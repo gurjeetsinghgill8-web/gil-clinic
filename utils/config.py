@@ -15,6 +15,10 @@ SUPABASE_KEY = os.getenv("SUPABASE_KEY", "your-supabase-anon-key")
 APP_NAME = os.getenv("APP_NAME", "CardioQueue")
 HOSPITAL_NAME = os.getenv("HOSPITAL_NAME", "GIL CLINIC")
 
+# ─── Staff Mobile Numbers (for WhatsApp alerts) ──────────────────────────────
+DOCTOR_MOBILE = os.getenv("DOCTOR_MOBILE", "")
+BABLU_MOBILE = os.getenv("BABLU_MOBILE", "")
+
 # ─── Staff Auth (Phase 1 — simple password-based) ───────────────────────────
 STAFF_PASSWORDS = {
     "Reception": os.getenv("RECEPTION_PASS", "recep123"),

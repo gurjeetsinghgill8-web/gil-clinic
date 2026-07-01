@@ -22,7 +22,7 @@ from typing import Callable
 
 from utils.config import (
     TEST_TYPES, ROOM_NAMES, AVG_TEST_TIME, STATUS_ICONS, STATUS_LABELS,
-    HOSPITAL_NAME, APP_NAME
+    HOSPITAL_NAME, APP_NAME, DOCTOR_MOBILE, BABLU_MOBILE
 )
 from utils.db import (
     create_patient, get_patient_by_id, get_patient_by_mobile,
@@ -40,6 +40,7 @@ from utils.notifications import (
     report_ready_message, browser_notification_script,
     request_notification_permission_script
 )
+from utils.whatsapp import send_whatsapp_message, get_whatsapp_template
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -109,6 +110,43 @@ class Harness:
         msg = registration_message(name, selected_tests)
         log_message(patient_id, mobile, "registration", msg, "browser")
 
+        # ─── WhatsApp Registration Notifications ─────────────────────────────
+        # 1. Patient Notification
+        token = created_tests[0]["token_number"] if created_tests else 1
+        wait_time = calculate_wait_time(selected_tests[0], 1) if selected_tests else 15
+        patient_wa_msg = get_whatsapp_template(
+            "registration",
+            hospital=HOSPITAL_NAME,
+            name=name.strip(),
+            test=", ".join(selected_tests),
+            token=token,
+            wait=wait_time
+        )
+        send_whatsapp_message(mobile, patient_wa_msg)
+
+        # 2. Doctor Notification
+        if DOCTOR_MOBILE:
+            doc_wa_msg = (
+                f"🏥 *{HOSPITAL_NAME}*\n"
+                f"New patient registered:\n"
+                f"Name: {name.strip()}\n"
+                f"Age/Gender: {age}/{gender}\n"
+                f"Token: #{token}\n"
+                f"Tests: {', '.join(selected_tests)}"
+            )
+            send_whatsapp_message(DOCTOR_MOBILE, doc_wa_msg)
+
+        # 3. Bablu Notification
+        if BABLU_MOBILE:
+            bablu_wa_msg = (
+                f"🏥 *{HOSPITAL_NAME}*\n"
+                f"New patient registered:\n"
+                f"Name: {name.strip()}\n"
+                f"Token: #{token}\n"
+                f"Tests: {', '.join(selected_tests)}"
+            )
+            send_whatsapp_message(BABLU_MOBILE, bablu_wa_msg)
+
         return {
             "success": True,
             "patient": patient,
@@ -171,6 +209,16 @@ class Harness:
         msg = called_message(patient_name, test_name, token, room)
         log_message(patient_id, mobile, "called", msg, "browser")
 
+        # ─── WhatsApp Call Notification ─────────────────────────────────────
+        patient_wa_msg = get_whatsapp_template(
+            "called",
+            hospital=HOSPITAL_NAME,
+            name=patient_name,
+            room=room,
+            token=token
+        )
+        send_whatsapp_message(mobile, patient_wa_msg)
+
         return {
             "success": True,
             "message": f"🔵 Called {patient_name} to {room}",
@@ -194,6 +242,15 @@ class Harness:
 
         msg = completed_message(patient_name, test_name)
         log_message(patient_id, mobile, "completed", msg, "browser")
+
+        # ─── WhatsApp Completed Notification ─────────────────────────────────
+        patient_wa_msg = get_whatsapp_template(
+            "completed",
+            hospital=HOSPITAL_NAME,
+            name=patient_name,
+            test=test_name
+        )
+        send_whatsapp_message(mobile, patient_wa_msg)
 
         return {
             "success": True,
@@ -222,6 +279,15 @@ class Harness:
 
         msg = report_ready_message(patient_name, test_name)
         log_message(patient_id, mobile, "report_ready", msg, "browser")
+
+        # ─── WhatsApp Report Ready Notification ──────────────────────────────
+        patient_wa_msg = get_whatsapp_template(
+            "report_ready",
+            hospital=HOSPITAL_NAME,
+            name=patient_name,
+            test=test_name
+        )
+        send_whatsapp_message(mobile, patient_wa_msg)
 
         return {
             "success": True,
