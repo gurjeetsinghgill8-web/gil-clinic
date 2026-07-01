@@ -70,6 +70,33 @@ PUBLIC_PAGES = ["📋 Patient Status"]
 ALL_PAGES = list(ROLE_PAGES.values()) + PUBLIC_PAGES + ["🏠 Home"]
 
 
+def render_sidebar_footer():
+    """Render database mode status and downloadable operations manual in the sidebar."""
+    from utils.db import USE_SUPABASE
+    with st.sidebar:
+        st.divider()
+        if USE_SUPABASE:
+            st.success("☁️ Supabase Cloud Active")
+        else:
+            st.warning("💾 Local SQLite Mode Active")
+            st.caption("Using `cardioqueue.db` locally.")
+
+        try:
+            with open("USER_MANUAL.md", "r", encoding="utf-8") as f:
+                manual_text = f.read()
+            st.download_button(
+                label="📖 Download User Manual",
+                data=manual_text,
+                file_name="CardioQueue_User_Manual.md",
+                mime="text/markdown",
+                use_container_width=True,
+            )
+        except Exception:
+            pass
+
+        st.caption("v1.1 • Built with ❤️ using Harness Engineering")
+
+
 def login_sidebar():
     """Render the login sidebar. Returns True if authenticated."""
     with st.sidebar:
@@ -106,8 +133,7 @@ def login_sidebar():
                 st.error("❌ Incorrect password. Please try again.")
                 return False
 
-        st.divider()
-        st.caption("v1.0 • Built with ❤️ using Harness Engineering")
+        render_sidebar_footer()
 
     return st.session_state.authenticated
 
@@ -232,6 +258,7 @@ def main():
     logout_button()
     role = st.session_state.auth_role
     page = page_selector()
+    render_sidebar_footer()
 
     # Route to the correct page based on selection
     if page == "🏠 Home":
