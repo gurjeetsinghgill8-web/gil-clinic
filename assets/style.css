@@ -1,0 +1,93 @@
+/* 
+ * CardioQueue Custom Styles
+ * Mobile-friendly Streamlit overrides
+ */
+
+/* Main container max-width for better mobile readability */
+.main > .block-container {
+    max-width: 1200px;
+    padding-left: 1rem;
+    padding-right: 1rem;
+}
+
+/* Better button sizing on mobile */
+.stButton > button {
+    font-weight: 600;
+    border-radius: 8px;
+    padding: 0.5rem 1rem;
+}
+
+/* Primary button emphasis */
+.stButton > button[data-testid="baseButton-primary"] {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border: none;
+    color: white;
+}
+
+/* Metric cards */
+.stMetric {
+    background-color: #f8f9fa;
+    border-radius: 10px;
+    padding: 10px 15px;
+    border: 1px solid #e9ecef;
+}
+
+/* Data editor / table styling */
+.stDataFrame {
+    border-radius: 10px;
+    overflow: hidden;
+}
+
+/* Sidebar tweaks */
+section[data-testid="stSidebar"] {
+    background-color: #f8f9fa;
+    padding-top: 1rem;
+}
+
+section[data-testid="stSidebar"] .stImage {
+    margin: 0 auto;
+    display: block;
+}
+
+/* Section dividers */
+.stDivider {
+    margin: 1.5rem 0;
+}
+
+/* Headers in containers */
+.stContainer {
+    border-radius: 10px;
+}
+
+/* Input fields */
+.stTextInput > div > div > input,
+.stNumberInput > div > div > input,
+.stSelectbox > div > div > select {
+    border-radius: 8px;
+    border: 1px solid #ced4da;
+}
+
+/* Status badges inline */
+.status-badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-size: 0.8rem;
+    font-weight: 600;
+}
+
+/* Mobile responsive */
+@media (max-width: 768px) {
+    .main > .block-container {
+        padding-left: 0.5rem;
+        padding-right: 0.5rem;
+    }
+    
+    .stMetric {
+        padding: 5px 10px;
+    }
+    
+    h1, h2, h3 {
+        font-size: 1.2rem !important;
+    }
+}
