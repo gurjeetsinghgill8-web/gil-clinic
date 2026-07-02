@@ -6,8 +6,57 @@ to a local SQLite database (cardioqueue.db) in the project directory.
 import os
 import sqlite3
 import uuid
+import requests
 from datetime import date, datetime
 from utils.config import SUPABASE_URL, SUPABASE_KEY
+
+# ─── GOOGLE SHEETS BACKEND CONFIG ───────────────────────────────────────────
+GOOGLE_SCRIPT_URL = os.getenv("GOOGLE_SCRIPT_URL", "").strip()
+USE_GOOGLE_SHEETS = len(GOOGLE_SCRIPT_URL) > 0
+
+def call_gs_api(action: str, params: dict = None, is_post: bool = False):
+    if params is None:
+        params = {}
+    params["action"] = action
+    try:
+        if is_post:
+            url = f"{GOOGLE_SCRIPT_URL}?action={action}"
+            r = requests.post(url, json=params, timeout=10)
+        else:
+            r = requests.get(GOOGLE_SCRIPT_URL, params=params, timeout=10)
+        
+        if r.status_code == 200:
+            return r.json()
+        else:
+            print(f"[GoogleSheets] API Error: {r.status_code} - {r.text}")
+            return None
+    except Exception as e:
+        print(f"[GoogleSheets] Exception calling API: {e}")
+        return None
+
+def to_snake_case(d):
+    if isinstance(d, list):
+        return [to_snake_case(x) for x in d]
+    if isinstance(d, dict):
+        mapping = {
+            "patientId": "patient_id",
+            "registrationDate": "registration_date",
+            "createdAt": "created_at",
+            "testName": "test_name",
+            "tokenNumber": "token_number",
+            "queuePosition": "queue_position",
+            "calledAt": "called_at",
+            "startedAt": "started_at",
+            "completedAt": "completed_at",
+            "reportReadyAt": "report_ready_at",
+            "deliveredAt": "delivered_at",
+            "dismissedAt": "dismissed_at",
+            "fromRole": "from_role",
+            "toRole": "to_role",
+            "relatedTestId": "related_test_id"
+        }
+        return {mapping.get(k, k): to_snake_case(v) for k, v in d.items()}
+    return d
 
 # ─── DATABASE DETECTION ──────────────────────────────────────────────────────
 USE_SUPABASE = False
@@ -107,6 +156,10 @@ def create_patient(name: str, mobile: str, age: int, gender: str) -> dict | None
     Insert a new patient record.
     Returns the created patient dict or None on failure.
     """
+    if USE_GOOGLE_SHEETS:
+        res = call_gs_api("createPatient", {"name": name, "mobile": mobile, "age": age, "gender": gender}, is_post=True)
+        return to_snake_case(res)
+
     today = date.today().isoformat()
     count = _get_today_patient_count()
     patient_id = f"CQ-{today.replace('-', '')}-{count + 1:03d}"
@@ -156,6 +209,10 @@ def create_patient(name: str, mobile: str, age: int, gender: str) -> dict | None
 
 def get_patient_by_id(patient_id: str) -> dict | None:
     """Fetch a single patient by patient_id."""
+    if USE_GOOGLE_SHEETS:
+        res = call_gs_api("getPatientById", {"patientId": patient_id})
+        return to_snake_case(res)
+
     if USE_SUPABASE:
         try:
             result = get_client().table("patients").select("*").eq("patient_id", patient_id).execute()
@@ -180,6 +237,10 @@ def get_patient_by_id(patient_id: str) -> dict | None:
 
 def get_patient_by_mobile(mobile: str) -> dict | None:
     """Fetch the most recent patient by mobile number."""
+    if USE_GOOGLE_SHEETS:
+        res = call_gs_api("getPatientByMobile", {"mobile": mobile})
+        return to_snake_case(res)
+
     if USE_SUPABASE:
         try:
             result = (get_client().table("patients")
@@ -209,6 +270,10 @@ def get_patient_by_mobile(mobile: str) -> dict | None:
 
 def get_today_patients() -> list[dict]:
     """Get all patients registered today."""
+    if USE_GOOGLE_SHEETS:
+        res = call_gs_api("getTodayPatients")
+        return to_snake_case(res) or []
+
     today = date.today().isoformat()
     if USE_SUPABASE:
         try:
@@ -270,6 +335,10 @@ def create_test(patient_id: str, test_name: str, room: str) -> dict | None:
     Create a test record for a patient.
     Auto-assigns the next daily token number for this test type.
     """
+    if USE_GOOGLE_SHEETS:
+        res = call_gs_api("createTest", {"patientId": patient_id, "testName": test_name}, is_post=True)
+        return to_snake_case(res)
+
     token = _get_next_token(test_name)
     queue_pos = _get_queue_length(test_name) + 1
 
@@ -319,6 +388,10 @@ def create_test(patient_id: str, test_name: str, room: str) -> dict | None:
 
 def get_tests_for_patient(patient_id: str) -> list[dict]:
     """Get all tests for a patient."""
+    if USE_GOOGLE_SHEETS:
+        res = call_gs_api("getTestsForPatient", {"patientId": patient_id})
+        return to_snake_case(res) or []
+
     if USE_SUPABASE:
         try:
             result = (get_client().table("tests")
@@ -347,6 +420,10 @@ def get_tests_for_patient(patient_id: str) -> list[dict]:
 
 def get_tests_by_mobile(mobile: str) -> list[dict]:
     """Get all tests for a patient by mobile number."""
+    if USE_GOOGLE_SHEETS:
+        res = call_gs_api("getTestsByMobile", {"mobile": mobile}, is_post=True)
+        return to_snake_case(res) or []
+
     patient = get_patient_by_mobile(mobile)
     if not patient:
         return []
@@ -358,6 +435,10 @@ def get_queue(test_name: str, status_filter: str = "waiting") -> list[dict]:
     Get the queue for a specific test type registered today, ordered by token_number.
     Default returns only 'waiting' items.
     """
+    if USE_GOOGLE_SHEETS:
+        res = call_gs_api("getQueue", {"testName": test_name, "status": status_filter or ""})
+        return to_snake_case(res) or []
+
     today = date.today().isoformat()
     if USE_SUPABASE:
         try:
@@ -413,6 +494,10 @@ def get_queue(test_name: str, status_filter: str = "waiting") -> list[dict]:
 
 def update_test_status(test_id: str, new_status: str) -> bool:
     """Update a test's status and set the corresponding timestamp."""
+    if USE_GOOGLE_SHEETS:
+        res = call_gs_api("updateTestStatus", {"testId": test_id, "status": new_status}, is_post=True)
+        return bool(res and not res.get("error"))
+
     if USE_SUPABASE:
         update_data = {"status": new_status}
         now = datetime.utcnow().isoformat()
@@ -466,6 +551,10 @@ def update_test_status(test_id: str, new_status: str) -> bool:
 
 def get_completed_tests() -> list[dict]:
     """Get all tests registered today with status 'completed' (for Doctor dashboard)."""
+    if USE_GOOGLE_SHEETS:
+        res = call_gs_api("getCompletedTests")
+        return to_snake_case(res) or []
+
     today = date.today().isoformat()
     if USE_SUPABASE:
         try:
@@ -511,6 +600,10 @@ def get_completed_tests() -> list[dict]:
 
 def get_report_ready_tests() -> list[dict]:
     """Get all tests registered today with status 'report_ready' (for Doctor dashboard)."""
+    if USE_GOOGLE_SHEETS:
+        res = call_gs_api("getReportReadyTests")
+        return to_snake_case(res) or []
+
     today = date.today().isoformat()
     if USE_SUPABASE:
         try:
@@ -628,6 +721,10 @@ def _get_queue_length(test_name: str) -> int:
 
 def get_current_patient(test_name: str) -> dict | None:
     """Get the patient currently being served today (called or in_progress)."""
+    if USE_GOOGLE_SHEETS:
+        res = call_gs_api("getCurrentPatient", {"testName": test_name})
+        return to_snake_case(res)
+
     today = date.today().isoformat()
     if USE_SUPABASE:
         try:
@@ -681,6 +778,9 @@ def get_current_patient(test_name: str) -> dict | None:
 
 def log_message(patient_id: str, mobile: str, msg_type: str, text: str, sent_via: str = "none"):
     """Log a sent notification to the messages table."""
+    if USE_GOOGLE_SHEETS:
+        return
+
     if USE_SUPABASE:
         data = {
             "patient_id": patient_id,
@@ -715,6 +815,10 @@ def log_message(patient_id: str, mobile: str, msg_type: str, text: str, sent_via
 
 def get_department_stats(test_name: str) -> dict:
     """Get counts for each status for a given test type (today only)."""
+    if USE_GOOGLE_SHEETS:
+        res = call_gs_api("getDepartmentStats", {"testName": test_name})
+        return to_snake_case(res) or {s: 0 for s in ["waiting", "called", "in_progress", "completed", "report_ready", "delivered"]}
+
     today = date.today().isoformat()
     stats = {}
     if USE_SUPABASE:
