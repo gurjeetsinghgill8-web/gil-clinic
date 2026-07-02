@@ -26,6 +26,7 @@ STAFF_PASSWORDS = {
     "Echo":      os.getenv("ECHO_PASS", "echo123"),
     "TMT":       os.getenv("TMT_PASS", "tmt123"),
     "Doctor":    os.getenv("DOCTOR_PASS", "doc123"),
+    "Manager":   os.getenv("MANAGER_PASS", "manager123"),
 }
 
 # ─── Test Types ──────────────────────────────────────────────────────────────
