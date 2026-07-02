@@ -99,3 +99,42 @@ To make the WhatsApp notifications work:
    - When anyone performs an action (registers a patient, calls a patient, completes a test, or prepares a report) on their mobile phone, the Streamlit app on the clinic laptop puts the message in the queue.
    - The background thread sequentially opens a Chrome tab, types the message on WhatsApp Web, presses Enter, and closes the tab after sending.
    - This ensures that keyboard/mouse commands do not conflict and Streamlit never freezes or lags!
+
+---
+
+## 📱 6. Pure PWA + Google Sheets Shared Cloud Backend Setup (Mobile-first)
+
+CardioQueue includes a mobile-optimized Pure PWA (Progressive Web App) that allows all clinic staff to sync their devices in real-time using a free Google Sheets cloud backend (no VPS or server setup cost!).
+
+### Step 1: Google Sheet Banao (Create Google Sheet)
+1. Open Chrome on your computer or mobile and go to: **https://sheets.new**
+2. Name the sheet **"CardioQueue"** (at the top left). This sheet will act as your cloud database.
+
+### Step 2: Apps Script code Lagao (Add Apps Script)
+1. Inside the Google Sheet, go to **Extensions** -> **Apps Script** (or the ⋮ menu on mobile).
+2. Delete any default code.
+3. Open [Code.gs](file:///c:/Users/pc/Desktop/gurjas%20ai/GIL%20CLINIC/pwa/google-apps-script/Code.gs) in this project, copy all its contents, and paste it into the script editor.
+4. Save the script (Ctrl+S / Save icon) and name it **"CardioQueue Backend"**.
+
+### Step 3: Web App Deploy Karo (Deploy Web App)
+1. Click the **Deploy** button -> **New Deployment**.
+2. Select type: **Web App** (click the gear icon).
+3. Set the following configurations:
+   - **Execute as:** "Me (your-email@gmail.com)"
+   - **Who has access:** **"Anyone"** (This is crucial for mobile sync).
+4. Click **Deploy**, choose your Google account, and click **Allow** for permissions.
+5. **Copy the Web App URL** displayed (e.g., `https://script.google.com/macros/s/abc123.../exec`).
+
+### Step 4: Link URL in PWA (PWA Setup)
+1. Open the PWA link on your mobile phone:  
+   👉 **https://gurjeetsinghgill8-web.github.io/gil-clinic/pwa/index.html**
+2. Login with any role (Reception, Doctor, etc.).
+3. Click the **⚙️ Settings** icon in the bottom navigation.
+4. Paste the copied Web App URL into the **Google Apps Script URL** field.
+5. Click **Save URL** and click **Test Connection** (It should show "✅ Connected!").
+6. *Repeat this on all staff phones. The URL is saved permanently on each phone, so you only need to enter it once!*
+
+### Step 5: Start using (Real-time Sync)
+- Now, when the receptionist registers a patient on their phone, the data is pushed to Google Sheets and instantly polled by the doctor's and technicians' phones (refreshes every 5 seconds).
+- Patients can scan the QR code printed on their token to check their estimated waiting time and status live on their own phones!
+
