@@ -1,5 +1,5 @@
 # Static-only deploy for CardioQueue PWA
-# Bypasses Jekyll entirely — serves raw files from /pwa at /gil-clinic/pwa/
+# Copies pwa/ content to root so it serves at /gil-clinic/
 name: pages build and deployment
 
 on:
@@ -20,9 +20,13 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
+      - name: Prepare static files
+        run: |
+          mkdir -p _site
+          cp -r pwa/* _site/
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: pwa/
+          path: _site/
       - name: Report build status
         run: |
           gh api -X POST "repos/$GITHUB_REPOSITORY/pages/telemetry" \
