@@ -1,6 +1,32 @@
 <!DOCTYPE html>
 <html lang="hi">
 <head>
+    <script>
+        // Self-healing PWA cache buster v2.1
+        (async function() {
+            try {
+                const CURRENT_VERSION = "2.1";
+                if (localStorage.getItem("cardioqueue_version") !== CURRENT_VERSION) {
+                    if ('serviceWorker' in navigator) {
+                        const registrations = await navigator.serviceWorker.getRegistrations();
+                        for (let r of registrations) {
+                            await r.unregister();
+                        }
+                    }
+                    if ('caches' in window) {
+                        const keys = await caches.keys();
+                        for (let k of keys) {
+                            await caches.delete(k);
+                        }
+                    }
+                    localStorage.setItem("cardioqueue_version", CURRENT_VERSION);
+                    window.location.reload(true);
+                }
+            } catch(e) {
+                console.error("Cache buster error:", e);
+            }
+        })();
+    </script>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <meta name="theme-color" content="#667eea">
