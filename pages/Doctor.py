@@ -71,7 +71,8 @@ def show():
                             st.success(result["message"])
                             if result.get("notification"):
                                 script = harness.get_notification_script(
-                                    "📋 Report Ready", result["notification"]
+                                    "📋 Report Ready", result["notification"],
+                                    urgent=True
                                 )
                                 st.markdown(script, unsafe_allow_html=True)
                             st.rerun()

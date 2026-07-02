@@ -103,10 +103,11 @@ def show_department(test_name: str, emoji: str = "📊"):
                         )
                         if result["success"]:
                             st.success(result["message"])
-                            # Trigger notification
+                            # Trigger urgent notification with sound + vibration
                             if result.get("notification"):
                                 script = harness.get_notification_script(
-                                    f"✅ {test_name} Completed", result["notification"]
+                                    f"✅ {test_name} Completed", result["notification"],
+                                    urgent=True
                                 )
                                 st.markdown(script, unsafe_allow_html=True)
                             st.rerun()
@@ -160,11 +161,12 @@ def show_department(test_name: str, emoji: str = "📊"):
                         )
                         if result["success"]:
                             st.success(result["message"])
-                            # Trigger notification
+                            # Trigger urgent notification with sound + vibration
                             if result.get("notification"):
                                 script = harness.get_notification_script(
                                     f"🔵 {test_name} — Patient Called",
-                                    result["notification"]
+                                    result["notification"],
+                                    urgent=True
                                 )
                                 st.markdown(script, unsafe_allow_html=True)
                             st.rerun()

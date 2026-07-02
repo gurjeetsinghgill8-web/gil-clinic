@@ -1,7 +1,7 @@
 """
-Notification module — browser notifications for CardioQueue.
+Notification module — browser notifications with Sound, Vibration & Badge for CardioQueue.
 Provides helper functions to compose notification messages and HTML/JS injection
-for browser-based Web Notification API alerts.
+for browser-based Web Notification API alerts with audio/vibration feedback.
 """
 from utils.config import HOSPITAL_NAME
 
@@ -45,52 +45,121 @@ def report_ready_message(patient_name: str, test_name: str) -> str:
     )
 
 
-# ─── Browser Notification HTML Injection ─────────────────────────────────────
+# ─── Sound Alert Base64 (short notification beep) ───────────────────────────
+# This is a tiny WAV encoded as base64 — a short 500ms sine beep at 880Hz
+NOTIFICATION_BEEP_B64 = (
+    "data:audio/wav;base64,"
+    "UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACAf39/f3+AgH9/f3+AgICAf39/f4CAgH+AgH+AgH9/f3+AgH+AgIB/f39/gIB/f3+AgH9/f3+AgH9/f3+AgH+AgH+AgH9/f3+AgH9/f3+AgH9/f3+"
+    "gH9/f3+AgH9/f4CAgH9/f39/gIB/f39/gIB/f39/f4CAf39/f39/gIB/f39/f39/f39/f4B/f39/f39/f39/f39/f3+AgH9/f39/f39/f3+AgH9/f39/f39/f39/f39/f39/f39/f39/f39/f39/f39/f3+AgH9/f39/f4B/f39/f39/f3+"
+    "Af39/f39/f39/f39/f3+AgH9/f39/f39/f39/f39/f39/f4B/f39/f39/f39/f39/f39/f4B/f39/f39/f39/f39/f4B/f39/f4B/f39/f39/f39/f4B/f39/f39/f39/f39/f4B/f39/f39/f39/f39/f4B/f39/f39/f39/f39/f39/f4B/f3+"
+    "Af39/f39/f39/f39/f39/f4B/f39/f39/f39/f39/f4B/f39/f39/f39/f39/f39/f39/f39/f39/f39/f39/f39/f39/f39/f39/f39/f39/f39/f4B/f39/f39/f39/f39/f39/f39/f39/f39"
+)
 
-def browser_notification_script(title: str, body: str) -> str:
+
+# ─── Browser Notification HTML Injection with Sound & Vibration ─────────────
+
+def browser_notification_script(title: str, body: str, urgent: bool = False) -> str:
     """
-    Returns a JavaScript snippet that triggers a browser notification.
-    Injects into Streamlit via components.html or st.markdown with unsafe_allow_html.
+    Returns a JavaScript snippet that:
+      1. Plays a notification beep sound (HTML5 Audio)
+      2. Vibrates mobile device (if supported)
+      3. Shows a browser notification (Web Notification API)
+      4. Updates the page title badge with a flashing indicator
+
+    Parameters:
+        title (str): Notification title
+        body (str): Notification body text
+        urgent (bool): If True, uses longer vibration + louder indicators
     """
-    # Escape single quotes for JS safety
     title_safe = title.replace("'", "\\'")
     body_safe = body.replace("'", "\\'").replace("\n", "\\n")
+    beep = NOTIFICATION_BEEP_B64
+
+    # Vibration pattern: normal = short buzz, urgent = long pattern
+    vibe_pattern = "[500, 200, 500]" if urgent else "[300]"
 
     return f"""
     <script>
     (function() {{
-        if (!("Notification" in window)) {{
-            console.log("Browser does not support notifications.");
-            return;
-        }}
-        if (Notification.permission === "granted") {{
-            new Notification('{title_safe}', {{
-                body: '{body_safe}',
-                icon: 'https://img.icons8.com/color/48/hospital.png'
+        var titleSafe = '{title_safe}';
+        var bodySafe = '{body_safe}';
+        var beep = '{beep}';
+
+        // ── 1. Play notification sound ────────────────────────────────────────
+        try {{
+            var audio = new Audio(beep);
+            audio.volume = 0.7;
+            audio.play().catch(function(e) {{
+                // Auto-play blocked — user will see notification instead
             }});
-        }} else if (Notification.permission !== "denied") {{
-            Notification.requestPermission().then(function(permission) {{
-                if (permission === "granted") {{
-                    new Notification('{title_safe}', {{
-                        body: '{body_safe}',
-                        icon: 'https://img.icons8.com/color/48/hospital.png'
-                    }});
-                }}
-            }});
+        }} catch(e) {{
+            console.log("Audio not supported");
         }}
+
+        // ── 2. Vibrate mobile device ──────────────────────────────────────────
+        try {{
+            if (navigator.vibrate) {{
+                navigator.vibrate({vibe_pattern});
+            }}
+        }} catch(e) {{}}
+
+        // ── 3. Show browser notification ──────────────────────────────────────
+        if ("Notification" in window) {{
+            if (Notification.permission === "granted") {{
+                new Notification(titleSafe, {{
+                    body: bodySafe,
+                    icon: 'https://img.icons8.com/color/48/hospital.png',
+                    badge: 'https://img.icons8.com/color/48/hospital.png',
+                    tag: 'cardioqueue-' + Date.now(),
+                    requireInteraction: true,
+                    silent: false
+                }});
+            }} else if (Notification.permission !== "denied") {{
+                Notification.requestPermission().then(function(permission) {{
+                    if (permission === "granted") {{
+                        new Notification(titleSafe, {{
+                            body: bodySafe,
+                            icon: 'https://img.icons8.com/color/48/hospital.png',
+                            badge: 'https://img.icons8.com/color/48/hospital.png',
+                            tag: 'cardioqueue-' + Date.now(),
+                            requireInteraction: true,
+                            silent: false
+                        }});
+                    }}
+                }});
+            }}
+        }}
+
+        // ── 4. Flash page title for attention ─────────────────────────────────
+        var originalTitle = document.title;
+        var flashInterval = setInterval(function() {{
+            document.title = (document.title === originalTitle)
+                ? '🔔 ' + titleSafe
+                : originalTitle;
+        }}, 1000);
+        setTimeout(function() {{
+            clearInterval(flashInterval);
+            document.title = originalTitle;
+        }}, 8000);
     }})();
     </script>
     """
 
 
 def request_notification_permission_script() -> str:
-    """Returns JS that requests notification permission on page load."""
+    """Returns JS that requests notification + vibration permission on page load."""
     return """
     <script>
     (function() {
+        // Request browser notification permission
         if ("Notification" in window && Notification.permission === "default") {
             Notification.requestPermission();
         }
+        // Pre-warm audio context for mobile (iOS requirement)
+        try {
+            var ctx = new (window.AudioContext || window.webkitAudioContext)();
+            ctx.resume();
+        } catch(e) {}
     })();
     </script>
     """

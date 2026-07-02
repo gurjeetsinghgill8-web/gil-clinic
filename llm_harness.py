@@ -333,9 +333,9 @@ class Harness:
     # ─── NOTIFICATION HELPERS ────────────────────────────────────────────────
 
     @staticmethod
-    def get_notification_script(title: str, body: str) -> str:
-        """Get browser notification injection script."""
-        return browser_notification_script(title, body)
+    def get_notification_script(title: str, body: str, urgent: bool = False) -> str:
+        """Get browser notification injection script (with sound + vibration)."""
+        return browser_notification_script(title, body, urgent=urgent)
 
     @staticmethod
     def get_permission_script() -> str:

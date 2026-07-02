@@ -67,10 +67,11 @@ def show():
             if result["success"]:
                 st.success(result["message"])
 
-                # Trigger browser notification
+                # Trigger browser notification with sound + vibration
                 if result["notification"]:
                     script = harness.get_notification_script(
-                        "🏥 New Patient Registered", result["notification"]
+                        "🏥 New Patient Registered", result["notification"],
+                        urgent=False
                     )
                     st.markdown(script, unsafe_allow_html=True)
 

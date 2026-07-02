@@ -7,6 +7,8 @@
   "background_color": "#ffffff",
   "theme_color": "#667eea",
   "orientation": "portrait",
+  "categories": ["medical", "health"],
+  "screenshots": [],
   "icons": [
     {
       "src": "https://img.icons8.com/color/192/hospital.png",
