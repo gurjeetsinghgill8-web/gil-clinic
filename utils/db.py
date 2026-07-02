@@ -13,25 +13,33 @@ from utils.config import SUPABASE_URL, SUPABASE_KEY
 # ─── GOOGLE SHEETS BACKEND CONFIG ───────────────────────────────────────────
 GOOGLE_SCRIPT_URL = os.getenv("GOOGLE_SCRIPT_URL", "").strip()
 USE_GOOGLE_SHEETS = len(GOOGLE_SCRIPT_URL) > 0
+_gs_failed = False  # Marks if GS API has failed — triggers SQLite fallback
 
 def call_gs_api(action: str, params: dict = None, is_post: bool = False):
+    global _gs_failed
+    if _gs_failed:
+        return None  # Already failed once — skip retries, use SQLite
     if params is None:
         params = {}
     params["action"] = action
     try:
         if is_post:
-            url = f"{GOOGLE_SCRIPT_URL}?action={action}"
-            r = requests.post(url, json=params, timeout=10)
+            r = requests.get(GOOGLE_SCRIPT_URL, params=params, timeout=10)
+            # Some GS web apps don't handle POST well — fallback to GET if POST fails
+            if r.status_code != 200:
+                r = requests.get(GOOGLE_SCRIPT_URL, params=params, timeout=10)
         else:
             r = requests.get(GOOGLE_SCRIPT_URL, params=params, timeout=10)
-        
+
         if r.status_code == 200:
             return r.json()
         else:
-            print(f"[GoogleSheets] API Error: {r.status_code} - {r.text}")
+            print(f"[GoogleSheets] API Error: {r.status_code} - {r.text[:200]}")
+            _gs_failed = True
             return None
     except Exception as e:
         print(f"[GoogleSheets] Exception calling API: {e}")
+        _gs_failed = True
         return None
 
 def to_snake_case(d):
@@ -156,9 +164,11 @@ def create_patient(name: str, mobile: str, age: int, gender: str) -> dict | None
     Insert a new patient record.
     Returns the created patient dict or None on failure.
     """
-    if USE_GOOGLE_SHEETS:
+    if USE_GOOGLE_SHEETS and not _gs_failed:
         res = call_gs_api("createPatient", {"name": name, "mobile": mobile, "age": age, "gender": gender}, is_post=True)
-        return to_snake_case(res)
+        if res:
+            return to_snake_case(res)
+        # Fall through to SQLite if Google Sheets fails
 
     today = date.today().isoformat()
     count = _get_today_patient_count()
@@ -209,9 +219,10 @@ def create_patient(name: str, mobile: str, age: int, gender: str) -> dict | None
 
 def get_patient_by_id(patient_id: str) -> dict | None:
     """Fetch a single patient by patient_id."""
-    if USE_GOOGLE_SHEETS:
+    if USE_GOOGLE_SHEETS and not _gs_failed:
         res = call_gs_api("getPatientById", {"patientId": patient_id})
-        return to_snake_case(res)
+        if res:
+            return to_snake_case(res)
 
     if USE_SUPABASE:
         try:
@@ -237,9 +248,10 @@ def get_patient_by_id(patient_id: str) -> dict | None:
 
 def get_patient_by_mobile(mobile: str) -> dict | None:
     """Fetch the most recent patient by mobile number."""
-    if USE_GOOGLE_SHEETS:
+    if USE_GOOGLE_SHEETS and not _gs_failed:
         res = call_gs_api("getPatientByMobile", {"mobile": mobile})
-        return to_snake_case(res)
+        if res:
+            return to_snake_case(res)
 
     if USE_SUPABASE:
         try:
@@ -270,9 +282,10 @@ def get_patient_by_mobile(mobile: str) -> dict | None:
 
 def get_today_patients() -> list[dict]:
     """Get all patients registered today."""
-    if USE_GOOGLE_SHEETS:
+    if USE_GOOGLE_SHEETS and not _gs_failed:
         res = call_gs_api("getTodayPatients")
-        return to_snake_case(res) or []
+        if res:
+            return to_snake_case(res) or []
 
     today = date.today().isoformat()
     if USE_SUPABASE:
@@ -335,9 +348,10 @@ def create_test(patient_id: str, test_name: str, room: str) -> dict | None:
     Create a test record for a patient.
     Auto-assigns the next daily token number for this test type.
     """
-    if USE_GOOGLE_SHEETS:
+    if USE_GOOGLE_SHEETS and not _gs_failed:
         res = call_gs_api("createTest", {"patientId": patient_id, "testName": test_name}, is_post=True)
-        return to_snake_case(res)
+        if res:
+            return to_snake_case(res)
 
     token = _get_next_token(test_name)
     queue_pos = _get_queue_length(test_name) + 1
@@ -388,9 +402,10 @@ def create_test(patient_id: str, test_name: str, room: str) -> dict | None:
 
 def get_tests_for_patient(patient_id: str) -> list[dict]:
     """Get all tests for a patient."""
-    if USE_GOOGLE_SHEETS:
+    if USE_GOOGLE_SHEETS and not _gs_failed:
         res = call_gs_api("getTestsForPatient", {"patientId": patient_id})
-        return to_snake_case(res) or []
+        if res:
+            return to_snake_case(res) or []
 
     if USE_SUPABASE:
         try:
@@ -420,9 +435,10 @@ def get_tests_for_patient(patient_id: str) -> list[dict]:
 
 def get_tests_by_mobile(mobile: str) -> list[dict]:
     """Get all tests for a patient by mobile number."""
-    if USE_GOOGLE_SHEETS:
+    if USE_GOOGLE_SHEETS and not _gs_failed:
         res = call_gs_api("getTestsByMobile", {"mobile": mobile}, is_post=True)
-        return to_snake_case(res) or []
+        if res:
+            return to_snake_case(res) or []
 
     patient = get_patient_by_mobile(mobile)
     if not patient:
@@ -435,9 +451,10 @@ def get_queue(test_name: str, status_filter: str = "waiting") -> list[dict]:
     Get the queue for a specific test type registered today, ordered by token_number.
     Default returns only 'waiting' items.
     """
-    if USE_GOOGLE_SHEETS:
+    if USE_GOOGLE_SHEETS and not _gs_failed:
         res = call_gs_api("getQueue", {"testName": test_name, "status": status_filter or ""})
-        return to_snake_case(res) or []
+        if res:
+            return to_snake_case(res) or []
 
     today = date.today().isoformat()
     if USE_SUPABASE:
@@ -494,9 +511,10 @@ def get_queue(test_name: str, status_filter: str = "waiting") -> list[dict]:
 
 def update_test_status(test_id: str, new_status: str) -> bool:
     """Update a test's status and set the corresponding timestamp."""
-    if USE_GOOGLE_SHEETS:
+    if USE_GOOGLE_SHEETS and not _gs_failed:
         res = call_gs_api("updateTestStatus", {"testId": test_id, "status": new_status}, is_post=True)
-        return bool(res and not res.get("error"))
+        if res and not res.get("error"):
+            return True
 
     if USE_SUPABASE:
         update_data = {"status": new_status}
@@ -551,9 +569,10 @@ def update_test_status(test_id: str, new_status: str) -> bool:
 
 def get_completed_tests() -> list[dict]:
     """Get all tests registered today with status 'completed' (for Doctor dashboard)."""
-    if USE_GOOGLE_SHEETS:
+    if USE_GOOGLE_SHEETS and not _gs_failed:
         res = call_gs_api("getCompletedTests")
-        return to_snake_case(res) or []
+        if res:
+            return to_snake_case(res) or []
 
     today = date.today().isoformat()
     if USE_SUPABASE:
@@ -600,9 +619,10 @@ def get_completed_tests() -> list[dict]:
 
 def get_report_ready_tests() -> list[dict]:
     """Get all tests registered today with status 'report_ready' (for Doctor dashboard)."""
-    if USE_GOOGLE_SHEETS:
+    if USE_GOOGLE_SHEETS and not _gs_failed:
         res = call_gs_api("getReportReadyTests")
-        return to_snake_case(res) or []
+        if res:
+            return to_snake_case(res) or []
 
     today = date.today().isoformat()
     if USE_SUPABASE:
@@ -721,9 +741,10 @@ def _get_queue_length(test_name: str) -> int:
 
 def get_current_patient(test_name: str) -> dict | None:
     """Get the patient currently being served today (called or in_progress)."""
-    if USE_GOOGLE_SHEETS:
+    if USE_GOOGLE_SHEETS and not _gs_failed:
         res = call_gs_api("getCurrentPatient", {"testName": test_name})
-        return to_snake_case(res)
+        if res:
+            return to_snake_case(res)
 
     today = date.today().isoformat()
     if USE_SUPABASE:
@@ -815,9 +836,10 @@ def log_message(patient_id: str, mobile: str, msg_type: str, text: str, sent_via
 
 def get_department_stats(test_name: str) -> dict:
     """Get counts for each status for a given test type (today only)."""
-    if USE_GOOGLE_SHEETS:
+    if USE_GOOGLE_SHEETS and not _gs_failed:
         res = call_gs_api("getDepartmentStats", {"testName": test_name})
-        return to_snake_case(res) or {s: 0 for s in ["waiting", "called", "in_progress", "completed", "report_ready", "delivered"]}
+        if res:
+            return to_snake_case(res) or {s: 0 for s in ["waiting", "called", "in_progress", "completed", "report_ready", "delivered"]}
 
     today = date.today().isoformat()
     stats = {}
