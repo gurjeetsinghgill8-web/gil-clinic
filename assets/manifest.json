@@ -1,0 +1,22 @@
+{
+  "name": "CardioQueue — GIL CLINIC",
+  "short_name": "CardioQueue",
+  "description": "Patient Queue & Status Dashboard for Cardiology Department",
+  "start_url": "/?source=pwa",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#667eea",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "https://img.icons8.com/color/192/hospital.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "https://img.icons8.com/color/512/hospital.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}

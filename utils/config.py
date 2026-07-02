@@ -63,6 +63,10 @@ ROOM_NAMES = {
 # ─── Patient ID Prefix ──────────────────────────────────────────────────────
 PATIENT_ID_PREFIX = "CQ"
 
+# ─── PWA / QR Code Settings ────────────────────────────────────────────────────
+# Base URL for QR codes — update to your Streamlit Cloud URL when deployed
+BASE_URL = os.getenv("BASE_URL", "http://localhost:8501")
+
 # ─── Status Display Helpers ──────────────────────────────────────────────────
 STATUS_ICONS = {
     "waiting":       "🟡",

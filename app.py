@@ -243,10 +243,20 @@ def main():
     """Main application entry point."""
     init_session()
 
+    # ─── Detect ?patient=XXX from URL for QR-based auto-load ─────────────
+    query_params = st.query_params
+    patient_qr = query_params.get("patient", None)
+
     # Request notification permission on first load (Phase 1)
     if not st.session_state.notification_permission_requested:
         st.markdown(request_notification_permission_script(), unsafe_allow_html=True)
         st.session_state.notification_permission_requested = True
+
+    # ─── QR auto-load: bypass login, go straight to Patient Status ───────
+    if patient_qr and not st.session_state.authenticated:
+        from pages.Patient_Status import show
+        show()
+        return
 
     # ─── Login Flow ──────────────────────────────────────────────────────────
     if not st.session_state.authenticated:

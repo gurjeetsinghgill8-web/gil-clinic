@@ -1,47 +1,101 @@
 /* 
- * CardioQueue Custom Styles
- * Mobile-friendly Streamlit overrides
+ * CardioQueue Custom Styles — PWA Mobile-First
+ * ==============================================
+ * Mobile-first responsive design with PWA support.
  */
 
-/* Main container max-width for better mobile readability */
+/* ─── Base / Reset ──────────────────────────────────────────────────────────── */
+* {
+    box-sizing: border-box;
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 
+                 'Helvetica Neue', Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+/* ─── Main Container ───────────────────────────────────────────────────────── */
 .main > .block-container {
     max-width: 1200px;
     padding-left: 1rem;
     padding-right: 1rem;
+    padding-top: 0.5rem;
+    padding-bottom: 2rem;
 }
 
-/* Better button sizing on mobile */
+/* ─── PWA: Disable text selection and tap highlight on mobile ──────────────── */
+* {
+    -webkit-tap-highlight-color: transparent;
+    -webkit-touch-callout: none;
+}
+
+/* ─── Buttons ──────────────────────────────────────────────────────────────── */
 .stButton > button {
     font-weight: 600;
-    border-radius: 8px;
-    padding: 0.5rem 1rem;
+    border-radius: 12px;
+    padding: 0.6rem 1.2rem;
+    border: none;
+    transition: all 0.2s ease;
+    cursor: pointer;
 }
 
-/* Primary button emphasis */
+.stButton > button:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.stButton > button:active {
+    transform: translateY(0);
+}
+
+/* Primary button gradient */
 .stButton > button[data-testid="baseButton-primary"] {
     background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
     border: none;
     color: white;
 }
 
-/* Metric cards */
+/* ─── Metric Cards ─────────────────────────────────────────────────────────── */
 .stMetric {
-    background-color: #f8f9fa;
-    border-radius: 10px;
-    padding: 10px 15px;
+    background: linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%);
+    border-radius: 12px;
+    padding: 12px 16px;
+    border: 1px solid #e9ecef;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.02);
+}
+
+.stMetric label {
+    font-weight: 600;
+    color: #495057;
+}
+
+/* ─── Containers / Cards ──────────────────────────────────────────────────── */
+.stContainer, 
+div[data-testid="stContainer"] {
+    border-radius: 12px;
+    border: 1px solid #e9ecef;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+    transition: box-shadow 0.2s ease;
+}
+
+div[data-testid="stContainer"]:hover {
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+}
+
+/* ─── Data Editor / Table ─────────────────────────────────────────────────── */
+.stDataFrame {
+    border-radius: 12px;
+    overflow: hidden;
     border: 1px solid #e9ecef;
 }
 
-/* Data editor / table styling */
-.stDataFrame {
-    border-radius: 10px;
-    overflow: hidden;
-}
-
-/* Sidebar tweaks */
+/* ─── Sidebar ─────────────────────────────────────────────────────────────── */
 section[data-testid="stSidebar"] {
     background-color: #f8f9fa;
     padding-top: 1rem;
+    border-right: 1px solid #e9ecef;
 }
 
 section[data-testid="stSidebar"] .stImage {
@@ -49,45 +103,157 @@ section[data-testid="stSidebar"] .stImage {
     display: block;
 }
 
-/* Section dividers */
+/* ─── Dividers ────────────────────────────────────────────────────────────── */
 .stDivider {
     margin: 1.5rem 0;
+    border-color: #e9ecef;
 }
 
-/* Headers in containers */
-.stContainer {
+/* ─── Input Fields ────────────────────────────────────────────────────────── */
+.stTextInput > div > div > input,
+.stNumberInput > div > div > input,
+.stSelectbox > div > div > select,
+.stTextArea > div > div > textarea {
+    border-radius: 10px;
+    border: 1.5px solid #dee2e6;
+    padding: 0.5rem 0.75rem;
+    font-size: 1rem;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.stTextInput > div > div > input:focus,
+.stNumberInput > div > div > input:focus,
+.stSelectbox > div > div > select:focus {
+    border-color: #667eea;
+    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.15);
+    outline: none;
+}
+
+/* ─── Status Badges ───────────────────────────────────────────────────────── */
+.status-badge {
+    display: inline-block;
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    line-height: 1.4;
+}
+
+/* ─── Progress Bars ────────────────────────────────────────────────────────── */
+.stProgress > div > div > div > div {
+    background: linear-gradient(90deg, #667eea, #764ba2);
     border-radius: 10px;
 }
 
-/* Input fields */
-.stTextInput > div > div > input,
-.stNumberInput > div > div > input,
-.stSelectbox > div > div > select {
-    border-radius: 8px;
-    border: 1px solid #ced4da;
-}
-
-/* Status badges inline */
-.status-badge {
-    display: inline-block;
-    padding: 2px 8px;
-    border-radius: 12px;
-    font-size: 0.8rem;
+/* ─── Expander ─────────────────────────────────────────────────────────────── */
+.streamlit-expanderHeader {
     font-weight: 600;
+    border-radius: 10px;
 }
 
-/* Mobile responsive */
+/* ─── Info / Success / Warning / Error messages ────────────────────────────── */
+.stAlert {
+    border-radius: 12px;
+    border: none;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+}
+
+/* ─── PWA: Mobile-first responsive ─────────────────────────────────────────── */
 @media (max-width: 768px) {
+    .main > .block-container {
+        padding-left: 0.75rem;
+        padding-right: 0.75rem;
+        padding-top: 0.25rem;
+    }
+
+    .stMetric {
+        padding: 8px 12px;
+    }
+
+    h1 {
+        font-size: 1.4rem !important;
+    }
+    h2 {
+        font-size: 1.2rem !important;
+    }
+    h3 {
+        font-size: 1.1rem !important;
+    }
+
+    .stButton > button {
+        padding: 0.5rem 1rem;
+        font-size: 0.9rem;
+    }
+
+    /* Full-width buttons on mobile */
+    .stButton {
+        width: 100%;
+    }
+
+    .stButton > button {
+        width: 100%;
+    }
+
+    /* Compact cards on mobile */
+    div[data-testid="stContainer"] {
+        padding: 0.75rem !important;
+    }
+
+    /* Hide sidebar on very small screens */
+    section[data-testid="stSidebar"] {
+        min-width: 200px !important;
+        max-width: 260px !important;
+    }
+}
+
+/* ─── Small screens (phones < 480px) ──────────────────────────────────────── */
+@media (max-width: 480px) {
     .main > .block-container {
         padding-left: 0.5rem;
         padding-right: 0.5rem;
     }
-    
-    .stMetric {
-        padding: 5px 10px;
-    }
-    
-    h1, h2, h3 {
+
+    h1 {
         font-size: 1.2rem !important;
     }
+    h2 {
+        font-size: 1.1rem !important;
+    }
+    h3 {
+        font-size: 1rem !important;
+    }
+
+    .stMetric label {
+        font-size: 0.75rem !important;
+    }
+
+    .stMetric div[data-testid="stMetricValue"] {
+        font-size: 1.2rem !important;
+    }
+}
+
+/* ─── Print Styles ─────────────────────────────────────────────────────────── */
+@media print {
+    section[data-testid="stSidebar"] {
+        display: none !important;
+    }
+
+    .main > .block-container {
+        max-width: 100% !important;
+        padding: 0 !important;
+    }
+
+    button {
+        display: none !important;
+    }
+}
+
+/* ─── Custom animations ───────────────────────────────────────────────────── */
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.fade-in {
+    animation: fadeIn 0.3s ease forwards;
 }

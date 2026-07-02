@@ -22,7 +22,7 @@ from typing import Callable
 
 from utils.config import (
     TEST_TYPES, ROOM_NAMES, AVG_TEST_TIME, STATUS_ICONS, STATUS_LABELS,
-    HOSPITAL_NAME, APP_NAME, DOCTOR_MOBILE, BABLU_MOBILE
+    HOSPITAL_NAME, APP_NAME, DOCTOR_MOBILE, BABLU_MOBILE, BASE_URL
 )
 from utils.db import (
     create_patient, get_patient_by_id, get_patient_by_mobile,
@@ -346,6 +346,39 @@ class Harness:
                             tests: list[dict]) -> str:
         """Generate a formatted token slip for printing."""
         return format_token_slip(patient_name, patient_id, tests)
+
+    # ─── QR CODE GENERATION ──────────────────────────────────────────────────
+
+    @staticmethod
+    def generate_qr_code_base64(patient_id: str) -> str | None:
+        """
+        Generate a QR code image for a patient's status page.
+        Returns a base64-encoded PNG data URI string, or None if qrcode not available.
+        """
+        try:
+            import qrcode
+            from io import BytesIO
+            import base64
+
+            url = f"{BASE_URL}/?patient={patient_id}"
+            qr = qrcode.QRCode(box_size=10, border=2)
+            qr.add_data(url)
+            qr.make(fit=True)
+            img = qr.make_image(fill_color="black", back_color="white")
+
+            buffer = BytesIO()
+            img.save(buffer, format="PNG")
+            img_b64 = base64.b64encode(buffer.getvalue()).decode()
+            return f"data:image/png;base64,{img_b64}"
+        except ImportError:
+            return None
+        except Exception as e:
+            print(f"[Harness] QR generation error: {e}")
+            return None
+
+    def get_qr_url(self, patient_id: str) -> str:
+        """Get the URL encoded in the QR code for a patient."""
+        return f"{BASE_URL}/?patient={patient_id}"
 
     # ─── DASHBOARD STATS ─────────────────────────────────────────────────────
 

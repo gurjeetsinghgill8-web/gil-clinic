@@ -10,7 +10,7 @@ import streamlit as st
 from datetime import date
 
 from llm_harness import get_harness
-from utils.config import TEST_TYPES, HOSPITAL_NAME, STATUS_LABELS, STATUS_ICONS
+from utils.config import TEST_TYPES, HOSPITAL_NAME, STATUS_LABELS, STATUS_ICONS, BASE_URL
 from utils.notifications import request_notification_permission_script
 
 
@@ -74,24 +74,58 @@ def show():
                     )
                     st.markdown(script, unsafe_allow_html=True)
 
+                patient_id = result["patient"]["patient_id"]
+
                 # Store last registered patient for token printing
                 st.session_state.last_patient = {
                     "name": name,
-                    "patient_id": result["patient"]["patient_id"],
+                    "patient_id": patient_id,
                     "tests": result["tests"],
                     "mobile": mobile,
                 }
 
-                # Show token preview
-                with st.expander("🖨️ Token Preview", expanded=True):
-                    slip = harness.generate_token_slip(
-                        name, result["patient"]["patient_id"], result["tests"]
-                    )
-                    st.code(slip, language="text")
-                    st.markdown(
-                        "👉 Click **Print Token** button above or use Ctrl+P to print.",
-                        help="Print this token slip",
-                    )
+                # Show QR Code and Token Preview side by side
+                qr_col, token_col = st.columns([1, 2])
+
+                with qr_col:
+                    qr_data_uri = harness.generate_qr_code_base64(patient_id)
+                    if qr_data_uri:
+                        qr_url = harness.get_qr_url(patient_id)
+                        st.markdown(
+                            f"""
+                            <div style="text-align: center; padding: 10px;">
+                                <h4>📱 Patient QR</h4>
+                                <img src="{qr_data_uri}" style="width: 180px; height: 180px; 
+                                     border: 2px solid #e0e0e0; border-radius: 12px; padding: 8px;
+                                     background: white;" alt="QR Code">
+                                <p style="font-size: 0.8rem; color: #666; margin-top: 8px;">
+                                    Scan to track live status
+                                </p>
+                                <a href="{qr_url}" target="_blank" 
+                                   style="text-decoration: none;">
+                                    <button style="background: #667eea; color: white; border: none;
+                                                   padding: 6px 16px; border-radius: 8px; cursor: pointer;
+                                                   font-size: 0.9rem;">
+                                        🔗 Open Link
+                                    </button>
+                                </a>
+                            </div>
+                            """,
+                            unsafe_allow_html=True,
+                        )
+                    else:
+                        st.info("📱 Install 'qrcode' package for QR generation:\n`pip install qrcode[pil]`")
+
+                with token_col:
+                    with st.expander("🖨️ Token Preview", expanded=True):
+                        slip = harness.generate_token_slip(
+                            name, patient_id, result["tests"]
+                        )
+                        st.code(slip, language="text")
+                        st.markdown(
+                            "👉 Click **Print Token** button above or use Ctrl+P to print.",
+                            help="Print this token slip",
+                        )
             else:
                 st.error(result["message"])
 
