@@ -1,0 +1,24 @@
+# Jekyll Configuration for CardioQueue Pages
+# Exclude non-static assets to speed up build and prevent parsing hangs on binary/Python files
+
+exclude:
+  - app.py
+  - llm_harness.py
+  - requirements.txt
+  - DEPLOY.md
+  - USER_MANUAL.md
+  - USER_MANUAL.html
+  - cardioqueue.db
+  - .env
+  - pages/
+  - utils/
+  - assets/
+  - __pycache__/
+  - nul
+  - verify_build_final.py
+  - scrape_runs_all.py
+  - scrape_actions_branch.py
+  - scrape_actions.py
+  - wait_html_deploy.py
+  - check_actions.py
+  - check_status.py
