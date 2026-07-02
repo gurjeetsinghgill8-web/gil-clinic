@@ -173,6 +173,56 @@ def show():
                     "number to see their live test statuses."
                 )
 
+        # ─── Common QR Code for Patient Status ─────────────────────────────────
+        st.divider()
+        st.subheader("📸 एक ही QR Code सबके लिए / One QR Code for All Patients")
+
+    st.markdown(
+        "इस QR Code को रिसेप्शन पर चिपका दें। मरीज़ स्कैन करें → अपना मोबाइल नंबर डालें → "
+        "अपने टेस्ट का स्टेटस देखें। **हर मरीज़ के लिए अलग QR बनाने की ज़रूरत नहीं!**\n\n"
+        "Place this QR at reception. Patients scan → enter their mobile → see live status. "
+        "**No need for per-patient QR codes!**"
+    )
+
+    common_qr_url = f"{BASE_URL}/?patient=common"
+    qr_data_uri = harness.generate_qr_code_base64("common")
+    if qr_data_uri:
+        col1, col2 = st.columns([1, 2])
+        with col1:
+            st.markdown(
+                f"""
+                <div style="text-align: center; padding: 10px; border: 2px dashed #667eea;
+                     border-radius: 12px; background: #f8f9ff;">
+                    <img src="{qr_data_uri}" style="width: 180px; height: 180px;
+                         border-radius: 8px; background: white;" alt="Common QR">
+                    <p style="font-size: 0.85rem; color: #667eea; margin-top: 8px; font-weight: 600;">
+                        📱 Scan → Enter Mobile
+                    </p>
+                    <a href="{common_qr_url}" target="_blank"
+                       style="text-decoration: none;">
+                        <button style="background: #667eea; color: white; border: none;
+                                       padding: 6px 16px; border-radius: 8px; cursor: pointer;
+                                       font-size: 0.9rem;">
+                            🔗 Test Link
+                        </button>
+                    </a>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+        with col2:
+            st.markdown(
+                """
+                ### 📋 कैसे काम करता है / How It Works
+                1. 🖨️ **Print this QR code** and paste at reception counter
+                2. 📱 **Patient scans** QR with their phone camera
+                3. 🔢 **Enters mobile number** they gave at registration
+                4. 👁️ **Sees live status** of all their tests
+                5. 🔄 **Auto-refreshes** every 5 seconds with sound + vibration
+                """,
+                unsafe_allow_html=True,
+            )
+
     # ─── Today's Patients Table ──────────────────────────────────────────────
     st.divider()
     st.subheader("📋 Today's Registered Patients")

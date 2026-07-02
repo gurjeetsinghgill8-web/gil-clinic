@@ -204,28 +204,61 @@ def show():
             "अपना रजिस्टर्ड मोबाइल नंबर डालें — Enter your registered mobile number"
         )
 
+        # Initialize session state for search
+        if "ps_result" not in st.session_state:
+            st.session_state.ps_result = None
+        if "ps_mobile" not in st.session_state:
+            st.session_state.ps_mobile = ""
+
         mobile = st.text_input(
             "📱 Mobile Number",
-            placeholder="10-digit mobile number",
+            placeholder="10-digit mobile number — auto-searches on typing",
             max_chars=10,
             key="patient_mobile",
         )
 
-        if st.button("🔍 Check Status", type="primary", use_container_width=True):
+        # Auto-search when 10 digits entered
+        if mobile and len(mobile) == 10 and mobile.isdigit():
+            if mobile != st.session_state.ps_mobile:
+                st.session_state.ps_mobile = mobile
+                res = harness.get_patient_status(mobile)
+                if res and res.get("found"):
+                    st.session_state.ps_result = res
+                    st.rerun()
+                else:
+                    st.warning("⚠️ इस नंबर पर कोई मरीज़ नहीं मिला / No patient found with this number")
+                    st.session_state.ps_result = None
+
+        # Fallback button
+        search_clicked = st.button("🔍 Check Status", type="primary", use_container_width=True)
+
+        if search_clicked:
             if not mobile or len(mobile) != 10 or not mobile.isdigit():
                 st.warning("⚠️ कृपया सही 10 अंकों का मोबाइल नंबर डालें")
                 return
-            result = harness.get_patient_status(mobile)
+            res = harness.get_patient_status(mobile)
+            if res and res.get("found"):
+                st.session_state.ps_result = res
+                st.session_state.ps_mobile = mobile
+                st.rerun()
+            else:
+                st.warning("⚠️ इस नंबर पर कोई मरीज़ नहीं मिला / No patient found with this number")
+                st.session_state.ps_result = None
 
         # Manual entry instructions
         st.markdown("---")
         st.markdown(
-            "📸 **QR Code मिला?** रिसेप्शन से मिला QR Code स्कैन करें "
-            "और अपना स्टेटस अपने आप खुल जाएगा।"
+            "📸 **QR Code मिला?** रिसेप्शन से QR Code स्कैन करें → "
+            "अपना मोबाइल नंबर डालें → स्टेटस अपने आप दिख जाएगा।"
         )
-        return
 
-    # ─── Handle auto-loaded from QR ────────────────────────────────────────
+        # If we have a result from auto-search, use it
+        if st.session_state.ps_result:
+            result = st.session_state.ps_result
+        else:
+            return
+
+    # ─── Handle result ────────────────────────────────────────────────────────
     if not result or not result["found"]:
         st.error("❌ Patient not found. Please scan the QR code again or check with reception.")
         st.markdown(
