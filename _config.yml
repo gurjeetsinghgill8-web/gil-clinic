@@ -1,6 +1,5 @@
 # Jekyll Configuration for CardioQueue Pages
-# Serve PWA content directly from /pwa directory
-source: pwa
+# Exclude non-static assets to speed up build and prevent parsing hangs on binary/Python files
 
 exclude:
   - app.py

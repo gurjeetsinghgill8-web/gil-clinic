@@ -1,48 +1,24 @@
-# Static-only deploy for CardioQueue PWA
-# Copies pwa/ content to root so it serves at /gil-clinic/
-name: pages build and deployment
+# Deploy /pwa content to gh-pages branch
+# Serves PWA at https://gurjeetsinghgill8-web.github.io/gil-clinic/
+name: deploy-pwa
 
 on:
   push:
     branches: [main]
 
 permissions:
-  contents: read
-  pages: write
-  id-token: write
-
-concurrency:
-  group: "pages-deploy"
-  cancel-in-progress: false
+  contents: write
 
 jobs:
-  build:
+  deploy:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
-      - name: Prepare static files
-        run: |
-          mkdir -p _site
-          cp -r pwa/* _site/
-      - uses: actions/upload-pages-artifact@v3
+      - name: Deploy pwa/ to gh-pages branch
+        uses: peaceiris/actions-gh-pages@v4
         with:
-          path: _site/
-      - name: Report build status
-        run: |
-          gh api -X POST "repos/$GITHUB_REPOSITORY/pages/telemetry" \
-            -F github_run_id="$GITHUB_RUN_ID" \
-            -F conclusion="success"
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          CONCLUSION: success
-
-  deploy:
-    needs: build
-    runs-on: ubuntu-24.04
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./pwa
+          force_orphan: true
+          user_name: "github-actions[bot]"
+          user_email: "github-actions[bot]@users.noreply.github.com"
