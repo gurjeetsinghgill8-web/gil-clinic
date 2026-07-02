@@ -1,0 +1,789 @@
+/* 
+ * CardioQueue PWA — Mobile-First Styles
+ * ======================================
+ * Pure mobile-first design. Single-column, touch-friendly.
+ * No external dependencies. Works offline.
+ */
+
+/* ─── Reset ─────────────────────────────────────────────────────────────────── */
+*, *::before, *::after {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+html {
+    -webkit-text-size-adjust: 100%;
+    -webkit-tap-highlight-color: transparent;
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+    background: #f5f6fa;
+    color: #333;
+    line-height: 1.6;
+    overflow-x: hidden;
+    -webkit-font-smoothing: antialiased;
+}
+
+/* ─── Screens ──────────────────────────────────────────────────────────────── */
+.screen {
+    display: none;
+    min-height: 100vh;
+    min-height: 100dvh;
+}
+.screen.active {
+    display: block;
+}
+
+/* ─── Loading Screen ───────────────────────────────────────────────────────── */
+#loading-screen {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    z-index: 9999;
+}
+#loading-screen.active {
+    display: flex;
+}
+.loading-container {
+    text-align: center;
+}
+.heart-pulse {
+    font-size: 4rem;
+    animation: heartBeat 1.5s ease infinite;
+}
+@keyframes heartBeat {
+    0% { transform: scale(1); }
+    25% { transform: scale(1.2); }
+    40% { transform: scale(1); }
+    60% { transform: scale(1.15); }
+    100% { transform: scale(1); }
+}
+.spinner {
+    width: 40px;
+    height: 40px;
+    margin: 20px auto;
+    border: 4px solid rgba(255,255,255,0.3);
+    border-top-color: white;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+}
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+.loading-text {
+    margin-top: 8px;
+    opacity: 0.8;
+    font-size: 0.9rem;
+}
+
+/* ─── Login Screen ─────────────────────────────────────────────────────────── */
+#login-screen {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    min-height: 100vh;
+    min-height: 100dvh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+}
+#login-screen.active {
+    display: flex;
+}
+.login-container {
+    background: white;
+    border-radius: 20px;
+    padding: 32px 24px;
+    width: 100%;
+    max-width: 400px;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.15);
+}
+.login-header {
+    text-align: center;
+    margin-bottom: 24px;
+}
+.hospital-icon {
+    font-size: 3rem;
+    margin-bottom: 8px;
+}
+.login-header h1 {
+    font-size: 1.6rem;
+    color: #333;
+}
+.subtitle {
+    color: #888;
+    font-size: 0.85rem;
+    margin-top: 4px;
+}
+.login-form {
+    margin-bottom: 16px;
+}
+.login-footer {
+    text-align: center;
+    color: #999;
+    font-size: 0.8rem;
+}
+.login-footer p {
+    margin-bottom: 4px;
+}
+.version {
+    color: #ccc;
+    font-size: 0.7rem;
+}
+.login-error {
+    color: #e53935;
+    font-size: 0.85rem;
+    text-align: center;
+    margin-top: 8px;
+    min-height: 20px;
+}
+
+/* ─── Form Elements ────────────────────────────────────────────────────────── */
+.form-group {
+    margin-bottom: 16px;
+}
+.form-group label {
+    display: block;
+    font-weight: 600;
+    margin-bottom: 6px;
+    font-size: 0.9rem;
+    color: #555;
+}
+.form-group input,
+.form-group select {
+    width: 100%;
+    padding: 12px 14px;
+    border: 1.5px solid #dee2e6;
+    border-radius: 12px;
+    font-size: 1rem;
+    background: #fafafa;
+    transition: border-color 0.2s;
+    -webkit-appearance: none;
+    appearance: none;
+}
+.form-group input:focus,
+.form-group select:focus {
+    outline: none;
+    border-color: #667eea;
+    box-shadow: 0 0 0 3px rgba(102,126,234,0.15);
+    background: white;
+}
+.form-row {
+    display: flex;
+    gap: 12px;
+}
+.form-row .form-group {
+    flex: 1;
+}
+.test-checkboxes {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+.checkbox-label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: #f0f0f0;
+    padding: 8px 14px;
+    border-radius: 20px;
+    font-size: 0.9rem;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+.checkbox-label:has(input:checked) {
+    background: #667eea;
+    color: white;
+}
+.checkbox-label input {
+    display: none;
+}
+
+/* ─── Buttons ──────────────────────────────────────────────────────────────── */
+.btn {
+    display: inline-block;
+    padding: 12px 20px;
+    border: none;
+    border-radius: 12px;
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+    text-align: center;
+}
+.btn:active {
+    transform: scale(0.97);
+}
+.btn-block {
+    display: block;
+    width: 100%;
+}
+.btn-primary {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    box-shadow: 0 4px 15px rgba(102,126,234,0.3);
+}
+.btn-secondary {
+    background: #f0f0f0;
+    color: #555;
+}
+.btn-success {
+    background: linear-gradient(135deg, #43A047 0%, #2E7D32 100%);
+    color: white;
+}
+.btn-sm {
+    padding: 8px 14px;
+    font-size: 0.85rem;
+    border-radius: 8px;
+}
+
+/* ─── App Shell ────────────────────────────────────────────────────────────── */
+#app-shell {
+    display: none;
+    flex-direction: column;
+    min-height: 100vh;
+    min-height: 100dvh;
+}
+#app-shell.active {
+    display: flex;
+}
+
+/* ─── Header ───────────────────────────────────────────────────────────────── */
+#app-header {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    padding: 12px 16px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+}
+.header-title {
+    font-size: 1.1rem;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.header-icon {
+    font-size: 1.3rem;
+}
+.icon-btn {
+    background: none;
+    border: none;
+    color: white;
+    font-size: 1.4rem;
+    padding: 4px 8px;
+    cursor: pointer;
+}
+
+/* ─── Install Banner ───────────────────────────────────────────────────────── */
+#install-banner {
+    background: #fff;
+    padding: 10px 16px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    border-bottom: 1px solid #e0e0e0;
+    font-size: 0.85rem;
+}
+#install-banner span {
+    flex: 1;
+}
+#install-banner-btn {
+    background: #667eea;
+    color: white;
+    border: none;
+    padding: 6px 14px;
+    border-radius: 8px;
+    font-weight: 600;
+    cursor: pointer;
+}
+#install-dismiss {
+    background: none;
+    border: none;
+    font-size: 1.2rem;
+    cursor: pointer;
+    color: #999;
+}
+
+/* ─── Main Content ─────────────────────────────────────────────────────────── */
+#main-content {
+    flex: 1;
+    padding: 12px 16px;
+    padding-bottom: 80px;
+    overflow-y: auto;
+}
+.page-content {
+    max-width: 600px;
+    margin: 0 auto;
+}
+.page-content h2 {
+    font-size: 1.3rem;
+    margin-bottom: 4px;
+}
+.page-content h3 {
+    font-size: 1.1rem;
+    margin: 12px 0 8px;
+}
+.page-content h4 {
+    font-size: 1rem;
+}
+.subtitle {
+    color: #888;
+    font-size: 0.8rem;
+    margin-bottom: 12px;
+}
+.page-loading {
+    text-align: center;
+    padding: 40px 16px;
+    color: #888;
+}
+
+/* ─── Bottom Navigation ────────────────────────────────────────────────────── */
+#bottom-nav {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: white;
+    display: flex;
+    justify-content: space-around;
+    padding: 6px 0;
+    padding-bottom: max(6px, env(safe-area-inset-bottom));
+    border-top: 1px solid #e0e0e0;
+    z-index: 100;
+    box-shadow: 0 -2px 10px rgba(0,0,0,0.05);
+}
+.nav-btn {
+    background: none;
+    border: none;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    padding: 4px 8px;
+    cursor: pointer;
+    color: #999;
+    transition: color 0.2s;
+    font-size: 0.7rem;
+    min-width: 60px;
+}
+.nav-btn.active {
+    color: #667eea;
+}
+.nav-btn.active .nav-icon {
+    transform: scale(1.1);
+}
+.nav-icon {
+    font-size: 1.3rem;
+    transition: transform 0.2s;
+}
+.nav-label {
+    font-weight: 500;
+}
+
+/* ─── Cards ────────────────────────────────────────────────────────────────── */
+.card {
+    background: white;
+    border-radius: 14px;
+    padding: 16px;
+    margin-bottom: 10px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+    border: 1px solid #f0f0f0;
+}
+
+/* ─── Stats Row ────────────────────────────────────────────────────────────── */
+.stats-row {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-bottom: 8px;
+}
+.stat-card {
+    flex: 1;
+    min-width: 70px;
+    padding: 12px 8px;
+    border-radius: 12px;
+    text-align: center;
+}
+.stat-value {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: #333;
+}
+.stat-label {
+    font-size: 0.7rem;
+    color: #666;
+    margin-top: 2px;
+}
+
+/* ─── Department Stats ─────────────────────────────────────────────────────── */
+.dept-stats {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+.dept-stat {
+    padding: 12px 16px;
+}
+.dept-stat h4 {
+    margin-bottom: 6px;
+    color: #555;
+}
+.dept-stat-row {
+    display: flex;
+    gap: 12px;
+    font-size: 0.85rem;
+    color: #777;
+}
+
+/* ─── Form Card ────────────────────────────────────────────────────────────── */
+.form-card {
+    margin-top: 12px;
+}
+
+/* ─── Patient Result ───────────────────────────────────────────────────────── */
+.patient-result-card {
+    margin-top: 12px;
+}
+.patient-result-header h4 {
+    font-size: 1.1rem;
+    margin-bottom: 4px;
+}
+.patient-result-header p {
+    color: #888;
+    font-size: 0.85rem;
+}
+.test-tokens {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin: 12px 0;
+}
+.token-badge {
+    background: #667eea;
+    color: white;
+    padding: 4px 12px;
+    border-radius: 16px;
+    font-size: 0.8rem;
+    font-weight: 600;
+}
+.btn-group {
+    display: flex;
+    gap: 8px;
+    margin-top: 12px;
+}
+
+/* ─── Messages ─────────────────────────────────────────────────────────────── */
+.success-msg {
+    background: #E8F5E9;
+    color: #2E7D32;
+    padding: 12px;
+    border-radius: 12px;
+    margin: 12px 0;
+    font-weight: 600;
+    text-align: center;
+}
+.error-msg {
+    background: #FFEBEE;
+    color: #C62828;
+    padding: 12px;
+    border-radius: 12px;
+    margin: 12px 0;
+    font-weight: 600;
+    text-align: center;
+}
+.info-box {
+    background: #E3F2FD;
+    border-radius: 12px;
+    padding: 12px 16px;
+    font-size: 0.85rem;
+    color: #1565C0;
+}
+
+/* ─── Patient List ─────────────────────────────────────────────────────────── */
+.search-bar {
+    margin-bottom: 12px;
+}
+.search-bar input {
+    width: 100%;
+    padding: 10px 14px;
+    border: 1.5px solid #dee2e6;
+    border-radius: 12px;
+    font-size: 0.95rem;
+    background: white;
+}
+.patient-list-item {
+    cursor: pointer;
+}
+.patient-list-header h4 {
+    margin-bottom: 2px;
+}
+.patient-list-header p {
+    font-size: 0.8rem;
+    color: #888;
+}
+.patient-list-tests {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-top: 8px;
+}
+.status-chip {
+    padding: 3px 8px;
+    border-radius: 12px;
+    font-size: 0.7rem;
+    font-weight: 600;
+}
+
+/* ─── Technician Dashboard ─────────────────────────────────────────────────── */
+.current-patient-card h3 {
+    font-size: 1.2rem;
+}
+.current-patient-card p {
+    font-size: 0.85rem;
+    color: #888;
+}
+.current-patient-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 12px;
+}
+.current-patient-actions {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    flex-wrap: wrap;
+}
+.elapsed-time {
+    font-size: 0.85rem;
+    color: #888;
+}
+.waiting-item {
+    padding: 12px 16px;
+}
+.waiting-item-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 6px;
+}
+.waiting-item-header h4 {
+    font-size: 1rem;
+}
+.waiting-item-header p {
+    font-size: 0.8rem;
+    color: #888;
+}
+.waiting-meta {
+    display: flex;
+    gap: 12px;
+    font-size: 0.8rem;
+    color: #999;
+}
+.waiting-actions {
+    display: flex;
+    gap: 6px;
+}
+
+/* ─── Doctor Dashboard ─────────────────────────────────────────────────────── */
+.pending-item {
+    padding: 12px 16px;
+}
+.pending-item-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+}
+.pending-item-header h4 {
+    font-size: 1rem;
+    margin-bottom: 2px;
+}
+.pending-item-header p {
+    font-size: 0.8rem;
+    color: #888;
+}
+
+/* ─── Patient Status (PWA Dashboard) ───────────────────────────────────────── */
+.patient-status-dashboard {
+    max-width: 500px;
+    margin: 0 auto;
+}
+.patient-info-card {
+    margin-bottom: 12px;
+}
+.patient-info-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+.patient-info-header h3 {
+    font-size: 1.2rem;
+}
+.patient-id {
+    font-size: 0.8rem;
+    color: #888;
+}
+.status-badge {
+    padding: 6px 14px;
+    border-radius: 20px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    white-space: nowrap;
+}
+.live-indicator {
+    text-align: center;
+    padding: 6px;
+    margin-bottom: 8px;
+    font-size: 0.8rem;
+    color: #888;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+}
+.pulse-dot {
+    width: 10px;
+    height: 10px;
+    background: #4CAF50;
+    border-radius: 50%;
+    animation: pulse 2s infinite;
+    display: inline-block;
+}
+@keyframes pulse {
+    0% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.5; transform: scale(1.3); }
+    100% { opacity: 1; transform: scale(1); }
+}
+.progress-section {
+    margin-bottom: 12px;
+    text-align: center;
+}
+.progress-section p {
+    margin-bottom: 4px;
+    font-size: 0.9rem;
+}
+.progress-text {
+    font-size: 0.8rem;
+    color: #888;
+}
+.progress-bar {
+    height: 10px;
+    background: #e0e0e0;
+    border-radius: 10px;
+    overflow: hidden;
+    margin: 4px 0;
+}
+.progress-bar.small {
+    height: 6px;
+    margin-top: 8px;
+}
+.progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #667eea, #764ba2);
+    border-radius: 10px;
+    transition: width 0.5s ease;
+}
+.test-card {
+    border-left: 5px solid #ccc;
+    margin-bottom: 10px;
+}
+.test-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 4px;
+}
+.test-card-header h4 {
+    font-size: 1.1rem;
+}
+.test-meta {
+    font-size: 0.8rem;
+    color: #888;
+}
+.test-status {
+    font-size: 0.9rem;
+    white-space: nowrap;
+}
+.test-details {
+    font-size: 0.85rem;
+    color: #777;
+    margin: 4px 0;
+}
+.summary-card {
+    text-align: center;
+    background: #FFF8E1;
+}
+.summary-card p {
+    font-size: 0.95rem;
+}
+
+/* ─── Patient Lookup ───────────────────────────────────────────────────────── */
+.patient-lookup {
+    text-align: center;
+    padding-top: 20px;
+}
+.patient-lookup h2 {
+    margin-bottom: 8px;
+}
+.patient-lookup p {
+    color: #888;
+    margin-bottom: 16px;
+}
+.patient-lookup input {
+    text-align: center;
+    font-size: 1.2rem;
+    letter-spacing: 2px;
+}
+
+/* ─── Token Slip ───────────────────────────────────────────────────────────── */
+.token-slip pre {
+    font-family: 'Courier New', monospace;
+    line-height: 1.5;
+}
+
+/* ─── Responsive ───────────────────────────────────────────────────────────── */
+@media (min-width: 600px) {
+    #main-content {
+        padding: 20px 32px;
+    }
+    .stats-row {
+        gap: 12px;
+    }
+    .stat-card {
+        padding: 16px 12px;
+    }
+    .stat-value {
+        font-size: 1.8rem;
+    }
+}
+
+/* ─── Print Styles ─────────────────────────────────────────────────────────── */
+@media print {
+    #app-header, #bottom-nav, #install-banner { display: none !important; }
+    #main-content { padding: 0 !important; }
+    .card { box-shadow: none !important; border: 1px solid #ddd !important; }
+}
+
+/* ─── Scrollbar ────────────────────────────────────────────────────────────── */
+::-webkit-scrollbar {
+    width: 4px;
+}
+::-webkit-scrollbar-track {
+    background: transparent;
+}
+::-webkit-scrollbar-thumb {
+    background: #ccc;
+    border-radius: 4px;
+}

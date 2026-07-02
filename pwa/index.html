@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="hi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="theme-color" content="#667eea">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="CardioQueue">
+    <link rel="manifest" href="manifest.json">
+    <link rel="icon" href="https://img.icons8.com/color/48/hospital.png" type="image/png">
+    <title>CardioQueue — GIL CLINIC</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <div id="app">
+        <!-- ═══════════ LOADING SCREEN ═══════════ -->
+        <div id="loading-screen" class="screen active">
+            <div class="loading-container">
+                <div class="heart-pulse">❤️</div>
+                <h2>CardioQueue</h2>
+                <p>GIL CLINIC — Cardiology Department</p>
+                <div class="spinner"></div>
+                <p class="loading-text">Loading...</p>
+            </div>
+        </div>
+
+        <!-- ═══════════ LOGIN SCREEN ═══════════ -->
+        <div id="login-screen" class="screen">
+            <div class="login-container">
+                <div class="login-header">
+                    <div class="hospital-icon">🏥</div>
+                    <h1>CardioQueue</h1>
+                    <p class="subtitle">GIL CLINIC — Cardiology Department</p>
+                </div>
+                <div class="login-form">
+                    <div class="form-group">
+                        <label for="role-select">अपनी भूमिका चुनें / Select Role</label>
+                        <select id="role-select">
+                            <option value="Reception">📋 Reception</option>
+                            <option value="ECG">📊 ECG Technician</option>
+                            <option value="Echo">📊 Echo Technician</option>
+                            <option value="TMT">📊 TMT Technician</option>
+                            <option value="Doctor">🩺 Doctor</option>
+                            <option value="Patient">🔍 Patient (No Login)</option>
+                        </select>
+                    </div>
+                    <div class="form-group" id="password-group">
+                        <label for="password-input">Password</label>
+                        <input type="password" id="password-input" placeholder="Enter password" autocomplete="off">
+                    </div>
+                    <button id="login-btn" class="btn btn-primary btn-block">🔐 Login</button>
+                    <p class="login-error" id="login-error"></p>
+                </div>
+                <div class="login-footer">
+                    <p>Patient? Just select "Patient" above — no password needed.</p>
+                    <p class="version">v2.0 • Pure PWA • ₹0/month</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- ═══════════ MAIN APP SHELL ═══════════ -->
+        <div id="app-shell" class="screen">
+            <!-- Top Header -->
+            <header id="app-header">
+                <button id="menu-btn" class="icon-btn">☰</button>
+                <div class="header-title">
+                    <span class="header-icon">🏥</span>
+                    <span id="header-text">CardioQueue</span>
+                </div>
+                <button id="install-btn" class="icon-btn" style="display:none;" title="Install App">📲</button>
+            </header>
+
+            <!-- PWA Install Banner -->
+            <div id="install-banner" style="display:none;">
+                <span>📲 Install CardioQueue for quick access</span>
+                <button id="install-banner-btn">Install</button>
+                <button id="install-dismiss">✕</button>
+            </div>
+
+            <!-- Main Content Area -->
+            <main id="main-content">
+                <!-- Dynamic content loaded by app.js -->
+            </main>
+
+            <!-- Bottom Navigation (visible for staff roles) -->
+            <nav id="bottom-nav" style="display:none;">
+                <button class="nav-btn" data-view="dashboard" data-icon="📊">
+                    <span class="nav-icon">📊</span>
+                    <span class="nav-label">Dashboard</span>
+                </button>
+                <button class="nav-btn" data-view="register" data-icon="➕">
+                    <span class="nav-icon">➕</span>
+                    <span class="nav-label">Register</span>
+                </button>
+                <button class="nav-btn" data-view="patients" data-icon="📋">
+                    <span class="nav-icon">📋</span>
+                    <span class="nav-label">Patients</span>
+                </button>
+                <button class="nav-btn" data-view="export" data-icon="📤">
+                    <span class="nav-icon">📤</span>
+                    <span class="nav-label">Export</span>
+                </button>
+                <button class="nav-btn" data-view="logout" data-icon="🚪">
+                    <span class="nav-icon">🚪</span>
+                    <span class="nav-label">Logout</span>
+                </button>
+            </nav>
+        </div>
+    </div>
+
+    <!-- QR Code Library -->
+    <script src="lib/qrcode.min.js"></script>
+
+    <!-- Application Scripts -->
+    <script src="js/db.js"></script>
+    <script src="js/qr.js"></script>
+    <script src="js/export.js"></script>
+    <script src="js/reception.js"></script>
+    <script src="js/technician.js"></script>
+    <script src="js/doctor.js"></script>
+    <script src="js/patient.js"></script>
+    <script src="js/app.js"></script>
+</body>
+</html>
