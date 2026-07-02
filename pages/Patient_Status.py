@@ -185,6 +185,8 @@ def show():
     # ─── Detect patient from query param ───────────────────────────────────
     query_params = st.query_params
     patient_id_from_url = query_params.get("patient", None)
+    if isinstance(patient_id_from_url, list):
+        patient_id_from_url = patient_id_from_url[0] if patient_id_from_url else None
 
     # ─── Mobile Input OR auto-load from URL ────────────────────────────────
     if patient_id_from_url:
