@@ -1,12 +1,13 @@
 /**
  * CardioQueue — Technician Module
- * Shared dashboard for ECG, Echo, TMT technicians.
+ * Shared dashboard for ECG, Echo, TMT, Holter, ABPM, OPD technicians.
  * Features: Current Patient, Waiting List, Call/Start/Complete actions.
+ * NEW: Alert banner for urgent requests from Reception/Manager.
  */
 
 const TECH_STATUS_ICONS = { waiting: "🟡", called: "🔵", in_progress: "🟠", completed: "✅", report_ready: "📋", delivered: "📄" };
 const TECH_STATUS_LABELS = { waiting: "Waiting", called: "Called", in_progress: "In Progress", completed: "Completed", report_ready: "Report Ready", delivered: "Delivered" };
-const TECH_AVG_TIMES = { ECG: 10, Echo: 20, TMT: 30, Holter: 15, ABPM: 15 };
+const TECH_AVG_TIMES = { ECG: 10, Echo: 20, TMT: 30, Holter: 15, ABPM: 15, OPD: 15 };
 
 async function renderTechnicianDashboard(container, testName) {
     container.innerHTML = `<div class="page-loading"><div class="spinner"></div><p>Loading ${testName}...</p></div>`;
@@ -15,6 +16,10 @@ async function renderTechnicianDashboard(container, testName) {
         const current = await getCurrentPatient(testName);
         const waitingList = await getQueue(testName, "waiting");
         const stats = await getDepartmentStats(testName);
+        
+        // Get active urgent alerts for this department
+        const alerts = await getActiveAlerts(testName);
+        const urgentAlerts = (alerts || []).filter(a => a.type === "urgent");
 
         const totalPatients = Object.values(stats).reduce((a, b) => a + b, 0);
 
@@ -22,6 +27,30 @@ async function renderTechnicianDashboard(container, testName) {
             <div class="page-content">
                 <h2>📊 ${testName} Dashboard</h2>
                 <p class="subtitle">${new Date().toLocaleString("hi-IN")}</p>
+
+                <!-- URGENT ALERT BANNER -->
+                ${urgentAlerts.length > 0 ? `
+                <div class="urgent-banner" style="background:#ff1744;color:white;padding:12px 16px;border-radius:12px;margin-bottom:12px;
+                        animation:pulseBg 1s infinite;">
+                    <h4 style="margin:0;">🚨 URGENT REQUEST (${urgentAlerts.length})</h4>
+                    ${urgentAlerts.slice(0, 5).map(a => `
+                        <div style="padding:4px 0;font-size:0.9rem;border-bottom:1px solid rgba(255,255,255,0.3);">
+                            <strong>${a.patientName || "Patient"}</strong>
+                            ${a.tokenNumber ? `#${a.tokenNumber}` : ""}
+                            ${a.testName ? `— ${a.testName}` : ""}
+                            <span style="font-size:0.75rem;opacity:0.8;"> ${a.fromRole} से</span>
+                        </div>
+                    `).join("")}
+                    <button class="btn btn-sm" style="background:white;color:#ff1744;margin-top:8px;font-weight:bold;"
+                            onclick="techDismissAlerts('${testName}')">✅ Dismiss Alerts</button>
+                </div>
+                <style>
+                    @keyframes pulseBg {
+                        0%, 100% { background: #ff1744; }
+                        50% { background: #d50000; }
+                    }
+                </style>
+                ` : ""}
 
                 <div class="stats-row">
                     <div class="stat-card" style="background:#FFF3E0;">
@@ -119,12 +148,17 @@ async function renderTechnicianDashboard(container, testName) {
 
         html += `
                 <div class="card info-box" style="margin-top:16px;">
-                    <p>ℹ️ <strong>${testName}</strong> | Avg time: ${TECH_AVG_TIMES[testName] || 15} min | Room: ${testName} Room 1</p>
+                    <p>ℹ️ <strong>${testName}</strong> | Avg time: ${TECH_AVG_TIMES[testName] || 15} min | Room: ${testName} Room</p>
                 </div>
             </div>
         `;
 
         container.innerHTML = html;
+
+        // If urgent alerts arrived, play sound
+        if (urgentAlerts.length > 0) {
+            playAlertSound("urgent");
+        }
 
     } catch(e) {
         container.innerHTML = `<div class="page-content"><p class="error-msg">❌ Error: ${e.message}</p></div>`;
@@ -142,54 +176,43 @@ async function renderTechnicianDashboard(container, testName) {
 async function techCallPatient(testId, patientName, testName, token, mobile, patientId) {
     const success = await updateTestStatus(testId, "called");
     if (success) {
-        // Trigger notification sound
-        try {
-            const ctx = new (window.AudioContext || window.webkitAudioContext)();
-            const osc = ctx.createOscillator();
-            const gain = ctx.createGain();
-            osc.connect(gain);
-            gain.connect(ctx.destination);
-            osc.frequency.value = 880;
-            osc.type = "sine";
-            gain.gain.value = 0.3;
-            osc.start();
-            osc.stop(ctx.currentTime + 0.3);
-        } catch(e) {}
+        playAlertSound("success");
         if (navigator.vibrate) navigator.vibrate(200);
-        alert(`🔵 Called ${patientName} to ${testName} Room`);
+        showToast(`🔵 Called ${patientName} to ${testName} Room`, "info");
     } else {
-        alert("❌ Failed to call patient");
+        showToast("❌ Failed to call patient", "error");
     }
 }
 
 async function techStartTest(testId) {
     const success = await updateTestStatus(testId, "in_progress");
     if (success) {
-        alert("🟠 Test started");
+        showToast("🟠 Test started", "info");
     } else {
-        alert("❌ Failed to start test");
+        showToast("❌ Failed to start test", "error");
     }
 }
 
 async function techCompleteTest(testId, patientName, testName, mobile, patientId) {
     const success = await updateTestStatus(testId, "completed");
     if (success) {
-        alert(`✅ ${testName} completed for ${patientName}`);
-        // Trigger notification
-        try {
-            const ctx = new (window.AudioContext || window.webkitAudioContext)();
-            const osc = ctx.createOscillator();
-            const gain = ctx.createGain();
-            osc.connect(gain);
-            gain.connect(ctx.destination);
-            osc.frequency.value = 660;
-            osc.type = "sine";
-            gain.gain.value = 0.3;
-            osc.start();
-            osc.stop(ctx.currentTime + 0.2);
-        } catch(e) {}
+        showToast(`✅ ${testName} completed for ${patientName}`, "success");
+        playAlertSound("success");
         if (navigator.vibrate) navigator.vibrate(100);
+        
+        // Auto-dismiss any urgent alerts for this test
+        await dismissAlertsByTestId(testId);
     } else {
-        alert("❌ Failed to complete test");
+        showToast("❌ Failed to complete test", "error");
     }
+}
+
+async function techDismissAlerts(testName) {
+    const alerts = await getActiveAlerts(testName);
+    for (const a of alerts) {
+        if (a.type === "urgent") {
+            await dismissAlert(a.id);
+        }
+    }
+    showToast("✅ Alerts dismissed", "success");
 }

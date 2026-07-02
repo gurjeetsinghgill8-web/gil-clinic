@@ -1,6 +1,8 @@
 /**
  * CardioQueue — Doctor Module
  * Manages report lifecycle: Review completed tests → Mark Report Ready → Mark Delivered.
+ * NEW: OPD queue (consultation management)
+ * NEW: Sends report_ready alert to Reception
  */
 
 async function renderDoctorDashboard(container) {
@@ -9,6 +11,8 @@ async function renderDoctorDashboard(container) {
     try {
         const completed = await getCompletedTests();
         const reportReady = await getReportReadyTests();
+        const opdWaiting = await getQueue("OPD", "waiting");
+        const opdCurrent = await getCurrentPatient("OPD");
 
         let html = `
             <div class="page-content">
@@ -24,10 +28,69 @@ async function renderDoctorDashboard(container) {
                         <div class="stat-value">${reportReady.length}</div>
                         <div class="stat-label">📤 Ready to Deliver</div>
                     </div>
+                    <div class="stat-card" style="background:#E8F5E9;">
+                        <div class="stat-value">${opdWaiting.length}</div>
+                        <div class="stat-label">🩺 OPD Waiting</div>
+                    </div>
                 </div>
+
+                <!-- ═══════════ OPD SECTION ═══════════ -->
+                <h3 style="margin-top:16px;">🩺 OPD Queue (${opdWaiting.length})</h3>
         `;
 
-        // ─── Pending Reports (completed, awaiting report_ready) ───────────────
+        // Current OPD Patient
+        if (opdCurrent) {
+            const p = opdCurrent.patients || {};
+            html += `
+                <div class="card" style="border-left:5px solid #4CAF50;margin-bottom:8px;">
+                    <div style="display:flex;justify-content:space-between;align-items:center;">
+                        <div>
+                            <h4>👤 ${p.name || "Unknown"}</h4>
+                            <p>🎫 Token #${opdCurrent.tokenNumber} | 📱 ${p.mobile || ""}</p>
+                        </div>
+                        <div>
+                            <button class="btn btn-success btn-sm" onclick="doctorCompleteOPD('${opdCurrent.id}', '${(p.name || "").replace(/'/g, "\\'")}', '${p.mobile || ""}', '${opdCurrent.patientId}')">
+                                ✅ Done
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `;
+        } else if (opdWaiting.length > 0) {
+            // Show call button for first waiting OPD
+            const first = opdWaiting[0];
+            const p = first.patients || {};
+            html += `
+                <div class="card" style="border-left:5px solid #FFA500;margin-bottom:8px;">
+                    <div style="display:flex;justify-content:space-between;align-items:center;">
+                        <div>
+                            <h4>👤 ${p.name || "Unknown"}</h4>
+                            <p>🎫 Token #${first.tokenNumber} | 📱 ${p.mobile || ""}</p>
+                        </div>
+                        <button class="btn btn-primary btn-sm" onclick="doctorCallOPD('${first.id}', '${(p.name || "").replace(/'/g, "\\'")}')">
+                            🔵 Call for OPD
+                        </button>
+                    </div>
+                </div>
+            `;
+            // List remaining
+            for (let i = 1; i < opdWaiting.length; i++) {
+                const w = opdWaiting[i];
+                const px = w.patients || {};
+                html += `
+                    <div class="card waiting-item" style="padding:8px 12px;margin-top:4px;">
+                        <div style="display:flex;justify-content:space-between;">
+                            <span>👤 ${px.name || "Unknown"} — 🎫 #${w.tokenNumber}</span>
+                            <span style="color:#888;font-size:0.8rem;">⏳ ${calculateWaitTime("OPD", w.queuePosition || 0)} min</span>
+                        </div>
+                    </div>
+                `;
+            }
+        } else {
+            html += `<div class="card"><p>✅ No OPD patients waiting.</p></div>`;
+        }
+
+        // ═══════════ PENDING REPORTS ═══════════
         html += `
                 <h3 style="margin-top:16px;">📋 Pending Reports (${completed.length})</h3>
         `;
@@ -53,7 +116,7 @@ async function renderDoctorDashboard(container) {
             }
         }
 
-        // ─── Reports Ready for Delivery ───────────────────────────────────────
+        // ═══════════ REPORTS READY ═══════════
         html += `
                 <h3 style="margin-top:16px;">📤 Reports Ready for Delivery (${reportReady.length})</h3>
         `;
@@ -93,23 +156,54 @@ async function renderDoctorDashboard(container) {
     }, 10000);
 }
 
-// ─── Doctor Actions ────────────────────────────────────────────────────────────
+// ─── OPD Actions ────────────────────────────────────────────────────────────────
+
+async function doctorCallOPD(testId, patientName) {
+    const success = await updateTestStatus(testId, "called");
+    if (success) {
+        showToast(`🔵 Called ${patientName} for OPD consultation`, "info");
+        playAlertSound("success");
+        if (navigator.vibrate) navigator.vibrate(200);
+    } else {
+        showToast("❌ Failed to call patient", "error");
+    }
+}
+
+async function doctorCompleteOPD(testId, patientName, mobile, patientId) {
+    const success = await updateTestStatus(testId, "completed");
+    if (success) {
+        showToast(`✅ OPD complete for ${patientName}`, "success");
+        playAlertSound("success");
+        if (navigator.vibrate) navigator.vibrate(100);
+    } else {
+        showToast("❌ Failed to complete OPD", "error");
+    }
+}
+
+// ─── Doctor Actions ─────────────────────────────────────────────────────────────
 
 async function doctorMarkReady(testId, patientName, testName, mobile, patientId) {
     const success = await updateTestStatus(testId, "report_ready");
     if (success) {
-        alert(`📋 Report ready for ${patientName} — ${testName}`);
+        showToast(`📋 Report ready for ${patientName} — ${testName}`, "success");
         if (navigator.vibrate) navigator.vibrate(100);
+        
+        // Send alert to Reception that report is ready
+        await sendAlert("report_ready",
+            `📋 ${patientName} — ${testName} report ready`,
+            "Doctor", "Reception",
+            { patientId, patientName, testName, relatedTestId: testId }
+        );
     } else {
-        alert("❌ Failed to mark report ready");
+        showToast("❌ Failed to mark report ready", "error");
     }
 }
 
 async function doctorDeliver(testId) {
     const success = await updateTestStatus(testId, "delivered");
     if (success) {
-        alert("📄 Report marked as delivered");
+        showToast("📄 Report marked as delivered", "success");
     } else {
-        alert("❌ Failed to mark delivered");
+        showToast("❌ Failed to mark delivered", "error");
     }
 }

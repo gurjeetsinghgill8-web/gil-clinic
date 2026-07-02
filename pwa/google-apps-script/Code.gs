@@ -36,6 +36,13 @@ const TEST_COL = {
   completedAt: 9, reportReadyAt: 10, deliveredAt: 11, createdAt: 12
 };
 
+// Column indices for Alerts sheet (0-based)
+const ALERT_COL = {
+  id: 0, type: 1, message: 2, fromRole: 3, toRole: 4,
+  patientId: 5, patientName: 6, testName: 7, tokenNumber: 8,
+  relatedTestId: 9, createdAt: 10, dismissedAt: 11
+};
+
 // ─── INIT — Auto-create sheets if missing ──────────────────────────────────────
 
 function getOrCreateSheet_(sheetName, headers) {
@@ -70,7 +77,16 @@ function ensureSheets_() {
     tSheet.getRange("1:1").setFontWeight("bold");
   }
   
-  return { pSheet, tSheet };
+  // Alerts sheet
+  let aSheet = ss.getSheetByName("Alerts");
+  if (!aSheet) {
+    aSheet = ss.insertSheet("Alerts");
+    aSheet.appendRow(["id", "type", "message", "fromRole", "toRole", "patientId", "patientName", "testName", "tokenNumber", "relatedTestId", "createdAt", "dismissedAt"]);
+    aSheet.setFrozenRows(1);
+    aSheet.getRange("1:1").setFontWeight("bold");
+  }
+  
+  return { pSheet, tSheet, aSheet };
 }
 
 // ─── HELPER: Generate ID ───────────────────────────────────────────────────────
@@ -462,6 +478,84 @@ function getReportReadyTests_() {
   return result;
 }
 
+// ─── ALERTS ─────────────────────────────────────────────────────────────────────
+
+function sendAlert_(data) {
+  const sheets = ensureSheets_();
+  const id = generateId_();
+  const now = nowISO_();
+  
+  sheets.aSheet.appendRow([id, data.type, data.message, data.fromRole, data.toRole,
+    data.patientId || "", data.patientName || "", data.testName || "",
+    data.tokenNumber || "", data.relatedTestId || "", now, ""]);
+  
+  return { success: true, id, createdAt: now };
+}
+
+function getActiveAlerts_(toRole) {
+  const sheets = ensureSheets_();
+  const data = sheets.aSheet.getDataRange().getValues();
+  const result = [];
+  const today = todayStr_();
+  
+  for (let i = 1; i < data.length; i++) {
+    // Only undismissed alerts (dismissedAt empty)
+    if (data[i][ALERT_COL.dismissedAt] !== "") continue;
+    // Filter by target role
+    if (data[i][ALERT_COL.toRole] !== toRole && data[i][ALERT_COL.toRole] !== "All") continue;
+    // Only today's alerts
+    const createdAt = data[i][ALERT_COL.createdAt] || "";
+    if (!createdAt.startsWith(today)) continue;
+    
+    result.push({
+      id: data[i][ALERT_COL.id],
+      type: data[i][ALERT_COL.type],
+      message: data[i][ALERT_COL.message],
+      fromRole: data[i][ALERT_COL.fromRole],
+      toRole: data[i][ALERT_COL.toRole],
+      patientId: data[i][ALERT_COL.patientId],
+      patientName: data[i][ALERT_COL.patientName],
+      testName: data[i][ALERT_COL.testName],
+      tokenNumber: data[i][ALERT_COL.tokenNumber],
+      relatedTestId: data[i][ALERT_COL.relatedTestId],
+      createdAt: data[i][ALERT_COL.createdAt]
+    });
+  }
+  
+  // Sort newest first
+  result.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  return result;
+}
+
+function dismissAlert_(alertId) {
+  const sheets = ensureSheets_();
+  const data = sheets.aSheet.getDataRange().getValues();
+  
+  for (let i = 1; i < data.length; i++) {
+    if (data[i][ALERT_COL.id] === alertId) {
+      const row = i + 1;
+      sheets.aSheet.getRange(row, ALERT_COL.dismissedAt + 1).setValue(nowISO_());
+      return { success: true };
+    }
+  }
+  return { success: false, error: "Alert not found" };
+}
+
+function dismissAlertsByTestId_(testId) {
+  const sheets = ensureSheets_();
+  const data = sheets.aSheet.getDataRange().getValues();
+  let count = 0;
+  
+  for (let i = 1; i < data.length; i++) {
+    if (data[i][ALERT_COL.relatedTestId] === testId && data[i][ALERT_COL.dismissedAt] === "") {
+      const row = i + 1;
+      sheets.aSheet.getRange(row, ALERT_COL.dismissedAt + 1).setValue(nowISO_());
+      count++;
+    }
+  }
+  return { success: true, dismissed: count };
+}
+
 // ─── EXPORT ─────────────────────────────────────────────────────────────────────
 
 function getAllDataForExport_() {
@@ -478,6 +572,25 @@ function getAllDataForExport_() {
     }
   }
   return result;
+}
+
+// ─── ALL DEPARTMENTS STATS (for Manager) ─────────────────────────────────────
+
+function getAllDepartmentsStats_() {
+  const testTypes = ["ECG", "Echo", "TMT", "Holter", "ABPM", "OPD"];
+  const result = {};
+  let grandTotal = { waiting: 0, called: 0, in_progress: 0, completed: 0, report_ready: 0, delivered: 0, total: 0 };
+  
+  for (const test of testTypes) {
+    const stats = getDepartmentStats_(test);
+    result[test] = stats;
+    for (const key of Object.keys(grandTotal)) {
+      if (key !== "total") grandTotal[key] += stats[key] || 0;
+    }
+    grandTotal.total += Object.values(stats).reduce((a, b) => a + b, 0);
+  }
+  
+  return { departments: result, grandTotal };
 }
 
 // ─── DOB CALCULATION ────────────────────────────────────────────────────────────
@@ -590,6 +703,20 @@ function handleRequest_(e, isPost) {
         return respondJson_(createTest_(params));
       case "updateTestStatus":
         return respondJson_(updateTestStatus_(params));
+      
+      // ── Alerts ──
+      case "sendAlert":
+        return respondJson_(sendAlert_(params));
+      case "getActiveAlerts":
+        return respondJson_(getActiveAlerts_(params.toRole));
+      case "dismissAlert":
+        return respondJson_(dismissAlert_(params.alertId));
+      case "dismissAlertsByTestId":
+        return respondJson_(dismissAlertsByTestId_(params.testId));
+      
+      // ── All Departments Stats (for Manager) ──
+      case "getAllDepartmentsStats":
+        return respondJson_(getAllDepartmentsStats_());
       
       // ── Export ──
       case "getAllDataForExport":

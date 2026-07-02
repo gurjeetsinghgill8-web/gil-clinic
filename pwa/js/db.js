@@ -128,6 +128,11 @@ async function callAPICached(action, params = {}, isPost = false, bypassCache = 
     return data;
 }
 
+// ─── Constants ──────────────────────────────────────────────────────────────────
+
+const DB_TEST_TYPES = ["ECG", "Echo", "TMT", "Holter", "ABPM", "OPD"];
+const DB_STATUS_ORDER = ["waiting", "called", "in_progress", "completed", "report_ready", "delivered"];
+
 // ─── Validators ─────────────────────────────────────────────────────────────────
 
 function validateMobile(mobile) {
@@ -210,6 +215,230 @@ async function getDepartmentStats(testName) {
 
 async function getAllDataForExport() {
     return callAPI("getAllDataForExport", {}, true);
+}
+
+// ─── ALERTS / NOTIFICATIONS ─────────────────────────────────────────────────────
+
+async function sendAlert(type, message, fromRole, toRole, patientData = {}) {
+    return callAPI("sendAlert", {
+        type, message, fromRole, toRole,
+        patientId: patientData.patientId || "",
+        patientName: patientData.patientName || "",
+        testName: patientData.testName || "",
+        tokenNumber: patientData.tokenNumber || "",
+        relatedTestId: patientData.relatedTestId || ""
+    }, true);
+}
+
+async function getActiveAlerts(toRole) {
+    return callAPI("getActiveAlerts", { toRole });
+}
+
+async function dismissAlert(alertId) {
+    return callAPI("dismissAlert", { alertId }, true);
+}
+
+async function dismissAlertsByTestId(testId) {
+    return callAPI("dismissAlertsByTestId", { testId }, true);
+}
+
+// ─── ALL DEPARTMENTS (for Manager) ─────────────────────────────────────────────
+
+async function getAllDepartmentsStats() {
+    return callAPI("getAllDepartmentsStats", {});
+}
+
+// ─── TOAST NOTIFICATION ─────────────────────────────────────────────────────────
+
+/**
+ * Show a toast notification at the top of the screen.
+ * Auto-dismisses after 4 seconds.
+ */
+function showToast(message, type = "info") {
+    const container = document.getElementById("alert-toast-container");
+    if (!container) return;
+    
+    const colors = { info: "#2196F3", success: "#4CAF50", warning: "#FF9800", error: "#f44336", urgent: "#ff1744" };
+    const bgColor = colors[type] || colors.info;
+    
+    const toast = document.createElement("div");
+    toast.style.cssText = `
+        background: ${bgColor};
+        color: white;
+        padding: 12px 16px;
+        border-radius: 12px;
+        margin-bottom: 8px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+        font-size: 0.95rem;
+        font-weight: 500;
+        animation: slideDown 0.3s ease;
+        pointer-events: auto;
+        cursor: pointer;
+        max-width: 100%;
+        word-break: break-word;
+    `;
+    toast.textContent = message;
+    
+    container.appendChild(toast);
+    
+    // Add animation style if not exists
+    if (!document.getElementById("toast-anim-style")) {
+        const style = document.createElement("style");
+        style.id = "toast-anim-style";
+        style.textContent = `
+            @keyframes slideDown { from { transform: translateY(-100px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+            @keyframes slideUp { from { transform: translateY(0); opacity: 1; } to { transform: translateY(-100px); opacity: 0; } }
+        `;
+        document.head.appendChild(style);
+    }
+    
+    // Auto dismiss after 4s
+    setTimeout(() => {
+        toast.style.animation = "slideUp 0.3s ease";
+        setTimeout(() => toast.remove(), 300);
+    }, 4000);
+    
+    // Dismiss on click
+    toast.addEventListener("click", () => {
+        toast.style.animation = "slideUp 0.3s ease";
+        setTimeout(() => toast.remove(), 300);
+    });
+}
+
+/**
+ * Play a notification sound for alerts.
+ */
+function playAlertSound(type = "alert") {
+    try {
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        
+        if (type === "urgent") {
+            // Rapid beeps for urgent
+            osc.frequency.value = 1200;
+            osc.type = "square";
+            gain.gain.value = 0.2;
+            osc.start();
+            setTimeout(() => { osc.frequency.value = 800; }, 150);
+            setTimeout(() => { osc.frequency.value = 1200; }, 300);
+            osc.stop(ctx.currentTime + 0.5);
+        } else if (type === "success") {
+            osc.frequency.value = 660;
+            osc.type = "sine";
+            gain.gain.value = 0.3;
+            osc.start();
+            osc.stop(ctx.currentTime + 0.3);
+        } else {
+            osc.frequency.value = 880;
+            osc.type = "sine";
+            gain.gain.value = 0.3;
+            osc.start();
+            osc.stop(ctx.currentTime + 0.3);
+        }
+        
+        if (navigator.vibrate) {
+            navigator.vibrate(type === "urgent" ? [200,100,200] : 200);
+        }
+    } catch(e) {}
+}
+
+// ─── QR MODAL ───────────────────────────────────────────────────────────────────
+
+/**
+ * Show the QR modal overlay with a patient's QR code.
+ */
+function showQRModal(patient) {
+    const modal = document.getElementById("qr-modal");
+    const body = document.getElementById("qr-modal-body");
+    if (!modal || !body) return;
+    
+    const baseURL = window.location.origin + window.location.pathname.replace(/\/[^/]*$/, "/index.html");
+    const qrURL = `${baseURL}?patient=${patient.patientId}`;
+    
+    body.innerHTML = `
+        <div class="qr-modal-patient">
+            <h3>👤 ${patient.name}</h3>
+            <p style="color:#888;margin:4px 0;">🆔 ${patient.patientId} | 📱 ${patient.mobile}</p>
+        </div>
+        <div id="qr-modal-code" style="text-align:center;margin:16px 0;"></div>
+        <div style="margin-top:8px;">
+            <button class="btn btn-secondary btn-sm" onclick="copyQRURL()">📋 Copy Link</button>
+            <button class="btn btn-primary btn-sm" onclick="shareQR()">📤 Share</button>
+        </div>
+        <p style="font-size:0.75rem;color:#aaa;margin-top:8px;">Patient ko QR scan karne dein ya link share karein</p>
+        <div id="qr-copy-feedback" style="font-size:0.8rem;margin-top:4px;"></div>
+    `;
+    
+    // Generate QR
+    try {
+        new QRCode(document.getElementById("qr-modal-code"), {
+            text: qrURL,
+            width: 200,
+            height: 200,
+            colorDark: "#000000",
+            colorLight: "#ffffff",
+            correctLevel: QRCode.CorrectLevel.H
+        });
+    } catch(e) {
+        document.getElementById("qr-modal-code").innerHTML = `<p style="color:red;">QR Error</p>`;
+    }
+    
+    // Store URL for copy/share
+    window._qrUrl = qrURL;
+    
+    modal.style.display = "flex";
+}
+
+/**
+ * Close the QR modal.
+ */
+function closeQRModal(event) {
+    if (event && event.target !== event.currentTarget) return;
+    const modal = document.getElementById("qr-modal");
+    if (modal) modal.style.display = "none";
+}
+
+/**
+ * Copy QR URL to clipboard.
+ */
+function copyQRURL() {
+    const url = window._qrUrl || "";
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(url).then(() => {
+            document.getElementById("qr-copy-feedback").textContent = "✅ Copied!";
+        }).catch(() => fallbackCopy(url));
+    } else {
+        fallbackCopy(url);
+    }
+}
+
+function fallbackCopy(text) {
+    const ta = document.createElement("textarea");
+    ta.value = text;
+    ta.style.position = "fixed";
+    ta.style.opacity = "0";
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand("copy");
+    document.body.removeChild(ta);
+    document.getElementById("qr-copy-feedback").textContent = "✅ Copied!";
+}
+
+/**
+ * Share QR URL via native share.
+ */
+async function shareQR() {
+    const url = window._qrUrl || "";
+    if (navigator.share) {
+        try {
+            await navigator.share({ title: "CardioQueue - Patient Status", url: url });
+        } catch(e) {}
+    } else {
+        copyQRURL();
+    }
 }
 
 // ─── CALCULATIONS (local, no API call needed) ───────────────────────────────────

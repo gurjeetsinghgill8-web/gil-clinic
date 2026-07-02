@@ -2,8 +2,8 @@
  * CardioQueue PWA — Main Application
  * =====================================
  * Handles routing, login, navigation, and screen management.
- * All data operations go through db.js (IndexedDB).
- * No server, no cloud, no internet needed.
+ * All data operations go through db.js (Google Sheets API).
+ * Multi-device sync via shared Google Sheet.
  */
 (function() {
     "use strict";
@@ -14,10 +14,13 @@
         ECG: "ecg123",
         Echo: "echo123",
         TMT: "tmt123",
-        Doctor: "doc123"
+        Holter: "holter123",
+        ABPM: "abpm123",
+        Doctor: "doc123",
+        Manager: "mgr123"
     };
 
-    const TEST_TYPES = ["ECG", "Echo", "TMT", "Holter", "ABPM"];
+    const TEST_TYPES = ["ECG", "Echo", "TMT", "Holter", "ABPM", "OPD"];
 
     let currentRole = null;
     let currentView = "dashboard";
@@ -54,7 +57,6 @@
             loginError.textContent = "";
 
             if (role === "Patient") {
-                // No password needed — go to patient lookup
                 currentRole = "Patient";
                 localStorage.setItem("cardioqueue_role", "Patient");
                 showScreen("app-shell");
@@ -75,6 +77,13 @@
                 document.getElementById("bottom-nav").style.display = "flex";
                 document.getElementById("header-text").textContent = `📋 ${role}`;
                 document.getElementById("menu-btn").style.display = "none";
+
+                // Show settings button only for Manager
+                const settingsNav = document.querySelector('.nav-btn[data-view="settings"]');
+                if (settingsNav) {
+                    settingsNav.style.display = (role === "Manager") ? "flex" : "none";
+                }
+
                 showView("dashboard");
             } else {
                 loginError.textContent = "❌ गलत पासवर्ड / Incorrect password";
@@ -180,10 +189,12 @@
         container.innerHTML = `<div class="page-loading"><div class="spinner"></div><p>Loading dashboard...</p></div>`;
         if (currentRole === "Reception") {
             renderReceptionDashboard(container);
-        } else if (["ECG", "Echo", "TMT"].includes(currentRole)) {
+        } else if (["ECG", "Echo", "TMT", "Holter", "ABPM", "OPD"].includes(currentRole)) {
             renderTechnicianDashboard(container, currentRole);
         } else if (currentRole === "Doctor") {
             renderDoctorDashboard(container);
+        } else if (currentRole === "Manager") {
+            renderManagerDashboard(container);
         } else {
             container.innerHTML = `<div class="page-content"><h2>👋 Welcome ${currentRole}</h2><p>Select an option from the bottom navigation.</p></div>`;
         }
@@ -216,62 +227,78 @@
                         📦 सारा डेटा / All Data
                     </button>
                 </div>
-                <div class="info-box" style="margin-top: 20px;">
-                    <p>💡 CSV फ़ाइल mobile में download होगी। आप इसे email, WhatsApp या कहीं भी share कर सकते हैं।</p>
-                    <p style="font-size:0.8rem;margin-top:8px;">The CSV file will download to your phone. You can share it via email, WhatsApp, or anywhere.</p>
+            </div>
+        `;
+    }
+
+    function renderConfigScreen(container) {
+        const savedUrl = getGoogleScriptUrl();
+        container.innerHTML = `
+            <div class="page-content">
+                <h2>⚙️ Settings</h2>
+                <div class="card">
+                    <h3>🔗 Google Sheets URL</h3>
+                    <p>यदि URL बदलना हो तो यहाँ update करें</p>
+                    <input type="url" id="gs-script-url" class="form-input"
+                           placeholder="https://script.google.com/macros/s/..."
+                           value="${savedUrl}" style="width:100%;padding:10px;margin:8px 0;border:1px solid #ddd;border-radius:8px;">
+                    <button class="btn btn-primary btn-block" onclick="saveGsUrl()">💾 Save</button>
+                    <p id="gs-url-status" style="margin-top:8px;font-size:14px;"></p>
+                </div>
+                <div class="card" style="margin-top:12px;">
+                    <h3>📘 User Manual</h3>
+                    <p>इस ऐप का उपयोग कैसे करें / How to use this app</p>
+                    <button class="btn btn-secondary btn-block" onclick="window.open('manual.html','_blank')">📖 Open Manual</button>
+                </div>
+                <div class="card" style="margin-top:12px;">
+                    <button class="btn btn-danger btn-block" onclick="logout()">🚪 Logout</button>
                 </div>
             </div>
         `;
     }
 
-    // ─── Patient Lookup (for Patient role) ─────────────────────────────────────
+    // ─── Patient Lookup ────────────────────────────────────────────────────────
 
-    function renderPatientLookup() {
-        const main = document.getElementById("main-content");
+    function renderPatientLookup(container) {
+        const main = container || document.getElementById("main-content");
         main.innerHTML = `
             <div class="page-content">
-                <div class="patient-lookup">
-                    <h2>🔍 अपना स्टेटस देखें</h2>
-                    <p>अपना रजिस्टर्ड मोबाइल नंबर डालें</p>
-                    <div class="form-group">
-                        <input type="text" id="patient-mobile-input" 
-                               placeholder="10 अंकों का मोबाइल नंबर" 
-                               maxlength="10" inputmode="numeric" autocomplete="off">
-                    </div>
-                    <button id="patient-lookup-btn" class="btn btn-primary btn-block">
-                        🔍 Check Status
-                    </button>
-                    <div id="patient-result"></div>
+                <div class="card">
+                    <h2>🔍 अपनी स्थिति देखें / Check Your Status</h2>
+                    <p>अपना मोबाइल नंबर या टोकन नंबर डालें / Enter your mobile or token number</p>
+                    <input type="text" id="patient-lookup-input" class="form-input"
+                           placeholder="📱 मोबाइल / Mobile or 🎫 Token" style="width:100%;padding:12px;margin:8px 0;border:1px solid #ddd;border-radius:8px;">
+                    <button class="btn btn-primary btn-block" onclick="lookupPatient()">🔍 Find</button>
                 </div>
+                <div id="patient-lookup-result"></div>
             </div>
         `;
+    }
 
-        document.getElementById("patient-lookup-btn").addEventListener("click", async () => {
-            const mobile = document.getElementById("patient-mobile-input").value.trim();
-            const resultDiv = document.getElementById("patient-result");
-            if (!mobile || mobile.length !== 10 || !/^\d+$/.test(mobile)) {
-                resultDiv.innerHTML = `<p class="error-msg">⚠️ कृपया सही 10 अंकों का मोबाइल नंबर डालें</p>`;
-                return;
-            }
-            resultDiv.innerHTML = `<div class="spinner"></div><p>Searching...</p>`;
-            const patient = await getPatientByMobile(mobile);
+    window.lookupPatient = async function() {
+        const input = document.getElementById("patient-lookup-input").value.trim();
+        const resultDiv = document.getElementById("patient-lookup-result");
+        if (!input) { resultDiv.innerHTML = '<p>❌ कृपया मोबाइल या टोकन डालें</p>'; return; }
+
+        resultDiv.innerHTML = `<div class="page-loading"><div class="spinner"></div><p>Searching...</p></div>`;
+
+        try {
+            const patients = await getTodayPatients();
+            const patient = patients.find(p =>
+                p.mobile === input || p.tokenNumber === input || p.patientId === input
+            );
             if (!patient) {
-                resultDiv.innerHTML = `<p class="error-msg">❌ कोई मरीज़ नहीं मिला / No patient found with this number</p>`;
+                resultDiv.innerHTML = `<div class="card"><p>❌ कोई मरीज़ नहीं मिला / No patient found</p></div>`;
                 return;
             }
             const tests = await getTestsForPatient(patient.patientId);
             renderPatientStatus(resultDiv, patient, tests);
-            // Start auto-refresh
-            if (refreshInterval) clearInterval(refreshInterval);
-            refreshInterval = setInterval(async () => {
-                const updatedTests = await getTestsForPatient(patient.patientId);
-                const resDiv = document.getElementById("patient-result");
-                if (resDiv) renderPatientStatus(resDiv, patient, updatedTests);
-            }, 5000);
-        });
-    }
+        } catch(e) {
+            resultDiv.innerHTML = `<div class="card"><p>❌ Error: ${e.message}</p></div>`;
+        }
+    };
 
-    // ─── ─── PATIENT STATUS RENDERER (shared) ──────────────────────────────────
+    // ─── Patient Status View (also used by QR scan) ────────────────────────────
 
     function renderPatientStatus(container, patient, tests) {
         if (!tests || tests.length === 0) {
@@ -353,6 +380,11 @@
                         ${t.status === "report_ready" ? '<span>📋 Collect at Counter</span>' : ""}
                         ${t.status === "delivered" ? '<span>📄 Delivered</span>' : ""}
                     </div>
+                    ${["waiting", "called"].includes(t.status) ? `
+                        <button class="btn btn-danger btn-sm btn-block" style="margin-top:8px;" onclick="patientUrgentAlert('${patient.patientId}','${patient.name}','${t.testName}','${t.tokenNumber}')">
+                            ⚡ Urgent: Jaldi karo
+                        </button>
+                    ` : ""}
                     <div class="progress-bar small">
                         <div class="progress-fill" style="width:${testProgress * 100}%;"></div>
                     </div>
@@ -380,10 +412,33 @@
         container.innerHTML = html;
     }
 
+    // ─── Patient Urgent Alert (from QR/patient status view) ────────────────────
+
+    window.patientUrgentAlert = async function(patientId, patientName, testName, tokenNumber) {
+        if (!confirm(`⚡ क्या आप वाकई urgent alert भेजना चाहते हैं?\nSend urgent alert for ${patientName} - ${testName}?`)) return;
+        try {
+            await sendAlert("urgent", `⚡ Urgent: ${patientName} (${testName}, Token #${tokenNumber}) को जल्दी करें!`, "Patient", testName, { patientId, patientName });
+            showToast("✅ Urgent alert sent!", "success");
+        } catch(e) {
+            showToast("❌ Error sending alert: " + e.message, "error");
+        }
+    };
+
     // ─── Expose globals for inline onclick ─────────────────────────────────────
 
     window.renderPatientLookup = renderPatientLookup;
     window.renderPatientStatus = renderPatientStatus;
+
+    window.saveGsUrl = function() {
+        const url = document.getElementById("gs-script-url").value.trim();
+        if (!url) {
+            document.getElementById("gs-url-status").textContent = "❌ Please enter a URL";
+            return;
+        }
+        setGoogleScriptUrl(url);
+        document.getElementById("gs-url-status").textContent = "✅ URL saved!";
+        setTimeout(() => document.getElementById("gs-url-status").textContent = "", 3000);
+    };
 
     // ─── Init ──────────────────────────────────────────────────────────────────
 
@@ -403,24 +458,34 @@
 
         if (patientId) {
             // QR scan auto-load — show patient status directly
-            const patient = await getPatientById(patientId);
-            if (patient) {
-                const tests = await getTestsForPatient(patient.patientId);
-                currentRole = "Patient";
-                showScreen("app-shell");
-                document.getElementById("bottom-nav").style.display = "none";
-                document.getElementById("header-text").textContent = "🔍 Patient Status";
-                const main = document.getElementById("main-content");
-                main.innerHTML = `<div class="page-content"><div id="qr-patient-result"></div></div>`;
-                renderPatientStatus(document.getElementById("qr-patient-result"), patient, tests);
-                // Auto-refresh
-                refreshInterval = setInterval(async () => {
-                    const updatedTests = await getTestsForPatient(patient.patientId);
-                    const resDiv = document.getElementById("qr-patient-result");
-                    if (resDiv) renderPatientStatus(resDiv, patient, updatedTests);
-                }, 5000);
-                return;
+            currentRole = "Patient";
+            showScreen("app-shell");
+            document.getElementById("bottom-nav").style.display = "none";
+            document.getElementById("header-text").textContent = "🔍 Patient Status";
+            const main = document.getElementById("main-content");
+            main.innerHTML = `<div class="page-content"><div id="qr-patient-result"></div></div>`;
+
+            async function loadQRPatient() {
+                try {
+                    const patients = await getTodayPatients();
+                    const patient = patients.find(p => p.patientId === patientId);
+                    if (patient) {
+                        const tests = await getTestsForPatient(patient.patientId);
+                        renderPatientStatus(document.getElementById("qr-patient-result"), patient, tests);
+                    } else {
+                        document.getElementById("qr-patient-result").innerHTML =
+                            `<div class="card"><p>❌ Patient not found</p></div>`;
+                    }
+                } catch(e) {
+                    document.getElementById("qr-patient-result").innerHTML =
+                        `<div class="card"><p>❌ Error: ${e.message}</p></div>`;
+                }
             }
+
+            await loadQRPatient();
+            // Auto-refresh every 5 seconds
+            refreshInterval = setInterval(loadQRPatient, 5000);
+            return;
         }
 
         // Check for saved login
@@ -452,7 +517,7 @@
         initPWAInstall();
     }
 
-    // Start app when DOM is ready
+    // Wait for DOM
     if (document.readyState === "loading") {
         document.addEventListener("DOMContentLoaded", init);
     } else {
