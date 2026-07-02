@@ -1,395 +1,218 @@
 /**
- * CardioQueue — IndexedDB Wrapper
- * ==================================
- * All database operations go through this module.
- * Data is stored entirely on-device — no cloud, no server.
+ * CardioQueue — Google Sheets Database Wrapper
+ * ==============================================
+ * All data operations go through this module.
+ * Uses a Google Apps Script Web App as the backend API.
+ * Google Sheet acts as the shared database — all devices see the same data.
  * 
- * Stores:
- *   patients - { id, patientId, name, mobile, age, gender, registrationDate, createdAt }
- *   tests    - { id, patientId, testName, status, tokenNumber, queuePosition, room,
- *                calledAt, startedAt, completedAt, reportReadyAt, deliveredAt, createdAt }
+ * BEFORE USING: Set GOOGLE_SCRIPT_URL below to your deployed Web App URL.
+ * See: pwa/google-apps-script/Code.gs for deployment instructions.
+ * 
+ * How it works:
+ *   • Each phone calls this API via HTTPS (mobile data or WiFi)
+ *   • Google Sheet stores all data in the cloud
+ *   • All phones share the same sheet → automatic sync
+ *   • No server needed, no setup cost, free forever
  */
-const DB_NAME = "CardioQueueDB";
-const DB_VERSION = 1;
 
-// ─── Open / Initialize Database ────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════════
+//  IMPORTANT: Paste your Google Apps Script Web App URL here after deployment
+// ═══════════════════════════════════════════════════════════════════════════════
+// Step 1: Go to https://sheets.google.com and create a new sheet
+// Step 2: Extensions → Apps Script → paste Code.gs content → Deploy as Web App
+// Step 3: Copy the Web App URL and paste it below
+// ═══════════════════════════════════════════════════════════════════════════════
 
-function openDB() {
-    return new Promise((resolve, reject) => {
-        const req = indexedDB.open(DB_NAME, DB_VERSION);
+let GOOGLE_SCRIPT_URL = localStorage.getItem("cardioqueue_gs_url") || "";
 
-        req.onupgradeneeded = (event) => {
-            const db = event.target.result;
+// You can also hardcode it here after setup:
+// const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/YOUR_SCRIPT_ID/exec";
 
-            // Patients store
-            if (!db.objectStoreNames.contains("patients")) {
-                const store = db.createObjectStore("patients", { keyPath: "id", autoIncrement: true });
-                store.createIndex("patientId", "patientId", { unique: true });
-                store.createIndex("mobile", "mobile", { unique: false });
-                store.createIndex("registrationDate", "registrationDate", { unique: false });
+// ─── Configuration URL setter (called from settings) ────────────────────────────
+
+function setGoogleScriptUrl(url) {
+    GOOGLE_SCRIPT_URL = url.trim().replace(/\/$/, "");
+    localStorage.setItem("cardioqueue_gs_url", GOOGLE_SCRIPT_URL);
+    return GOOGLE_SCRIPT_URL;
+}
+
+function getGoogleScriptUrl() {
+    return GOOGLE_SCRIPT_URL;
+}
+
+// ─── API Helper ─────────────────────────────────────────────────────────────────
+
+/**
+ * Calls the Google Apps Script Web App.
+ * @param {string} action - The action name (maps to a function in Code.gs)
+ * @param {object} params - Parameters to send
+ * @param {boolean} isPost - Use POST for writes, GET for reads
+ */
+async function callAPI(action, params = {}, isPost = false) {
+    if (!GOOGLE_SCRIPT_URL) {
+        throw new Error("GOOGLE_SCRIPT_URL not set. Configure URL first.");
+    }
+
+    const url = GOOGLE_SCRIPT_URL + (GOOGLE_SCRIPT_URL.includes("?") ? "&" : "?") + "action=" + encodeURIComponent(action);
+    params.action = action;
+
+    try {
+        let response;
+        if (isPost) {
+            // POST: Send JSON body, read response as text (Apps Script returns JSONP-like response)
+            response = await fetch(url, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(params)
+            });
+        } else {
+            // GET: Append params to URL
+            const query = new URLSearchParams(params).toString();
+            response = await fetch(`${GOOGLE_SCRIPT_URL}?${query}`, {
+                method: "GET"
+            });
+        }
+
+        const text = await response.text();
+        
+        // Apps Script Web Apps sometimes return JSON wrapped in HTML/script tags
+        // or with a Google Apps Script callback wrapper
+        
+        // Try direct JSON parse first
+        try {
+            return JSON.parse(text);
+        } catch(e) {
+            // Try to extract JSON from HTML response
+            // Google Apps Script sometimes wraps in <pre> or callback
+            const jsonMatch = text.match(/(\{.*\}|\[.*\])/s);
+            if (jsonMatch) {
+                try {
+                    return JSON.parse(jsonMatch[1]);
+                } catch(e2) {}
             }
-
-            // Tests store
-            if (!db.objectStoreNames.contains("tests")) {
-                const store = db.createObjectStore("tests", { keyPath: "id", autoIncrement: true });
-                store.createIndex("patientId", "patientId", { unique: false });
-                store.createIndex("testName", "testName", { unique: false });
-                store.createIndex("status", "status", { unique: false });
-                store.createIndex("tokenNumber", "tokenNumber", { unique: false });
-                store.createIndex("patientId_testName", ["patientId", "testName"], { unique: true });
+            
+            // Try text-based responses
+            if (text.includes("ping") || text.includes("ok")) {
+                return { status: "ok", raw: text.substring(0, 100) };
             }
-        };
-
-        req.onsuccess = () => resolve(req.result);
-        req.onerror = () => reject(req.error);
-    });
+            
+            console.warn("Raw response:", text.substring(0, 300));
+            throw new Error(`Could not parse server response. Raw: ${text.substring(0, 100)}`);
+        }
+    } catch (err) {
+        console.error(`API Error (${action}):`, err);
+        throw err;
+    }
 }
 
-// ─── Generators ─────────────────────────────────────────────────────────────────
+/**
+ * Cached API call with deduplication.
+ * Uses localStorage cache briefly to avoid redundant calls.
+ */
+const apiCache = {};
+const CACHE_TTL = 2000; // 2 seconds
 
-function generatePatientId(count) {
-    const today = new Date().toISOString().slice(0, 10).replace(/-/g, "");
-    const seq = String(count + 1).padStart(3, "0");
-    return `CQ-${today}-${seq}`;
+async function callAPICached(action, params = {}, isPost = false, bypassCache = false) {
+    const cacheKey = `${action}_${JSON.stringify(params)}`;
+    
+    if (!bypassCache && !isPost && apiCache[cacheKey] && Date.now() - apiCache[cacheKey].time < CACHE_TTL) {
+        return apiCache[cacheKey].data;
+    }
+    
+    const data = await callAPI(action, params, isPost);
+    
+    if (!isPost) {
+        apiCache[cacheKey] = { data, time: Date.now() };
+    }
+    
+    return data;
 }
 
-function todayStr() {
-    return new Date().toISOString().slice(0, 10);
+// ─── Validators ─────────────────────────────────────────────────────────────────
+
+function validateMobile(mobile) {
+    return mobile && /^\d{10}$/.test(mobile.trim());
 }
 
-function nowISO() {
-    return new Date().toISOString();
+function validateName(name) {
+    return name && name.trim().length >= 2;
 }
 
 // ─── PATIENT CRUD ───────────────────────────────────────────────────────────────
 
 async function createPatient(name, mobile, age, gender) {
-    const db = await openDB();
-    const tx = db.transaction("patients", "readwrite");
-    const store = tx.objectStore("patients");
-
-    // Get today's count for ID generation
-    const index = store.index("registrationDate");
-    const range = IDBKeyRange.only(todayStr());
-    const countReq = index.count(range);
-    const count = await new Promise((res) => { countReq.onsuccess = () => res(countReq.result); });
-
-    const patient = {
-        patientId: generatePatientId(count),
+    if (!validateName(name)) throw new Error("Name must be at least 2 characters");
+    if (!validateMobile(mobile)) throw new Error("Valid 10-digit mobile number required");
+    if (!age || age < 0 || age > 150) throw new Error("Valid age (0-150) required");
+    
+    return callAPI("createPatient", {
         name: name.trim(),
         mobile: mobile.trim(),
         age: parseInt(age),
-        gender: gender,
-        registrationDate: todayStr(),
-        createdAt: nowISO()
-    };
-
-    const req = store.add(patient);
-    return new Promise((resolve, reject) => {
-        req.onsuccess = () => { patient.id = req.result; resolve(patient); };
-        req.onerror = () => reject(req.error);
-        tx.oncomplete = () => db.close();
-    });
+        gender: gender
+    }, true);
 }
 
 async function getPatientById(patientId) {
-    const db = await openDB();
-    const tx = db.transaction("patients", "readonly");
-    const index = tx.objectStore("patients").index("patientId");
-    const req = index.get(patientId);
-    return new Promise((resolve) => {
-        req.onsuccess = () => { resolve(req.result || null); db.close(); };
-        req.onerror = () => { resolve(null); db.close(); };
-    });
+    return callAPI("getPatientById", { patientId });
 }
 
 async function getPatientByMobile(mobile) {
-    const db = await openDB();
-    const tx = db.transaction("patients", "readonly");
-    const index = tx.objectStore("patients").index("mobile");
-    const range = IDBKeyRange.only(mobile);
-    const req = index.openCursor(range, "prev");
-    return new Promise((resolve) => {
-        req.onsuccess = () => {
-            const cursor = req.result;
-            resolve(cursor ? cursor.value : null);
-            db.close();
-        };
-        req.onerror = () => { resolve(null); db.close(); };
-    });
+    if (!validateMobile(mobile)) return null;
+    return callAPI("getPatientByMobile", { mobile: mobile.trim() });
 }
 
 async function getTodayPatients() {
-    const db = await openDB();
-    const tx = db.transaction("patients", "readonly");
-    const index = tx.objectStore("patients").index("registrationDate");
-    const range = IDBKeyRange.only(todayStr());
-    const req = index.getAll(range);
-    return new Promise((resolve) => {
-        req.onsuccess = () => { resolve(req.result || []); db.close(); };
-        req.onerror = () => { resolve([]); db.close(); };
-    });
+    return callAPI("getTodayPatients", {});
 }
 
 async function getAllPatients() {
-    const db = await openDB();
-    const tx = db.transaction("patients", "readonly");
-    const req = tx.objectStore("patients").getAll();
-    return new Promise((resolve) => {
-        req.onsuccess = () => { resolve(req.result || []); db.close(); };
-        req.onerror = () => { resolve([]); db.close(); };
-    });
+    return callAPI("getAllPatients", {});
 }
 
 // ─── TEST CRUD ──────────────────────────────────────────────────────────────────
 
-async function getNextToken(testName) {
-    const db = await openDB();
-    const tx = db.transaction(["tests", "patients"], "readonly");
-    const testStore = tx.objectStore("tests");
-    const testIdx = testStore.index("testName");
-    const patStore = tx.objectStore("patients");
-    const dateIdx = patStore.index("registrationDate");
-
-    // Get all tests for this testName
-    const allTestsReq = testIdx.getAll(testName);
-    const allTests = await new Promise((res) => { allTestsReq.onsuccess = () => res(allTestsReq.result || []); });
-
-    // Get today's patient IDs
-    const todayPatsReq = dateIdx.getAll(todayStr());
-    const todayPatients = await new Promise((res) => { todayPatsReq.onsuccess = () => res(todayPatsReq.result || []); });
-    const todayPatIds = new Set(todayPatients.map(p => p.patientId));
-
-    // Filter tests belonging to today's patients
-    const todayTests = allTests.filter(t => todayPatIds.has(t.patientId));
-    const maxToken = todayTests.reduce((max, t) => Math.max(max, t.tokenNumber || 0), 0);
-    
-    db.close();
-    return maxToken + 1;
-}
-
-async function getQueueLength(testName) {
-    const db = await openDB();
-    const tx = db.transaction(["tests", "patients"], "readonly");
-    const testIdx = tx.objectStore("tests").index("testName");
-    const dateIdx = tx.objectStore("patients").index("registrationDate");
-
-    const allTestsReq = testIdx.getAll(testName);
-    const allTests = await new Promise((res) => { allTestsReq.onsuccess = () => res(allTestsReq.result || []); });
-    const todayPatsReq = dateIdx.getAll(todayStr());
-    const todayPatients = await new Promise((res) => { todayPatsReq.onsuccess = () => res(todayPatsReq.result || []); });
-    const todayPatIds = new Set(todayPatients.map(p => p.patientId));
-
-    const waiting = allTests.filter(t => todayPatIds.has(t.patientId) && t.status === "waiting");
-    db.close();
-    return waiting.length;
-}
-
 async function createTest(patientId, testName) {
-    const db = await openDB();
-    const tx = db.transaction("tests", "readwrite");
-    const store = tx.objectStore("tests");
-
-    const token = await getNextToken(testName);
-    const queuePos = (await getQueueLength(testName)) + 1;
-
-    const rooms = { ECG: "ECG Room 1", Echo: "Echo Room 1", TMT: "TMT Room 1", Holter: "Holter Room", ABPM: "ABPM Room" };
-
-    const test = {
-        patientId: patientId,
-        testName: testName,
-        status: "waiting",
-        tokenNumber: token,
-        queuePosition: queuePos,
-        room: rooms[testName] || `${testName} Room`,
-        calledAt: null,
-        startedAt: null,
-        completedAt: null,
-        reportReadyAt: null,
-        deliveredAt: null,
-        createdAt: nowISO()
-    };
-
-    const req = store.add(test);
-    return new Promise((resolve, reject) => {
-        req.onsuccess = () => { test.id = req.result; resolve(test); };
-        req.onerror = () => reject(req.error);
-        tx.oncomplete = () => db.close();
-    });
+    return callAPI("createTest", { patientId, testName }, true);
 }
 
 async function getTestsForPatient(patientId) {
-    const db = await openDB();
-    const tx = db.transaction("tests", "readonly");
-    const index = tx.objectStore("tests").index("patientId");
-    const req = index.getAll(patientId);
-    return new Promise((resolve) => {
-        req.onsuccess = () => { resolve(req.result || []); db.close(); };
-        req.onerror = () => { resolve([]); db.close(); };
-    });
+    return callAPI("getTestsForPatient", { patientId });
 }
 
 async function getTestsByMobile(mobile) {
-    const patient = await getPatientByMobile(mobile);
-    if (!patient) return [];
-    return getTestsForPatient(patient.patientId);
+    return callAPI("getTestsByMobile", { mobile: mobile.trim() });
 }
 
 async function getQueue(testName, statusFilter) {
-    const db = await openDB();
-    const tx = db.transaction(["tests", "patients"], "readonly");
-    const testIdx = tx.objectStore("tests").index("testName");
-    const dateIdx = tx.objectStore("patients").index("registrationDate");
-
-    const allTestsReq = testIdx.getAll(testName);
-    const allTests = await new Promise((res) => { allTestsReq.onsuccess = () => res(allTestsReq.result || []); });
-    const todayPatsReq = dateIdx.getAll(todayStr());
-    const todayPatients = await new Promise((res) => { todayPatsReq.onsuccess = () => res(todayPatsReq.result || []); });
-
-    const todayPatMap = {};
-    todayPatients.forEach(p => { todayPatMap[p.patientId] = p; });
-
-    let filtered = allTests.filter(t => t.patientId in todayPatMap);
-    if (statusFilter) {
-        filtered = filtered.filter(t => t.status === statusFilter);
-    }
-    filtered.sort((a, b) => a.tokenNumber - b.tokenNumber);
-
-    const result = filtered.map(t => ({
-        ...t,
-        patients: todayPatMap[t.patientId] || {}
-    }));
-
-    db.close();
-    return result;
+    return callAPI("getQueue", { testName, status: statusFilter || "" });
 }
 
 async function updateTestStatus(testId, newStatus) {
-    const db = await openDB();
-    const tx = db.transaction("tests", "readwrite");
-    const store = tx.objectStore("tests");
-    const req = store.get(testId);
-
-    return new Promise((resolve) => {
-        req.onsuccess = () => {
-            const test = req.result;
-            if (!test) { resolve(false); db.close(); return; }
-
-            test.status = newStatus;
-            const fieldMap = {
-                called: "calledAt",
-                in_progress: "startedAt",
-                completed: "completedAt",
-                report_ready: "reportReadyAt",
-                delivered: "deliveredAt"
-            };
-            if (fieldMap[newStatus]) {
-                test[fieldMap[newStatus]] = nowISO();
-            }
-
-            const updateReq = store.put(test);
-            updateReq.onsuccess = () => { resolve(true); db.close(); };
-            updateReq.onerror = () => { resolve(false); db.close(); };
-        };
-        req.onerror = () => { resolve(false); db.close(); };
-    });
+    return callAPI("updateTestStatus", { testId, status: newStatus }, true);
 }
 
 async function getCurrentPatient(testName) {
-    const db = await openDB();
-    const tx = db.transaction(["tests", "patients"], "readonly");
-    const testIdx = tx.objectStore("tests").index("testName");
-    const dateIdx = tx.objectStore("patients").index("registrationDate");
-
-    const allTestsReq = testIdx.getAll(testName);
-    const allTests = await new Promise((res) => { allTestsReq.onsuccess = () => res(allTestsReq.result || []); });
-    const todayPatsReq = dateIdx.getAll(todayStr());
-    const todayPatients = await new Promise((res) => { todayPatsReq.onsuccess = () => res(todayPatsReq.result || []); });
-
-    const todayPatMap = {};
-    todayPatients.forEach(p => { todayPatMap[p.patientId] = p; });
-
-    const active = allTests
-        .filter(t => t.patientId in todayPatMap && ["called", "in_progress"].includes(t.status))
-        .sort((a, b) => {
-            const aTime = a.calledAt || a.createdAt;
-            const bTime = b.calledAt || b.createdAt;
-            return aTime.localeCompare(bTime);
-        });
-
-    db.close();
-    if (active.length === 0) return null;
-    return { ...active[0], patients: todayPatMap[active[0].patientId] };
+    return callAPI("getCurrentPatient", { testName });
 }
 
 async function getCompletedTests() {
-    const db = await openDB();
-    const tx = db.transaction(["tests", "patients"], "readonly");
-    const statusIdx = tx.objectStore("tests").index("status");
-    const dateIdx = tx.objectStore("patients").index("registrationDate");
-
-    const completedReq = statusIdx.getAll("completed");
-    const completed = await new Promise((res) => { completedReq.onsuccess = () => res(completedReq.result || []); });
-    const todayPatsReq = dateIdx.getAll(todayStr());
-    const todayPatients = await new Promise((res) => { todayPatsReq.onsuccess = () => res(todayPatsReq.result || []); });
-
-    const todayPatMap = {};
-    todayPatients.forEach(p => { todayPatMap[p.patientId] = p; });
-
-    const result = completed
-        .filter(t => t.patientId in todayPatMap)
-        .sort((a, b) => (a.completedAt || "").localeCompare(b.completedAt || ""))
-        .map(t => ({ ...t, patients: todayPatMap[t.patientId] }));
-
-    db.close();
-    return result;
+    return callAPI("getCompletedTests", {});
 }
 
 async function getReportReadyTests() {
-    const db = await openDB();
-    const tx = db.transaction(["tests", "patients"], "readonly");
-    const statusIdx = tx.objectStore("tests").index("status");
-    const dateIdx = tx.objectStore("patients").index("registrationDate");
-
-    const readyReq = statusIdx.getAll("report_ready");
-    const ready = await new Promise((res) => { readyReq.onsuccess = () => res(readyReq.result || []); });
-    const todayPatsReq = dateIdx.getAll(todayStr());
-    const todayPatients = await new Promise((res) => { todayPatsReq.onsuccess = () => res(todayPatsReq.result || []); });
-
-    const todayPatMap = {};
-    todayPatients.forEach(p => { todayPatMap[p.patientId] = p; });
-
-    const result = ready
-        .filter(t => t.patientId in todayPatMap)
-        .sort((a, b) => (a.reportReadyAt || "").localeCompare(b.reportReadyAt || ""))
-        .map(t => ({ ...t, patients: todayPatMap[t.patientId] }));
-
-    db.close();
-    return result;
+    return callAPI("getReportReadyTests", {});
 }
 
 async function getDepartmentStats(testName) {
-    const db = await openDB();
-    const tx = db.transaction(["tests", "patients"], "readonly");
-    const testIdx = tx.objectStore("tests").index("testName");
-    const dateIdx = tx.objectStore("patients").index("registrationDate");
-
-    const allTestsReq = testIdx.getAll(testName);
-    const allTests = await new Promise((res) => { allTestsReq.onsuccess = () => res(allTestsReq.result || []); });
-    const todayPatsReq = dateIdx.getAll(todayStr());
-    const todayPatients = await new Promise((res) => { todayPatsReq.onsuccess = () => res(todayPatsReq.result || []); });
-
-    const todayPatIds = new Set(todayPatients.map(p => p.patientId));
-    const todayTests = allTests.filter(t => todayPatIds.has(t.patientId));
-
-    const stats = { waiting: 0, called: 0, in_progress: 0, completed: 0, report_ready: 0, delivered: 0 };
-    todayTests.forEach(t => { if (t.status in stats) stats[t.status]++; });
-
-    db.close();
-    return stats;
+    return callAPI("getDepartmentStats", { testName });
 }
 
-// ─── CALCULATIONS ───────────────────────────────────────────────────────────────
+async function getAllDataForExport() {
+    return callAPI("getAllDataForExport", {}, true);
+}
+
+// ─── CALCULATIONS (local, no API call needed) ───────────────────────────────────
 
 function calculateWaitTime(testName, queuePosition) {
     const avgTimes = { ECG: 10, Echo: 20, TMT: 30, Holter: 15, ABPM: 15 };
@@ -397,6 +220,63 @@ function calculateWaitTime(testName, queuePosition) {
     if (!queuePosition || queuePosition <= 0) return 0;
     return Math.max(queuePosition - 1, 0) * avg;
 }
+
+// ─── CONFIGURATION SCREEN ───────────────────────────────────────────────────────
+
+function renderConfigScreen(container) {
+    const currentUrl = getGoogleScriptUrl();
+    container.innerHTML = `
+        <div class="page-content">
+            <h2>⚙️ Settings</h2>
+            <div class="card form-card">
+                <div class="form-group">
+                    <label>Google Apps Script URL</label>
+                    <input type="url" id="gs-url-input" 
+                           value="${currentUrl}" 
+                           placeholder="https://script.google.com/macros/s/.../exec"
+                           style="font-size:0.8rem;word-break:break-all;">
+                    <p style="font-size:0.75rem;color:#888;margin-top:4px;">
+                        Yeh URL aapko Google Apps Script Web App deploy karne ke baad milega.
+                    </p>
+                </div>
+                <button id="save-gs-url" class="btn btn-primary btn-block">💾 Save URL</button>
+                <div id="gs-url-result"></div>
+            </div>
+            <div class="card" style="margin-top:12px;">
+                <h4>🔗 Test Connection</h4>
+                <button id="test-gs-connection" class="btn btn-secondary btn-block">📡 Test Connection</button>
+                <div id="gs-test-result" style="margin-top:8px;"></div>
+            </div>
+        </div>
+    `;
+
+    document.getElementById("save-gs-url").addEventListener("click", () => {
+        const url = document.getElementById("gs-url-input").value.trim();
+        if (!url) {
+            document.getElementById("gs-url-result").innerHTML = `<p class="error-msg">⚠️ Please enter a URL</p>`;
+            return;
+        }
+        setGoogleScriptUrl(url);
+        document.getElementById("gs-url-result").innerHTML = `<p class="success-msg">✅ URL saved!</p>`;
+    });
+
+    document.getElementById("test-gs-connection").addEventListener("click", async () => {
+        const resultDiv = document.getElementById("gs-test-result");
+        resultDiv.innerHTML = `<div class="spinner"></div><p>Testing...</p>`;
+        try {
+            // Save URL first
+            const url = document.getElementById("gs-url-input").value.trim();
+            if (url) setGoogleScriptUrl(url);
+            
+            const result = await callAPI("ping");
+            resultDiv.innerHTML = `<p class="success-msg">✅ Connected! Server time: ${result.time || "ok"}</p>`;
+        } catch(e) {
+            resultDiv.innerHTML = `<p class="error-msg">❌ Connection failed: ${e.message}</p>`;
+        }
+    });
+}
+
+// ─── Status Display Helpers ─────────────────────────────────────────────────────
 
 function formatStatusDisplay(status) {
     const icons = { waiting: "🟡", called: "🔵", in_progress: "🟠", completed: "✅", report_ready: "📋", delivered: "📄" };

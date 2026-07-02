@@ -107,6 +107,9 @@
             case "export":
                 renderExport(main);
                 break;
+            case "settings":
+                renderConfigScreen(main);
+                break;
             default:
                 renderDashboard(main);
         }

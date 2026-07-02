@@ -11,7 +11,6 @@ const APP_SHELL = [
   "/pwa/js/reception.js",
   "/pwa/js/technician.js",
   "/pwa/js/doctor.js",
-  "/pwa/js/patient.js",
   "/pwa/js/qr.js",
   "/pwa/js/export.js",
   "/pwa/lib/qrcode.min.js",
