@@ -62,8 +62,16 @@ ROLE_PAGES = {
     "ECG":  "📊 ECG",
     "Echo": "📊 Echo",
     "TMT":  "📊 TMT",
+    "OPD":  "🩺 OPD",
     "Doctor": "🩺 Doctor",
     "Manager": "📈 Manager Dashboard",
+}
+
+DEPARTMENT_PAGES = {
+    "ECG": "📊 ECG",
+    "Echo": "📊 Echo",
+    "TMT": "📊 TMT",
+    "OPD": "🩺 OPD",
 }
 
 PUBLIC_PAGES = ["📋 Patient Status"]
@@ -110,7 +118,7 @@ def login_sidebar():
         # Role selector
         role = st.selectbox(
             "Select Role",
-            ["Reception", "ECG", "Echo", "TMT", "Doctor", "Manager", "Patient (No Login)"],
+            ["Reception", "ECG", "Echo", "TMT", "OPD", "Doctor", "Manager", "Patient (No Login)"],
             key="login_role",
         )
 
@@ -291,6 +299,10 @@ def main():
 
     elif page == "📊 TMT":
         from pages.TMT import show
+        show()
+
+    elif page == "🩺 OPD":
+        from pages.OPD import show
         show()
 
     elif page == "📈 Manager Dashboard":

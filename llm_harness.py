@@ -29,7 +29,8 @@ from utils.db import (
     get_today_patients, create_test, get_tests_for_patient,
     get_tests_by_mobile, get_queue, update_test_status,
     get_completed_tests, get_report_ready_tests,
-    get_current_patient, log_message, get_department_stats
+    get_current_patient, log_message, get_department_stats,
+    USE_GOOGLE_SHEETS
 )
 from utils.queue import (
     generate_patient_id, calculate_wait_time, format_status_display,
@@ -92,8 +93,9 @@ class Harness:
         # Create patient record
         patient = create_patient(name.strip(), mobile, age, gender)
         if not patient:
+            db_name = "Google Sheets" if USE_GOOGLE_SHEETS else "Supabase" if USE_SUPABASE else "SQLite"
             return {"success": False, "patient": None, "tests": [],
-                    "message": "❌ Failed to create patient record. Check Supabase connection.",
+                    "message": f"❌ Failed to create patient record. Check {db_name} connection.",
                     "notification": None}
 
         patient_id = patient["patient_id"]

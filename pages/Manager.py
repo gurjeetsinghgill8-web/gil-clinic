@@ -52,7 +52,7 @@ def show():
     for test_name in TEST_TYPES:
         stats = dept_stats.get(test_name, {})
         with st.container(border=True):
-            icon_map = {"ECG": "🩺", "Echo": "🔬", "TMT": "🏃", "Holter": "📟", "ABPM": "💓"}
+            icon_map = {"ECG": "🩺", "Echo": "🔬", "TMT": "🏃", "Holter": "📟", "ABPM": "💓", "OPD": "🩺"}
             icon = icon_map.get(test_name, "📊")
 
             cols = st.columns([1, 3, 3, 3])

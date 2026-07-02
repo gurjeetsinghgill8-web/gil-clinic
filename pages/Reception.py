@@ -219,7 +219,7 @@ def show():
             st.info("📭 No patients registered today yet.")
 
     except Exception as e:
-        st.warning(f"Could not load patient list. Ensure Supabase is connected.\nError: {e}")
+        st.warning(f"Could not load patient list. Check database connection.\nError: {e}")
 
     # ─── Quick Stats ─────────────────────────────────────────────────────────
     with st.sidebar:

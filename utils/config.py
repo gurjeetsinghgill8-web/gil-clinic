@@ -25,12 +25,13 @@ STAFF_PASSWORDS = {
     "ECG":       os.getenv("ECG_PASS", "ecg123"),
     "Echo":      os.getenv("ECHO_PASS", "echo123"),
     "TMT":       os.getenv("TMT_PASS", "tmt123"),
+    "OPD":       os.getenv("OPD_PASS", "opd123"),
     "Doctor":    os.getenv("DOCTOR_PASS", "doc123"),
     "Manager":   os.getenv("MANAGER_PASS", "manager123"),
 }
 
 # ─── Test Types ──────────────────────────────────────────────────────────────
-TEST_TYPES = ["ECG", "Echo", "TMT", "Holter", "ABPM"]
+TEST_TYPES = ["ECG", "Echo", "TMT", "Holter", "ABPM", "OPD"]
 
 # ─── Status Flow ─────────────────────────────────────────────────────────────
 # The lifecycle of a test status
@@ -50,6 +51,7 @@ AVG_TEST_TIME = {
     "TMT":   int(os.getenv("AVG_TMT_TIME", "30")),
     "Holter": int(os.getenv("AVG_HOLTER_TIME", "15")),
     "ABPM":  int(os.getenv("AVG_ABPM_TIME", "15")),
+    "OPD":   int(os.getenv("AVG_OPD_TIME", "10")),
 }
 
 # ─── Room Names ──────────────────────────────────────────────────────────────
@@ -59,6 +61,7 @@ ROOM_NAMES = {
     "TMT":   "TMT Room 1",
     "Holter": "Holter Room",
     "ABPM":  "ABPM Room",
+    "OPD":   "OPD Room",
 }
 
 # ─── Patient ID Prefix ──────────────────────────────────────────────────────
