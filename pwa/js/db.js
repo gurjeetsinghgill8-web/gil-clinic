@@ -25,8 +25,22 @@
 
 let GOOGLE_SCRIPT_URL = localStorage.getItem("cardioqueue_gs_url") || "";
 
-// You can also hardcode it here after setup:
-// const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/YOUR_SCRIPT_ID/exec";
+// ─── Auto-load from secret.txt (if not already in localStorage) ────────────
+(async function loadSecret() {
+    if (GOOGLE_SCRIPT_URL) return;
+    try {
+        const res = await fetch("secret.txt");
+        if (!res.ok) return;
+        const text = await res.text();
+        const match = text.match(/^GOOGLE_SCRIPT_URL=(.+)$/m);
+        if (match) {
+            GOOGLE_SCRIPT_URL = match[1].trim().replace(/\/$/, "");
+            localStorage.setItem("cardioqueue_gs_url", GOOGLE_SCRIPT_URL);
+        }
+    } catch (e) {
+        // secret.txt not found — user must configure via settings UI
+    }
+})();
 
 // ─── Configuration URL setter (called from settings) ────────────────────────────
 

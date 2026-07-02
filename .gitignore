@@ -18,6 +18,9 @@ build/
 .vscode/
 .idea/
 
+# Secrets
+pwa/secret.txt
+
 # OS
 .DS_Store
 Thumbs.db
