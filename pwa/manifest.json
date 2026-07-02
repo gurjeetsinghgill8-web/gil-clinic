@@ -2,7 +2,7 @@
   "name": "CardioQueue — GIL CLINIC",
   "short_name": "CardioQueue",
   "description": "Patient Queue Management — Cardiology Department",
-  "start_url": "/pwa/index.html",
+  "start_url": "index.html",
   "display": "standalone",
   "background_color": "#ffffff",
   "theme_color": "#667eea",

@@ -4,17 +4,17 @@
  */
 const CACHE_NAME = "cardioqueue-v1";
 const APP_SHELL = [
-  "/pwa/index.html",
-  "/pwa/css/style.css",
-  "/pwa/js/db.js",
-  "/pwa/js/app.js",
-  "/pwa/js/reception.js",
-  "/pwa/js/technician.js",
-  "/pwa/js/doctor.js",
-  "/pwa/js/qr.js",
-  "/pwa/js/export.js",
-  "/pwa/lib/qrcode.min.js",
-  "/pwa/manifest.json"
+  "./index.html",
+  "./css/style.css",
+  "./js/db.js",
+  "./js/app.js",
+  "./js/reception.js",
+  "./js/technician.js",
+  "./js/doctor.js",
+  "./js/qr.js",
+  "./js/export.js",
+  "./lib/qrcode.min.js",
+  "./manifest.json"
 ];
 
 self.addEventListener("install", (event) => {
