@@ -1,7 +1,10 @@
 """
-Database module — Dual database support (SQLite + Supabase) for CardioQueue.
-If Supabase URL and Key are left as defaults or empty, it automatically falls back
-to a local SQLite database (cardioqueue.db) in the project directory.
+Database module — Tri-mode storage for CardioQueue.
+====================================================
+Priority: Google Sheets → Local JSON files (cardioqueue_data/) → SQLite
+- If Google Sheets URL is set and working → uses GS
+- If GS fails → automatically falls back to Local JSON (human-readable files)
+- If SUPABASE_URL/KEY are valid → uses Supabase instead of SQLite
 """
 import os
 import sqlite3
@@ -13,19 +16,40 @@ from utils.config import SUPABASE_URL, SUPABASE_KEY
 # ─── GOOGLE SHEETS BACKEND CONFIG ───────────────────────────────────────────
 GOOGLE_SCRIPT_URL = os.getenv("GOOGLE_SCRIPT_URL", "").strip()
 USE_GOOGLE_SHEETS = len(GOOGLE_SCRIPT_URL) > 0
-_gs_failed = False  # Marks if GS API has failed — triggers SQLite fallback
+_gs_failed = False  # Marks if GS API has failed — triggers Local JSON fallback
+
+# ─── LOCAL JSON FALLBACK ────────────────────────────────────────────────────
+USE_LOCAL_JSON = not USE_GOOGLE_SHEETS or _gs_failed  # Will be re-evaluated after GS fail
+if not USE_GOOGLE_SHEETS:
+    from utils.local_json_db import (
+        create_patient_json as _create_patient,
+        get_patient_by_id_json as _get_patient_by_id,
+        get_patient_by_mobile_json as _get_patient_by_mobile,
+        get_today_patients_json as _get_today_patients,
+        create_test_json as _create_test,
+        get_tests_for_patient_json as _get_tests_for_patient,
+        get_tests_by_mobile_json as _get_tests_by_mobile,
+        get_queue_json as _get_queue,
+        update_test_status_json as _update_test_status,
+        get_completed_tests_json as _get_completed_tests,
+        get_report_ready_tests_json as _get_report_ready_tests,
+        get_current_patient_json as _get_current_patient,
+        get_department_stats_json as _get_department_stats,
+        log_message_json as _log_message,
+    )
+    print("[DB] Google Sheets not set. Using Local JSON file storage.")
+    print(f"[DB] Data directory: {os.path.abspath('cardioqueue_data/')}")
 
 def call_gs_api(action: str, params: dict = None, is_post: bool = False):
-    global _gs_failed
+    global _gs_failed, USE_LOCAL_JSON
     if _gs_failed:
-        return None  # Already failed once — skip retries, use SQLite
+        return None  # Already failed once — skip retries, use Local JSON
     if params is None:
         params = {}
     params["action"] = action
     try:
         if is_post:
             r = requests.get(GOOGLE_SCRIPT_URL, params=params, timeout=10)
-            # Some GS web apps don't handle POST well — fallback to GET if POST fails
             if r.status_code != 200:
                 r = requests.get(GOOGLE_SCRIPT_URL, params=params, timeout=10)
         else:
@@ -36,11 +60,39 @@ def call_gs_api(action: str, params: dict = None, is_post: bool = False):
         else:
             print(f"[GoogleSheets] API Error: {r.status_code} - {r.text[:200]}")
             _gs_failed = True
+            _auto_enable_local_json()
             return None
     except Exception as e:
         print(f"[GoogleSheets] Exception calling API: {e}")
         _gs_failed = True
+        _auto_enable_local_json()
         return None
+
+
+def _auto_enable_local_json():
+    """Import JSON functions when Google Sheets fails, so rest of app uses files."""
+    global USE_LOCAL_JSON, _create_patient, _get_patient_by_id, _get_patient_by_mobile
+    global _get_today_patients, _create_test, _get_tests_for_patient, _get_tests_by_mobile
+    global _get_queue, _update_test_status, _get_completed_tests, _get_report_ready_tests
+    global _get_current_patient, _get_department_stats, _log_message
+    from utils.local_json_db import (
+        create_patient_json as _create_patient,
+        get_patient_by_id_json as _get_patient_by_id,
+        get_patient_by_mobile_json as _get_patient_by_mobile,
+        get_today_patients_json as _get_today_patients,
+        create_test_json as _create_test,
+        get_tests_for_patient_json as _get_tests_for_patient,
+        get_tests_by_mobile_json as _get_tests_by_mobile,
+        get_queue_json as _get_queue,
+        update_test_status_json as _update_test_status,
+        get_completed_tests_json as _get_completed_tests,
+        get_report_ready_tests_json as _get_report_ready_tests,
+        get_current_patient_json as _get_current_patient,
+        get_department_stats_json as _get_department_stats,
+        log_message_json as _log_message,
+    )
+    USE_LOCAL_JSON = True
+    print("[DB] Google Sheets failed. Switched to Local JSON folder storage.")
 
 def to_snake_case(d):
     if isinstance(d, list):
@@ -164,11 +216,16 @@ def create_patient(name: str, mobile: str, age: int, gender: str) -> dict | None
     Insert a new patient record.
     Returns the created patient dict or None on failure.
     """
+    # ─── Google Sheets ────────────────────────────────────────────────────────
     if USE_GOOGLE_SHEETS and not _gs_failed:
         res = call_gs_api("createPatient", {"name": name, "mobile": mobile, "age": age, "gender": gender}, is_post=True)
         if res:
             return to_snake_case(res)
-        # Fall through to SQLite if Google Sheets fails
+        # Fall through to Local JSON if GS fails
+
+    # ─── Local JSON ───────────────────────────────────────────────────────────
+    if USE_LOCAL_JSON:
+        return _create_patient(name, mobile, age, gender)
 
     today = date.today().isoformat()
     count = _get_today_patient_count()
@@ -224,6 +281,9 @@ def get_patient_by_id(patient_id: str) -> dict | None:
         if res:
             return to_snake_case(res)
 
+    if USE_LOCAL_JSON:
+        return _get_patient_by_id(patient_id)
+
     if USE_SUPABASE:
         try:
             result = get_client().table("patients").select("*").eq("patient_id", patient_id).execute()
@@ -252,6 +312,9 @@ def get_patient_by_mobile(mobile: str) -> dict | None:
         res = call_gs_api("getPatientByMobile", {"mobile": mobile})
         if res:
             return to_snake_case(res)
+
+    if USE_LOCAL_JSON:
+        return _get_patient_by_mobile(mobile)
 
     if USE_SUPABASE:
         try:
@@ -286,6 +349,9 @@ def get_today_patients() -> list[dict]:
         res = call_gs_api("getTodayPatients")
         if res:
             return to_snake_case(res) or []
+
+    if USE_LOCAL_JSON:
+        return _get_today_patients()
 
     today = date.today().isoformat()
     if USE_SUPABASE:
@@ -353,6 +419,9 @@ def create_test(patient_id: str, test_name: str, room: str) -> dict | None:
         if res:
             return to_snake_case(res)
 
+    if USE_LOCAL_JSON:
+        return _create_test(patient_id, test_name, room)
+
     token = _get_next_token(test_name)
     queue_pos = _get_queue_length(test_name) + 1
 
@@ -407,6 +476,9 @@ def get_tests_for_patient(patient_id: str) -> list[dict]:
         if res:
             return to_snake_case(res) or []
 
+    if USE_LOCAL_JSON:
+        return _get_tests_for_patient(patient_id)
+
     if USE_SUPABASE:
         try:
             result = (get_client().table("tests")
@@ -440,6 +512,9 @@ def get_tests_by_mobile(mobile: str) -> list[dict]:
         if res:
             return to_snake_case(res) or []
 
+    if USE_LOCAL_JSON:
+        return _get_tests_by_mobile(mobile)
+
     patient = get_patient_by_mobile(mobile)
     if not patient:
         return []
@@ -455,6 +530,9 @@ def get_queue(test_name: str, status_filter: str = "waiting") -> list[dict]:
         res = call_gs_api("getQueue", {"testName": test_name, "status": status_filter or ""})
         if res:
             return to_snake_case(res) or []
+
+    if USE_LOCAL_JSON:
+        return _get_queue(test_name, status_filter)
 
     today = date.today().isoformat()
     if USE_SUPABASE:
@@ -516,6 +594,9 @@ def update_test_status(test_id: str, new_status: str) -> bool:
         if res and not res.get("error"):
             return True
 
+    if USE_LOCAL_JSON:
+        return _update_test_status(test_id, new_status)
+
     if USE_SUPABASE:
         update_data = {"status": new_status}
         now = datetime.utcnow().isoformat()
@@ -574,6 +655,9 @@ def get_completed_tests() -> list[dict]:
         if res:
             return to_snake_case(res) or []
 
+    if USE_LOCAL_JSON:
+        return _get_completed_tests()
+
     today = date.today().isoformat()
     if USE_SUPABASE:
         try:
@@ -623,6 +707,9 @@ def get_report_ready_tests() -> list[dict]:
         res = call_gs_api("getReportReadyTests")
         if res:
             return to_snake_case(res) or []
+
+    if USE_LOCAL_JSON:
+        return _get_report_ready_tests()
 
     today = date.today().isoformat()
     if USE_SUPABASE:
@@ -746,6 +833,9 @@ def get_current_patient(test_name: str) -> dict | None:
         if res:
             return to_snake_case(res)
 
+    if USE_LOCAL_JSON:
+        return _get_current_patient(test_name)
+
     today = date.today().isoformat()
     if USE_SUPABASE:
         try:
@@ -802,6 +892,9 @@ def log_message(patient_id: str, mobile: str, msg_type: str, text: str, sent_via
     if USE_GOOGLE_SHEETS:
         return
 
+    if USE_LOCAL_JSON:
+        return _log_message(patient_id, mobile, msg_type, text, sent_via)
+
     if USE_SUPABASE:
         data = {
             "patient_id": patient_id,
@@ -840,6 +933,9 @@ def get_department_stats(test_name: str) -> dict:
         res = call_gs_api("getDepartmentStats", {"testName": test_name})
         if res:
             return to_snake_case(res) or {s: 0 for s in ["waiting", "called", "in_progress", "completed", "report_ready", "delivered"]}
+
+    if USE_LOCAL_JSON:
+        return _get_department_stats(test_name)
 
     today = date.today().isoformat()
     stats = {}
