@@ -98,18 +98,36 @@ def get_pwa_install_button() -> str:
 
 # ─── STATUS CHANGE DETECTION JS ─────────────────────────────────────────────────
 
-def get_status_watcher_js(prev_status_hash: str, patient_name: str) -> str:
+def get_status_watcher_js(prev_status_hash: str, patient_name: str, patient_id: str = "") -> str:
     """
     Inject JavaScript that watches for status changes and triggers:
       - Browser Notification
       - Audio beep (via Web Audio API)
       - Vibration (on supported devices)
+      - Service Worker background tracking
     """
     return f"""
     <script>
     (function() {{
         var prevHash = "{prev_status_hash}";
         var patientName = "{patient_name.replace("'", "\\'")}";
+        var patientId = "{patient_id}";
+
+        // ── Register with Service Worker for background tracking ──────────────
+        function registerServiceWorker() {{
+            if ("serviceWorker" in navigator) {{
+                navigator.serviceWorker.ready.then(function(registration) {{
+                    // Send patient info to SW for background polling
+                    registration.active.postMessage({{
+                        type: "TRACK_PATIENT",
+                        patientId: patientId,
+                        patientName: patientName,
+                        statusHash: prevHash
+                    }});
+                }});
+            }}
+        }}
+        registerServiceWorker();
 
         function checkStatus() {{
             // Re-read the status element from the DOM
@@ -118,6 +136,16 @@ def get_status_watcher_js(prev_status_hash: str, patient_name: str) -> str:
             var currHash = statusEl.getAttribute("data-hash") || "";
             var currStatus = statusEl.getAttribute("data-status") || "";
             var currTest = statusEl.getAttribute("data-test") || "";
+
+            // Update SW with latest hash
+            if ("serviceWorker" in navigator) {{
+                navigator.serviceWorker.ready.then(function(reg) {{
+                    reg.active.postMessage({{
+                        type: "UPDATE_STATUS_HASH",
+                        statusHash: currHash
+                    }});
+                }});
+            }}
 
             if (prevHash && currHash && currHash !== prevHash) {{
                 // Status changed — notify patient
@@ -421,9 +449,33 @@ def show():
         "⚠️ Wait times are estimates only. Actual times may vary based on department workload."
     )
 
+    # ─── Education Messages Section ──────────────────────────────────────────
+    st.divider()
+    st.markdown("### 📚 स्वास्थ्य शिक्षा / Health Education")
+    st.caption("आपके टेस्ट से जुड़ी महत्वपूर्ण जानकारी / Important info about your tests")
+
+    # Show education tips based on what tests are booked
+    test_tips = {
+        "ECG": "🫀 **ECG (Electrocardiogram)**: बिल्कुल सामान्य प्रक्रिया है। आराम से लेटें और गहरी सांस लें।\nNo special preparation needed. Lie still and breathe normally.",
+        "Echo": "🫀 **Echo (Echocardiography)**: अल्ट्रासाउंड जैसी प्रक्रिया है — पूरी तरह दर्द रहित।\nPainless ultrasound of your heart. Lie on your left side as instructed.",
+        "TMT": "🏃 **TMT (Treadmill Test)**: हल्के कपड़े पहनें। टेस्ट से 2 घंटे पहले कुछ न खाएं।\nWear comfortable shoes. Don't eat 2 hours before the test.",
+        "Holter": "📟 **Holter Monitor**: 24 घंटे portable ECG machine लगाई जाएगी। सामान्य काम करें।\nA portable ECG device for 24 hours. Continue normal activities.",
+        "ABPM": "💓 **ABPM (Ambulatory BP)**: 24 घंटे BP monitor लगेगा। हर 30 मिनट में BP लेगा।\n24-hour blood pressure monitor. Records BP every 30 minutes.",
+        "OPD": "🩺 **OPD Consultation**: डॉक्टर से परामर्श लें। अपनी सारी पुरानी रिपोर्ट लेकर आएं।\nDoctor consultation. Bring all previous medical reports.",
+    }
+
+    # Get unique test types from the patient's tests
+    booked_tests = set(t["test_name"] for t in tests)
+    for test_name in sorted(booked_tests):
+        if test_name in test_tips:
+            with st.container(border=True):
+                st.markdown(test_tips[test_name])
+
+    st.caption("🔔 Notifications: Allow browser notifications for real-time updates. Even if you close this page, you may receive updates via the installed PWA app.")
+
     # ─── Inject Status Watcher JS ──────────────────────────────────────────
     st.markdown(
-        get_status_watcher_js(status_hash, patient["name"]),
+        get_status_watcher_js(status_hash, patient["name"], patient["patient_id"]),
         unsafe_allow_html=True,
     )
 

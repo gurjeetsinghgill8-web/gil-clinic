@@ -175,6 +175,20 @@ def init_sqlite():
         FOREIGN KEY (patient_id) REFERENCES patients(patient_id) ON DELETE CASCADE
     )
     """)
+
+    # 4. users table (for password-based auth)
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS users (
+        id TEXT PRIMARY KEY,
+        username TEXT UNIQUE NOT NULL,
+        display_name TEXT NOT NULL,
+        role TEXT NOT NULL,
+        password TEXT NOT NULL,
+        active INTEGER DEFAULT 1,
+        created_by TEXT,
+        created_at TEXT NOT NULL
+    )
+    """)
     
     conn.commit()
     conn.close()
@@ -926,6 +940,145 @@ def log_message(patient_id: str, mobile: str, msg_type: str, text: str, sent_via
 
 
 # ─── DASHBOARD STATS ─────────────────────────────────────────────────────────
+
+# ─── USERS (Password Management) ────────────────────────────────────────────
+
+def create_user(username: str, display_name: str, role: str, password: str) -> dict | None:
+    """Create a new staff user account."""
+    user_uuid = str(uuid.uuid4())
+    now_str = datetime.now().isoformat()
+    conn = sqlite3.connect(DB_FILE)
+    cursor = conn.cursor()
+    try:
+        cursor.execute(
+            "INSERT INTO users (id, username, display_name, role, password, active, created_at) VALUES (?, ?, ?, ?, ?, 1, ?)",
+            (user_uuid, username, display_name, role, password, now_str)
+        )
+        conn.commit()
+        return {
+            "id": user_uuid,
+            "username": username,
+            "display_name": display_name,
+            "role": role,
+            "active": 1,
+            "created_at": now_str
+        }
+    except sqlite3.IntegrityError:
+        return None  # Username already exists
+    except Exception as e:
+        print(f"[SQLite] create_user error: {e}")
+        return None
+    finally:
+        conn.close()
+
+
+def authenticate_user(username: str, password: str) -> dict | None:
+    """Authenticate a staff user. Returns user dict if valid, None otherwise."""
+    conn = sqlite3.connect(DB_FILE)
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+    try:
+        cursor.execute(
+            "SELECT * FROM users WHERE username = ? AND active = 1",
+            (username,)
+        )
+        row = cursor.fetchone()
+        if row and row["password"] == password:
+            return dict(row)
+        return None
+    except Exception as e:
+        print(f"[SQLite] authenticate_user error: {e}")
+        return None
+    finally:
+        conn.close()
+
+
+def get_all_users() -> list[dict]:
+    """Get all staff user accounts."""
+    conn = sqlite3.connect(DB_FILE)
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+    try:
+        cursor.execute("SELECT * FROM users ORDER BY role, username ASC")
+        rows = cursor.fetchall()
+        return [dict(row) for row in rows]
+    except Exception as e:
+        print(f"[SQLite] get_all_users error: {e}")
+        return []
+    finally:
+        conn.close()
+
+
+def get_user_by_username(username: str) -> dict | None:
+    """Get a single user by username."""
+    conn = sqlite3.connect(DB_FILE)
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+    try:
+        cursor.execute("SELECT * FROM users WHERE username = ?", (username,))
+        row = cursor.fetchone()
+        return dict(row) if row else None
+    except Exception as e:
+        print(f"[SQLite] get_user_by_username error: {e}")
+        return None
+    finally:
+        conn.close()
+
+
+def update_user_password(username: str, new_password: str) -> bool:
+    """Update a user's password."""
+    conn = sqlite3.connect(DB_FILE)
+    cursor = conn.cursor()
+    try:
+        cursor.execute(
+            "UPDATE users SET password = ? WHERE username = ?",
+            (new_password, username)
+        )
+        conn.commit()
+        return cursor.rowcount > 0
+    except Exception as e:
+        print(f"[SQLite] update_user_password error: {e}")
+        return False
+    finally:
+        conn.close()
+
+
+def delete_user(username: str) -> bool:
+    """Delete (deactivate) a user account."""
+    conn = sqlite3.connect(DB_FILE)
+    cursor = conn.cursor()
+    try:
+        cursor.execute(
+            "UPDATE users SET active = 0 WHERE username = ?",
+            (username,)
+        )
+        conn.commit()
+        return cursor.rowcount > 0
+    except Exception as e:
+        print(f"[SQLite] delete_user error: {e}")
+        return False
+    finally:
+        conn.close()
+
+
+def get_users_by_role(role: str) -> list[dict]:
+    """Get all active users for a given role."""
+    conn = sqlite3.connect(DB_FILE)
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+    try:
+        cursor.execute(
+            "SELECT * FROM users WHERE role = ? AND active = 1 ORDER BY username ASC",
+            (role,)
+        )
+        rows = cursor.fetchall()
+        return [dict(row) for row in rows]
+    except Exception as e:
+        print(f"[SQLite] get_users_by_role error: {e}")
+        return []
+    finally:
+        conn.close()
+
 
 def get_department_stats(test_name: str) -> dict:
     """Get counts for each status for a given test type (today only)."""

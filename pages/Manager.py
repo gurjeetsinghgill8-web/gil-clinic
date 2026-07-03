@@ -92,6 +92,100 @@ def show():
 
     st.divider()
 
+    # ─── Quick Actions: Manager can call/complete patients in any dept ─────────
+    st.markdown("### ⚡ Department Quick Actions")
+    st.caption("Manager can call the next waiting patient or mark the current patient as complete for any department.")
+
+    dept_actions = {
+        "ECG": "📊",
+        "Echo": "🔬",
+        "TMT": "🏃",
+        "OPD": "🩺",
+    }
+
+    for dept_name, dept_icon in dept_actions.items():
+        queue_data = harness.get_department_queue(dept_name)
+        dept_current = queue_data["current"]
+        dept_waiting = queue_data["waiting"]
+
+        with st.container(border=True):
+            cols = st.columns([1, 2, 2, 2])
+            with cols[0]:
+                st.markdown(f"## {dept_icon}")
+            with cols[1]:
+                st.markdown(f"**{dept_name}**")
+                waiting_count = len(dept_waiting)
+                st.caption(f"⏳ Waiting: {waiting_count}")
+
+            with cols[2]:
+                if dept_current:
+                    p = dept_current
+                    p_name = p.get("patients", {}).get("name", "Unknown")
+                    p_status = p.get("status", "")
+                    st.markdown(f"**Current:** {p_name}")
+                    st.caption(f"Status: {STATUS_LABELS.get(p_status, p_status)}")
+
+                    if p_status in ["called", "in_progress"]:
+                        if st.button(
+                            f"✅ Mark Complete — {p_name}",
+                            key=f"mgr_complete_{dept_name}",
+                            use_container_width=True,
+                        ):
+                            p_mobile = p.get("patients", {}).get("mobile", "")
+                            result = harness.complete_test(
+                                p["id"], p_name, dept_name,
+                                p_mobile, p.get("patient_id", "")
+                            )
+                            if result["success"]:
+                                st.success(result["message"])
+                                if result.get("notification"):
+                                    script = harness.get_notification_script(
+                                        f"✅ {dept_name} Completed", result["notification"],
+                                        urgent=True
+                                    )
+                                    st.markdown(script, unsafe_allow_html=True)
+                                st.rerun()
+                            else:
+                                st.error(result["message"])
+                else:
+                    st.markdown("— No current patient —")
+
+            with cols[3]:
+                if dept_waiting:
+                    next_p = dept_waiting[0]
+                    p = next_p.get("patients", {})
+                    w_name = p.get("name", "Unknown")
+                    w_mobile = p.get("mobile", "")
+                    token = next_p.get("token_number", 0)
+                    st.markdown(f"**Next:** {w_name} (Token #{token})")
+
+                    if st.button(
+                        f"🔵 Call — {w_name}",
+                        key=f"mgr_call_{dept_name}",
+                        type="primary",
+                        use_container_width=True,
+                    ):
+                        result = harness.call_patient(
+                            next_p["id"], w_name, dept_name, token,
+                            w_mobile, next_p.get("patient_id", "")
+                        )
+                        if result["success"]:
+                            st.success(result["message"])
+                            if result.get("notification"):
+                                script = harness.get_notification_script(
+                                    f"🔵 {dept_name} — Patient Called",
+                                    result["notification"],
+                                    urgent=True
+                                )
+                                st.markdown(script, unsafe_allow_html=True)
+                            st.rerun()
+                        else:
+                            st.error(result["message"])
+                else:
+                    st.markdown("✅ No waiting patients")
+
+    st.divider()
+
     # ─── Today's Recent Patients ─────────────────────────────────────────────
     st.markdown("### 📋 Today's Patients")
     try:

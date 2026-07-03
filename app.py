@@ -17,7 +17,8 @@ st.set_page_config(
 )
 
 from llm_harness import get_harness
-from utils.config import STAFF_PASSWORDS, APP_NAME, HOSPITAL_NAME
+from utils.config import APP_NAME, HOSPITAL_NAME, ADMIN_USERNAME, ADMIN_PASS
+from utils.db import authenticate_user, get_all_users, get_users_by_role
 from utils.notifications import request_notification_permission_script
 
 
@@ -65,6 +66,11 @@ ROLE_PAGES = {
     "OPD":  "🩺 OPD",
     "Doctor": "🩺 Doctor",
     "Manager": "📈 Manager Dashboard",
+    "Admin": "👑 Admin Panel",
+}
+
+ADMIN_EXTRA_PAGES = {
+    "🔐 Password Management": "🔐 Password Management",
 }
 
 DEPARTMENT_PAGES = {
@@ -107,7 +113,7 @@ def render_sidebar_footer():
 
 
 def login_sidebar():
-    """Render the login sidebar. Returns True if authenticated."""
+    """Render the login sidebar. Two modes: Staff login (username+pass) and Admin login."""
     with st.sidebar:
         st.image("https://img.icons8.com/color/96/hospital.png", width=80)
         st.markdown(f"### 🏥 {APP_NAME}")
@@ -115,32 +121,76 @@ def login_sidebar():
 
         st.divider()
 
-        # Role selector
-        role = st.selectbox(
-            "Select Role",
-            ["Reception", "ECG", "Echo", "TMT", "OPD", "Doctor", "Manager", "Patient (No Login)"],
-            key="login_role",
+        # ─── Tab-style: Staff Login vs Admin Login ─────────────────────────────
+        login_mode = st.radio(
+            "Login as:",
+            ["👥 Staff", "🔑 Admin", "👤 Patient (No Login)"],
+            key="login_mode",
+            horizontal=True,
+            label_visibility="collapsed",
         )
 
-        if role == "Patient (No Login)":
+        if login_mode == "👤 Patient (No Login)":
             if st.button("🔓 Access Patient Status", use_container_width=True, type="primary"):
                 st.session_state.authenticated = True
                 st.session_state.auth_role = "Patient"
+                st.session_state.auth_username = "Patient"
                 st.rerun()
             st.caption("No password needed to check your status.")
+            render_sidebar_footer()
             return False
 
-        password = st.text_input("Password", type="password", key="login_pass")
+        # ─── Staff Login ───────────────────────────────────────────────────────
+        if login_mode == "👥 Staff":
+            staff_roles = ["Reception", "ECG", "Echo", "TMT", "OPD", "Doctor", "Manager"]
+            selected_role = st.selectbox(
+                "Select your role",
+                staff_roles,
+                key="login_staff_role",
+            )
 
-        if st.button("🔐 Login", use_container_width=True, type="primary"):
-            expected_pass = STAFF_PASSWORDS.get(role)
-            if password == expected_pass:
-                st.session_state.authenticated = True
-                st.session_state.auth_role = role
-                st.rerun()
-            else:
-                st.error("❌ Incorrect password. Please try again.")
+            # Get all active users for this role
+            role_users = get_users_by_role(selected_role)
+            if not role_users:
+                st.info(f"⚠️ No {selected_role} users found.\nContact Admin to create your account.")
+                render_sidebar_footer()
                 return False
+
+            usernames = {u["display_name"]: u["username"] for u in role_users}
+            selected_display = st.selectbox(
+                "Select your name",
+                list(usernames.keys()),
+                key="login_staff_name",
+            )
+
+            password = st.text_input("Password", type="password", key="login_staff_pass")
+
+            if st.button("🔐 Login", use_container_width=True, type="primary"):
+                username = usernames[selected_display]
+                user = authenticate_user(username, password)
+                if user:
+                    st.session_state.authenticated = True
+                    st.session_state.auth_role = user["role"]
+                    st.session_state.auth_username = user["display_name"]
+                    st.rerun()
+                else:
+                    st.error("❌ Incorrect password. Please try again.")
+                    return False
+
+        # ─── Admin Login ───────────────────────────────────────────────────────
+        if login_mode == "🔑 Admin":
+            admin_user = st.text_input("Admin Username", key="admin_user")
+            admin_pass = st.text_input("Admin Password", type="password", key="admin_pass")
+
+            if st.button("🔐 Admin Login", use_container_width=True, type="primary"):
+                if admin_user == ADMIN_USERNAME and admin_pass == ADMIN_PASS:
+                    st.session_state.authenticated = True
+                    st.session_state.auth_role = "Admin"
+                    st.session_state.auth_username = "Admin (Owner)"
+                    st.rerun()
+                else:
+                    st.error("❌ Invalid admin credentials.")
+                    return False
 
         render_sidebar_footer()
 
@@ -151,10 +201,13 @@ def logout_button():
     """Show logout button in sidebar for authenticated users."""
     with st.sidebar:
         st.divider()
-        st.caption(f"Logged in as: **{st.session_state.auth_role}**")
+        role = st.session_state.auth_role
+        username = st.session_state.get("auth_username", role)
+        st.caption(f"👤 **{username}**  \n_{role}_")
         if st.button("🚪 Logout", use_container_width=True):
             st.session_state.authenticated = False
             st.session_state.auth_role = None
+            st.session_state.auth_username = None
             st.rerun()
 
 
@@ -169,7 +222,12 @@ def page_selector():
     # Build navigation options
     nav_options = ["🏠 Home"]
 
-    if role in ROLE_PAGES:
+    if role == "Admin":
+        # Admin sees ALL pages + password management
+        nav_options.extend(list(ROLE_PAGES.values()))
+        nav_options.append("📋 Patient Status")
+        nav_options.append("🔐 Password Management")
+    elif role in ROLE_PAGES:
         nav_options.append(ROLE_PAGES[role])
 
     # Doctor can also see status
@@ -198,7 +256,7 @@ def show_home():
     st.title(f"🏥 {APP_NAME}")
     st.subheader(f"{HOSPITAL_NAME} — Cardiology Department")
 
-    col1, col2, col3 = st.columns([2, 1, 1])
+    col1, col2 = st.columns([2, 1])
 
     with col1:
         st.markdown("""
@@ -214,24 +272,13 @@ def show_home():
 
         **Key Features:**
         - ✅ Real-time queue management
-        - ✅ Browser notifications
+        - ✅ Browser notifications on mobile
         - ✅ Token printing
         - ✅ Zero monthly cost
-        - ✅ WhatsApp automation (coming Phase 2)
+        - ✅ Live PWA status tracking
         """)
 
     with col2:
-        st.markdown("### 🔐 Quick Access")
-        st.markdown("""
-        **Staff Login (sidebar):**
-        - Reception: `recep123`
-        - ECG: `ecg123`
-        - Echo: `echo123`
-        - TMT: `tmt123`
-        - Doctor: `doc123`
-        """)
-
-    with col3:
         st.markdown("### 📊 Today's Stats")
         try:
             harness = get_harness()
@@ -315,6 +362,14 @@ def main():
 
     elif page == "📋 Patient Status":
         from pages.Patient_Status import show
+        show()
+
+    elif page == "👑 Admin Panel":
+        st.info("👑 Admin Panel — You have full access to all pages via the sidebar navigation.")
+        st.markdown("Use the sidebar to navigate to any department, or go to **🔐 Password Management** to manage staff accounts.")
+
+    elif page == "🔐 Password Management":
+        from pages.Password_Management import show
         show()
 
 

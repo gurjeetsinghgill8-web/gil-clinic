@@ -19,16 +19,9 @@ HOSPITAL_NAME = os.getenv("HOSPITAL_NAME", "GIL CLINIC")
 DOCTOR_MOBILE = os.getenv("DOCTOR_MOBILE", "")
 BABLU_MOBILE = os.getenv("BABLU_MOBILE", "")
 
-# ─── Staff Auth (Phase 1 — simple password-based) ───────────────────────────
-STAFF_PASSWORDS = {
-    "Reception": os.getenv("RECEPTION_PASS", "recep123"),
-    "ECG":       os.getenv("ECG_PASS", "ecg123"),
-    "Echo":      os.getenv("ECHO_PASS", "echo123"),
-    "TMT":       os.getenv("TMT_PASS", "tmt123"),
-    "OPD":       os.getenv("OPD_PASS", "opd123"),
-    "Doctor":    os.getenv("DOCTOR_PASS", "doc123"),
-    "Manager":   os.getenv("MANAGER_PASS", "manager123"),
-}
+# ─── Admin Credentials (for the new Admin role) ──────────────────────────────
+ADMIN_USERNAME = os.getenv("ADMIN_USERNAME", "admin")
+ADMIN_PASS = os.getenv("ADMIN_PASS", "admin123")
 
 # ─── Test Types ──────────────────────────────────────────────────────────────
 TEST_TYPES = ["ECG", "Echo", "TMT", "Holter", "ABPM", "OPD"]
