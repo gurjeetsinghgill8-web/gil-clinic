@@ -3,43 +3,19 @@ Password Management — Admin-only page for managing staff user accounts
 ======================================================================
 Admin can:
   - View all users
-  - Create new users (auto-generates username + random password)
+  - Create new users (with custom username + password)
   - Reset passwords for existing users
   - Delete users (soft-deactivate)
 
 Access: Admin role only
 """
 import streamlit as st
-import random
-import string
 from datetime import datetime
 
 from utils.db import (
-    create_user, authenticate_user, get_all_users,
-    get_user_by_username, update_user_password, delete_user,
-    get_users_by_role
+    create_user, get_all_users, get_user_by_username,
+    update_user_password, delete_user, get_users_by_role
 )
-
-
-# ─── Helpers ──────────────────────────────────────────────────────────────────
-
-def generate_password(length=8):
-    """Generate a random alphanumeric password."""
-    chars = string.ascii_letters + string.digits
-    return ''.join(random.choice(chars) for _ in range(length))
-
-
-def generate_username(role: str) -> str:
-    """Generate a unique username like 'reception1', 'ecg2' etc."""
-    prefix = role.lower().replace(" ", "_")
-    existing = get_users_by_role(role)
-    count = len(existing) + 1
-    username = f"{prefix}{count}"
-    # Ensure uniqueness
-    while get_user_by_username(username):
-        count += 1
-        username = f"{prefix}{count}"
-    return username
 
 
 # ─── Main Page ────────────────────────────────────────────────────────────────
@@ -93,8 +69,8 @@ def show():
     # ─── Tab 2: Create User ────────────────────────────────────────────────────
     with tab2:
         st.markdown("### ➔ Create New Staff User")
-        st.markdown("Select a role and enter the staff member's name. A username and password will be auto-generated.")
-        
+        st.markdown("**अपने हिसाब से username और password बनाएं** — आपको याद रहेगा और staff को भी आसानी होगी।")
+
         role_options = ["Reception", "ECG", "Echo", "TMT", "OPD", "Doctor", "Manager"]
         new_role = st.selectbox("Select Role", role_options, key="new_user_role")
         new_name = st.text_input(
@@ -102,50 +78,80 @@ def show():
             placeholder="e.g. Rajesh Kumar",
             key="new_user_name",
         )
-        
-        if st.button("✨ Generate User & Password", type="primary", use_container_width=True):
-            if not new_name or new_name.strip() == "":
-                st.error("⚠️ Please enter the staff member's name.")
-            else:
-                username = generate_username(new_role)
-                password = generate_password()
-                display_name = new_name.strip().title()
+        new_username = st.text_input(
+            "👤 Choose Username",
+            placeholder="e.g. rajesh, ecg_raj, reception1",
+            key="new_username",
+            help="Staff is username se login karega. Kuch simple rakhein."
+        )
+        new_password = st.text_input(
+            "🔑 Choose Password",
+            type="password",
+            placeholder="e.g. rajesh123, ecg@2024",
+            key="new_password",
+            help="Simple rakhein jo staff ko yad rahe. Min 4 characters."
+        )
+
+        col1, col2 = st.columns(2)
+        with col1:
+            if st.button("✅ Create User", type="primary", use_container_width=True):
+                errors = []
+                if not new_name or new_name.strip() == "":
+                    errors.append("⚠️ Name daalna zaroori hai.")
+                if not new_username or new_username.strip() == "":
+                    errors.append("⚠️ Username daalna zaroori hai.")
+                if not new_password or len(new_password.strip()) < 4:
+                    errors.append("⚠️ Password kam se kam 4 characters ka daalein.")
                 
-                result = create_user(username, display_name, new_role, password)
-                if result:
-                    st.success(f"✅ User created successfully!")
-                    
-                    # Show credentials ONCE in a highlighted box
-                    st.markdown("""
-                    <div style="
-                        background: linear-gradient(135deg, #667eea, #764ba2);
-                        color: white; padding: 20px; border-radius: 12px;
-                        margin: 15px 0; text-align: center;
-                    ">
-                    """, unsafe_allow_html=True)
-                    
-                    st.markdown(f"### 🎉 New Staff Account")
-                    st.markdown(f"**Name:** {display_name}")
-                    st.markdown(f"**Role:** {new_role}")
-                    st.markdown(f"**Username:** `{username}`")
-                    st.markdown(f"**Password:** `{password}`")
-                    
-                    st.markdown("""
-                    <p style="font-size: 0.85rem; opacity: 0.8; margin-top: 10px;">
-                    ⚠️ This is the ONLY time the password is shown. Share it securely with the staff member.
-                    </p>
-                    </div>
-                    """, unsafe_allow_html=True)
-                    
-                    st.info("📝 Tell the staff member: Use the **Staff** login tab → select their role → select their name → enter the password.")
+                if errors:
+                    for e in errors:
+                        st.error(e)
                 else:
-                    st.error("❌ Failed to create user. Username may already exist.")
+                    # Check if username already exists
+                    existing = get_user_by_username(new_username.strip().lower())
+                    if existing:
+                        st.error(f"❌ Username `{new_username.strip().lower()}` already exists! Koi aur username rakhein.")
+                    else:
+                        display_name = new_name.strip().title()
+                        username = new_username.strip().lower()
+                        password = new_password.strip()
+                        
+                        result = create_user(username, display_name, new_role, password)
+                        if result:
+                            st.success(f"✅ User created successfully!")
+                            
+                            # Show credentials in a highlighted box
+                            st.markdown("""
+                            <div style="
+                                background: linear-gradient(135deg, #667eea, #764ba2);
+                                color: white; padding: 20px; border-radius: 12px;
+                                margin: 15px 0; text-align: center;
+                            ">
+                            """, unsafe_allow_html=True)
+                            
+                            st.markdown(f"### 🎉 New Staff Account")
+                            st.markdown(f"**Name:** {display_name}")
+                            st.markdown(f"**Role:** {new_role}")
+                            st.markdown(f"**Username:** `{username}`")
+                            st.markdown(f"**Password:** `{password}`")
+                            
+                            st.markdown("""
+                            <p style="font-size: 0.85rem; opacity: 0.8; margin-top: 10px;">
+                            ✅ Staff member ko ye username aur password dein. Woh <b>Staff</b> login mode me apna role select karke login karega.
+                            </p>
+                            </div>
+                            """, unsafe_allow_html=True)
+                        else:
+                            st.error("❌ Failed to create user. Check database connection.")
+
+        with col2:
+            st.info("💡 **Tips:**\n\n- Username simple rakhein: `raj`, `sona`, `ecg1`\n- Password aisa rakhein jo staff ko yad rahe: `raj123`, `sona@2024`\n- Baad me bhi password reset kar sakte hain")
     
     # ─── Tab 3: Reset Password ─────────────────────────────────────────────────
     with tab3:
         st.markdown("### 🔄 Reset User Password")
-        st.markdown("Select a user and generate a new password for them.")
-        
+        st.markdown("**नया password खुद लिखकर दें** — जो staff को आसानी से याद रह सके।")
+
         users = [u for u in get_all_users() if u.get("active", 1)]
         if not users:
             st.info("No active users to reset.")
@@ -153,35 +159,45 @@ def show():
             user_options = {f"{u['display_name']} ({u['role']}) — {u['username']}": u['username'] for u in users}
             selected_label = st.selectbox("Select User", list(user_options.keys()), key="reset_user")
             selected_username = user_options[selected_label]
-            
-            if st.button("🔄 Generate New Password", type="primary", use_container_width=True):
-                new_pass = generate_password()
-                if update_user_password(selected_username, new_pass):
-                    user_data = get_user_by_username(selected_username)
-                    
-                    st.success(f"✅ Password reset successfully!")
-                    
-                    st.markdown("""
-                    <div style="
-                        background: linear-gradient(135deg, #f093fb, #f5576c);
-                        color: white; padding: 20px; border-radius: 12px;
-                        margin: 15px 0; text-align: center;
-                    ">
-                    """, unsafe_allow_html=True)
-                    
-                    st.markdown(f"### 🔄 New Password")
-                    st.markdown(f"**User:** {user_data['display_name']} ({user_data['role']})")
-                    st.markdown(f"**Username:** `{selected_username}`")
-                    st.markdown(f"**New Password:** `{new_pass}`")
-                    
-                    st.markdown("""
-                    <p style="font-size: 0.85rem; opacity: 0.8; margin-top: 10px;">
-                    ⚠️ Share the new password securely with the staff member.
-                    </p>
-                    </div>
-                    """, unsafe_allow_html=True)
+
+            new_password_manual = st.text_input(
+                "🔑 Enter New Password",
+                type="password",
+                placeholder="e.g. raj123, sona@2024",
+                key="reset_new_pass",
+                help="4+ characters. Simple rakhein jo staff ko yad rahe."
+            )
+
+            if st.button("🔄 Reset Password", type="primary", use_container_width=True):
+                if not new_password_manual or len(new_password_manual.strip()) < 4:
+                    st.error("⚠️ Password kam se kam 4 characters ka daalein.")
                 else:
-                    st.error("❌ Failed to reset password.")
+                    if update_user_password(selected_username, new_password_manual.strip()):
+                        user_data = get_user_by_username(selected_username)
+
+                        st.success(f"✅ Password reset successfully!")
+
+                        st.markdown("""
+                        <div style="
+                            background: linear-gradient(135deg, #f093fb, #f5576c);
+                            color: white; padding: 20px; border-radius: 12px;
+                            margin: 15px 0; text-align: center;
+                        ">
+                        """, unsafe_allow_html=True)
+
+                        st.markdown(f"### 🔄 Password Updated")
+                        st.markdown(f"**User:** {user_data['display_name']} ({user_data['role']})")
+                        st.markdown(f"**Username:** `{selected_username}`")
+                        st.markdown(f"**New Password:** `{new_password_manual.strip()}`")
+
+                        st.markdown("""
+                        <p style="font-size: 0.85rem; opacity: 0.8; margin-top: 10px;">
+                        ✅ Staff member ko naya password de dein.
+                        </p>
+                        </div>
+                        """, unsafe_allow_html=True)
+                    else:
+                        st.error("❌ Failed to reset password.")
     
     # ─── Tab 4: Delete User ────────────────────────────────────────────────────
     with tab4:
