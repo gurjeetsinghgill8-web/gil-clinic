@@ -993,6 +993,30 @@ def authenticate_user(username: str, password: str) -> dict | None:
         conn.close()
 
 
+def verify_login(username: str, password: str) -> dict | None:
+    """
+    Authenticate a staff user. Supports both text passwords and numeric PINs (4-6 digits).
+    Returns user dict if valid, None otherwise.
+    """
+    conn = sqlite3.connect(DB_FILE)
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+    try:
+        cursor.execute(
+            "SELECT * FROM users WHERE username = ? AND active = 1",
+            (username,)
+        )
+        row = cursor.fetchone()
+        if row and row["password"] == password:
+            return dict(row)
+        return None
+    except Exception as e:
+        print(f"[SQLite] verify_login error: {e}")
+        return None
+    finally:
+        conn.close()
+
+
 def get_all_users() -> list[dict]:
     """Get all staff user accounts."""
     conn = sqlite3.connect(DB_FILE)
@@ -1043,6 +1067,26 @@ def update_user_password(username: str, new_password: str) -> bool:
         conn.close()
 
 
+def update_user_to_pin(username: str, new_pin: str) -> bool:
+    """Convert a user's password to a numeric PIN (4-6 digits)."""
+    if not new_pin.isdigit() or len(new_pin) < 4 or len(new_pin) > 6:
+        return False
+    conn = sqlite3.connect(DB_FILE)
+    cursor = conn.cursor()
+    try:
+        cursor.execute(
+            "UPDATE users SET password = ? WHERE username = ?",
+            (new_pin, username)
+        )
+        conn.commit()
+        return cursor.rowcount > 0
+    except Exception as e:
+        print(f"[SQLite] update_user_to_pin error: {e}")
+        return False
+    finally:
+        conn.close()
+
+
 def delete_user(username: str) -> bool:
     """Delete (deactivate) a user account."""
     conn = sqlite3.connect(DB_FILE)
@@ -1057,6 +1101,22 @@ def delete_user(username: str) -> bool:
     except Exception as e:
         print(f"[SQLite] delete_user error: {e}")
         return False
+    finally:
+        conn.close()
+
+
+def get_all_active_users() -> list[dict]:
+    """Get all active (non-deleted) user accounts."""
+    conn = sqlite3.connect(DB_FILE)
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+    try:
+        cursor.execute("SELECT * FROM users WHERE active = 1 ORDER BY role, display_name ASC")
+        rows = cursor.fetchall()
+        return [dict(row) for row in rows]
+    except Exception as e:
+        print(f"[SQLite] get_all_active_users error: {e}")
+        return []
     finally:
         conn.close()
 

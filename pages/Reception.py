@@ -5,9 +5,10 @@ The front desk staff uses this page to register new patients,
 print tokens, and view today's registered patients.
 
 All actions go through llm_harness.py — no direct DB calls.
+Modern UI with gradient cards QR code display.
 """
 import streamlit as st
-from datetime import date
+from datetime import date, datetime
 
 from llm_harness import get_harness
 from utils.config import TEST_TYPES, HOSPITAL_NAME, STATUS_LABELS, STATUS_ICONS, BASE_URL
@@ -16,10 +17,12 @@ from utils.notifications import request_notification_permission_script
 
 def show():
     harness = get_harness()
-    today = date.today().strftime("%d-%b-%Y")
+    now = datetime.now()
+    today = now.strftime("%d-%b-%Y %I:%M %p")
 
     st.title("📋 Reception Dashboard")
-    st.caption(f"{HOSPITAL_NAME} — {today}")
+    st.markdown(f"### {HOSPITAL_NAME}")
+    st.caption(f"🗓️ {today}")
 
     # ─── Registration Form ───────────────────────────────────────────────────
     with st.container(border=True):
@@ -70,8 +73,7 @@ def show():
                 # Trigger browser notification with sound + vibration
                 if result["notification"]:
                     script = harness.get_notification_script(
-                        "🏥 New Patient Registered", result["notification"],
-                        urgent=False
+                        "🏥 New Patient Registered", result["notification"], urgent=False
                     )
                     st.markdown(script, unsafe_allow_html=True)
 
@@ -94,19 +96,20 @@ def show():
                         qr_url = harness.get_qr_url(patient_id)
                         st.markdown(
                             f"""
-                            <div style="text-align: center; padding: 10px;">
-                                <h4>📱 Patient QR</h4>
-                                <img src="{qr_data_uri}" style="width: 180px; height: 180px; 
-                                     border: 2px solid #e0e0e0; border-radius: 12px; padding: 8px;
-                                     background: white;" alt="QR Code">
-                                <p style="font-size: 0.8rem; color: #666; margin-top: 8px;">
+                            <div style="text-align:center;padding:1rem;border:2px dashed #667eea;
+                                        border-radius:12px;background:#f8f9ff;">
+                                <h4 style="margin-bottom:0.5rem;">📱 Patient QR</h4>
+                                <img src="{qr_data_uri}" style="width:160px;height:160px;
+                                     border-radius:8px;background:white;padding:8px;" alt="QR Code">
+                                <p style="font-size:0.85rem;color:#667eea;margin-top:8px;font-weight:600;">
                                     Scan to track live status
                                 </p>
-                                <a href="{qr_url}" target="_blank" 
-                                   style="text-decoration: none;">
-                                    <button style="background: #667eea; color: white; border: none;
-                                                   padding: 6px 16px; border-radius: 8px; cursor: pointer;
-                                                   font-size: 0.9rem;">
+                                <a href="{qr_url}" target="_blank"
+                                   style="text-decoration:none;">
+                                    <button style="background:linear-gradient(135deg,#667eea,#764ba2);
+                                                   color:white;border:none;padding:8px 20px;
+                                                   border-radius:8px;cursor:pointer;font-size:0.9rem;
+                                                   font-weight:600;">
                                         🔗 Open Link
                                     </button>
                                 </a>
@@ -173,9 +176,9 @@ def show():
                     "number to see their live test statuses."
                 )
 
-        # ─── Common QR Code for Patient Status ─────────────────────────────────
-        st.divider()
-        st.subheader("📸 एक ही QR Code सबके लिए / One QR Code for All Patients")
+    # ─── Common QR Code for Patient Status ─────────────────────────────────────
+    st.divider()
+    st.subheader("📸 एक ही QR Code सबके लिए / One QR Code for All Patients")
 
     st.markdown(
         "इस QR Code को रिसेप्शन पर चिपका दें। मरीज़ स्कैन करें → अपना मोबाइल नंबर डालें → "
@@ -191,18 +194,19 @@ def show():
         with col1:
             st.markdown(
                 f"""
-                <div style="text-align: center; padding: 10px; border: 2px dashed #667eea;
-                     border-radius: 12px; background: #f8f9ff;">
-                    <img src="{qr_data_uri}" style="width: 180px; height: 180px;
-                         border-radius: 8px; background: white;" alt="Common QR">
-                    <p style="font-size: 0.85rem; color: #667eea; margin-top: 8px; font-weight: 600;">
+                <div style="text-align:center;padding:1rem;border:2px dashed #667eea;
+                            border-radius:12px;background:#f8f9ff;">
+                    <img src="{qr_data_uri}" style="width:160px;height:160px;
+                         border-radius:8px;background:white;padding:8px;" alt="Common QR">
+                    <p style="font-size:0.85rem;color:#667eea;margin-top:8px;font-weight:600;">
                         📱 Scan → Enter Mobile
                     </p>
                     <a href="{common_qr_url}" target="_blank"
-                       style="text-decoration: none;">
-                        <button style="background: #667eea; color: white; border: none;
-                                       padding: 6px 16px; border-radius: 8px; cursor: pointer;
-                                       font-size: 0.9rem;">
+                       style="text-decoration:none;">
+                        <button style="background:linear-gradient(135deg,#667eea,#764ba2);
+                                       color:white;border:none;padding:8px 20px;
+                                       border-radius:8px;cursor:pointer;font-size:0.9rem;
+                                       font-weight:600;">
                             🔗 Test Link
                         </button>
                     </a>
@@ -239,7 +243,6 @@ def show():
             for p in today_patients:
                 tests = harness.get_patient_details(p["patient_id"], by_mobile=False)
                 test_names = [t["test_name"] for t in tests["tests"]]
-                statuses = [STATUS_ICONS.get(t["status"], "❓") for t in tests["tests"]]
                 table_data.append({
                     "ID": p["patient_id"],
                     "Name": p["name"],

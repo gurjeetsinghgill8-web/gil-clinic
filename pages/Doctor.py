@@ -5,6 +5,7 @@ The doctor sees pending reports (tests completed, awaiting report approval),
 marks them as "Report Ready", and then marks as "Delivered" when handed over.
 
 All actions go through llm_harness.py — no direct DB calls.
+Modern UI with gradient cards and status indicators.
 """
 import streamlit as st
 from datetime import datetime
@@ -15,10 +16,12 @@ from utils.config import HOSPITAL_NAME, STATUS_ICONS, STATUS_LABELS
 
 def show():
     harness = get_harness()
-    today = datetime.now().strftime("%d-%b-%Y %I:%M %p")
+    now = datetime.now()
+    today = now.strftime("%d-%b-%Y %I:%M %p")
 
     st.title("🩺 Doctor Dashboard")
-    st.caption(f"{HOSPITAL_NAME} — {today}")
+    st.markdown(f"### {HOSPITAL_NAME}")
+    st.caption(f"🗓️ {today}")
 
     # Auto-refresh every 10 seconds
     try:
@@ -32,8 +35,36 @@ def show():
     pending = dashboard["pending_reports"]
     reports_ready = dashboard["reports_ready"]
 
-    # ─── Section 1: Pending Reports (completed, awaiting doctor approval) ────
+    # ─── Summary Cards ─────────────────────────────────────────────────────
+    st.markdown("### 📊 Summary")
+    cols = st.columns(3)
+    with cols[0]:
+        st.markdown(f"""
+        <div class="status-gradient-card" style="background:linear-gradient(135deg, #4facfe, #00f2fe);">
+            <div style="font-size:1.8rem;font-weight:700;">{len(pending)}</div>
+            <div style="font-size:0.9rem;opacity:0.9;">📋 Pending Reports</div>
+        </div>
+        """, unsafe_allow_html=True)
+    with cols[1]:
+        st.markdown(f"""
+        <div class="status-gradient-card" style="background:linear-gradient(135deg, #43e97b, #38f9d7);">
+            <div style="font-size:1.8rem;font-weight:700;">{len(reports_ready)}</div>
+            <div style="font-size:0.9rem;opacity:0.9;">📄 Ready for Delivery</div>
+        </div>
+        """, unsafe_allow_html=True)
+    with cols[2]:
+        st.markdown(f"""
+        <div class="status-gradient-card" style="background:linear-gradient(135deg, #fa709a, #fee140);">
+            <div style="font-size:1.8rem;font-weight:700;">{len(pending) + len(reports_ready)}</div>
+            <div style="font-size:0.9rem;opacity:0.9;">⚡ Total Awaiting Action</div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    st.divider()
+
+    # ─── Section 1: Pending Reports ──────────────────────────────────────────
     st.subheader("📋 Pending Reports")
+    st.caption("Tests completed — awaiting your review to mark report ready")
 
     if pending:
         for test in pending:
@@ -45,20 +76,20 @@ def show():
             completed_at = test.get("completed_at", "")
 
             with st.container(border=True):
-                cols = st.columns([2, 1, 1, 1])
+                cols = st.columns([2.5, 1.5, 1.5, 1])
 
                 with cols[0]:
                     st.markdown(f"**{p_name}** — {test_name} (Token #{token})")
-                    st.caption(f"Mobile: {p_mobile}")
+                    st.caption(f"📱 {p_mobile}")
 
                 with cols[1]:
                     if completed_at:
                         try:
                             ct = datetime.fromisoformat(completed_at.replace("Z", "+00:00"))
                             elapsed = (datetime.utcnow() - ct.replace(tzinfo=None)).seconds // 60
-                            st.markdown(f"✅ Completed {elapsed} min ago")
+                            st.info(f"✅ Completed {elapsed} min ago")
                         except Exception:
-                            st.markdown("✅ Completed")
+                            st.info("✅ Completed")
 
                 with cols[2]:
                     if st.button("📋 Report Ready", key=f"ready_{test['id']}",
@@ -71,8 +102,7 @@ def show():
                             st.success(result["message"])
                             if result.get("notification"):
                                 script = harness.get_notification_script(
-                                    "📋 Report Ready", result["notification"],
-                                    urgent=True
+                                    "📋 Report Ready", result["notification"], urgent=True
                                 )
                                 st.markdown(script, unsafe_allow_html=True)
                             st.rerun()
@@ -82,11 +112,11 @@ def show():
                 with cols[3]:
                     st.markdown(f"🏥 {test_name}")
     else:
-        st.info("✅ No pending reports. All completed tests have been processed.")
+        st.success("✅ No pending reports. All completed tests have been processed.")
 
     st.divider()
 
-    # ─── Section 2: Reports Ready (awaiting delivery) ────────────────────────
+    # ─── Section 2: Reports Ready ────────────────────────────────────────────
     st.subheader("📄 Reports Ready for Delivery")
 
     if reports_ready:
@@ -99,20 +129,20 @@ def show():
             ready_at = test.get("report_ready_at", "")
 
             with st.container(border=True):
-                cols = st.columns([2, 1, 1, 1])
+                cols = st.columns([2.5, 1.5, 1.5, 1])
 
                 with cols[0]:
                     st.markdown(f"**{p_name}** — {test_name} (Token #{token})")
-                    st.caption(f"Mobile: {p_mobile}")
+                    st.caption(f"📱 {p_mobile}")
 
                 with cols[1]:
                     if ready_at:
                         try:
                             rt = datetime.fromisoformat(ready_at.replace("Z", "+00:00"))
                             elapsed = (datetime.utcnow() - rt.replace(tzinfo=None)).seconds // 60
-                            st.markdown(f"📋 Ready {elapsed} min ago")
+                            st.success(f"📋 Ready {elapsed} min ago")
                         except Exception:
-                            st.markdown("📋 Report Ready")
+                            st.success("📋 Report Ready")
 
                 with cols[2]:
                     if st.button("📄 Delivered", key=f"deliver_{test['id']}",

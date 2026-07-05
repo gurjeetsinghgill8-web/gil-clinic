@@ -3,9 +3,10 @@ Password Management — Admin-only page for managing staff user accounts
 ======================================================================
 Admin can:
   - View all users
-  - Create new users (with custom username + password)
-  - Reset passwords for existing users
+  - Create new users (with custom username + PIN/password)
+  - Reset passwords/PINs for existing users
   - Delete users (soft-deactivate)
+  - Convert to PIN (4-6 digit numeric)
 
 Access: Admin role only
 """
@@ -14,15 +15,15 @@ from datetime import datetime
 
 from utils.db import (
     create_user, get_all_users, get_user_by_username,
-    update_user_password, delete_user, get_users_by_role
+    update_user_password, update_user_to_pin, delete_user, get_users_by_role
 )
 
 
 # ─── Main Page ────────────────────────────────────────────────────────────────
 
 def show():
-    st.title("🔐 Password Management")
-    st.subheader("Admin — Manage Staff User Accounts")
+    st.title("🔐 Password & PIN Management")
+    st.markdown("### Admin — Manage Staff User Accounts")
     
     # Verify admin
     if st.session_state.auth_role != "Admin":
@@ -30,11 +31,12 @@ def show():
         return
     
     # ─── Tabs for different operations ─────────────────────────────────────────
-    tab1, tab2, tab3, tab4 = st.tabs([
+    tab1, tab2, tab3, tab4, tab5 = st.tabs([
         "👥 All Users",
         "➕ Create User",
         "🔄 Reset Password",
-        "❌ Delete User",
+        "🔢 Set PIN",
+        "❌ Deactivate User",
     ])
     
     # ─── Tab 1: All Users ──────────────────────────────────────────────────────
@@ -45,23 +47,30 @@ def show():
         if not users:
             st.info("No users found. Create your first staff account below.")
         else:
-            # Show as a table
-            cols = st.columns([1, 2, 1.5, 1.5, 0.8])
+            # Show as a styled table
+            cols = st.columns([0.5, 2, 1.5, 1.5, 1, 0.8])
             cols[0].markdown("**#**")
             cols[1].markdown("**Name**")
             cols[2].markdown("**Username**")
             cols[3].markdown("**Role**")
-            cols[4].markdown("**Active**")
+            cols[4].markdown("**Type**")
+            cols[5].markdown("**Active**")
             st.divider()
             
             for i, u in enumerate(users, 1):
-                cols = st.columns([1, 2, 1.5, 1.5, 0.8])
+                cols = st.columns([0.5, 2, 1.5, 1.5, 1, 0.8])
                 cols[0].markdown(f"{i}")
                 cols[1].markdown(f"{u.get('display_name', '—')}")
                 cols[2].markdown(f"`{u['username']}`")
                 cols[3].markdown(f"**{u['role']}**")
+                
+                # Detect if PIN or password
+                pw = u.get("password", "")
+                is_pin = pw.isdigit() and 4 <= len(pw) <= 6
+                cols[4].markdown("🔢 PIN" if is_pin else "🔑 Text")
+                
                 active = u.get("active", 1)
-                cols[4].markdown("✅" if active else "❌")
+                cols[5].markdown("✅" if active else "❌")
         
         st.divider()
         st.caption(f"Total: {len(users)} user(s)  |  Admin login: `.env` credentials")
@@ -69,7 +78,7 @@ def show():
     # ─── Tab 2: Create User ────────────────────────────────────────────────────
     with tab2:
         st.markdown("### ➔ Create New Staff User")
-        st.markdown("**अपने हिसाब से username और password बनाएं** — आपको याद रहेगा और staff को भी आसानी होगी।")
+        st.markdown("**अपने हिसाब से username और password/PIN बनाएं** — आपको याद रहेगा और staff को भी आसानी होगी।")
 
         role_options = ["Reception", "ECG", "Echo", "TMT", "OPD", "Doctor", "Manager"]
         new_role = st.selectbox("Select Role", role_options, key="new_user_role")
@@ -84,13 +93,29 @@ def show():
             key="new_username",
             help="Staff is username se login karega. Kuch simple rakhein."
         )
-        new_password = st.text_input(
-            "🔑 Choose Password",
-            type="password",
-            placeholder="e.g. rajesh123, ecg@2024",
-            key="new_password",
-            help="Simple rakhein jo staff ko yad rahe. Min 4 characters."
-        )
+        
+        # Option: PIN or text password
+        auth_type = st.radio("Login Type", ["🔢 Numeric PIN (4-6 digits)", "🔑 Text Password"], 
+                             horizontal=True, key="new_auth_type")
+        
+        if auth_type.startswith("🔢"):
+            new_pin = st.text_input(
+                "🔢 Choose PIN",
+                type="password",
+                placeholder="e.g. 1234, 5678",
+                max_chars=6,
+                key="new_pin",
+                help="4-6 digits ka PIN rakhein. Staff PIN daal ke login karega."
+            )
+            new_password = new_pin
+        else:
+            new_password = st.text_input(
+                "🔑 Choose Password",
+                type="password",
+                placeholder="e.g. rajesh123, ecg@2024",
+                key="new_password",
+                help="Simple rakhein jo staff ko yad rahe. Min 4 characters."
+            )
 
         col1, col2 = st.columns(2)
         with col1:
@@ -101,7 +126,10 @@ def show():
                 if not new_username or new_username.strip() == "":
                     errors.append("⚠️ Username daalna zaroori hai.")
                 if not new_password or len(new_password.strip()) < 4:
-                    errors.append("⚠️ Password kam se kam 4 characters ka daalein.")
+                    errors.append("⚠️ Password/PIN kam se kam 4 characters ka daalein.")
+                
+                if auth_type.startswith("🔢") and new_password and not new_password.strip().isdigit():
+                    errors.append("⚠️ PIN sirf numbers (0-9) hone chahiye.")
                 
                 if errors:
                     for e in errors:
@@ -120,32 +148,30 @@ def show():
                         if result:
                             st.success(f"✅ User created successfully!")
                             
-                            # Show credentials in a highlighted box
-                            st.markdown("""
+                            # Show credentials in a highlighted gradient box
+                            auth_label = "PIN" if auth_type.startswith("🔢") else "Password"
+                            
+                            st.markdown(f"""
                             <div style="
-                                background: linear-gradient(135deg, #667eea, #764ba2);
+                                background:linear-gradient(135deg, #667eea, #764ba2);
                                 color: white; padding: 20px; border-radius: 12px;
                                 margin: 15px 0; text-align: center;
                             ">
-                            """, unsafe_allow_html=True)
-                            
-                            st.markdown(f"### 🎉 New Staff Account")
-                            st.markdown(f"**Name:** {display_name}")
-                            st.markdown(f"**Role:** {new_role}")
-                            st.markdown(f"**Username:** `{username}`")
-                            st.markdown(f"**Password:** `{password}`")
-                            
-                            st.markdown("""
-                            <p style="font-size: 0.85rem; opacity: 0.8; margin-top: 10px;">
-                            ✅ Staff member ko ye username aur password dein. Woh <b>Staff</b> login mode me apna role select karke login karega.
-                            </p>
+                                <h3 style="color:white;">🎉 New Staff Account</h3>
+                                <p><strong>Name:</strong> {display_name}</p>
+                                <p><strong>Role:</strong> {new_role}</p>
+                                <p><strong>Username:</strong> <code>{username}</code></p>
+                                <p><strong>{auth_label}:</strong> <code>{password}</code></p>
+                                <p style="font-size:0.85rem;opacity:0.8;margin-top:10px;">
+                                ✅ Staff member ko ye details dein. Woh apna naam select karke login karega.
+                                </p>
                             </div>
                             """, unsafe_allow_html=True)
                         else:
                             st.error("❌ Failed to create user. Check database connection.")
 
         with col2:
-            st.info("💡 **Tips:**\n\n- Username simple rakhein: `raj`, `sona`, `ecg1`\n- Password aisa rakhein jo staff ko yad rahe: `raj123`, `sona@2024`\n- Baad me bhi password reset kar sakte hain")
+            st.info("💡 **Tips:**\n\n- Username simple rakhein: `raj`, `sona`, `ecg1`\n- **PIN recommended** (4-6 digits): `1234`, `5678`\n- Staff PIN daal ke quickly login kar sakte hain\n- Baad me bhi PIN/Password reset kar sakte hain")
     
     # ─── Tab 3: Reset Password ─────────────────────────────────────────────────
     with tab3:
@@ -175,32 +201,87 @@ def show():
                     if update_user_password(selected_username, new_password_manual.strip()):
                         user_data = get_user_by_username(selected_username)
 
-                        st.success(f"✅ Password reset successfully!")
-
-                        st.markdown("""
+                        st.markdown(f"""
                         <div style="
-                            background: linear-gradient(135deg, #f093fb, #f5576c);
+                            background:linear-gradient(135deg, #f093fb, #f5576c);
                             color: white; padding: 20px; border-radius: 12px;
                             margin: 15px 0; text-align: center;
                         ">
-                        """, unsafe_allow_html=True)
-
-                        st.markdown(f"### 🔄 Password Updated")
-                        st.markdown(f"**User:** {user_data['display_name']} ({user_data['role']})")
-                        st.markdown(f"**Username:** `{selected_username}`")
-                        st.markdown(f"**New Password:** `{new_password_manual.strip()}`")
-
-                        st.markdown("""
-                        <p style="font-size: 0.85rem; opacity: 0.8; margin-top: 10px;">
-                        ✅ Staff member ko naya password de dein.
-                        </p>
+                            <h3 style="color:white;">🔄 Password Updated</h3>
+                            <p><strong>User:</strong> {user_data['display_name']} ({user_data['role']})</p>
+                            <p><strong>Username:</strong> <code>{selected_username}</code></p>
+                            <p><strong>New Password:</strong> <code>{new_password_manual.strip()}</code></p>
+                            <p style="font-size:0.85rem;opacity:0.8;margin-top:10px;">
+                            ✅ Staff member ko naya password de dein.
+                            </p>
                         </div>
                         """, unsafe_allow_html=True)
                     else:
                         st.error("❌ Failed to reset password.")
     
-    # ─── Tab 4: Delete User ────────────────────────────────────────────────────
+    # ─── Tab 4: Set PIN ────────────────────────────────────────────────────────
     with tab4:
+        st.markdown("### 🔢 Set Numeric PIN for User")
+        st.markdown("**Staff ke liye 4-6 अंकों का PIN सेट करें** — जिससे वे जल्दी login कर सकें।")
+        st.info("💡 PIN sirf numbers (0-9) hote hain. Jaise: `1234`, `5678`, `2024`")
+
+        users = [u for u in get_all_users() if u.get("active", 1)]
+        if not users:
+            st.info("No active users to set PIN.")
+        else:
+            user_options = {f"{u['display_name']} ({u['role']}) — {u['username']}": u['username'] for u in users}
+            selected_label = st.selectbox("Select User", list(user_options.keys()), key="pin_user")
+            selected_username = user_options[selected_label]
+            
+            # Show current auth type
+            current_user = get_user_by_username(selected_username)
+            if current_user:
+                pw = current_user.get("password", "")
+                is_pin = pw.isdigit() and 4 <= len(pw) <= 6
+                if is_pin:
+                    st.success(f"✅ This user already has a PIN set: `{'•' * len(pw)}`")
+                else:
+                    st.warning("🔑 This user currently uses a text password. Convert to PIN below.")
+
+            new_pin = st.text_input(
+                "🔢 Enter New PIN",
+                type="password",
+                placeholder="e.g. 1234",
+                max_chars=6,
+                key="set_new_pin",
+                help="4-6 digits. Sirf numbers."
+            )
+
+            if st.button("🔢 Set PIN", type="primary", use_container_width=True):
+                if not new_pin:
+                    st.error("⚠️ Please enter a PIN.")
+                elif not new_pin.isdigit():
+                    st.error("⚠️ PIN sirf numbers (0-9) hone chahiye.")
+                elif len(new_pin) < 4 or len(new_pin) > 6:
+                    st.error("⚠️ PIN 4 ya 6 digits ka hona chahiye.")
+                else:
+                    if update_user_to_pin(selected_username, new_pin.strip()):
+                        user_data = get_user_by_username(selected_username)
+                        st.markdown(f"""
+                        <div style="
+                            background:linear-gradient(135deg, #43e97b, #38f9d7);
+                            color: white; padding: 20px; border-radius: 12px;
+                            margin: 15px 0; text-align: center;
+                        ">
+                            <h3 style="color:white;">🔢 PIN Set Successfully!</h3>
+                            <p><strong>User:</strong> {user_data['display_name']} ({user_data['role']})</p>
+                            <p><strong>Username:</strong> <code>{selected_username}</code></p>
+                            <p><strong>New PIN:</strong> <code>{new_pin.strip()}</code></p>
+                            <p style="font-size:0.85rem;opacity:0.8;margin-top:10px;">
+                            ✅ Staff ab PIN daal ke login kar sakta hai.
+                            </p>
+                        </div>
+                        """, unsafe_allow_html=True)
+                    else:
+                        st.error("❌ Failed to set PIN. PIN must be 4-6 digits.")
+    
+    # ─── Tab 5: Delete User ────────────────────────────────────────────────────
+    with tab5:
         st.markdown("### ❌ Deactivate User")
         st.warning("⚠️ This will **deactivate** the user account. They will no longer be able to log in.")
         st.caption("The account is not permanently deleted — it can be re-activated by the admin.")
@@ -230,7 +311,7 @@ def show():
     
     **Security Notes:**
     - Staff members see ONLY their own dashboard
-    - Passwords are stored in the local database (`cardioqueue.db`)
-    - The password is shown only ONCE when created or reset
-    - Always share passwords securely with staff members
+    - **PIN recommended** (4-6 digits) — faster login, easy to remember
+    - Passwords/PINs are stored in the local database (`cardioqueue.db`)
+    - Always share credentials securely with staff members
     """)

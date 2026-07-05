@@ -2,6 +2,7 @@
 CardioQueue — Main Entry Point
 ================================
 Multi-page Streamlit application for Cardiology Department workflow.
+Modern UI with beautiful login, single-click staff selection, and PIN entry.
 
 Architecture: UI (this file) → llm_harness.py (Orchestrator) → db.py (Database)
 The UI NEVER talks to the database directly — all actions go through the Harness.
@@ -18,7 +19,7 @@ st.set_page_config(
 
 from llm_harness import get_harness
 from utils.config import APP_NAME, HOSPITAL_NAME, ADMIN_USERNAME, ADMIN_PASS
-from utils.db import authenticate_user, get_all_users, get_users_by_role
+from utils.db import get_all_active_users, verify_login
 from utils.notifications import request_notification_permission_script
 
 
@@ -48,14 +49,22 @@ def init_session():
         st.session_state.authenticated = False
     if "auth_role" not in st.session_state:
         st.session_state.auth_role = None
+    if "auth_username" not in st.session_state:
+        st.session_state.auth_username = None
     if "page" not in st.session_state:
         st.session_state.page = "🏠 Home"
     if "notification_permission_requested" not in st.session_state:
         st.session_state.notification_permission_requested = False
+    if "login_step" not in st.session_state:
+        st.session_state.login_step = "select"  # "select" | "pin" | "admin"
+    if "selected_user" not in st.session_state:
+        st.session_state.selected_user = None
+    if "show_admin_login" not in st.session_state:
+        st.session_state.show_admin_login = False
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-#  AUTHENTICATION
+#  PAGE CONFIG
 # ═══════════════════════════════════════════════════════════════════════════════
 
 ROLE_PAGES = {
@@ -69,10 +78,6 @@ ROLE_PAGES = {
     "Admin": "👑 Admin Panel",
 }
 
-ADMIN_EXTRA_PAGES = {
-    "🔐 Password Management": "🔐 Password Management",
-}
-
 DEPARTMENT_PAGES = {
     "ECG": "📊 ECG",
     "Echo": "📊 Echo",
@@ -83,6 +88,18 @@ DEPARTMENT_PAGES = {
 PUBLIC_PAGES = ["📋 Patient Status"]
 
 ALL_PAGES = list(ROLE_PAGES.values()) + PUBLIC_PAGES + ["🏠 Home"]
+
+# Role-to-emoji mapping for staff cards
+ROLE_EMOJIS = {
+    "Reception": "📋",
+    "ECG": "🩺",
+    "Echo": "🔬",
+    "TMT": "🏃",
+    "OPD": "🩺",
+    "Doctor": "👨‍⚕️",
+    "Manager": "📈",
+    "Admin": "👑",
+}
 
 
 def render_sidebar_footer():
@@ -109,93 +126,199 @@ def render_sidebar_footer():
         except Exception:
             pass
 
-        st.caption("v1.1 • Built with ❤️ using Harness Engineering")
+        st.caption("v2.0 • Modern UI • Built with ❤️")
 
 
-def login_sidebar():
-    """Render the login sidebar. Two modes: Staff login (username+pass) and Admin login."""
-    with st.sidebar:
-        st.image("https://img.icons8.com/color/96/hospital.png", width=80)
-        st.markdown(f"### 🏥 {APP_NAME}")
-        st.caption(f"{HOSPITAL_NAME} — Cardiology Department")
+# ═══════════════════════════════════════════════════════════════════════════════
+#  NEW BEAUTIFUL LOGIN PAGE
+# ═══════════════════════════════════════════════════════════════════════════════
 
-        st.divider()
+def render_login_page():
+    """
+    Modern full-page login with staff card grid.
+    Step 1: Select staff member from beautiful card grid
+    Step 2: Enter PIN (4-6 digits)
+    Also has: Patient access button + Admin login link
+    """
+    # ─── Center the login card using columns ───────────────────────────────
+    col1, col2, col3 = st.columns([1, 2, 1])
 
-        # ─── Tab-style: Staff Login vs Admin Login ─────────────────────────────
-        login_mode = st.radio(
-            "Login as:",
-            ["👥 Staff", "🔑 Admin", "👤 Patient (No Login)"],
-            key="login_mode",
-            horizontal=True,
-            label_visibility="collapsed",
-        )
+    with col2:
+        # ─── Login Card ────────────────────────────────────────────────────
+        st.markdown("""
+        <div class="login-card">
+            <div class="login-header">
+                <div class="hospital-icon">🏥</div>
+                <h1>CardioQueue</h1>
+                <p>GIL CLINIC — Cardiology Department</p>
+                <p style="font-size:0.8rem;color:#b2bec3;margin-top:4px;">Staff Login</p>
+            </div>
+        """, unsafe_allow_html=True)
 
-        if login_mode == "👤 Patient (No Login)":
-            if st.button("🔓 Access Patient Status", use_container_width=True, type="primary"):
-                st.session_state.authenticated = True
-                st.session_state.auth_role = "Patient"
-                st.session_state.auth_username = "Patient"
+        # ─── Admin Login Mode (toggled via link) ─────────────────────────────
+        if st.session_state.get("show_admin_login", False):
+            st.markdown("### 🔑 Admin Login")
+            admin_user = st.text_input("Admin Username", key="admin_user_top")
+            admin_pass = st.text_input("Admin Password", type="password", key="admin_pass_top")
+
+            col_a, col_b = st.columns(2)
+            with col_a:
+                if st.button("🔐 Login", type="primary", use_container_width=True):
+                    if admin_user == ADMIN_USERNAME and admin_pass == ADMIN_PASS:
+                        st.session_state.authenticated = True
+                        st.session_state.auth_role = "Admin"
+                        st.session_state.auth_username = "Admin (Owner)"
+                        st.session_state.show_admin_login = False
+                        st.rerun()
+                    else:
+                        st.error("❌ Invalid admin credentials.")
+
+            with col_b:
+                if st.button("← Back", use_container_width=True):
+                    st.session_state.show_admin_login = False
+                    st.rerun()
+
+            st.markdown("</div>", unsafe_allow_html=True)
+            return
+
+        # ─── Step 1: Staff Selection ───────────────────────────────────────
+        if st.session_state.login_step == "select":
+            st.markdown("### 👤 अपना नाम चुनें / Select Your Name")
+            st.caption("Login karne ke liye apna naam click karein")
+
+            # Get all active staff users grouped by role
+            all_users = get_all_active_users()
+            if not all_users:
+                st.warning("⚠️ No staff accounts found. Contact Admin to create accounts.")
+                st.info("💡 Admin login: नीचे Admin link पर click karein.")
+
+                # Patient button when no staff
+                if st.button("🔓 Access Patient Status", use_container_width=True, type="primary"):
+                    st.session_state.authenticated = True
+                    st.session_state.auth_role = "Patient"
+                    st.session_state.auth_username = "Patient"
+                    st.rerun()
+
+                # Admin link
+                st.markdown("""
+                <div class="admin-login-link">
+                    <button onclick="document.querySelector('button:has(span:text(\"🔑\"))').click()">🔑 Admin Login</button>
+                </div>
+                """, unsafe_allow_html=True)
+                if st.button("🔑 Admin Login", key="admin_link_empty"):
+                    st.session_state.show_admin_login = True
+                    st.rerun()
+
+                st.markdown("</div>", unsafe_allow_html=True)
+                return
+
+            # Group users by role for organized display
+            from itertools import groupby
+            all_users_sorted = sorted(all_users, key=lambda u: u["role"])
+            for role, group in groupby(all_users_sorted, key=lambda u: u["role"]):
+                users_list = list(group)
+                emoji = ROLE_EMOJIS.get(role, "👤")
+                st.markdown(f"**{emoji} {role}**")
+
+                # Display users in rows of 4 columns
+                for row_start in range(0, len(users_list), 4):
+                    row_users = users_list[row_start:row_start + 4]
+                    cols = st.columns(4)
+                    for col_idx, user in enumerate(row_users):
+                        with cols[col_idx]:
+                            display_name = user.get("display_name", user["username"])
+                            avatar_letter = display_name[0].upper() if display_name else "👤"
+                            btn_key = f"staff_{user['username']}_{row_start}"
+
+                            if st.button(
+                                f"{avatar_letter}\n\n{display_name}\n\n{role}",
+                                key=btn_key,
+                                use_container_width=True,
+                            ):
+                                st.session_state.selected_user = user
+                                st.session_state.login_step = "pin"
+                                st.rerun()
+
+            # ─── Patient Entry ──────────────────────────────────────────────
+            st.markdown("---")
+            patient_col1, patient_col2 = st.columns([1, 1])
+            with patient_col1:
+                if st.button("🔓 Patient (No Login)", use_container_width=True):
+                    st.session_state.authenticated = True
+                    st.session_state.auth_role = "Patient"
+                    st.session_state.auth_username = "Patient"
+                    st.rerun()
+            with patient_col2:
+                if st.button("🔑 Admin Login", key="admin_link_main", use_container_width=True):
+                    st.session_state.show_admin_login = True
+                    st.rerun()
+
+        # ─── Step 2: PIN Entry ──────────────────────────────────────────────
+        elif st.session_state.login_step == "pin":
+            user = st.session_state.selected_user
+            if not user:
+                st.session_state.login_step = "select"
                 st.rerun()
-            st.caption("No password needed to check your status.")
-            render_sidebar_footer()
-            return False
+                return
 
-        # ─── Staff Login ───────────────────────────────────────────────────────
-        if login_mode == "👥 Staff":
-            staff_roles = ["Reception", "ECG", "Echo", "TMT", "OPD", "Doctor", "Manager"]
-            selected_role = st.selectbox(
-                "Select your role",
-                staff_roles,
-                key="login_staff_role",
+            display_name = user.get("display_name", "User")
+            username = user["username"]
+            role = user["role"]
+            emoji = ROLE_EMOJIS.get(role, "👤")
+
+            # Show who is logging in
+            st.markdown(f"""
+            <div style="text-align:center;padding:1rem;background:rgba(102,126,234,0.06);
+                        border-radius:12px;margin-bottom:1rem;">
+                <div style="font-size:2.5rem;">{emoji}</div>
+                <div style="font-weight:700;font-size:1.2rem;">{display_name}</div>
+                <div style="color:#636e72;font-size:0.9rem;">{role}</div>
+            </div>
+            """, unsafe_allow_html=True)
+
+            st.markdown("### 🔑 Enter Your PIN")
+            st.caption("अपना 4-6 अंकों का PIN डालें")
+
+            pin = st.text_input(
+                "PIN",
+                type="password",
+                placeholder="••••",
+                max_chars=6,
+                key="staff_pin",
+                label_visibility="collapsed",
             )
 
-            # Get all active users for this role
-            role_users = get_users_by_role(selected_role)
-            if not role_users:
-                st.info(f"⚠️ No {selected_role} users found.\nContact Admin to create your account.")
-                render_sidebar_footer()
-                return False
+            col_a, col_b = st.columns(2)
+            with col_a:
+                if st.button("🔐 Login", type="primary", use_container_width=True):
+                    if not pin:
+                        st.error("⚠️ Please enter your PIN.")
+                    elif len(pin) < 4:
+                        st.error("⚠️ PIN kam se kam 4 digits ka hona chahiye.")
+                    else:
+                        user_data = verify_login(username, pin)
+                        if user_data:
+                            st.session_state.authenticated = True
+                            st.session_state.auth_role = user_data["role"]
+                            st.session_state.auth_username = user_data["display_name"]
+                            st.session_state.login_step = "select"
+                            st.session_state.selected_user = None
+                            st.rerun()
+                        else:
+                            st.error("❌ गलत PIN / Wrong PIN. Please try again.")
 
-            usernames = {u["display_name"]: u["username"] for u in role_users}
-            selected_display = st.selectbox(
-                "Select your name",
-                list(usernames.keys()),
-                key="login_staff_name",
-            )
-
-            password = st.text_input("Password", type="password", key="login_staff_pass")
-
-            if st.button("🔐 Login", use_container_width=True, type="primary"):
-                username = usernames[selected_display]
-                user = authenticate_user(username, password)
-                if user:
-                    st.session_state.authenticated = True
-                    st.session_state.auth_role = user["role"]
-                    st.session_state.auth_username = user["display_name"]
+            with col_b:
+                if st.button("← Change Staff", use_container_width=True):
+                    st.session_state.login_step = "select"
+                    st.session_state.selected_user = None
                     st.rerun()
-                else:
-                    st.error("❌ Incorrect password. Please try again.")
-                    return False
 
-        # ─── Admin Login ───────────────────────────────────────────────────────
-        if login_mode == "🔑 Admin":
-            admin_user = st.text_input("Admin Username", key="admin_user")
-            admin_pass = st.text_input("Admin Password", type="password", key="admin_pass")
+        st.markdown("</div>", unsafe_allow_html=True)
 
-            if st.button("🔐 Admin Login", use_container_width=True, type="primary"):
-                if admin_user == ADMIN_USERNAME and admin_pass == ADMIN_PASS:
-                    st.session_state.authenticated = True
-                    st.session_state.auth_role = "Admin"
-                    st.session_state.auth_username = "Admin (Owner)"
-                    st.rerun()
-                else:
-                    st.error("❌ Invalid admin credentials.")
-                    return False
 
-        render_sidebar_footer()
-
-    return st.session_state.authenticated
-
+# ═══════════════════════════════════════════════════════════════════════════════
+#  SIDEBAR USER INFO & LOGOUT
+# ═══════════════════════════════════════════════════════════════════════════════
 
 def logout_button():
     """Show logout button in sidebar for authenticated users."""
@@ -203,11 +326,24 @@ def logout_button():
         st.divider()
         role = st.session_state.auth_role
         username = st.session_state.get("auth_username", role)
-        st.caption(f"👤 **{username}**  \n_{role}_")
+        emoji = ROLE_EMOJIS.get(role, "👤")
+
+        st.markdown(f"""
+        <div style="padding:0.5rem;background:rgba(255,255,255,0.05);border-radius:10px;
+                    text-align:center;">
+            <div style="font-size:2rem;">{emoji}</div>
+            <div style="font-weight:600;color:white;">{username}</div>
+            <div style="color:#b2bec3;font-size:0.8rem;">{role}</div>
+        </div>
+        """, unsafe_allow_html=True)
+
         if st.button("🚪 Logout", use_container_width=True):
             st.session_state.authenticated = False
             st.session_state.auth_role = None
             st.session_state.auth_username = None
+            st.session_state.login_step = "select"
+            st.session_state.selected_user = None
+            st.session_state.show_admin_login = False
             st.rerun()
 
 
@@ -223,7 +359,6 @@ def page_selector():
     nav_options = ["🏠 Home"]
 
     if role == "Admin":
-        # Admin sees ALL pages + password management
         nav_options.extend(list(ROLE_PAGES.values()))
         nav_options.append("📋 Patient Status")
         nav_options.append("🔐 Password Management")
@@ -238,13 +373,12 @@ def page_selector():
     if role == "Patient":
         nav_options = ["📋 Patient Status"]
 
-    # Always show patient status as public option in sidebar
+    # Show navigation in sidebar
     with st.sidebar:
         st.divider()
-        selected = st.radio("Navigate to:", nav_options, key="nav")
+        st.markdown("### 📍 Navigation")
+        selected = st.radio("Go to:", nav_options, key="nav", label_visibility="collapsed")
         return selected
-
-    return nav_options[0]
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -252,11 +386,52 @@ def page_selector():
 # ═══════════════════════════════════════════════════════════════════════════════
 
 def show_home():
-    """Render the home/dashboard page."""
+    """Render the home/dashboard page with modern styling."""
     st.title(f"🏥 {APP_NAME}")
-    st.subheader(f"{HOSPITAL_NAME} — Cardiology Department")
+    st.markdown(f"### {HOSPITAL_NAME} — Cardiology Department")
 
-    col1, col2 = st.columns([2, 1])
+    # ─── Welcome section with role-based greeting ──────────────────────────
+    role = st.session_state.get("auth_role", "Guest")
+    username = st.session_state.get("auth_username", "Guest")
+
+    if role and role != "Guest" and role != "Patient":
+        st.markdown(f"""
+        <div style="background:linear-gradient(135deg,#667eea20,#764ba220);
+                    padding:1rem 1.5rem;border-radius:12px;margin:0.5rem 0 1.5rem;
+                    border-left:4px solid #667eea;">
+            <span style="font-size:1.1rem;font-weight:600;">👋 Welcome, {username}!</span>
+            <span style="color:#636e72;margin-left:1rem;">You are logged in as <strong>{role}</strong></span>
+        </div>
+        """, unsafe_allow_html=True)
+
+    # ─── Quick Stats Cards ─────────────────────────────────────────────────
+    try:
+        harness = get_harness()
+        stats = harness.get_all_dashboard_stats()
+
+        # Compute totals
+        total_waiting = sum(s.get("waiting", 0) for s in stats.values())
+        total_in_progress = sum(s.get("in_progress", 0) for s in stats.values())
+        total_completed = sum(s.get("completed", 0) for s in stats.values())
+
+        st.markdown("### 📊 Today's Overview")
+
+        cols = st.columns(4)
+        metrics_data = [
+            ("👥 Total Today", str(total_waiting + total_in_progress + total_completed), "patients registered"),
+            ("⏳ Waiting", str(total_waiting), "awaiting service"),
+            ("🟠 In Progress", str(total_in_progress), "being served"),
+            ("✅ Completed", str(total_completed), "tests done today"),
+        ]
+        for col, (label, value, delta) in zip(cols, metrics_data):
+            with col:
+                st.metric(label, value, delta)
+    except Exception:
+        st.info("📊 Awaiting data...")
+
+    # ─── Module Overview ────────────────────────────────────────────────────
+    st.markdown("---")
+    col1, col2 = st.columns([3, 2])
 
     with col1:
         st.markdown("""
@@ -266,20 +441,22 @@ def show_home():
 
         **Modules:**
         - 📋 **Reception** — Register patients, print tokens, view status
-        - 📊 **ECG / Echo / TMT** — Technician dashboards with live queues
+        - 📊 **ECG / Echo / TMT / OPD** — Technician dashboards with live queues
         - 🩺 **Doctor** — Manage reports and delivery
         - 🔍 **Patient Status** — Self-service check for patients
+        - 📈 **Manager Dashboard** — Full clinic overview
 
         **Key Features:**
         - ✅ Real-time queue management
         - ✅ Browser notifications on mobile
-        - ✅ Token printing
+        - ✅ Token printing & QR codes
         - ✅ Zero monthly cost
-        - ✅ Live PWA status tracking
+        - ✅ PIN-based staff login
+        - ✅ PWA support for mobile
         """)
 
     with col2:
-        st.markdown("### 📊 Today's Stats")
+        st.markdown("### 🏥 Department Stats")
         try:
             harness = get_harness()
             stats = harness.get_all_dashboard_stats()
@@ -305,7 +482,7 @@ def main():
     if isinstance(patient_qr, list):
         patient_qr = patient_qr[0] if patient_qr else None
 
-    # Request notification permission on first load (Phase 1)
+    # Request notification permission on first load
     if not st.session_state.notification_permission_requested:
         st.markdown(request_notification_permission_script(), unsafe_allow_html=True)
         st.session_state.notification_permission_requested = True
@@ -318,8 +495,8 @@ def main():
 
     # ─── Login Flow ──────────────────────────────────────────────────────────
     if not st.session_state.authenticated:
-        login_sidebar()
-        show_home()
+        # Hide sidebar during login for clean look
+        render_login_page()
         return
 
     # ─── Authenticated Flow ──────────────────────────────────────────────────

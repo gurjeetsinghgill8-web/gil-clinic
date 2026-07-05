@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="hi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="theme-color" content="#667eea">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="CardioQueue">
+    <link rel="manifest" href="manifest.json">
+    <link rel="icon" href="https://img.icons8.com/color/48/hospital.png" type="image/png">
+    <link rel="apple-touch-icon" href="https://img.icons8.com/color/192/hospital.png">
+    <link rel="stylesheet" href="style.css">
+    <title>CardioQueue — GIL CLINIC</title>
+</head>
+<body>
+    <!-- ═══════ SPLASH SCREEN ═══════ -->
+    <div id="splash-screen">
+        <div class="splash-content">
+            <div class="splash-icon">❤️</div>
+            <div class="splash-title">CardioQueue</div>
+            <div class="splash-sub">GIL CLINIC — Cardiology Department</div>
+            <div class="spinner"></div>
+        </div>
+    </div>
+
+    <!-- ═══════ MAIN APP ═══════ -->
+    <div id="app">
+        <div class="header">
+            <h1>🏥 CardioQueue</h1>
+            <p>GIL CLINIC — Cardiology Department</p>
+        </div>
+
+        <!-- Mobile Input Screen -->
+        <div id="mobile-input-screen">
+            <h2>🔍 अपना स्टेटस देखें</h2>
+            <p>अपना रजिस्टर्ड मोबाइल नंबर डालें<br>Enter your registered mobile number</p>
+
+            <div class="mobile-input-group">
+                <input type="tel" id="mobile-input" 
+                       placeholder="10 अंकों का नंबर" 
+                       maxlength="10" 
+                       inputmode="numeric"
+                       pattern="[0-9]*"
+                       autocomplete="off">
+            </div>
+
+            <button id="search-btn" class="btn btn-primary">
+                🔍 Check Status
+            </button>
+
+            <div class="error-msg" id="error-msg"></div>
+
+            <p style="text-align:center;margin-top:2rem;font-size:0.8rem;color:#b2bec3;">
+                📸 Reception par laga QR Code scan karein<br>
+                ya upar apna mobile number daalein
+            </p>
+        </div>
+
+        <!-- Status Screen -->
+        <div id="status-screen">
+            <button id="back-btn" class="back-btn">← Back</button>
+
+            <!-- Install Banner -->
+            <div id="install-banner" class="install-banner">
+                📲 Add CardioQueue to Home Screen for quick access
+            </div>
+
+            <!-- Patient Card -->
+            <div class="patient-card">
+                <div class="patient-name" id="patient-name">Loading...</div>
+                <div class="patient-id" id="patient-id"></div>
+                <div class="patient-status">
+                    <span class="status-badge" id="status-badge">⏳ Waiting</span>
+                </div>
+            </div>
+
+            <!-- Live Indicator -->
+            <div class="live-indicator">
+                <span class="live-dot"></span>
+                <span>Live — Auto-updating every 5 seconds</span>
+            </div>
+
+            <!-- Hidden status hash for SW -->
+            <div id="status-hash" data-hash="" data-status="" style="display:none;"></div>
+
+            <!-- Tests -->
+            <div id="tests-container"></div>
+
+            <!-- Summary -->
+            <div id="summary-section" style="margin-top:1rem;padding:1rem;background:white;border-radius:12px;box-shadow:0 2px 8px rgba(0,0,0,0.06);text-align:center;"></div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>

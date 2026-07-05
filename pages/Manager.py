@@ -2,7 +2,9 @@
 Manager Dashboard — Full Clinic Overview
 ==========================================
 Real-time view of all departments, patient counts, and status flow.
-Access: Manager role only (password: manager123 / env: MANAGER_PASS)
+Access: Manager role only.
+
+Modern UI with gradient stat cards, department breakdowns, and quick actions.
 """
 import streamlit as st
 from datetime import datetime
@@ -13,14 +15,16 @@ from utils.config import HOSPITAL_NAME, TEST_TYPES, STATUS_ICONS, STATUS_LABELS,
 
 def show():
     harness = get_harness()
-    today = datetime.now().strftime("%d-%b-%Y %I:%M %p")
+    now = datetime.now()
+    today = now.strftime("%d-%b-%Y %I:%M %p")
 
     st.title("📈 Manager Dashboard")
-    st.subheader(f"{HOSPITAL_NAME} — Cardiology Department")
+    st.markdown(f"### {HOSPITAL_NAME} — Cardiology Department")
     st.caption(f"🗓️ {today}")
 
     # ─── Summary Cards ───────────────────────────────────────────────────────
     st.markdown("### 📊 Overall Status")
+    st.caption("Real-time summary across all departments")
 
     dept_stats = harness.get_all_dashboard_stats()
 
@@ -32,30 +36,44 @@ def show():
     total_delivered = sum(s.get("delivered", 0) for s in dept_stats.values())
     total_today = total_waiting + total_in_progress + total_completed + total_report_ready + total_delivered
 
-    cols = st.columns(5)
-    with cols[0]:
-        st.metric("👥 Total Today", total_today)
-    with cols[1]:
-        st.metric("⏳ Waiting", total_waiting)
-    with cols[2]:
-        st.metric("🟠 In Progress", total_in_progress)
-    with cols[3]:
-        st.metric("✅ Completed", total_completed)
-    with cols[4]:
-        st.metric("📋 Report Ready", total_report_ready)
+    # Gradient summary cards
+    metric_colors = [
+        ("👥 Total Today", total_today, "linear-gradient(135deg, #667eea, #764ba2)"),
+        ("⏳ Waiting", total_waiting, "linear-gradient(135deg, #f093fb, #f5576c)"),
+        ("🟠 In Progress", total_in_progress, "linear-gradient(135deg, #4facfe, #00f2fe)"),
+        ("✅ Completed", total_completed, "linear-gradient(135deg, #43e97b, #38f9d7)"),
+        ("📋 Report Ready", total_report_ready, "linear-gradient(135deg, #fa709a, #fee140)"),
+    ]
+
+    cols = st.columns(len(metric_colors))
+    for col, (label, value, gradient) in zip(cols, metric_colors):
+        with col:
+            st.markdown(f"""
+            <div class="status-gradient-card" style="background:{gradient};">
+                <div style="font-size:2rem;font-weight:700;">{value}</div>
+                <div style="font-size:0.9rem;opacity:0.9;">{label}</div>
+            </div>
+            """, unsafe_allow_html=True)
 
     st.divider()
 
     # ─── Department-wise Breakdown ───────────────────────────────────────────
     st.markdown("### 🏥 Department-wise Status")
+    st.caption("Click on any department for details")
+
+    dept_icons = {"ECG": "🩺", "Echo": "🔬", "TMT": "🏃", "Holter": "📟", "ABPM": "💓", "OPD": "🩺"}
 
     for test_name in TEST_TYPES:
         stats = dept_stats.get(test_name, {})
-        with st.container(border=True):
-            icon_map = {"ECG": "🩺", "Echo": "🔬", "TMT": "🏃", "Holter": "📟", "ABPM": "💓", "OPD": "🩺"}
-            icon = icon_map.get(test_name, "📊")
+        icon = dept_icons.get(test_name, "📊")
 
-            cols = st.columns([1, 3, 3, 3])
+        waiting = stats.get("waiting", 0)
+        progress = stats.get("in_progress", 0)
+        done = stats.get("completed", 0)
+        ready = stats.get("report_ready", 0)
+
+        with st.container(border=True):
+            cols = st.columns([0.8, 2, 3, 2.5])
 
             with cols[0]:
                 st.markdown(f"## {icon}")
@@ -63,13 +81,8 @@ def show():
             with cols[1]:
                 st.markdown(f"**{test_name}**")
                 st.caption(f"Avg: {AVG_TEST_TIME.get(test_name, 15)} min")
-                st.caption(f"Room: {test_name} Room 1")
 
             with cols[2]:
-                waiting = stats.get("waiting", 0)
-                progress = stats.get("in_progress", 0)
-                done = stats.get("completed", 0)
-                ready = stats.get("report_ready", 0)
                 st.markdown(
                     f"⏳ Waiting: **{waiting}**  \n"
                     f"🟠 In Progress: **{progress}**  \n"
@@ -78,7 +91,6 @@ def show():
                 )
 
             with cols[3]:
-                # Quick action info
                 if waiting > 0:
                     st.info(f"👥 {waiting} patient(s) waiting")
                 elif progress > 0:
@@ -92,7 +104,7 @@ def show():
 
     st.divider()
 
-    # ─── Quick Actions: Manager can call/complete patients in any dept ─────────
+    # ─── Quick Actions: Manager can call/complete patients in any dept ────────
     st.markdown("### ⚡ Department Quick Actions")
     st.caption("Manager can call the next waiting patient or mark the current patient as complete for any department.")
 
@@ -109,7 +121,7 @@ def show():
         dept_waiting = queue_data["waiting"]
 
         with st.container(border=True):
-            cols = st.columns([1, 2, 2, 2])
+            cols = st.columns([0.8, 2, 3, 3])
             with cols[0]:
                 st.markdown(f"## {dept_icon}")
             with cols[1]:
@@ -140,8 +152,7 @@ def show():
                                 st.success(result["message"])
                                 if result.get("notification"):
                                     script = harness.get_notification_script(
-                                        f"✅ {dept_name} Completed", result["notification"],
-                                        urgent=True
+                                        f"✅ {dept_name} Completed", result["notification"], urgent=True
                                     )
                                     st.markdown(script, unsafe_allow_html=True)
                                 st.rerun()
@@ -174,8 +185,7 @@ def show():
                             if result.get("notification"):
                                 script = harness.get_notification_script(
                                     f"🔵 {dept_name} — Patient Called",
-                                    result["notification"],
-                                    urgent=True
+                                    result["notification"], urgent=True
                                 )
                                 st.markdown(script, unsafe_allow_html=True)
                             st.rerun()
@@ -192,7 +202,7 @@ def show():
         from utils.db import get_today_patients, get_tests_for_patient
         patients = get_today_patients()
         if patients:
-            for p in reversed(patients[-15:]):  # Latest 15
+            for p in reversed(patients[-15:]):
                 p_id = p.get("patient_id", "")
                 tests = get_tests_for_patient(p_id) if p_id else []
                 test_names = ", ".join(t.get("test_name", "?") for t in tests) if tests else "—"
