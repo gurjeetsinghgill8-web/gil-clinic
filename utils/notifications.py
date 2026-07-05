@@ -146,6 +146,25 @@ def browser_notification_script(title: str, body: str, urgent: bool = False) -> 
     """
 
 
+def request_notification_permission_script() -> str:
+    """Returns JS that requests notification + vibration permission on page load."""
+    return """
+    <script>
+    (function() {
+        // Request browser notification permission
+        if ("Notification" in window && Notification.permission === "default") {
+            Notification.requestPermission();
+        }
+        // Pre-warm audio context for mobile (iOS requirement)
+        try {
+            var ctx = new (window.AudioContext || window.webkitAudioContext)();
+            ctx.resume();
+        } catch(e) {}
+    })();
+    </script>
+    """
+
+
 def misscall_alert_script(patient_name: str, test_name: str = "") -> str:
     """
     Returns JS that triggers a FULL-SCREEN visual banner + sound + vibration
