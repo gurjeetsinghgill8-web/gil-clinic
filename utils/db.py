@@ -193,6 +193,43 @@ def init_sqlite():
     conn.commit()
     conn.close()
 
+    # ─── Auto-seed default users if empty ───────────────────────────────────
+    _seed_default_users()
+
+
+def _seed_default_users():
+    """Create default admin + sample staff accounts if users table is empty."""
+    conn = sqlite3.connect(DB_FILE)
+    cursor = conn.cursor()
+    try:
+        cursor.execute("SELECT COUNT(*) FROM users")
+        count = cursor.fetchone()[0]
+        if count > 0:
+            conn.close()
+            return
+
+        now = datetime.now().isoformat()
+        default_users = [
+            (str(uuid.uuid4()), "admin", "Admin", "Admin", "gurjas@123", 1, now),
+            (str(uuid.uuid4()), "reception1", "Reception Staff", "Reception", "1234", 1, now),
+            (str(uuid.uuid4()), "ecg1", "ECG Technician", "ECG", "1234", 1, now),
+            (str(uuid.uuid4()), "echo1", "Echo Technician", "Echo", "1234", 1, now),
+            (str(uuid.uuid4()), "tmt1", "TMT Technician", "TMT", "1234", 1, now),
+            (str(uuid.uuid4()), "doctor1", "Dr. Sharma", "Doctor", "1234", 1, now),
+            (str(uuid.uuid4()), "manager1", "Manager", "Manager", "1234", 1, now),
+        ]
+        cursor.executemany(
+            "INSERT INTO users (id, username, display_name, role, password, active, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+            default_users
+        )
+        conn.commit()
+        print(f"[DB] ✅ Seeded {len(default_users)} default user accounts.")
+    except Exception as e:
+        print(f"[DB] _seed_default_users error: {e}")
+    finally:
+        conn.close()
+
+
 # Detect and configure database connection
 if (
     SUPABASE_URL 
