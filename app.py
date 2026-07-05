@@ -126,7 +126,7 @@ def render_sidebar_footer():
         except Exception:
             pass
 
-        st.caption("v2.0 • Modern UI • Built with ❤️")
+        st.caption("v2.2 • Local-First UI • Built with ❤️")
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -151,6 +151,7 @@ def render_login_page():
                 <div class="hospital-icon">{CLINIC_LOGO}</div>
                 <h1>CardioQueue</h1>
                 <p>{HOSPITAL_NAME} — {CLINIC_SPECIALTY} Department</p>
+                <div style="margin: 6px 0;"><span style="background-color:#00b894;color:white;padding:3px 8px;border-radius:10px;font-size:0.75rem;font-weight:bold;box-shadow:0 2px 6px rgba(0,184,148,0.25);">🚀 Upgrade v2.2 (Local-First)</span></div>
                 <p style="font-size:0.8rem;color:#b2bec3;margin-top:4px;">Staff Login</p>
             </div>
         """, unsafe_allow_html=True)
