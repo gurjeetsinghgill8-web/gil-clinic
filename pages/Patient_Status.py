@@ -28,11 +28,14 @@ from utils.config import (
 from utils.queue import calculate_wait_time, calculate_expected_time
 
 
-# ─── PWA / META INJECTION ───────────────────────────────────────────────────────
+def clean_html(html_str: str) -> str:
+    """Strip all leading whitespace from every line of HTML to prevent markdown code block rendering."""
+    return "\n".join(line.lstrip() for line in html_str.splitlines())
+
 
 def inject_pwa_meta():
     """Inject PWA manifest link, service worker registration, and audio setup."""
-    return textwrap.dedent("""
+    return clean_html("""
     <!-- PWA Manifest -->
     <link rel="manifest" href="/assets/manifest.json">
     <meta name="theme-color" content="#667eea">
@@ -187,7 +190,7 @@ def inject_pwa_meta():
 
 def get_pwa_install_button() -> str:
     """Return HTML for the PWA install button (hidden by default)."""
-    return textwrap.dedent("""
+    return clean_html("""
     <div id="install-pwa-btn" style="display: none; text-align: center; margin: 10px 0;">
         <button onclick="installPWA()" style="
             background: linear-gradient(135deg, #667eea, #764ba2);
@@ -219,7 +222,7 @@ def get_status_watcher_js(prev_status_hash: str, patient_name: str, patient_id: 
     button reaches the patient — via URL param instead of direct JS injection.
     """
     safe_name = patient_name.replace("'", "\\'").replace('"', '\\"')
-    return textwrap.dedent(f"""
+    return clean_html(f"""
     <script>
     (function() {{
         var PID = "{patient_id}";
