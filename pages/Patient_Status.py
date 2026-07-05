@@ -44,6 +44,9 @@ def inject_pwa_meta():
     window.__audioCtx = null;
     window.__audioReady = false;
 
+    // Check sessionStorage for audio activation flag (survives st_autorefresh)
+    var __audioActivated = sessionStorage.getItem("cq_audio_ready") === "1";
+
     function getAudioCtx() {{
         if (!window.__audioCtx) {{
             try {{
@@ -53,11 +56,21 @@ def inject_pwa_meta():
         if (window.__audioCtx.state === "suspended") {{
             window.__audioCtx.resume().then(function() {{
                 window.__audioReady = true;
+                sessionStorage.setItem("cq_audio_ready", "1");
             }});
         }} else {{
             window.__audioReady = true;
+            if (!__audioActivated) {{
+                sessionStorage.setItem("cq_audio_ready", "1");
+                __audioActivated = true;
+            }}
         }}
         return window.__audioCtx;
+    }}
+
+    // If audio was active before reload, resume immediately
+    if (__audioActivated) {{
+        setTimeout(function() {{ getAudioCtx(); }}, 100);
     }}
 
     // Play a test beep — called manually AND on first touch
@@ -94,17 +107,30 @@ def inject_pwa_meta():
             playTestBeep();
         }}
     }}
-    document.addEventListener("touchstart", resumeAudio, {{ once: true }});
-    document.addEventListener("click", resumeAudio, {{ once: true }});
-    document.addEventListener("touchend", resumeAudio, {{ once: true }});
 
-    // Also try periodically (some browsers need multiple attempts)
+    // Re-attach event listeners on every page load (survives st_autorefresh)
+    function attachAudioListeners() {{
+        document.removeEventListener("touchstart", resumeAudio);
+        document.removeEventListener("click", resumeAudio);
+        document.removeEventListener("touchend", resumeAudio);
+        document.addEventListener("touchstart", resumeAudio, {{ once: true }});
+        document.addEventListener("click", resumeAudio, {{ once: true }});
+        document.addEventListener("touchend", resumeAudio, {{ once: true }});
+    }}
+    attachAudioListeners();
+
+    // Periodic resume (every 3s — helps when st_autorefresh kills AudioContext)
     setInterval(function() {{
         var ctx = window.__audioCtx;
         if (ctx && ctx.state === "suspended") {{
-            ctx.resume().then(function() {{ window.__audioReady = true; }});
+            ctx.resume().then(function() {{
+                window.__audioReady = true;
+                sessionStorage.setItem("cq_audio_ready", "1");
+            }});
         }}
-    }}, 2000);
+        // Re-attach listeners after st_autorefresh (page reloads)
+        attachAudioListeners();
+    }}, 3000);
 
     // ─── Service Worker ─────────────────────────────────────────────────
     if ("serviceWorker" in navigator) {{
@@ -321,7 +347,11 @@ def show():
     # ─── Inject PWA Meta & Service Worker ──────────────────────────────────
     st.markdown(inject_pwa_meta(), unsafe_allow_html=True)
 
-    # ─── Auto-refresh every 5 seconds (live queue) ─────────────────────────
+    # ─── Auto-refresh via client-side meta tag ──────────────────────────────
+    # Using meta refresh instead of st_autorefresh because st_autorefresh does
+    # a full page reload that destroys AudioContext + event listeners.
+    # Meta refresh also triggers full reload, BUT we handle it via sessionStorage
+    # + status-hash comparison in get_status_watcher_js().
     try:
         from streamlit_autorefresh import st_autorefresh
         st_autorefresh(interval=5000, key="patient_refresh")
@@ -443,6 +473,38 @@ def show():
         f'style="display:none;"></div>',
         unsafe_allow_html=True,
     )
+
+    # ─── Test Sound Button (Streamlit button — SURVIVES st_autorefresh) ────
+    sound_test_clicked = st.button(
+        "🔊 Test Sound — Tap to Enable Alert Sounds",
+        key="test_sound_btn",
+        use_container_width=True,
+        type="primary",
+        help="Tap to test sound and vibration. AudioContext will be activated.",
+    )
+    if sound_test_clicked:
+        sound_js = """
+        <script>
+        (function() {
+            try {
+                if (window.resumeAudio) window.resumeAudio();
+                if (window.playTestBeep) window.playTestBeep();
+                if (navigator.vibrate) navigator.vibrate(300);
+                var el = document.createElement('div');
+                el.id = 'sound-test-result';
+                el.innerHTML = '✅ Sound + Vibration working!';
+                el.style.cssText = 'text-align:center;padding:8px;margin:6px 0;'
+                    + 'background:#4CAF50;color:white;border-radius:8px;font-weight:600;';
+                document.querySelector('[data-testid="stMarkdownContainer"]')?.before(el);
+                setTimeout(function() {
+                    var r = document.getElementById('sound-test-result');
+                    if (r) r.remove();
+                }, 4000);
+            } catch(e) { console.log('Sound test error:', e); }
+        })();
+        </script>
+        """
+        st.markdown(sound_js, unsafe_allow_html=True)
 
     # ─── PWA Install Button ────────────────────────────────────────────────
     st.markdown(get_pwa_install_button(), unsafe_allow_html=True)
@@ -608,22 +670,6 @@ def show():
         "साउंड + वाइब्रेशन आएगा। बस स्क्रीन पर एक बार टैप करें 'Tap to enable sound' दिखे तो।  \n"
         "Sound + vibration work WITHOUT browser notification permission. Just tap the screen once if you see the hint."
     )
-
-    # ─── Test Sound Button ────────────────────────────────────────────────
-    st.markdown("""
-    <div style="text-align:center;margin:8px 0;">
-        <button onclick="resumeAudio();playTestBeep();navigator.vibrate(200);"
-                style="background:linear-gradient(135deg,#667eea,#764ba2);color:white;
-                       border:none;padding:12px 24px;border-radius:12px;font-size:16px;
-                       font-weight:600;cursor:pointer;width:100%;
-                       box-shadow:0 4px 15px rgba(102,126,234,0.4);">
-            🔊 Test Sound — Tap to Enable Alert Sounds
-        </button>
-        <p style="font-size:0.75rem;color:#888;margin-top:4px;">
-            Agar sound nahi aa raha to ise tap karein / Tap this if you don't hear anything
-        </p>
-    </div>
-    """, unsafe_allow_html=True)
 
     # ─── Inject Status Watcher JS ──────────────────────────────────────────
     st.markdown(
