@@ -39,13 +39,24 @@ def inject_pwa_meta():
     <meta name="apple-mobile-web-app-title" content="CardioQueue">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 
-    <!-- Service Worker Registration -->
+    <!-- Service Worker Registration + Notif Perm + Audio Warmup -->
     <script>
     if ("serviceWorker" in navigator) {{
         navigator.serviceWorker.register("/assets/service-worker.js")
             .then(function() {{ console.log("[PWA] Service Worker registered"); }})
             .catch(function(err) {{ console.log("[PWA] SW registration failed:", err); }});
     }}
+
+    // Request notification permission on first visit
+    if ("Notification" in window && Notification.permission === "default") {{
+        Notification.requestPermission();
+    }}
+
+    // Pre-warm AudioContext (required by iOS/mobile browsers)
+    try {{
+        var warmCtx = new (window.AudioContext || window.webkitAudioContext)();
+        warmCtx.resume();
+    }} catch(e) {{}}
 
     // Add to Home Screen prompt handler
     window.addEventListener("beforeinstallprompt", function(e) {{
@@ -101,136 +112,140 @@ def get_pwa_install_button() -> str:
 def get_status_watcher_js(prev_status_hash: str, patient_name: str, patient_id: str = "") -> str:
     """
     Inject JavaScript that watches for status changes and triggers:
+      - Sound (Web Audio API beep)
+      - Vibration
       - Browser Notification
-      - Audio beep (via Web Audio API)
-      - Vibration (on supported devices)
       - Service Worker background tracking
 
-    NOTE: prev_status_hash is stored in sessionStorage so it survives page reloads.
+    Uses sessionStorage so hash survives Streamlit reruns/auto-refresh.
+    On every page load, compares current hash with stored hash → triggers alert if changed.
     """
+    safe_name = patient_name.replace("'", "\\'").replace('"', '\\"')
     return f"""
     <script>
     (function() {{
-        var patientName = "{patient_name.replace("'", "\\'")}";
-        var patientId = "{patient_id}";
-        var currentHash = "{prev_status_hash}";
+        var PID = "{patient_id}";
+        var PNAME = "{safe_name}";
+        var HASH = "{prev_status_hash}";
+        var STORAGE_KEY = "cq_h_" + PID;
 
-        // ── Store hash in sessionStorage so it survives Streamlit reruns ───
-        var storedHash = sessionStorage.getItem("cq_status_hash_" + patientId);
-        var prevHash = storedHash || "{prev_status_hash}";
-        sessionStorage.setItem("cq_status_hash_" + patientId, currentHash);
+        // ─── 1. Compare with stored hash → alert on change ────────────────────
+        var oldHash = sessionStorage.getItem(STORAGE_KEY);
+        var justChanged = (oldHash && oldHash !== HASH);
 
-        // ── Register with Service Worker for background tracking ──────────────
+        // Always store current hash
+        sessionStorage.setItem(STORAGE_KEY, HASH);
+
+        // ─── 2. Play sound+vibration+notification if status just changed ──────
+        function playAlert(statusLabel) {{
+            // Sound
+            try {{
+                var ctx = new (window.AudioContext || window.webkitAudioContext)();
+                var osc = ctx.createOscillator();
+                var g = ctx.createGain();
+                osc.connect(g); g.connect(ctx.destination);
+                osc.frequency.value = 880;
+                osc.type = "sine";
+                g.gain.value = 0.5;
+                osc.start();
+                osc.stop(ctx.currentTime + 0.6);
+                // Second beep after 200ms
+                setTimeout(function() {{
+                    var ctx2 = new (window.AudioContext || window.webkitAudioContext)();
+                    var osc2 = ctx2.createOscillator();
+                    var g2 = ctx2.createGain();
+                    osc2.connect(g2); g2.connect(ctx2.destination);
+                    osc2.frequency.value = 660;
+                    osc2.type = "sine";
+                    g2.gain.value = 0.4;
+                    osc2.start();
+                    osc2.stop(ctx2.currentTime + 0.4);
+                }}, 200);
+            }} catch(e) {{}}
+
+            // Vibration
+            try {{ if (navigator.vibrate) navigator.vibrate([400, 200, 400, 200, 600]); }} catch(e) {{}}
+
+            // Browser Notification
+            if ("Notification" in window && Notification.permission === "granted") {{
+                new Notification("🔔 " + PNAME, {{
+                    body: "Status: " + statusLabel,
+                    icon: "https://img.icons8.com/color/48/hospital.png",
+                    tag: "cq-" + Date.now(),
+                    requireInteraction: true,
+                    silent: false,
+                    vibrate: [400, 200, 400, 200, 600]
+                }});
+            }}
+
+            // Title flash
+            var ot = document.title;
+            var fi = setInterval(function() {{ document.title = (document.title === ot) ? "🔔 " + statusLabel : ot; }}, 700);
+            setTimeout(function() {{ clearInterval(fi); document.title = ot; }}, 5000);
+        }}
+
+        if (justChanged) {{
+            var el = document.getElementById("status-hash");
+            var st = el ? el.getAttribute("data-status") || "Updated" : "Updated";
+            playAlert(st);
+        }}
+
+        // ─── 3. Register Service Worker for background tracking ────────────────
         if ("serviceWorker" in navigator) {{
-            navigator.serviceWorker.ready.then(function(registration) {{
-                if (registration.active) {{
-                    registration.active.postMessage({{
+            navigator.serviceWorker.ready.then(function(reg) {{
+                if (reg.active) {{
+                    reg.active.postMessage({{
                         type: "TRACK_PATIENT",
-                        patientId: patientId,
-                        patientName: patientName,
-                        statusHash: currentHash
+                        patientId: PID,
+                        patientName: PNAME,
+                        statusHash: HASH
                     }});
                 }}
             }});
         }}
 
-        // ── Status changed? Notify immediately! ────────────────────────────────
-        if (prevHash && currentHash && prevHash !== currentHash) {{
-            var title = "🔄 Status Updated";
-            var statusEl = document.getElementById("status-hash");
-            var currStatus = statusEl ? statusEl.getAttribute("data-status") || "Updated" : "Updated";
-
-            // 1. Sound — Web Audio API
-            try {{
-                var ctx = new (window.AudioContext || window.webkitAudioContext)();
-                var osc = ctx.createOscillator();
-                var gain = ctx.createGain();
-                osc.connect(gain);
-                gain.connect(ctx.destination);
-                osc.frequency.value = 880;
-                osc.type = "sine";
-                gain.gain.value = 0.5;
-                osc.start();
-                osc.stop(ctx.currentTime + 0.5);
-            }} catch(e) {{}}
-
-            // 2. Vibration
-            try {{
-                if (navigator.vibrate) {{
-                    navigator.vibrate([300, 150, 300, 150, 500]);
-                }}
-            }} catch(e) {{}}
-
-            // 3. Browser Notification
-            if ("Notification" in window && Notification.permission === "granted") {{
-                new Notification(title, {{
-                    body: patientName + ", your status changed to: " + currStatus,
-                    icon: "https://img.icons8.com/color/48/hospital.png",
-                    tag: "cq-" + Date.now(),
-                    requireInteraction: true,
-                    silent: false,
-                    vibrate: [300, 150, 300, 150, 500]
-                }});
-            }}
-
-            // 4. Flash page title
-            var origTitle = document.title;
-            var flashInt = setInterval(function() {{
-                document.title = (document.title === origTitle) ? "🔔 " + currStatus : origTitle;
-            }}, 800);
-            setTimeout(function() {{ clearInterval(flashInt); document.title = origTitle; }}, 6000);
-        }}
-
-        // ── Background watcher (polls every 3 sec for changes) ──────────────────
-        function checkStatus() {{
-            var statusEl = document.getElementById("status-hash");
-            if (!statusEl) return;
-            var newHash = statusEl.getAttribute("data-hash") || "";
-            var newStatus = statusEl.getAttribute("data-status") || "";
-            var oldHash = sessionStorage.getItem("cq_status_hash_" + patientId) || "";
-
-            if (oldHash && newHash && oldHash !== newHash) {{
-                sessionStorage.setItem("cq_status_hash_" + patientId, newHash);
-
+        // ─── 4. Poll every 3 sec for DOM changes (catches st_autorefresh updates) ─
+        setInterval(function() {{
+            var el = document.getElementById("status-hash");
+            if (!el) return;
+            var nh = el.getAttribute("data-hash") || "";
+            var ns = el.getAttribute("data-status") || "";
+            var oh = sessionStorage.getItem(STORAGE_KEY) || "";
+            if (oh && nh && oh !== nh) {{
+                sessionStorage.setItem(STORAGE_KEY, nh);
                 // Sound
                 try {{
-                    var ctx = new (window.AudioContext || window.webkitAudioContext)();
-                    var osc = ctx.createOscillator();
-                    var gain = ctx.createGain();
-                    osc.connect(gain);
-                    gain.connect(ctx.destination);
-                    osc.frequency.value = 880;
-                    osc.type = "sine";
-                    gain.gain.value = 0.5;
-                    osc.start();
-                    osc.stop(ctx.currentTime + 0.5);
+                    var c = new (window.AudioContext || window.webkitAudioContext)();
+                    var o = c.createOscillator();
+                    var g2 = c.createGain();
+                    o.connect(g2); g2.connect(c.destination);
+                    o.frequency.value = 880;
+                    o.type = "sine";
+                    g2.gain.value = 0.5;
+                    o.start();
+                    o.stop(c.currentTime + 0.5);
                 }} catch(e) {{}}
-
                 // Vibration
-                try {{ if (navigator.vibrate) navigator.vibrate([300, 150, 300]); }} catch(e) {{}}
-
+                try {{ if (navigator.vibrate) navigator.vibrate([400, 200, 400]); }} catch(e) {{}}
                 // Notification
                 if ("Notification" in window && Notification.permission === "granted") {{
-                    new Notification("🔄 Status Updated", {{
-                        body: patientName + ", your status changed to: " + newStatus,
+                    new Notification("🔔 " + PNAME, {{
+                        body: "Status: " + ns,
                         icon: "https://img.icons8.com/color/48/hospital.png",
                         tag: "cq-" + Date.now(),
                         requireInteraction: true,
                         silent: false,
-                        vibrate: [300, 150, 300]
+                        vibrate: [400, 200, 400]
                     }});
                 }}
-
                 // Update SW
                 if ("serviceWorker" in navigator) {{
                     navigator.serviceWorker.ready.then(function(reg) {{
-                        if (reg.active) reg.active.postMessage({{ type: "UPDATE_STATUS_HASH", statusHash: newHash }});
+                        if (reg.active) reg.active.postMessage({{ type: "UPDATE_STATUS_HASH", statusHash: nh }});
                     }});
                 }}
             }}
-        }}
-
-        setInterval(checkStatus, 3000);
+        }}, 3000);
     }})();
     </script>
     """
