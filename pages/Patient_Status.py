@@ -98,33 +98,33 @@ def get_pwa_install_button() -> str:
     """
 
 
-# ─── BROWSER ALERT TRIGGERS ───────────────────────────────────────────────────
-
 def trigger_alert_sound(message: str = ""):
-    """Trigger triple-beep sound and vibration alert in the browser via clean HTML components."""
+    """Trigger voice text-to-speech alert and vibration in the browser via clean HTML components."""
     import streamlit.components.v1 as components
     safe_msg = message.replace("'", " ").replace('"', ' ').replace("\n", " ")
     js_code = """
     <script>
     (function() {
         try {
-            var ctx = new (window.AudioContext || window.webkitAudioContext)();
-            var freqs = [880, 660, 1000];
-            var durations = [0.2, 0.15, 0.25];
-            var delays = [0, 150, 350];
-            freqs.forEach(function(f, idx) {
-                setTimeout(function() {
-                    try {
-                        var osc = ctx.createOscillator();
-                        var gain = ctx.createGain();
-                        osc.connect(gain); gain.connect(ctx.destination);
-                        osc.frequency.value = f; osc.type = 'sine';
-                        gain.gain.setValueAtTime(0.5, ctx.currentTime);
-                        gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + durations[idx]);
-                        osc.start(ctx.currentTime); osc.stop(ctx.currentTime + durations[idx]);
-                    } catch(err) {}
-                }, delays[idx]);
-            });
+            window.speechSynthesis.cancel(); // Cancel any ongoing speech
+            var voiceMsg = "{safe_msg}";
+            if (voiceMsg === "") {
+                voiceMsg = "Welcome to Doctor Gill Clinic";
+            }
+            
+            // 1. Speak in English
+            var speakEn = new SpeechSynthesisUtterance(voiceMsg);
+            speakEn.lang = "en-US";
+            speakEn.rate = 0.95;
+            window.speechSynthesis.speak(speakEn);
+            
+            // 2. Speak in Hindi (if generic welcome)
+            if ("{safe_msg}" === "" || "{safe_msg}".includes("Welcome")) {
+                var speakHi = new SpeechSynthesisUtterance("डॉक्टर गिल के क्लिनिक में आपका स्वागत है");
+                speakHi.lang = "hi-IN";
+                speakHi.rate = 0.95;
+                window.speechSynthesis.speak(speakHi);
+            }
         } catch(e) {}
         if (navigator.vibrate) navigator.vibrate([500, 200, 500, 200, 700]);
         if ("Notification" in window && Notification.permission === "granted" && "{safe_msg}" !== "") {
@@ -310,25 +310,23 @@ def show():
      <script>
      document.getElementById('ts-btn').onclick = function() {
          try {
-             var ctx = new (window.AudioContext || window.webkitAudioContext)();
-             [0, 0.15, 0.35].forEach(function(t, i) {
-                 setTimeout(function() {
-                     try {
-                         var osc = ctx.createOscillator();
-                         var gain = ctx.createGain();
-                         osc.connect(gain); gain.connect(ctx.destination);
-                         osc.frequency.value = [880, 660, 1000][i];
-                         osc.type = "sine";
-                         gain.gain.setValueAtTime(0.5, ctx.currentTime);
-                         gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.2);
-                         osc.start(ctx.currentTime); osc.stop(ctx.currentTime + 0.2);
-                     } catch(err) {}
-                 }, t * 1000);
-             });
+             window.speechSynthesis.cancel(); // Stop any currently speaking voice
+             
+             // Speak English Welcome
+             var speakEn = new SpeechSynthesisUtterance("Welcome to Doctor Gill Clinic");
+             speakEn.lang = "en-US";
+             speakEn.rate = 0.95;
+             window.speechSynthesis.speak(speakEn);
+             
+             // Speak Hindi Welcome
+             var speakHi = new SpeechSynthesisUtterance("डॉक्टर गिल के क्लिनिक में आपका स्वागत है");
+             speakHi.lang = "hi-IN";
+             speakHi.rate = 0.95;
+             window.speechSynthesis.speak(speakHi);
          } catch(e) {}
          if (navigator.vibrate) navigator.vibrate(300);
          var res = document.getElementById('test-res');
-         res.innerHTML = '<div style="text-align:center;padding:8px;margin:6px 0;background:#4CAF50;color:white;border-radius:8px;font-weight:600;font-family:sans-serif;font-size:0.85rem;">✅ Sound + Vibration working!</div>';
+         res.innerHTML = '<div style="text-align:center;padding:8px;margin:6px 0;background:#4CAF50;color:white;border-radius:8px;font-weight:600;font-family:sans-serif;font-size:0.85rem;">✅ Voice greeting playing! / स्वागत संदेश बज रहा है!</div>';
          setTimeout(function() { res.innerHTML = ''; }, 3000);
      };
      </script>
