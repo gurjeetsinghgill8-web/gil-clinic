@@ -93,17 +93,28 @@ def inject_pwa_meta():
 	            } catch(e) {}
 	        }
 
-	        // Public: call from onclick — unlocks + plays beep instantly
-	        window.playTestBeep = function() {
-	            unlockAudio();
-	            setTimeout(function() {
-	                playBeepNow(880, 0.2, 0.5);
-	                setTimeout(function() { playBeepNow(660, 0.15, 0.4); }, 150);
-	                setTimeout(function() { playBeepNow(1000, 0.25, 0.4); }, 350);
-	            }, 30);
-	            if (navigator.vibrate) navigator.vibrate(300);
-	            sessionStorage.setItem("cq_test_sound", "1");
-	        };
+	        // Public: call from onclick — unlocks + plays beep instantly using a fresh AudioContext
+        window.playTestBeep = function() {
+            try {
+                var ctx = new (window.AudioContext || window.webkitAudioContext)();
+                [0, 0.15, 0.35].forEach(function(t, i) {
+                    setTimeout(function() {
+                        try {
+                            var osc = ctx.createOscillator();
+                            var gain = ctx.createGain();
+                            osc.connect(gain); gain.connect(ctx.destination);
+                            osc.frequency.value = [880, 660, 1000][i];
+                            osc.type = "sine";
+                            gain.gain.setValueAtTime(0.5, ctx.currentTime);
+                            gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.2);
+                            osc.start(ctx.currentTime); osc.stop(ctx.currentTime + 0.2);
+                        } catch(err) {}
+                    }, t * 1000);
+                });
+            } catch(e) {}
+            if (navigator.vibrate) navigator.vibrate(300);
+            sessionStorage.setItem("cq_test_sound", "1");
+        };
 
 	        // Public: ensure audio is ready
 	        window.resumeAudio = function() { unlockAudio(); };
@@ -253,10 +264,23 @@ def get_status_watcher_js(prev_status_hash: str, patient_name: str, patient_id: 
 
         // ─── Global alert function — can be called from anywhere ──────────────
         window.__playPatientAlert = function(statusLabel) {{
-            // Sound — triple beep pattern using shared AudioContext
-            playBeep(880, 0.5, 0.6, 0);
-            playBeep(660, 0.4, 0.5, 250);
-            playBeep(1000, 0.6, 0.5, 500);
+            try {{
+                var ctx = new (window.AudioContext || window.webkitAudioContext)();
+                [0, 0.25, 0.5].forEach(function(t, i) {{
+                    setTimeout(function() {{
+                        try {{
+                            var osc = ctx.createOscillator();
+                            var gain = ctx.createGain();
+                            osc.connect(gain); gain.connect(ctx.destination);
+                            osc.frequency.value = [880, 660, 1000][i];
+                            osc.type = "sine";
+                            gain.gain.setValueAtTime(0.6, ctx.currentTime);
+                            gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.45);
+                            osc.start(ctx.currentTime); osc.stop(ctx.currentTime + 0.45);
+                        } catch(err) {{}}
+                    }}, t * 1000);
+                }});
+            }} catch(e) {{}}
 
             // Vibration — long pattern
             try {{ if (navigator.vibrate) navigator.vibrate([500, 200, 500, 200, 700]); }} catch(e) {{}}
