@@ -277,7 +277,7 @@ def get_status_watcher_js(prev_status_hash: str, patient_name: str, patient_id: 
                             gain.gain.setValueAtTime(0.6, ctx.currentTime);
                             gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.45);
                             osc.start(ctx.currentTime); osc.stop(ctx.currentTime + 0.45);
-                        } catch(err) {{}}
+                        }} catch(err) {{}}
                     }}, t * 1000);
                 }});
             }} catch(e) {{}}
