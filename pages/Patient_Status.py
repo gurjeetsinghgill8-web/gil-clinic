@@ -105,63 +105,94 @@ def get_status_watcher_js(prev_status_hash: str, patient_name: str, patient_id: 
       - Audio beep (via Web Audio API)
       - Vibration (on supported devices)
       - Service Worker background tracking
+
+    NOTE: prev_status_hash is stored in sessionStorage so it survives page reloads.
     """
     return f"""
     <script>
     (function() {{
-        var prevHash = "{prev_status_hash}";
         var patientName = "{patient_name.replace("'", "\\'")}";
         var patientId = "{patient_id}";
+        var currentHash = "{prev_status_hash}";
+
+        // ── Store hash in sessionStorage so it survives Streamlit reruns ───
+        var storedHash = sessionStorage.getItem("cq_status_hash_" + patientId);
+        var prevHash = storedHash || "{prev_status_hash}";
+        sessionStorage.setItem("cq_status_hash_" + patientId, currentHash);
 
         // ── Register with Service Worker for background tracking ──────────────
-        function registerServiceWorker() {{
-            if ("serviceWorker" in navigator) {{
-                navigator.serviceWorker.ready.then(function(registration) {{
-                    // Send patient info to SW for background polling
+        if ("serviceWorker" in navigator) {{
+            navigator.serviceWorker.ready.then(function(registration) {{
+                if (registration.active) {{
                     registration.active.postMessage({{
                         type: "TRACK_PATIENT",
                         patientId: patientId,
                         patientName: patientName,
-                        statusHash: prevHash
-                    }});
-                }});
-            }}
-        }}
-        registerServiceWorker();
-
-        function checkStatus() {{
-            // Re-read the status element from the DOM
-            var statusEl = document.getElementById("status-hash");
-            if (!statusEl) return;
-            var currHash = statusEl.getAttribute("data-hash") || "";
-            var currStatus = statusEl.getAttribute("data-status") || "";
-            var currTest = statusEl.getAttribute("data-test") || "";
-
-            // Update SW with latest hash
-            if ("serviceWorker" in navigator) {{
-                navigator.serviceWorker.ready.then(function(reg) {{
-                    reg.active.postMessage({{
-                        type: "UPDATE_STATUS_HASH",
-                        statusHash: currHash
-                    }});
-                }});
-            }}
-
-            if (prevHash && currHash && currHash !== prevHash) {{
-                // Status changed — notify patient
-                var title = "🔄 Status Updated";
-                var body = patientName + ", your status changed to: " + currStatus;
-
-                // Browser Notification
-                if ("Notification" in window && Notification.permission === "granted") {{
-                    new Notification(title, {{
-                        body: body,
-                        icon: "https://img.icons8.com/color/48/hospital.png",
-                        vibrate: [200, 100, 200]
+                        statusHash: currentHash
                     }});
                 }}
+            }});
+        }}
 
-                // Audio alert via Web Audio API (no file needed)
+        // ── Status changed? Notify immediately! ────────────────────────────────
+        if (prevHash && currentHash && prevHash !== currentHash) {{
+            var title = "🔄 Status Updated";
+            var statusEl = document.getElementById("status-hash");
+            var currStatus = statusEl ? statusEl.getAttribute("data-status") || "Updated" : "Updated";
+
+            // 1. Sound — Web Audio API
+            try {{
+                var ctx = new (window.AudioContext || window.webkitAudioContext)();
+                var osc = ctx.createOscillator();
+                var gain = ctx.createGain();
+                osc.connect(gain);
+                gain.connect(ctx.destination);
+                osc.frequency.value = 880;
+                osc.type = "sine";
+                gain.gain.value = 0.5;
+                osc.start();
+                osc.stop(ctx.currentTime + 0.5);
+            }} catch(e) {{}}
+
+            // 2. Vibration
+            try {{
+                if (navigator.vibrate) {{
+                    navigator.vibrate([300, 150, 300, 150, 500]);
+                }}
+            }} catch(e) {{}}
+
+            // 3. Browser Notification
+            if ("Notification" in window && Notification.permission === "granted") {{
+                new Notification(title, {{
+                    body: patientName + ", your status changed to: " + currStatus,
+                    icon: "https://img.icons8.com/color/48/hospital.png",
+                    tag: "cq-" + Date.now(),
+                    requireInteraction: true,
+                    silent: false,
+                    vibrate: [300, 150, 300, 150, 500]
+                }});
+            }}
+
+            // 4. Flash page title
+            var origTitle = document.title;
+            var flashInt = setInterval(function() {{
+                document.title = (document.title === origTitle) ? "🔔 " + currStatus : origTitle;
+            }}, 800);
+            setTimeout(function() {{ clearInterval(flashInt); document.title = origTitle; }}, 6000);
+        }}
+
+        // ── Background watcher (polls every 3 sec for changes) ──────────────────
+        function checkStatus() {{
+            var statusEl = document.getElementById("status-hash");
+            if (!statusEl) return;
+            var newHash = statusEl.getAttribute("data-hash") || "";
+            var newStatus = statusEl.getAttribute("data-status") || "";
+            var oldHash = sessionStorage.getItem("cq_status_hash_" + patientId) || "";
+
+            if (oldHash && newHash && oldHash !== newHash) {{
+                sessionStorage.setItem("cq_status_hash_" + patientId, newHash);
+
+                // Sound
                 try {{
                     var ctx = new (window.AudioContext || window.webkitAudioContext)();
                     var osc = ctx.createOscillator();
@@ -170,21 +201,35 @@ def get_status_watcher_js(prev_status_hash: str, patient_name: str, patient_id: 
                     gain.connect(ctx.destination);
                     osc.frequency.value = 880;
                     osc.type = "sine";
-                    gain.gain.value = 0.3;
+                    gain.gain.value = 0.5;
                     osc.start();
-                    osc.stop(ctx.currentTime + 0.3);
+                    osc.stop(ctx.currentTime + 0.5);
                 }} catch(e) {{}}
 
                 // Vibration
-                if ("vibrate" in navigator) {{
-                    navigator.vibrate([200, 100, 200, 100, 400]);
+                try {{ if (navigator.vibrate) navigator.vibrate([300, 150, 300]); }} catch(e) {{}}
+
+                // Notification
+                if ("Notification" in window && Notification.permission === "granted") {{
+                    new Notification("🔄 Status Updated", {{
+                        body: patientName + ", your status changed to: " + newStatus,
+                        icon: "https://img.icons8.com/color/48/hospital.png",
+                        tag: "cq-" + Date.now(),
+                        requireInteraction: true,
+                        silent: false,
+                        vibrate: [300, 150, 300]
+                    }});
                 }}
 
-                prevHash = currHash;
+                // Update SW
+                if ("serviceWorker" in navigator) {{
+                    navigator.serviceWorker.ready.then(function(reg) {{
+                        if (reg.active) reg.active.postMessage({{ type: "UPDATE_STATUS_HASH", statusHash: newHash }});
+                    }});
+                }}
             }}
         }}
 
-        // Check every 3 seconds
         setInterval(checkStatus, 3000);
     }})();
     </script>
