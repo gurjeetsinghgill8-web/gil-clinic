@@ -251,7 +251,7 @@ def show():
                 )
 
                 with st.container(border=True):
-                    col1, col2, col3, col4 = st.columns([3, 2, 1, 1])
+                    col1, col2, col3, col4, col5 = st.columns([3, 2, 1, 1, 1])
                     with col1:
                         st.markdown(f"**{p_name}** — `{p_id}`")
                         st.caption(f"📱 {p_mobile} | Tests: {', '.join(test_names)}")
@@ -261,36 +261,39 @@ def show():
                         if st.button("🔔 Remind", key=f"remind_rec_{p_id}",
                                      use_container_width=True):
                             result = harness.send_reminder(
-                                p_name, ", ".join(test_names), p_mobile
+                                p_name, ", ".join(test_names), p_mobile,
+                                patient_id=p_id
                             )
                             if result["success"]:
                                 st.success(result["message"])
-                                if result.get("notification"):
-                                    script = harness.get_notification_script(
-                                        "🔔 Reminder from Reception",
-                                        result["notification"], urgent=True
-                                    )
-                                    st.markdown(script, unsafe_allow_html=True)
                     with col4:
                         if st.button("📞 Miss Call", key=f"misscall_rec_{p_id}",
                                      use_container_width=True, type="secondary",
-                                     help="Sends alert to patient page WITHOUT needing notification permission. Works on all phones."):
+                                     help="Sends alert to patient page without notification permission."):
                             result = harness.send_misscall_alert(
                                 p_name, ", ".join(test_names), patient_pid=p_id
                             )
                             if result["success"]:
                                 st.success(result["message"])
-                                # Show the misscall URL — staff can share via WhatsApp
-                                misscall_url = result.get("misscall_url", "")
-                                if misscall_url:
-                                    st.info(f"📤 Share this link with patient:\n`{misscall_url}`")
-                                    st.markdown(
-                                        f'<a href="{misscall_url}" target="_blank">'
-                                        f'<button style="background:linear-gradient(135deg,#ff4444,#cc0000);color:white;'
-                                        f'border:none;padding:10px 20px;border-radius:8px;cursor:pointer;font-size:14px;'
-                                        f'font-weight:600;">📞 Open Miss Call Alert on Patient Page</button></a>',
-                                        unsafe_allow_html=True,
-                                    )
+                    with col5:
+                        # 📲 WhatsApp share — wa.me deep link, zero cost, no API
+                        _status_link = f"{BASE_URL}/Patient_Status?mobile={p_mobile}"
+                        _wa_text = (
+                            f"🏥 *{HOSPITAL_NAME}*\n"
+                            f"Patient: {p_name}\n"
+                            f"Tests: {', '.join(test_names)}\n"
+                            f"🔗 Live: {_status_link}"
+                        )
+                        import urllib.parse
+                        _wa_url = f"https://wa.me/?text={urllib.parse.quote(_wa_text)}"
+                        st.markdown(
+                            f'<a href="{_wa_url}" target="_blank">'
+                            f'<button style="background:#25D366;color:white;border:none;'
+                            f'padding:5px 10px;border-radius:6px;cursor:pointer;'
+                            f'font-size:0.8rem;width:100%;font-weight:600;">'
+                            f'📲 WA</button></a>',
+                            unsafe_allow_html=True
+                        )
         else:
             st.info("📭 No patients registered today yet.")
 

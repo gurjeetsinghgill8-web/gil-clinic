@@ -11,14 +11,14 @@ import streamlit as st
 
 # Must be the first Streamlit command
 st.set_page_config(
-    page_title="CardioQueue — GIL CLINIC",
+    page_title=f"CardioQueue — {__import__('utils.config', fromlist=['HOSPITAL_NAME']).HOSPITAL_NAME}",
     page_icon="🏥",
     layout="wide",
     initial_sidebar_state="expanded",
 )
 
 from llm_harness import get_harness
-from utils.config import APP_NAME, HOSPITAL_NAME, ADMIN_USERNAME, ADMIN_PASS
+from utils.config import APP_NAME, HOSPITAL_NAME, CLINIC_SPECIALTY, CLINIC_LOGO, ADMIN_USERNAME, ADMIN_PASS
 from utils.db import get_all_active_users, verify_login
 from utils.notifications import request_notification_permission_script
 
@@ -145,12 +145,12 @@ def render_login_page():
 
     with col2:
         # ─── Login Card ────────────────────────────────────────────────────
-        st.markdown("""
+        st.markdown(f"""
         <div class="login-card">
             <div class="login-header">
-                <div class="hospital-icon">🏥</div>
+                <div class="hospital-icon">{CLINIC_LOGO}</div>
                 <h1>CardioQueue</h1>
-                <p>GIL CLINIC — Cardiology Department</p>
+                <p>{HOSPITAL_NAME} — {CLINIC_SPECIALTY} Department</p>
                 <p style="font-size:0.8rem;color:#b2bec3;margin-top:4px;">Staff Login</p>
             </div>
         """, unsafe_allow_html=True)
@@ -387,8 +387,8 @@ def page_selector():
 
 def show_home():
     """Render the home/dashboard page with modern styling."""
-    st.title(f"🏥 {APP_NAME}")
-    st.markdown(f"### {HOSPITAL_NAME} — Cardiology Department")
+    st.title(f"{CLINIC_LOGO} {APP_NAME}")
+    st.markdown(f"### {HOSPITAL_NAME} — {CLINIC_SPECIALTY} Department")
 
     # ─── Welcome section with role-based greeting ──────────────────────────
     role = st.session_state.get("auth_role", "Guest")
@@ -434,10 +434,10 @@ def show_home():
     col1, col2 = st.columns([3, 2])
 
     with col1:
-        st.markdown("""
+        st.markdown(f"""
         ### 👋 Welcome to CardioQueue
 
-        A lightweight patient flow management system for cardiology departments.
+        A smart queue management system for {CLINIC_SPECIALTY.lower()} departments.
 
         **Modules:**
         - 📋 **Reception** — Register patients, print tokens, view status

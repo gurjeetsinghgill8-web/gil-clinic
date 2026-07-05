@@ -76,6 +76,7 @@ def show_department(test_name: str, emoji: str = "📊"):
         p_name = p.get("patients", {}).get("name", "Unknown")
         p_mobile = p.get("patients", {}).get("mobile", "")
         p_age = p.get("patients", {}).get("age", "")
+        p_patient_id = p.get("patient_id", "")  # for DB-poll alert
         token = p.get("token_number", 0)
         current_status = p.get("status", "called")
         status_display = f"{STATUS_ICONS.get(current_status, '❓')} {STATUS_LABELS.get(current_status, current_status)}"
@@ -138,20 +139,15 @@ def show_department(test_name: str, emoji: str = "📊"):
                         st.error(result["message"])
 
         with cols[2]:
-            # 🔔 Reminder button — always visible for current patient
+            # 🔔 Reminder button — DB-poll: writes alert to DB, patient's page picks it up
             if st.button("🔔 Remind", key=f"remind_curr_{p['id']}",
-                         use_container_width=True):
+                         use_container_width=True,
+                         help="Alert will appear on patient's phone within 5 seconds"):
                 result = harness.send_reminder(
-                    p_name, test_name, p_mobile, token
+                    p_name, test_name, p_mobile, token, patient_id=p_patient_id
                 )
                 if result["success"]:
                     st.success(result["message"])
-                    if result.get("notification"):
-                        script = harness.get_notification_script(
-                            f"🔔 Reminder — {test_name}",
-                            result["notification"], urgent=True
-                        )
-                        st.markdown(script, unsafe_allow_html=True)
 
         with cols[3]:
             # 📞 Miss Call Alert — works without notification permission
@@ -227,19 +223,16 @@ def show_department(test_name: str, emoji: str = "📊"):
                             st.error(result["message"])
 
                 with cols[3]:
+                    # 🔔 Reminder — DB-poll: writes alert flag, patient's 5s refresh picks it up
                     if st.button("🔔 Remind", key=f"remind_{w['id']}",
-                                 use_container_width=True):
+                                 use_container_width=True,
+                                 help="Alert appears on patient's phone within 5s"):
+                        w_patient_id = w.get("patient_id", "")
                         result = harness.send_reminder(
-                            w_name, test_name, w_mobile, token
+                            w_name, test_name, w_mobile, token, patient_id=w_patient_id
                         )
                         if result["success"]:
                             st.success(result["message"])
-                            if result.get("notification"):
-                                script = harness.get_notification_script(
-                                    f"🔔 Reminder — {test_name}",
-                                    result["notification"], urgent=True
-                                )
-                                st.markdown(script, unsafe_allow_html=True)
 
                 with cols[4]:
                     # 📞 Miss Call Alert

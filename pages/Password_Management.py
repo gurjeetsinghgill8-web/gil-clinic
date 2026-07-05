@@ -15,7 +15,9 @@ from datetime import datetime
 
 from utils.db import (
     create_user, get_all_users, get_user_by_username,
-    update_user_password, update_user_to_pin, delete_user, get_users_by_role
+    update_user_password, update_user_to_pin, delete_user, get_users_by_role,
+    get_departments, add_department, remove_department,
+    get_clinic_settings_db, save_clinic_settings_db,
 )
 
 
@@ -31,12 +33,14 @@ def show():
         return
     
     # ─── Tabs for different operations ─────────────────────────────────────────
-    tab1, tab2, tab3, tab4, tab5 = st.tabs([
+    tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
         "👥 All Users",
         "➕ Create User",
         "🔄 Reset Password",
         "🔢 Set PIN",
         "❌ Deactivate User",
+        "🏥 Departments",
+        "⚙️ Clinic Settings",
     ])
     
     # ─── Tab 1: All Users ──────────────────────────────────────────────────────
@@ -315,3 +319,111 @@ def show():
     - Passwords/PINs are stored in the local database (`cardioqueue.db`)
     - Always share credentials securely with staff members
     """)
+
+    # ─── Tab 6: Department Management (BRICK 6) ─────────────────────────────────
+    with tab6:
+        st.markdown("### 🏥 Manage Departments")
+        st.caption("Add or remove departments. Changes take effect on next app reload.")
+
+        depts = get_departments(active_only=False)
+
+        if depts:
+            st.markdown("#### Current Departments")
+            for d in depts:
+                active_badge = "✅" if d.get("active", 1) else "⚫ (disabled)"
+                c1, c2, c3, c4 = st.columns([1, 3, 2, 1])
+                c1.markdown(f"{d.get('icon','📋')} {active_badge}")
+                c2.markdown(f"**{d['name']}** — {d.get('room', '')}")
+                c3.caption(f"~{d.get('avg_time_minutes', 15)} min avg")
+                if d.get("active", 1) and c4.button("❌", key=f"rm_{d['name']}",
+                                                      help=f"Disable {d['name']} department"):
+                    if remove_department(d["name"]):
+                        st.success(f"✅ {d['name']} disabled! Reload to see changes.")
+                        st.rerun()
+                    else:
+                        st.error("Failed to remove.")
+        else:
+            st.info("No departments found. Add one below.")
+
+        st.divider()
+        st.markdown("#### ➕ Add New Department")
+
+        col_a, col_b = st.columns(2)
+        new_name = col_a.text_input("Department Name *", placeholder="e.g. Ultrasound", key="new_dept_name")
+        new_display = col_b.text_input("Display Name", placeholder="e.g. Ultrasound", key="new_dept_display")
+
+        col_c, col_d, col_e = st.columns(3)
+        new_room = col_c.text_input("Default Room", placeholder="e.g. Ultrasound Room 1", key="new_dept_room")
+        new_time = col_d.number_input("Avg Time (min)", min_value=5, max_value=120, value=15, key="new_dept_time")
+        new_icon = col_e.text_input("Icon Emoji", value="📋", max_chars=4, key="new_dept_icon")
+
+        if st.button("➕ Add Department", type="primary", use_container_width=True, key="add_dept_btn"):
+            if not new_name.strip():
+                st.warning("Department name is required.")
+            else:
+                disp = new_display.strip() or new_name.strip()
+                room = new_room.strip() or f"{new_name.strip()} Room 1"
+                if add_department(new_name.strip(), disp, room, new_time, new_icon.strip() or "📋"):
+                    st.success(f"✅ {new_name} department added! Reload app to activate.")
+                    st.rerun()
+                else:
+                    st.error("❌ Failed to add department (may already exist).")
+
+        st.info("💡 After adding/removing departments, restart the app for routing changes to take effect.")
+
+    # ─── Tab 7: Clinic Settings (BRICK 5) ──────────────────────────────────────
+    with tab7:
+        st.markdown("### ⚙️ Clinic Settings")
+        st.caption("Customize branding — clinic name, specialty, logo emoji, contact.")
+
+        # Load current settings
+        current = get_clinic_settings_db() or {}
+
+        from utils.config import HOSPITAL_NAME, CLINIC_SPECIALTY, CLINIC_LOGO
+        c_name   = current.get("clinic_name", HOSPITAL_NAME)
+        c_spec   = current.get("specialty",   CLINIC_SPECIALTY)
+        c_logo   = current.get("logo_emoji",  CLINIC_LOGO)
+        c_phone  = current.get("phone",  "")
+        c_addr   = current.get("address", "")
+
+        st.markdown("#### 🎨 Branding")
+        col1, col2, col3 = st.columns([3, 2, 1])
+        new_cname  = col1.text_input("Clinic Name",   value=c_name,  key="cs_name")
+        new_cspec  = col2.text_input("Specialty",     value=c_spec,  key="cs_spec",
+                                     placeholder="e.g. Cardiology, Dental")
+        new_clogo  = col3.text_input("Logo Emoji",    value=c_logo,  key="cs_logo", max_chars=4)
+
+        st.markdown("#### 📞 Contact Info")
+        col4, col5 = st.columns(2)
+        new_phone = col4.text_input("Phone Number",  value=c_phone, key="cs_phone",
+                                     placeholder="e.g. 98765-43210")
+        new_addr  = col5.text_input("Clinic Address", value=c_addr,  key="cs_addr",
+                                     placeholder="e.g. Sector 17, Chandigarh")
+
+        # Live preview
+        st.markdown("---")
+        st.markdown(f"#### Preview: How patients see your clinic")
+        st.markdown(
+            f"<div style='background:linear-gradient(135deg,#667eea,#764ba2);padding:16px;border-radius:12px;color:white;text-align:center;'>"
+            f"<div style='font-size:2.5rem'>{new_clogo or '🏥'}</div>"
+            f"<div style='font-size:1.4rem;font-weight:700'>{new_cname or 'Clinic Name'}</div>"
+            f"<div style='opacity:0.85'>{new_cspec or 'Specialty'} Department</div>"
+            f"</div>",
+            unsafe_allow_html=True
+        )
+
+        st.markdown("")
+        if st.button("💾 Save Clinic Settings", type="primary", use_container_width=True, key="save_clinic_btn"):
+            if not new_cname.strip():
+                st.warning("Clinic name cannot be empty.")
+            elif save_clinic_settings_db(new_cname.strip(), new_cspec.strip(), new_clogo.strip(), new_phone.strip(), new_addr.strip()):
+                st.success("✅ Clinic settings saved! Restart app to see changes across all pages.")
+            else:
+                st.error("❌ Failed to save settings.")
+
+        st.info(
+            "💡 **Note:** Changes saved here override `.env` settings **after app restart**.\n\n"
+            "For immediate permanent change, also update your Streamlit Cloud Secrets: "
+            "`HOSPITAL_NAME`, `CLINIC_SPECIALTY`, `CLINIC_LOGO`."
+        )
+

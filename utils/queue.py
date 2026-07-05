@@ -2,7 +2,7 @@
 Queue logic module — token generation, position calculation, wait time estimation.
 All pure functions, no database calls directly.
 """
-from datetime import date
+from datetime import date, datetime, timedelta
 from utils.config import PATIENT_ID_PREFIX, AVG_TEST_TIME, STATUS_ICONS, STATUS_LABELS, ROOM_NAMES
 
 
@@ -28,6 +28,24 @@ def calculate_wait_time(test_name: str, queue_position: int) -> int:
     # Position 1 means currently called/in_progress — estimate remaining avg time
     effective_position = max(queue_position - 1, 0)
     return effective_position * avg_minutes
+
+
+def calculate_expected_time(test_name: str, queue_position: int) -> str:
+    """
+    Returns estimated appointment clock time as a formatted string.
+    Example: '~3:45 PM' or 'Now / अभी'
+
+    Used on Patient Status page and Token Slips to show WHEN, not just HOW LONG.
+    """
+    wait_minutes = calculate_wait_time(test_name, queue_position)
+    if wait_minutes <= 0:
+        return "Now / अभी"
+    expected_dt = datetime.now() + timedelta(minutes=wait_minutes)
+    # Format: ~3:45 PM (no leading zero)
+    hour = expected_dt.strftime("%I").lstrip("0") or "12"
+    minute = expected_dt.strftime("%M")
+    ampm = expected_dt.strftime("%p")
+    return f"~{hour}:{minute} {ampm}"
 
 
 def get_department_from_test(test_name: str) -> str:

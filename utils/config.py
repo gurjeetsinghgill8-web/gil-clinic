@@ -14,6 +14,8 @@ SUPABASE_KEY = os.getenv("SUPABASE_KEY", "your-supabase-anon-key")
 # ─── App Info ────────────────────────────────────────────────────────────────
 APP_NAME = os.getenv("APP_NAME", "CardioQueue")
 HOSPITAL_NAME = os.getenv("HOSPITAL_NAME", "GIL CLINIC")
+CLINIC_SPECIALTY = os.getenv("CLINIC_SPECIALTY", "Cardiology")  # e.g. Dental, Radiology
+CLINIC_LOGO = os.getenv("CLINIC_LOGO", "🏥")  # Emoji for branding
 
 # ─── Staff Mobile Numbers (for WhatsApp alerts) ──────────────────────────────
 DOCTOR_MOBILE = os.getenv("DOCTOR_MOBILE", "")

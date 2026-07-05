@@ -36,6 +36,7 @@ if not USE_GOOGLE_SHEETS:
         get_current_patient_json as _get_current_patient,
         get_department_stats_json as _get_department_stats,
         log_message_json as _log_message,
+        _set_patient_alert_json, _get_patient_alert_json, _clear_patient_alert_json,
     )
     print("[DB] Google Sheets not set. Using Local JSON file storage.")
     print(f"[DB] Data directory: {os.path.abspath('cardioqueue_data/')}")
@@ -75,6 +76,7 @@ def _auto_enable_local_json():
     global _get_today_patients, _create_test, _get_tests_for_patient, _get_tests_by_mobile
     global _get_queue, _update_test_status, _get_completed_tests, _get_report_ready_tests
     global _get_current_patient, _get_department_stats, _log_message
+    global _set_patient_alert_json, _get_patient_alert_json, _clear_patient_alert_json
     from utils.local_json_db import (
         create_patient_json as _create_patient,
         get_patient_by_id_json as _get_patient_by_id,
@@ -90,6 +92,7 @@ def _auto_enable_local_json():
         get_current_patient_json as _get_current_patient,
         get_department_stats_json as _get_department_stats,
         log_message_json as _log_message,
+        _set_patient_alert_json, _get_patient_alert_json, _clear_patient_alert_json,
     )
     USE_LOCAL_JSON = True
     print("[DB] Google Sheets failed. Switched to Local JSON folder storage.")
@@ -158,9 +161,21 @@ def init_sqlite():
         report_ready_at TEXT,
         delivered_at TEXT,
         created_at TEXT NOT NULL,
+        pending_alert INTEGER DEFAULT 0,
+        alert_message TEXT DEFAULT '',
         FOREIGN KEY (patient_id) REFERENCES patients(patient_id) ON DELETE CASCADE
     )
     """)
+
+    # Migrate existing DB: add alert columns if missing
+    try:
+        cursor.execute("ALTER TABLE tests ADD COLUMN pending_alert INTEGER DEFAULT 0")
+    except Exception:
+        pass  # Column already exists
+    try:
+        cursor.execute("ALTER TABLE tests ADD COLUMN alert_message TEXT DEFAULT ''")
+    except Exception:
+        pass  # Column already exists
     
     # 3. messages table
     cursor.execute("""
@@ -1228,3 +1243,359 @@ def get_department_stats(test_name: str) -> dict:
         finally:
             conn.close()
     return stats
+
+
+# ─── PATIENT ALERT SYSTEM (DB-Poll Push) ───────────────────────────────────────────────────
+
+def set_patient_alert(patient_id: str, message: str = "") -> bool:
+    """
+    Set pending_alert=1 for a patient so their status page plays sound on next refresh.
+    Works across all DB modes: Google Sheets, Local JSON, Supabase, SQLite.
+    Architecture: Staff presses Remind → this writes to DB → Patient's 5s refresh detects it.
+    """
+    # ─── Google Sheets ────────────────────────────────────────────────────────────────
+    if USE_GOOGLE_SHEETS and not _gs_failed:
+        res = call_gs_api("setPatientAlert", {"patientId": patient_id, "message": message}, is_post=True)
+        if res is not None:
+            return True
+        # Fall through to Local JSON on GS failure
+
+    # ─── Local JSON ───────────────────────────────────────────────────────────────────
+    if USE_LOCAL_JSON:
+        return _set_patient_alert_json(patient_id, message)
+
+    # ─── Supabase ─────────────────────────────────────────────────────────────────────
+    if USE_SUPABASE:
+        try:
+            get_client().table("tests").update(
+                {"pending_alert": 1, "alert_message": message}
+            ).eq("patient_id", patient_id).execute()
+            return True
+        except Exception as e:
+            print(f"[DB] set_patient_alert (Supabase) error: {e}")
+            return False
+
+    # ─── SQLite ─────────────────────────────────────────────────────────────────────────
+    conn = sqlite3.connect(DB_FILE)
+    try:
+        conn.execute(
+            "UPDATE tests SET pending_alert=1, alert_message=? WHERE patient_id=?",
+            (message, patient_id)
+        )
+        conn.commit()
+        return True
+    except Exception as e:
+        print(f"[SQLite] set_patient_alert error: {e}")
+        return False
+    finally:
+        conn.close()
+
+
+def get_patient_alert(patient_id: str) -> dict:
+    """
+    Check if patient has a pending staff alert.
+    Returns: {"has_alert": bool, "message": str}
+    Called by Patient_Status.py on every 5s refresh.
+    """
+    # ─── Google Sheets ────────────────────────────────────────────────────────────────
+    if USE_GOOGLE_SHEETS and not _gs_failed:
+        res = call_gs_api("getPatientAlert", {"patientId": patient_id})
+        if res is not None:
+            return {"has_alert": res.get("pendingAlert", 0) == 1, "message": res.get("alertMessage", "")}
+
+    # ─── Local JSON ───────────────────────────────────────────────────────────────────
+    if USE_LOCAL_JSON:
+        return _get_patient_alert_json(patient_id)
+
+    # ─── Supabase ─────────────────────────────────────────────────────────────────────
+    if USE_SUPABASE:
+        try:
+            result = (get_client().table("tests")
+                      .select("pending_alert, alert_message")
+                      .eq("patient_id", patient_id)
+                      .eq("pending_alert", 1)
+                      .limit(1)
+                      .execute())
+            if result.data:
+                return {"has_alert": True, "message": result.data[0].get("alert_message", "")}
+            return {"has_alert": False, "message": ""}
+        except Exception as e:
+            print(f"[DB] get_patient_alert (Supabase) error: {e}")
+            return {"has_alert": False, "message": ""}
+
+    # ─── SQLite ─────────────────────────────────────────────────────────────────────────
+    conn = sqlite3.connect(DB_FILE)
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+    try:
+        cursor.execute(
+            "SELECT pending_alert, alert_message FROM tests WHERE patient_id=? AND pending_alert=1 LIMIT 1",
+            (patient_id,)
+        )
+        row = cursor.fetchone()
+        if row:
+            return {"has_alert": True, "message": row["alert_message"] or ""}
+        return {"has_alert": False, "message": ""}
+    except Exception as e:
+        print(f"[SQLite] get_patient_alert error: {e}")
+        return {"has_alert": False, "message": ""}
+    finally:
+        conn.close()
+
+
+def clear_patient_alert(patient_id: str) -> bool:
+    """
+    Clear the pending alert after patient's page has shown it.
+    Called immediately after get_patient_alert() returns has_alert=True.
+    """
+    # ─── Google Sheets ────────────────────────────────────────────────────────────────
+    if USE_GOOGLE_SHEETS and not _gs_failed:
+        call_gs_api("clearPatientAlert", {"patientId": patient_id}, is_post=True)
+        return True
+
+    # ─── Local JSON ───────────────────────────────────────────────────────────────────
+    if USE_LOCAL_JSON:
+        return _clear_patient_alert_json(patient_id)
+
+    # ─── Supabase ─────────────────────────────────────────────────────────────────────
+    if USE_SUPABASE:
+        try:
+            get_client().table("tests").update(
+                {"pending_alert": 0, "alert_message": ""}
+            ).eq("patient_id", patient_id).execute()
+            return True
+        except Exception as e:
+            print(f"[DB] clear_patient_alert (Supabase) error: {e}")
+            return False
+
+    # ─── SQLite ─────────────────────────────────────────────────────────────────────────
+    conn = sqlite3.connect(DB_FILE)
+    try:
+        conn.execute(
+            "UPDATE tests SET pending_alert=0, alert_message='' WHERE patient_id=?",
+            (patient_id,)
+        )
+        conn.commit()
+        return True
+    except Exception as e:
+        print(f"[SQLite] clear_patient_alert error: {e}")
+        return False
+    finally:
+        conn.close()
+
+
+# ─── DEPARTMENTS (BRICK 6 — Dynamic Department Management) ───────────────────
+
+_DEFAULT_DEPARTMENTS = [
+    {"name": "ECG",    "display_name": "ECG",    "room": "ECG Room 1",  "avg_time_minutes": 10, "icon": "❤️",  "active": 1, "sort_order": 1},
+    {"name": "Echo",   "display_name": "Echo",   "room": "Echo Room 1", "avg_time_minutes": 20, "icon": "🫀",  "active": 1, "sort_order": 2},
+    {"name": "TMT",    "display_name": "TMT",    "room": "TMT Room 1",  "avg_time_minutes": 30, "icon": "🏃",  "active": 1, "sort_order": 3},
+    {"name": "OPD",    "display_name": "OPD",    "room": "OPD Room 1",  "avg_time_minutes": 15, "icon": "🩺",  "active": 1, "sort_order": 4},
+    {"name": "Holter", "display_name": "Holter", "room": "ECG Room 1",  "avg_time_minutes": 10, "icon": "📟",  "active": 1, "sort_order": 5},
+    {"name": "ABPM",   "display_name": "ABPM",   "room": "ECG Room 1",  "avg_time_minutes": 10, "icon": "💉",  "active": 1, "sort_order": 6},
+]
+
+
+def get_departments(active_only: bool = True) -> list:
+    """Return list of department dicts, sorted by sort_order."""
+    # ─── Supabase ─────────────────────────────────────────────────────────────
+    if USE_SUPABASE:
+        try:
+            q = get_client().table("departments").select("*").order("sort_order")
+            if active_only:
+                q = q.eq("active", 1)
+            res = q.execute()
+            return res.data or []
+        except Exception as e:
+            print(f"[DB] get_departments (Supabase) error: {e}")
+            return _DEFAULT_DEPARTMENTS
+
+    # ─── SQLite ───────────────────────────────────────────────────────────────
+    try:
+        conn = sqlite3.connect(DB_FILE)
+        cursor = conn.cursor()
+        # Create departments table if missing (migration safety)
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS departments (
+            id TEXT PRIMARY KEY,
+            name TEXT UNIQUE NOT NULL,
+            display_name TEXT NOT NULL,
+            room TEXT NOT NULL DEFAULT '',
+            avg_time_minutes INTEGER NOT NULL DEFAULT 15,
+            icon TEXT NOT NULL DEFAULT '📋',
+            active INTEGER NOT NULL DEFAULT 1,
+            sort_order INTEGER NOT NULL DEFAULT 0,
+            created_at TEXT NOT NULL
+        )""")
+        conn.commit()
+        where = "WHERE active=1" if active_only else ""
+        cursor.execute(f"SELECT name,display_name,room,avg_time_minutes,icon,active,sort_order FROM departments {where} ORDER BY sort_order")
+        rows = cursor.fetchall()
+        conn.close()
+        if not rows:
+            # Seed defaults on first run
+            _seed_default_departments()
+            return _DEFAULT_DEPARTMENTS
+        return [{"name": r[0], "display_name": r[1], "room": r[2],
+                 "avg_time_minutes": r[3], "icon": r[4], "active": r[5], "sort_order": r[6]}
+                for r in rows]
+    except Exception as e:
+        print(f"[SQLite] get_departments error: {e}")
+        return _DEFAULT_DEPARTMENTS
+
+
+def _seed_default_departments():
+    """Seed default departments into SQLite on first run."""
+    try:
+        conn = sqlite3.connect(DB_FILE)
+        now = datetime.now().isoformat()
+        for d in _DEFAULT_DEPARTMENTS:
+            conn.execute(
+                "INSERT OR IGNORE INTO departments (id,name,display_name,room,avg_time_minutes,icon,active,sort_order,created_at) VALUES (?,?,?,?,?,?,?,?,?)",
+                (str(uuid.uuid4()), d["name"], d["display_name"], d["room"],
+                 d["avg_time_minutes"], d["icon"], d["active"], d["sort_order"], now)
+            )
+        conn.commit()
+        conn.close()
+        print("[DB] ✅ Seeded default departments.")
+    except Exception as e:
+        print(f"[SQLite] _seed_default_departments error: {e}")
+
+
+def add_department(name: str, display_name: str, room: str,
+                   avg_time_minutes: int = 15, icon: str = "📋") -> bool:
+    """Add a new department (BRICK 6)."""
+    now = datetime.now().isoformat()
+    # ─── Supabase ─────────────────────────────────────────────────────────────
+    if USE_SUPABASE:
+        try:
+            get_client().table("departments").insert({
+                "name": name, "display_name": display_name, "room": room,
+                "avg_time_minutes": avg_time_minutes, "icon": icon,
+                "active": 1, "sort_order": 99,
+            }).execute()
+            return True
+        except Exception as e:
+            print(f"[DB] add_department (Supabase) error: {e}")
+            return False
+    # ─── SQLite ───────────────────────────────────────────────────────────────
+    try:
+        conn = sqlite3.connect(DB_FILE)
+        conn.execute(
+            "INSERT OR IGNORE INTO departments (id,name,display_name,room,avg_time_minutes,icon,active,sort_order,created_at) VALUES (?,?,?,?,?,?,1,99,?)",
+            (str(uuid.uuid4()), name, display_name, room, avg_time_minutes, icon, now)
+        )
+        conn.commit()
+        conn.close()
+        return True
+    except Exception as e:
+        print(f"[SQLite] add_department error: {e}")
+        return False
+
+
+def remove_department(name: str) -> bool:
+    """Soft-delete a department (set active=0, BRICK 6)."""
+    # ─── Supabase ─────────────────────────────────────────────────────────────
+    if USE_SUPABASE:
+        try:
+            get_client().table("departments").update({"active": 0}).eq("name", name).execute()
+            return True
+        except Exception as e:
+            print(f"[DB] remove_department (Supabase) error: {e}")
+            return False
+    # ─── SQLite ───────────────────────────────────────────────────────────────
+    try:
+        conn = sqlite3.connect(DB_FILE)
+        conn.execute("UPDATE departments SET active=0 WHERE name=?", (name,))
+        conn.commit()
+        conn.close()
+        return True
+    except Exception as e:
+        print(f"[SQLite] remove_department error: {e}")
+        return False
+
+
+# ─── CLINIC SETTINGS (BRICK 5 — Multi-Tenant SaaS) ───────────────────────────
+
+def get_clinic_settings_db() -> dict | None:
+    """
+    Load clinic settings from DB.
+    Returns None if no row found (so config.py falls back to .env defaults).
+    """
+    # ─── Supabase ─────────────────────────────────────────────────────────────
+    if USE_SUPABASE:
+        try:
+            res = get_client().table("clinic_settings").select("*").eq("clinic_id", "default").limit(1).execute()
+            if res.data:
+                return res.data[0]
+        except Exception as e:
+            print(f"[DB] get_clinic_settings_db (Supabase) error: {e}")
+        return None
+    # ─── SQLite ───────────────────────────────────────────────────────────────
+    try:
+        conn = sqlite3.connect(DB_FILE)
+        cursor = conn.cursor()
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS clinic_settings (
+            id TEXT PRIMARY KEY,
+            clinic_id TEXT UNIQUE NOT NULL DEFAULT 'default',
+            clinic_name TEXT NOT NULL DEFAULT 'GIL CLINIC',
+            specialty TEXT NOT NULL DEFAULT 'Cardiology',
+            logo_emoji TEXT NOT NULL DEFAULT '🏥',
+            phone TEXT NOT NULL DEFAULT '',
+            address TEXT NOT NULL DEFAULT '',
+            owner_username TEXT NOT NULL DEFAULT 'admin',
+            plan_type TEXT NOT NULL DEFAULT 'basic',
+            is_active INTEGER NOT NULL DEFAULT 1,
+            created_at TEXT NOT NULL
+        )""")
+        conn.commit()
+        cursor.execute("SELECT clinic_name,specialty,logo_emoji,phone,address,plan_type FROM clinic_settings WHERE clinic_id='default' LIMIT 1")
+        row = cursor.fetchone()
+        conn.close()
+        if row:
+            return {"clinic_name": row[0], "specialty": row[1], "logo_emoji": row[2],
+                    "phone": row[3], "address": row[4], "plan_type": row[5]}
+    except Exception as e:
+        print(f"[SQLite] get_clinic_settings_db error: {e}")
+    return None
+
+
+def save_clinic_settings_db(clinic_name: str, specialty: str, logo_emoji: str,
+                             phone: str = "", address: str = "") -> bool:
+    """Save clinic settings to DB (BRICK 5 Admin Panel)."""
+    now = datetime.now().isoformat()
+    # ─── Supabase ─────────────────────────────────────────────────────────────
+    if USE_SUPABASE:
+        try:
+            get_client().table("clinic_settings").upsert({
+                "clinic_id": "default",
+                "clinic_name": clinic_name,
+                "specialty": specialty,
+                "logo_emoji": logo_emoji,
+                "phone": phone,
+                "address": address,
+            }).execute()
+            return True
+        except Exception as e:
+            print(f"[DB] save_clinic_settings_db (Supabase) error: {e}")
+            return False
+    # ─── SQLite ───────────────────────────────────────────────────────────────
+    try:
+        conn = sqlite3.connect(DB_FILE)
+        conn.execute("""
+            INSERT INTO clinic_settings (id,clinic_id,clinic_name,specialty,logo_emoji,phone,address,owner_username,plan_type,is_active,created_at)
+            VALUES (?,?,?,?,?,?,?,'admin','basic',1,?)
+            ON CONFLICT(clinic_id) DO UPDATE SET
+                clinic_name=excluded.clinic_name,
+                specialty=excluded.specialty,
+                logo_emoji=excluded.logo_emoji,
+                phone=excluded.phone,
+                address=excluded.address
+        """, (str(uuid.uuid4()), "default", clinic_name, specialty, logo_emoji, phone, address, now))
+        conn.commit()
+        conn.close()
+        return True
+    except Exception as e:
+        print(f"[SQLite] save_clinic_settings_db error: {e}")
+        return False

@@ -1,5 +1,11 @@
 -- ============================================================
--- CardioQueue — Supabase Database Schema
+-- CardioQueue — Supabase Database Schema  v2.1
+-- ============================================================
+-- CHANGES v2.1:
+--   • tests: added pending_alert, alert_message  (BRICK 1)
+--   • Added: users table                         (replaces hard-coded staff)
+--   • Added: departments table                   (BRICK 6 dynamic depts)
+--   • Added: clinic_settings table               (BRICK 5 multi-tenant)
 -- ============================================================
 -- Run this entire SQL in your Supabase SQL Editor to set up
 -- all tables, indexes, and Row Level Security policies.
@@ -40,6 +46,9 @@ CREATE TABLE IF NOT EXISTS tests (
     completed_at TIMESTAMPTZ,
     report_ready_at TIMESTAMPTZ,
     delivered_at TIMESTAMPTZ,
+    -- BRICK 1: DB-poll alert system (staff → patient phone)
+    pending_alert INTEGER NOT NULL DEFAULT 0,
+    alert_message TEXT NOT NULL DEFAULT '',
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
@@ -104,7 +113,90 @@ CREATE POLICY "Allow all operations for anon" ON messages
     FOR ALL USING (true) WITH CHECK (true);
 
 
--- ─── 6. SAMPLE DATA (for testing) ──────────────────────────────────────────
+-- ─── 6. USERS TABLE (Staff Accounts) ───────────────────────────────────────
+-- Stores all staff logins (receptionist, ECG tech, doctor, admin)
+
+CREATE TABLE IF NOT EXISTS users (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    username TEXT UNIQUE NOT NULL,
+    display_name TEXT NOT NULL,
+    role TEXT NOT NULL CHECK (role IN ('admin', 'receptionist', 'ecg', 'echo', 'tmt', 'opd', 'holter', 'abpm', 'doctor', 'manager')),
+    password TEXT NOT NULL,
+    active INTEGER NOT NULL DEFAULT 1,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);
+CREATE INDEX IF NOT EXISTS idx_users_role ON users(role);
+
+ALTER TABLE users ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Allow all operations for anon" ON users
+    FOR ALL USING (true) WITH CHECK (true);
+
+
+-- ─── 7. DEPARTMENTS TABLE (BRICK 6 — Dynamic Depts) ─────────────────────────
+-- Admin can add/remove departments without touching code.
+
+CREATE TABLE IF NOT EXISTS departments (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    name TEXT UNIQUE NOT NULL,               -- e.g. "ECG", "Echo", "Ultrasound"
+    display_name TEXT NOT NULL,              -- e.g. "ECG Room"
+    room TEXT NOT NULL DEFAULT '',           -- default room label
+    avg_time_minutes INTEGER NOT NULL DEFAULT 15,
+    icon TEXT NOT NULL DEFAULT '📋',
+    active INTEGER NOT NULL DEFAULT 1,
+    sort_order INTEGER NOT NULL DEFAULT 0,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_depts_name ON departments(name);
+CREATE INDEX IF NOT EXISTS idx_depts_active ON departments(active);
+
+ALTER TABLE departments ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Allow all operations for anon" ON departments
+    FOR ALL USING (true) WITH CHECK (true);
+
+-- Default departments for GIL CLINIC (run once)
+INSERT INTO departments (name, display_name, room, avg_time_minutes, icon, sort_order)
+VALUES
+    ('ECG',   'ECG',        'ECG Room 1',  10, '❤️',  1),
+    ('Echo',  'Echo',       'Echo Room 1', 20, '🫀',  2),
+    ('TMT',   'TMT',        'TMT Room 1',  30, '🏃',  3),
+    ('OPD',   'OPD',        'OPD Room 1',  15, '🩺',  4),
+    ('Holter','Holter',     'ECG Room 1',  10, '📟',  5),
+    ('ABPM',  'ABPM',       'ECG Room 1',  10, '💉',  6)
+ON CONFLICT (name) DO NOTHING;
+
+
+-- ─── 8. CLINIC SETTINGS TABLE (BRICK 5 — Multi-Tenant SaaS) ─────────────────
+-- One row per clinic deployment. Drives all white-label config.
+
+CREATE TABLE IF NOT EXISTS clinic_settings (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    clinic_id TEXT UNIQUE NOT NULL DEFAULT 'default',
+    clinic_name TEXT NOT NULL DEFAULT 'GIL CLINIC',
+    specialty TEXT NOT NULL DEFAULT 'Cardiology',
+    logo_emoji TEXT NOT NULL DEFAULT '🏥',
+    phone TEXT NOT NULL DEFAULT '',
+    address TEXT NOT NULL DEFAULT '',
+    owner_username TEXT NOT NULL DEFAULT 'admin',
+    plan_type TEXT NOT NULL DEFAULT 'basic'
+        CHECK (plan_type IN ('free', 'basic', 'pro', 'enterprise')),
+    is_active INTEGER NOT NULL DEFAULT 1,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+ALTER TABLE clinic_settings ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Allow all operations for anon" ON clinic_settings
+    FOR ALL USING (true) WITH CHECK (true);
+
+-- Insert default clinic row (idempotent)
+INSERT INTO clinic_settings (clinic_id, clinic_name, specialty, logo_emoji)
+VALUES ('default', 'GIL CLINIC', 'Cardiology', '🏥')
+ON CONFLICT (clinic_id) DO NOTHING;
+
+
+-- ─── 9. SAMPLE DATA (for testing) ──────────────────────────────────────────
 -- Uncomment to insert sample data:
 
 -- INSERT INTO patients (patient_id, name, mobile, age, gender)

@@ -367,3 +367,53 @@ def log_message_json(patient_id: str, mobile: str, msg_type: str, text: str, sen
     })
     with open(msgs_path, "w", encoding="utf-8") as f:
         json.dump(msgs, f, indent=2, ensure_ascii=False)
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+#  PATIENT ALERT SYSTEM (for Local JSON mode)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def _alert_path(patient_id: str) -> str:
+    """Path to the per-patient alert flag file."""
+    safe_id = patient_id.replace("/", "_").replace("\\", "_")
+    # Store in today's dir — alert is ephemeral (same day)
+    return os.path.join(_today_dir(), f"alert_{safe_id}.json")
+
+
+def _set_patient_alert_json(patient_id: str, message: str = "") -> bool:
+    """Write pending_alert flag for a patient (Local JSON mode)."""
+    try:
+        alert_file = _alert_path(patient_id)
+        with open(alert_file, "w", encoding="utf-8") as f:
+            json.dump({"pending_alert": 1, "alert_message": message, "set_at": _now_str()}, f)
+        return True
+    except Exception as e:
+        print(f"[LocalJSON] _set_patient_alert_json error: {e}")
+        return False
+
+
+def _get_patient_alert_json(patient_id: str) -> dict:
+    """Read pending_alert flag for a patient (Local JSON mode)."""
+    try:
+        alert_file = _alert_path(patient_id)
+        if os.path.exists(alert_file):
+            with open(alert_file, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            if data.get("pending_alert") == 1:
+                return {"has_alert": True, "message": data.get("alert_message", "")}
+        return {"has_alert": False, "message": ""}
+    except Exception as e:
+        print(f"[LocalJSON] _get_patient_alert_json error: {e}")
+        return {"has_alert": False, "message": ""}
+
+
+def _clear_patient_alert_json(patient_id: str) -> bool:
+    """Clear the alert flag for a patient (Local JSON mode)."""
+    try:
+        alert_file = _alert_path(patient_id)
+        if os.path.exists(alert_file):
+            os.remove(alert_file)
+        return True
+    except Exception as e:
+        print(f"[LocalJSON] _clear_patient_alert_json error: {e}")
+        return False

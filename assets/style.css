@@ -1,42 +1,76 @@
 /* 
- * CardioQueue Modern UI — Complete Redesign v2.0
+ * CardioQueue Premium UI — v3.0 "Harness" Edition
  * ================================================
- * Modern medical theme with gradient accents, glass-morphism,
- * smooth animations, and mobile-first responsive design.
+ * Premium medical theme: deep navy + vivid indigo/violet gradient.
+ * Glassmorphism cards, smooth micro-animations, Inter typography.
+ * Mobile-first, dark sidebar, vibrant status colours.
  */
+
+/* ─── Google Fonts ──────────────────────────────────────────── */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap');
 
 /* ─── CSS Variables ─────────────────────────────────────────── */
 :root {
-    --primary: #667eea;
-    --primary-dark: #5a6fd6;
-    --primary-light: #8b9ef0;
-    --secondary: #764ba2;
-    --secondary-light: #9b6fc0;
-    --success: #4CAF50;
-    --warning: #FF9800;
-    --danger: #f44336;
-    --info: #2196F3;
-    --bg: #f0f2f5;
-    --bg-card: #ffffff;
-    --bg-sidebar: #1a1a2e;
-    --text-primary: #2d3436;
-    --text-secondary: #636e72;
-    --text-light: #b2bec3;
-    --border: #e8ecf1;
-    --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.06);
-    --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.1);
-    --shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.12);
-    --shadow-glow: 0 4px 20px rgba(102, 126, 234, 0.3);
-    --radius-sm: 8px;
-    --radius-md: 12px;
-    --radius-lg: 16px;
-    --radius-xl: 20px;
-    --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-    --gradient-primary: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    --gradient-success: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);
-    --gradient-warning: linear-gradient(135deg, #fa709a 0%, #fee140 100%);
-    --gradient-info: linear-gradient(135deg, #a18cd1 0%, #fbc2eb 100%);
-    --gradient-bg: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+    /* Brand Palette */
+    --primary:        hsl(233, 77%, 68%);   /* Indigo #667eea */
+    --primary-dark:   hsl(233, 77%, 56%);
+    --primary-light:  hsl(233, 77%, 80%);
+    --secondary:      hsl(276, 38%, 47%);   /* Deep Violet */
+    --accent:         hsl(197, 100%, 60%);  /* Electric Cyan */
+    --accent-green:   hsl(158, 64%, 52%);   /* Emerald */
+
+    /* Semantic */
+    --success:        hsl(158, 64%, 52%);
+    --warning:        hsl(37, 100%, 56%);
+    --danger:         hsl(351, 84%, 58%);
+    --info:           hsl(207, 89%, 54%);
+
+    /* Surfaces */
+    --bg:             hsl(220, 20%, 96%);
+    --bg-card:        rgba(255, 255, 255, 0.92);
+    --bg-glass:       rgba(255, 255, 255, 0.65);
+    --bg-sidebar:     hsl(230, 40%, 12%);
+    --bg-sidebar-2:   hsl(240, 35%, 16%);
+
+    /* Typography */
+    --text-primary:   hsl(220, 25%, 16%);
+    --text-secondary: hsl(220, 15%, 44%);
+    --text-light:     hsl(220, 10%, 65%);
+
+    /* Structure */
+    --border:         hsl(220, 20%, 88%);
+    --border-glass:   rgba(255, 255, 255, 0.35);
+
+    /* Shadows */
+    --shadow-xs:  0 1px 3px rgba(0,0,0,0.07);
+    --shadow-sm:  0 2px 8px rgba(0,0,0,0.08);
+    --shadow-md:  0 4px 20px rgba(0,0,0,0.11);
+    --shadow-lg:  0 8px 40px rgba(0,0,0,0.14);
+    --shadow-glow: 0 4px 24px rgba(102, 126, 234, 0.35);
+    --shadow-glow-lg: 0 8px 40px rgba(102, 126, 234, 0.5);
+
+    /* Radius */
+    --radius-xs: 6px;
+    --radius-sm: 10px;
+    --radius-md: 14px;
+    --radius-lg: 18px;
+    --radius-xl: 24px;
+    --radius-full: 9999px;
+
+    /* Transition */
+    --transition: all 0.28s cubic-bezier(0.4, 0, 0.2, 1);
+    --transition-fast: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+    --spring: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+
+    /* Gradients */
+    --gradient-primary: linear-gradient(135deg, hsl(233,77%,62%) 0%, hsl(276,55%,52%) 100%);
+    --gradient-success: linear-gradient(135deg, hsl(158,64%,42%) 0%, hsl(168,72%,58%) 100%);
+    --gradient-warning: linear-gradient(135deg, hsl(37,100%,50%) 0%, hsl(14,100%,62%) 100%);
+    --gradient-danger:  linear-gradient(135deg, hsl(351,84%,54%) 0%, hsl(320,72%,58%) 100%);
+    --gradient-info:    linear-gradient(135deg, hsl(207,89%,48%) 0%, hsl(233,77%,68%) 100%);
+    --gradient-dark:    linear-gradient(135deg, hsl(230,40%,12%) 0%, hsl(240,35%,18%) 100%);
+    --gradient-bg:      linear-gradient(145deg, hsl(220,30%,97%) 0%, hsl(230,25%,93%) 100%);
+    --gradient-glass:   linear-gradient(135deg, rgba(255,255,255,0.7) 0%, rgba(255,255,255,0.4) 100%);
 }
 
 /* ─── Base / Reset ─────────────────────────────────────────── */
@@ -51,13 +85,14 @@ html {
 }
 
 body {
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
-                 'Helvetica Neue', Arial, sans-serif;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
-    background: var(--bg);
+    background: var(--gradient-bg);
+    background-attachment: fixed;
     color: var(--text-primary);
     line-height: 1.6;
+    letter-spacing: -0.01em;
 }
 
 /* ─── Scrollbar ────────────────────────────────────────────── */
@@ -819,3 +854,768 @@ div[data-testid="stAlert"] {
         display: none !important;
     }
 }
+
+
+/* ═══════════════════════════════════════════════════════════════
+   PREMIUM v3.0 — "HARNESS" EDITION COMPONENTS
+   ═══════════════════════════════════════════════════════════════ */
+
+/* ─── Typography upgrades ──────────────────────────────────── */
+h1, h2, h3, h4, h5 {
+    font-family: 'Inter', sans-serif;
+    font-weight: 700;
+    letter-spacing: -0.025em;
+    line-height: 1.2;
+}
+
+/* ─── Animated Page Header ──────────────────────────────────── */
+.stApp > header {
+    background: var(--gradient-primary) !important;
+}
+
+/* ─── Premium Main Container ────────────────────────────────── */
+.main > .block-container {
+    background: transparent !important;
+}
+
+/* ─── Glassmorphism Cards (Streamlit containers) ──────────────── */
+div[data-testid="stVerticalBlock"] > div[data-testid="stVerticalBlockBorderWrapper"] {
+    background: var(--bg-glass) !important;
+    backdrop-filter: blur(12px) !important;
+    -webkit-backdrop-filter: blur(12px) !important;
+    border: 1px solid var(--border-glass) !important;
+    border-radius: var(--radius-lg) !important;
+    box-shadow: var(--shadow-md) !important;
+    transition: var(--transition) !important;
+}
+
+div[data-testid="stVerticalBlock"] > div[data-testid="stVerticalBlockBorderWrapper"]:hover {
+    box-shadow: var(--shadow-lg) !important;
+    border-color: rgba(102, 126, 234, 0.25) !important;
+    transform: translateY(-1px) !important;
+}
+
+/* ─── Premium Sidebar ────────────────────────────────────────── */
+section[data-testid="stSidebar"] {
+    background: var(--gradient-dark) !important;
+    border-right: 1px solid rgba(255,255,255,0.08) !important;
+}
+
+section[data-testid="stSidebar"] .stMarkdown,
+section[data-testid="stSidebar"] .stMarkdown p,
+section[data-testid="stSidebar"] h1,
+section[data-testid="stSidebar"] h2,
+section[data-testid="stSidebar"] h3 {
+    color: rgba(255,255,255,0.9) !important;
+}
+
+section[data-testid="stSidebar"] .stRadio label,
+section[data-testid="stSidebar"] .stSelectbox label {
+    color: rgba(255,255,255,0.75) !important;
+}
+
+/* Sidebar radio buttons — glowing selection */
+section[data-testid="stSidebar"] div[data-testid="stRadio"] > div > label {
+    color: rgba(255,255,255,0.8) !important;
+    border-radius: var(--radius-sm) !important;
+    padding: 4px 8px !important;
+    transition: var(--transition) !important;
+}
+
+section[data-testid="stSidebar"] div[data-testid="stRadio"] > div > label:hover {
+    background: rgba(102, 126, 234, 0.2) !important;
+    color: white !important;
+}
+
+/* ─── Premium Buttons ────────────────────────────────────────── */
+.stButton > button {
+    font-family: 'Inter', sans-serif !important;
+    font-weight: 600 !important;
+    border-radius: var(--radius-sm) !important;
+    transition: var(--transition) !important;
+    letter-spacing: 0.01em !important;
+}
+
+.stButton > button[kind="primary"] {
+    background: var(--gradient-primary) !important;
+    border: none !important;
+    color: white !important;
+    box-shadow: var(--shadow-glow) !important;
+}
+
+.stButton > button[kind="primary"]:hover {
+    box-shadow: var(--shadow-glow-lg) !important;
+    transform: translateY(-2px) !important;
+}
+
+.stButton > button:not([kind="primary"]):hover {
+    border-color: var(--primary) !important;
+    color: var(--primary) !important;
+    transform: translateY(-1px) !important;
+}
+
+/* ─── Premium Login Card ─────────────────────────────────────── */
+.login-card {
+    background: var(--bg-glass) !important;
+    backdrop-filter: blur(20px) !important;
+    -webkit-backdrop-filter: blur(20px) !important;
+    border: 1px solid var(--border-glass) !important;
+    border-radius: var(--radius-xl) !important;
+    box-shadow: var(--shadow-lg), 0 0 60px rgba(102,126,234,0.12) !important;
+    padding: 2.5rem !important;
+    position: relative;
+    overflow: hidden;
+}
+
+.login-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 3px;
+    background: var(--gradient-primary);
+    border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+}
+
+.login-header {
+    text-align: center;
+    margin-bottom: 2rem;
+}
+
+.hospital-icon {
+    font-size: 3.5rem;
+    margin-bottom: 0.5rem;
+    display: block;
+    filter: drop-shadow(0 4px 12px rgba(102,126,234,0.4));
+    animation: floatIcon 3s ease-in-out infinite;
+}
+
+@keyframes floatIcon {
+    0%, 100% { transform: translateY(0px); }
+    50%       { transform: translateY(-6px); }
+}
+
+.login-header h1 {
+    background: var(--gradient-primary);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    font-size: 2rem !important;
+    font-weight: 800 !important;
+    margin-bottom: 0.25rem;
+}
+
+.login-header p {
+    color: var(--text-secondary);
+    font-size: 0.95rem;
+}
+
+/* ─── Metric / Stat Cards ────────────────────────────────────── */
+.dept-metric-card {
+    background: var(--bg-glass) !important;
+    backdrop-filter: blur(10px) !important;
+    -webkit-backdrop-filter: blur(10px) !important;
+    border-radius: var(--radius-md) !important;
+    padding: 1.25rem !important;
+    border: 1px solid var(--border-glass) !important;
+    box-shadow: var(--shadow-sm) !important;
+    text-align: center !important;
+    transition: var(--spring) !important;
+}
+
+.dept-metric-card:hover {
+    box-shadow: var(--shadow-glow) !important;
+    transform: translateY(-4px) scale(1.02) !important;
+}
+
+.dept-metric-card .value {
+    font-size: 2rem !important;
+    font-weight: 800 !important;
+    background: var(--gradient-primary);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+.dept-metric-card .label {
+    font-size: 0.78rem !important;
+    font-weight: 600 !important;
+    text-transform: uppercase;
+    letter-spacing: 0.06em !important;
+    color: var(--text-secondary) !important;
+    margin-top: 4px;
+}
+
+/* ─── Status indicators (Streamlit metrics) ─────────────────── */
+div[data-testid="stMetric"] {
+    background: var(--bg-glass) !important;
+    backdrop-filter: blur(8px) !important;
+    border: 1px solid var(--border-glass) !important;
+    border-radius: var(--radius-md) !important;
+    padding: 1rem 1.25rem !important;
+    transition: var(--transition) !important;
+    box-shadow: var(--shadow-xs) !important;
+}
+
+div[data-testid="stMetric"]:hover {
+    box-shadow: var(--shadow-sm) !important;
+    border-color: rgba(102,126,234,0.2) !important;
+}
+
+div[data-testid="stMetricValue"] {
+    font-weight: 800 !important;
+    font-family: 'Inter', sans-serif !important;
+}
+
+/* ─── DB-Poll Alert Banner (Brick 1) ─────────────────────────── */
+div[data-testid="stAlert"][data-baseweb="notification"] {
+    border-radius: var(--radius-md) !important;
+    animation: alertPulse 0.5s ease !important;
+}
+
+@keyframes alertPulse {
+    0%   { transform: scale(0.97); opacity: 0; }
+    60%  { transform: scale(1.02); opacity: 1; }
+    100% { transform: scale(1); opacity: 1; }
+}
+
+/* ─── Premium Progress Bars ──────────────────────────────────── */
+div[data-testid="stProgress"] > div {
+    border-radius: var(--radius-full) !important;
+    background: var(--border) !important;
+    height: 8px !important;
+}
+
+div[data-testid="stProgress"] > div > div {
+    border-radius: var(--radius-full) !important;
+    background: var(--gradient-primary) !important;
+}
+
+/* ─── Status Colour Strips (for test cards in Patient Status) ── */
+.status-strip-waiting  { border-left: 4px solid var(--warning)  !important; }
+.status-strip-called   { border-left: 4px solid var(--info)     !important; }
+.status-strip-progress { border-left: 4px solid var(--primary)  !important; }
+.status-strip-done     { border-left: 4px solid var(--success)  !important; }
+
+/* ─── Animated Pulse Dot (live indicator) ────────────────────── */
+@keyframes livePulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(76,175,80,0.5); }
+    50%       { box-shadow: 0 0 0 6px rgba(76,175,80,0); }
+}
+
+.live-dot {
+    display: inline-block;
+    width: 10px; height: 10px;
+    background: var(--success);
+    border-radius: 50%;
+    animation: livePulse 2s ease-in-out infinite;
+    margin-right: 6px;
+    vertical-align: middle;
+}
+
+/* ─── WhatsApp Button (Brick 4) ──────────────────────────────── */
+.wa-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: linear-gradient(135deg, #25D366 0%, #128C7E 100%);
+    color: white !important;
+    padding: 10px 20px;
+    border-radius: var(--radius-sm);
+    font-weight: 600;
+    font-size: 0.9rem;
+    text-decoration: none !important;
+    transition: var(--transition);
+    box-shadow: 0 4px 15px rgba(37,211,102,0.3);
+}
+
+.wa-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(37,211,102,0.45);
+}
+
+/* ─── Staff Card Upgrades ────────────────────────────────────── */
+.staff-card {
+    background: var(--bg-glass) !important;
+    backdrop-filter: blur(10px) !important;
+    -webkit-backdrop-filter: blur(10px) !important;
+    border: 1px solid var(--border-glass) !important;
+    transition: var(--spring) !important;
+}
+
+.staff-card:hover {
+    background: var(--gradient-glass) !important;
+    transform: translateY(-6px) scale(1.03) !important;
+    box-shadow: var(--shadow-glow) !important;
+    border-color: rgba(102,126,234,0.3) !important;
+}
+
+/* ─── Input / Form upgrades ──────────────────────────────────── */
+div[data-testid="stTextInput"] > div > div > input,
+div[data-testid="stNumberInput"] > div > div > input {
+    border-radius: var(--radius-sm) !important;
+    border: 1.5px solid var(--border) !important;
+    font-family: 'Inter', sans-serif !important;
+    transition: var(--transition) !important;
+    background: var(--bg-glass) !important;
+}
+
+div[data-testid="stTextInput"] > div > div > input:focus,
+div[data-testid="stNumberInput"] > div > div > input:focus {
+    border-color: var(--primary) !important;
+    box-shadow: 0 0 0 3px rgba(102,126,234,0.15) !important;
+}
+
+/* ─── Selectbox ──────────────────────────────────────────────── */
+div[data-testid="stSelectbox"] > div > div {
+    border-radius: var(--radius-sm) !important;
+    border: 1.5px solid var(--border) !important;
+    background: var(--bg-glass) !important;
+    transition: var(--transition) !important;
+}
+
+div[data-testid="stSelectbox"] > div > div:hover {
+    border-color: var(--primary) !important;
+}
+
+/* ─── Divider upgrade ────────────────────────────────────────── */
+hr {
+    border: none !important;
+    height: 1px !important;
+    background: linear-gradient(to right, transparent, var(--border), transparent) !important;
+    margin: 1.5rem 0 !important;
+}
+
+/* ─── Success/Error/Warning boxes ────────────────────────────── */
+div[data-testid="stSuccess"],
+div[data-testid="stInfo"],
+div[data-testid="stWarning"],
+div[data-testid="stError"] {
+    border-radius: var(--radius-md) !important;
+    border: none !important;
+    font-family: 'Inter', sans-serif !important;
+}
+
+/* ─── Code blocks (token slips) ─────────────────────────────── */
+.stCode, pre {
+    font-family: 'JetBrains Mono', 'Courier New', monospace !important;
+    border-radius: var(--radius-sm) !important;
+}
+
+/* ─── Tooltip / Caption ──────────────────────────────────────── */
+.stCaption, small {
+    font-family: 'Inter', sans-serif !important;
+    color: var(--text-light) !important;
+    font-size: 0.8rem !important;
+}
+
+/* ─── Checkbox (test selection) ──────────────────────────────── */
+div[data-testid="stCheckbox"] label {
+    font-family: 'Inter', sans-serif !important;
+    font-weight: 500 !important;
+    transition: var(--transition) !important;
+}
+
+div[data-testid="stCheckbox"] label:hover {
+    color: var(--primary) !important;
+}
+
+/* ─── Expander ──────────────────────────────────────────────── */
+div[data-testid="stExpander"] {
+    border-radius: var(--radius-md) !important;
+    border: 1px solid var(--border) !important;
+    background: var(--bg-glass) !important;
+    backdrop-filter: blur(8px) !important;
+    overflow: hidden !important;
+}
+
+div[data-testid="stExpander"] summary {
+    font-family: 'Inter', sans-serif !important;
+    font-weight: 600 !important;
+    transition: var(--transition) !important;
+}
+
+div[data-testid="stExpander"] summary:hover {
+    color: var(--primary) !important;
+}
+
+/* ─── Animated loading shimmer for refresh ───────────────────── */
+@keyframes shimmer {
+    0%   { background-position: -500px 0; }
+    100% { background-position: 500px 0; }
+}
+
+.shimmer {
+    background: linear-gradient(90deg, var(--bg) 25%, var(--border) 50%, var(--bg) 75%);
+    background-size: 1000px 100%;
+    animation: shimmer 1.5s infinite;
+    border-radius: var(--radius-sm);
+}
+
+/* ─── Sidebar metric badges ──────────────────────────────────── */
+section[data-testid="stSidebar"] div[data-testid="stMetric"] {
+    background: rgba(255,255,255,0.07) !important;
+    border: 1px solid rgba(255,255,255,0.1) !important;
+    color: white !important;
+}
+
+    font-family: 'Inter', sans-serif !important;
+}
+
+/* ─── DB-Poll Alert Banner (Brick 1) ─────────────────────────── */
+div[data-testid="stAlert"][data-baseweb="notification"] {
+    border-radius: var(--radius-md) !important;
+    animation: alertPulse 0.5s ease !important;
+}
+
+@keyframes alertPulse {
+    0%   { transform: scale(0.97); opacity: 0; }
+    60%  { transform: scale(1.02); opacity: 1; }
+    100% { transform: scale(1); opacity: 1; }
+}
+
+/* ─── Premium Progress Bars ──────────────────────────────────── */
+div[data-testid="stProgress"] > div {
+    border-radius: var(--radius-full) !important;
+    background: var(--border) !important;
+    height: 8px !important;
+}
+
+div[data-testid="stProgress"] > div > div {
+    border-radius: var(--radius-full) !important;
+    background: var(--gradient-primary) !important;
+}
+
+/* ─── Status Colour Strips (for test cards in Patient Status) ── */
+.status-strip-waiting  { border-left: 4px solid var(--warning)  !important; }
+.status-strip-called   { border-left: 4px solid var(--info)     !important; }
+.status-strip-progress { border-left: 4px solid var(--primary)  !important; }
+.status-strip-done     { border-left: 4px solid var(--success)  !important; }
+
+/* ─── Animated Pulse Dot (live indicator) ────────────────────── */
+@keyframes livePulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(76,175,80,0.5); }
+    50%       { box-shadow: 0 0 0 6px rgba(76,175,80,0); }
+}
+
+.live-dot {
+    display: inline-block;
+    width: 10px; height: 10px;
+    background: var(--success);
+    border-radius: 50%;
+    animation: livePulse 2s ease-in-out infinite;
+    margin-right: 6px;
+    vertical-align: middle;
+}
+
+/* ─── WhatsApp Button (Brick 4) ──────────────────────────────── */
+.wa-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: linear-gradient(135deg, #25D366 0%, #128C7E 100%);
+    color: white !important;
+    padding: 10px 20px;
+    border-radius: var(--radius-sm);
+    font-weight: 600;
+    font-size: 0.9rem;
+    text-decoration: none !important;
+    transition: var(--transition);
+    box-shadow: 0 4px 15px rgba(37,211,102,0.3);
+}
+
+.wa-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(37,211,102,0.45);
+}
+
+/* ─── Staff Card Upgrades ────────────────────────────────────── */
+.staff-card {
+    background: var(--bg-glass) !important;
+    backdrop-filter: blur(10px) !important;
+    -webkit-backdrop-filter: blur(10px) !important;
+    border: 1px solid var(--border-glass) !important;
+    transition: var(--spring) !important;
+}
+
+.staff-card:hover {
+    background: var(--gradient-glass) !important;
+    transform: translateY(-6px) scale(1.03) !important;
+    box-shadow: var(--shadow-glow) !important;
+    border-color: rgba(102,126,234,0.3) !important;
+}
+
+/* ─── Input / Form upgrades ──────────────────────────────────── */
+div[data-testid="stTextInput"] > div > div > input,
+div[data-testid="stNumberInput"] > div > div > input {
+    border-radius: var(--radius-sm) !important;
+    border: 1.5px solid var(--border) !important;
+    font-family: 'Inter', sans-serif !important;
+    transition: var(--transition) !important;
+    background: var(--bg-glass) !important;
+}
+
+div[data-testid="stTextInput"] > div > div > input:focus,
+div[data-testid="stNumberInput"] > div > div > input:focus {
+    border-color: var(--primary) !important;
+    box-shadow: 0 0 0 3px rgba(102,126,234,0.15) !important;
+}
+
+/* ─── Selectbox ──────────────────────────────────────────────── */
+div[data-testid="stSelectbox"] > div > div {
+    border-radius: var(--radius-sm) !important;
+    border: 1.5px solid var(--border) !important;
+    background: var(--bg-glass) !important;
+    transition: var(--transition) !important;
+}
+
+div[data-testid="stSelectbox"] > div > div:hover {
+    border-color: var(--primary) !important;
+}
+
+/* ─── Divider upgrade ────────────────────────────────────────── */
+hr {
+    border: none !important;
+    height: 1px !important;
+    background: linear-gradient(to right, transparent, var(--border), transparent) !important;
+    margin: 1.5rem 0 !important;
+}
+
+/* ─── Success/Error/Warning boxes ────────────────────────────── */
+div[data-testid="stSuccess"],
+div[data-testid="stInfo"],
+div[data-testid="stWarning"],
+div[data-testid="stError"] {
+    border-radius: var(--radius-md) !important;
+    border: none !important;
+    font-family: 'Inter', sans-serif !important;
+}
+
+/* ─── Code blocks (token slips) ─────────────────────────────── */
+.stCode, pre {
+    font-family: 'JetBrains Mono', 'Courier New', monospace !important;
+    border-radius: var(--radius-sm) !important;
+}
+
+/* ─── Tooltip / Caption ──────────────────────────────────────── */
+.stCaption, small {
+    font-family: 'Inter', sans-serif !important;
+    color: var(--text-light) !important;
+    font-size: 0.8rem !important;
+}
+
+/* ─── Checkbox (test selection) ──────────────────────────────── */
+div[data-testid="stCheckbox"] label {
+    font-family: 'Inter', sans-serif !important;
+    font-weight: 500 !important;
+    transition: var(--transition) !important;
+}
+
+div[data-testid="stCheckbox"] label:hover {
+    color: var(--primary) !important;
+}
+
+/* ─── Expander ──────────────────────────────────────────────── */
+div[data-testid="stExpander"] {
+    border-radius: var(--radius-md) !important;
+    border: 1px solid var(--border) !important;
+    background: var(--bg-glass) !important;
+    backdrop-filter: blur(8px) !important;
+    overflow: hidden !important;
+}
+
+div[data-testid="stExpander"] summary {
+    font-family: 'Inter', sans-serif !important;
+    font-weight: 600 !important;
+    transition: var(--transition) !important;
+}
+
+div[data-testid="stExpander"] summary:hover {
+    color: var(--primary) !important;
+}
+
+/* ─── Animated loading shimmer for refresh ───────────────────── */
+@keyframes shimmer {
+    0%   { background-position: -500px 0; }
+    100% { background-position: 500px 0; }
+}
+
+.shimmer {
+    background: linear-gradient(90deg, var(--bg) 25%, var(--border) 50%, var(--bg) 75%);
+    background-size: 1000px 100%;
+    animation: shimmer 1.5s infinite;
+    border-radius: var(--radius-sm);
+}
+
+/* ─── Sidebar metric badges ──────────────────────────────────── */
+section[data-testid="stSidebar"] div[data-testid="stMetric"] {
+    background: rgba(255,255,255,0.07) !important;
+    border: 1px solid rgba(255,255,255,0.1) !important;
+    color: white !important;
+}
+
+section[data-testid="stSidebar"] div[data-testid="stMetricValue"],
+section[data-testid="stSidebar"] div[data-testid="stMetricLabel"] {
+    color: rgba(255,255,255,0.9) !important;
+}
+
+section[data-testid="stSidebar"] div[data-testid="stMetricDelta"] {
+    color: hsl(158,64%,72%) !important;
+}
+
+/* ─── Core Keyframe Animations (BRICK 2) ─────────────────────── */
+
+/* 1. Page entrance fade */
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(8px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
+/* 2. Card scale-in pop */
+@keyframes scaleIn {
+    from { opacity: 0; transform: scale(0.95); }
+    to   { opacity: 1; transform: scale(1); }
+}
+
+/* 3. Slide up from bottom */
+@keyframes slideUp {
+    from { opacity: 0; transform: translateY(20px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
+/* 4. Pulsing glow — used on "called" status */
+@keyframes glowPulse {
+    0%, 100% { box-shadow: 0 0 8px rgba(253, 203, 110, 0.5), 0 4px 20px rgba(253, 203, 110, 0.25); }
+    50%       { box-shadow: 0 0 20px rgba(253, 203, 110, 0.9), 0 4px 28px rgba(253, 203, 110, 0.45); }
+}
+
+/* 5. Heartbeat — ECG / critical alert pulse */
+@keyframes heartbeat {
+    0%, 100% { transform: scale(1); }
+    14%      { transform: scale(1.12); }
+    28%      { transform: scale(1); }
+    42%      { transform: scale(1.08); }
+    70%      { transform: scale(1); }
+}
+
+/* 6. Live dot blink */
+@keyframes liveBlink {
+    0%, 100% { opacity: 1; }
+    50%       { opacity: 0.25; }
+}
+
+/* 7. Gradient shift (for hero backgrounds) */
+@keyframes gradientShift {
+    0%   { background-position: 0% 50%; }
+    50%  { background-position: 100% 50%; }
+    100% { background-position: 0% 50%; }
+}
+
+/* ─── Animation Utility Classes ──────────────────────────────── */
+
+.anim-fade      { animation: fadeIn   0.4s ease both; }
+.anim-scale     { animation: scaleIn  0.35s cubic-bezier(0.34,1.56,0.64,1) both; }
+.anim-slide-up  { animation: slideUp  0.45s ease both; }
+.anim-heartbeat { animation: heartbeat 1.3s ease-in-out infinite; }
+.anim-gradient  {
+    background-size: 200% 200%;
+    animation: gradientShift 5s ease infinite;
+}
+
+/* ─── Live Status Dot ────────────────────────────────────────── */
+.live-dot {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    background: var(--accent-green);
+    border-radius: 50%;
+    animation: liveBlink 1.4s ease-in-out infinite;
+    vertical-align: middle;
+    margin-right: 5px;
+}
+
+.live-dot.orange { background: var(--warning); }
+.live-dot.red    { background: var(--danger); }
+.live-dot.blue   { background: var(--primary); }
+
+/* ─── Premium Status Badges (animated, BRICK 2) ─────────────── */
+.status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 4px 12px;
+    border-radius: var(--radius-full);
+    font-size: 0.78rem;
+    font-weight: 600;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    transition: var(--transition);
+}
+
+.status-waiting    { background: rgba(102,126,234,0.15); color: var(--primary);      border: 1px solid rgba(102,126,234,0.3); }
+.status-called     { background: rgba(253,203,110,0.18); color: hsl(37,90%,38%);     border: 1px solid rgba(253,203,110,0.5);
+                     animation: glowPulse 2s ease-in-out infinite; }
+.status-progress   { background: rgba(0,184,148,0.15);   color: var(--accent-green); border: 1px solid rgba(0,184,148,0.3); }
+.status-completed  { background: rgba(0,184,148,0.10);   color: hsl(158,64%,36%);   border: 1px solid rgba(0,184,148,0.2); }
+.status-ready      { background: rgba(116,75,162,0.15);  color: hsl(276,55%,52%);   border: 1px solid rgba(116,75,162,0.3); }
+.status-delivered  { background: rgba(179,179,179,0.15); color: var(--text-secondary); border: 1px solid var(--border); }
+
+/* ─── Hover-lift card effect ─────────────────────────────────── */
+.card-hover {
+    transition: transform 0.25s cubic-bezier(0.34,1.56,0.64,1),
+                box-shadow 0.25s ease;
+}
+.card-hover:hover {
+    transform: translateY(-4px);
+    box-shadow: var(--shadow-lg), var(--shadow-glow);
+}
+
+/* ─── Gradient Hero Heading ──────────────────────────────────── */
+.hero-heading {
+    background: var(--gradient-primary);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    font-size: 2.2rem;
+    font-weight: 800;
+    line-height: 1.2;
+}
+
+/* ─── Premium Number Display (token, queue position) ─────────── */
+.token-number {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 3rem;
+    font-weight: 700;
+    background: var(--gradient-primary);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    line-height: 1;
+}
+
+/* ─── Glassmorphism Banner ───────────────────────────────────── */
+.glass-banner {
+    background: var(--gradient-glass);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid var(--border-glass);
+    border-radius: var(--radius-lg);
+    padding: 1.25rem 1.5rem;
+    box-shadow: var(--shadow-md);
+}
+
+/* ─── Progress Step Indicator ────────────────────────────────── */
+.progress-steps {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin: 8px 0;
+}
+.progress-step {
+    width: 24px;
+    height: 6px;
+    border-radius: var(--radius-full);
+    background: var(--border);
+    transition: var(--transition);
+}
+.progress-step.done    { background: var(--gradient-success); }
+.progress-step.active  { background: var(--gradient-primary); animation: glowPulse 1.8s ease infinite; }

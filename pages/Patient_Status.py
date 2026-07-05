@@ -21,9 +21,10 @@ from datetime import datetime
 
 from llm_harness import get_harness
 from utils.config import (
-    HOSPITAL_NAME, STATUS_ICONS, STATUS_LABELS, ROOM_NAMES, AVG_TEST_TIME, BASE_URL
+    HOSPITAL_NAME, CLINIC_SPECIALTY, CLINIC_LOGO,
+    STATUS_ICONS, STATUS_LABELS, ROOM_NAMES, AVG_TEST_TIME, BASE_URL
 )
-from utils.queue import calculate_wait_time
+from utils.queue import calculate_wait_time, calculate_expected_time
 
 
 # ─── PWA / META INJECTION ───────────────────────────────────────────────────────
@@ -370,7 +371,7 @@ def show():
     harness = get_harness()
     today = datetime.now().strftime("%d-%b-%Y %I:%M %p")
 
-    st.title("❤️ Cardio Department")
+    st.title(f"{CLINIC_LOGO} {CLINIC_SPECIALTY} Department")
     st.caption(f"{HOSPITAL_NAME} — {today}")
 
     # ─── Inject PWA Meta & Service Worker ──────────────────────────────────
@@ -487,6 +488,48 @@ def show():
     all_statuses = [t["status"] for t in tests]
     primary_status = all_statuses[0] if all_statuses else "waiting"
     primary_test = tests[0]["test_name"] if tests else ""
+
+    # ─── BRICK 1: DB-Poll Alert Check ────────────────────────────────────────
+    # On every 5s auto-refresh, check if staff pressed Remind.
+    # If yes: play sound + vibrate on THIS patient's phone, then clear the flag.
+    try:
+        from utils.db import get_patient_alert, clear_patient_alert
+        _alert_data = get_patient_alert(patient["patient_id"])
+        if _alert_data["has_alert"]:
+            clear_patient_alert(patient["patient_id"])  # Clear immediately — show only once
+            _alert_msg = _alert_data["message"] or "Your turn is coming soon!"
+            # Visual alert banner
+            st.warning(f"**Staff Alert:** {_alert_msg}")
+            # JS: force audio + vibration on patient's phone
+            _safe_msg = _alert_msg.replace("'", " ").replace('"', ' ').replace("\n", " ")
+            st.markdown(f"""
+            <script>
+            (function() {{
+                function playUrgentBeep() {{
+                    try {{
+                        var ctx = new (window.AudioContext || window.webkitAudioContext)();
+                        [0, 0.35, 0.7].forEach(function(t) {{
+                            var osc = ctx.createOscillator();
+                            var gain = ctx.createGain();
+                            osc.connect(gain); gain.connect(ctx.destination);
+                            osc.frequency.value = 880; osc.type = 'sine';
+                            gain.gain.setValueAtTime(0.8, ctx.currentTime + t);
+                            gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + t + 0.3);
+                            osc.start(ctx.currentTime + t); osc.stop(ctx.currentTime + t + 0.3);
+                        }});
+                    }} catch(e) {{}}
+                }}
+                if (navigator.vibrate) navigator.vibrate([200, 100, 400, 100, 200]);
+                playUrgentBeep();
+                setTimeout(playUrgentBeep, 500);
+                if (window.Notification && Notification.permission === 'granted') {{
+                    new Notification('Clinic Alert', {{ body: '{_safe_msg}', icon: '/favicon.ico' }});
+                }}
+            }})();
+            </script>
+            """, unsafe_allow_html=True)
+    except Exception:
+        pass  # Silent fail — alert system must never crash patient view
 
     # ─── Detect misscall param from URL ───────────────────────────────────
     misscall_triggered = query_params.get("misscall", None)
@@ -626,10 +669,13 @@ def show():
             with col2:
                 # Time / Position info
                 if status in ["waiting", "called"]:
-                    st.markdown(f"### ⏱️")
-                    st.markdown(f"**~{wait_time} min**")
-                    if pos:
-                        st.caption(f"Position: #{pos}")
+                    expected_time = calculate_expected_time(test_name, pos)
+                    st.markdown(f"### ⏰")
+                    st.markdown(f"**{expected_time}**")
+                    if wait_time > 0:
+                        st.caption(f"~{wait_time} min | #{pos} in queue")
+                    else:
+                        st.caption("Your turn is now!")
                 elif status == "in_progress":
                     st.markdown(f"### 🔄")
                     st.markdown("**In Progress...**")
@@ -670,8 +716,33 @@ def show():
         st.info(f"⏳ अनुमानित प्रतीक्षा: ~{max_wait} मिनट\n\nEstimated wait: ~{max_wait} minutes")
 
     st.caption(
-        "⚠️ Wait times are estimates only. Actual times may vary based on department workload."
+        "🔔 **Miss Call Alert System Active!** अब बिना Notification Permission के भी "
+        "साउंड + वाइब्रेशन आएगा।  \n"
+        "Sound + vibration work WITHOUT browser notification permission."
     )
+
+    # ─── WhatsApp Share Button (Brick 4) ─────────────────────────────────────────────
+    try:
+        _status_url = f"{BASE_URL}/Patient_Status?mobile={patient.get('mobile', '')}"
+        _wa_text = (
+            f"🏥 *{HOSPITAL_NAME} — Live Status*\n"
+            f"👤 {patient.get('name', '')}\n"
+            f"📊 Tests: {', '.join(t['test_name'] for t in tests)}\n"
+            f"🔗 Live Track: {_status_url}"
+        )
+        import urllib.parse
+        _wa_url = f"https://wa.me/?text={urllib.parse.quote(_wa_text)}"
+        st.markdown(
+            f'<a href="{_wa_url}" target="_blank" style="text-decoration:none;">'
+            f'<div style="background:linear-gradient(135deg,#25D366,#128C7E);'
+            f'color:white;padding:10px 18px;border-radius:10px;text-align:center;'
+            f'font-weight:600;font-size:0.9rem;margin:8px 0;cursor:pointer;">'
+            f'📲 Share Status on WhatsApp / WhatsApp पर भेजें'
+            f'</div></a>',
+            unsafe_allow_html=True
+        )
+    except Exception:
+        pass
 
     # ─── Education Messages Section ──────────────────────────────────────────
     st.divider()

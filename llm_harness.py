@@ -260,35 +260,42 @@ class Harness:
             "notification": msg,
         }
 
-    def send_reminder(self, patient_name: str, test_name: str = "", mobile: str = "", token: int = 0) -> dict:
+    def send_reminder(self, patient_name: str, test_name: str = "", mobile: str = "",
+                      token: int = 0, patient_id: str = "") -> dict:
         """
-        Send a reminder notification (sound + vibration) to a patient.
-        Does NOT change any status — just pushes notification.
-        Staff can click this button repeatedly.
+        Send a reminder to the PATIENT's phone via DB-poll mechanism.
+
+        Architecture fix (Brick 1):
+        OLD: JS injection on staff browser — only staff sees it. Patient sees NOTHING.
+        NEW: Write pending_alert=1 to DB -> Patient's 5s auto-refresh detects it
+             -> Sound + Vibration + Banner on patient's own phone. ✅
+
+        Works without WebSockets, without APIs, on free Streamlit Cloud hosting.
         """
-        room = ROOM_NAMES.get(test_name, "Cardiology Department")
+        from utils.db import set_patient_alert
+
+        room = ROOM_NAMES.get(test_name, "Reception")
         msg = (
-            f"🔔 Reminder!\n"
-            f"{patient_name}, please check your status.\n"
-            f"Department: {test_name or 'Cardiology'}\n"
-            f"Token: #{token}"
+            f"🔔 आपका नंबर जल्द आने वाला है! / Your turn is coming soon!\n"
+            f"{patient_name} — {test_name or 'Dept'}\n"
+            f"Token: #{token} | {room}\n"
+            f"कृपया तैयार रहें / Please be ready!"
         )
 
-        # ─── WhatsApp Reminder (if mobile available) ─────────────────────────
-        if mobile:
-            wa_msg = (
-                f"🏥 *{HOSPITAL_NAME}*\n"
-                f"🔔 *Reminder*\n"
-                f"Dear {patient_name}, your test ({test_name}) is pending.\n"
-                f"Token #{token} • Room: {room}\n"
-                f"Please check your status."
-            )
-            send_whatsapp_message(mobile, wa_msg)
+        # ✅ Write to DB — patient's page picks this up on next 5s auto-refresh
+        alert_sent = False
+        if patient_id:
+            alert_sent = set_patient_alert(patient_id, msg)
 
         return {
             "success": True,
-            "message": f"🔔 Reminder sent to {patient_name}",
+            "message": (
+                f"🔔 Reminder sent! Will appear on {patient_name}'s phone within 5 seconds."
+                if alert_sent else
+                f"🔔 Reminder noted for {patient_name} (pass patient_id to enable DB alert)"
+            ),
             "notification": msg,
+            "db_alert_set": alert_sent,
         }
 
     # ─── DOCTOR OPERATIONS ────────────────────────────────────────────────────
@@ -395,8 +402,8 @@ class Harness:
             "misscall_url": misscall_url,
         }
 
-        # Send WhatsApp with misscall link if patient_id available
-        if patient_id:
+        # Send WhatsApp with misscall link if patient_pid available
+        if patient_pid:
             wa_msg = (
                 f"🏥 *{HOSPITAL_NAME}*\n"
                 f"📞 *Miss Call Alert!*\n"
