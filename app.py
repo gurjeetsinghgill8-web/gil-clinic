@@ -375,6 +375,11 @@ def page_selector():
 
     # Show navigation in sidebar
     with st.sidebar:
+        st.markdown(f"## {CLINIC_LOGO} {HOSPITAL_NAME}")
+        st.markdown(
+            '<div style="margin-bottom: 0.5rem;"><span style="background-color:#00b894;color:white;padding:2px 8px;border-radius:10px;font-size:0.75rem;font-weight:bold;">🚀 Upgrade v2.0</span></div>',
+            unsafe_allow_html=True
+        )
         st.divider()
         st.markdown("### 📍 Navigation")
         selected = st.radio("Go to:", nav_options, key="nav", label_visibility="collapsed")
@@ -389,6 +394,10 @@ def show_home():
     """Render the home/dashboard page with modern styling."""
     st.title(f"{CLINIC_LOGO} {APP_NAME}")
     st.markdown(f"### {HOSPITAL_NAME} — {CLINIC_SPECIALTY} Department")
+    st.markdown(
+        '<div style="margin-bottom: 1rem;"><span style="background-color:#00b894;color:white;padding:4px 10px;border-radius:12px;font-size:0.8rem;font-weight:bold;box-shadow:0 2px 8px rgba(0,184,148,0.3);">🚀 Upgrade v2.0 (Local-First)</span></div>',
+        unsafe_allow_html=True
+    )
 
     # ─── Welcome section with role-based greeting ──────────────────────────
     role = st.session_state.get("auth_role", "Guest")
