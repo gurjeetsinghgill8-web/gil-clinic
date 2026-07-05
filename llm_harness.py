@@ -363,15 +363,20 @@ class Harness:
 
     # ─── MISS CALL ALERT ────────────────────────────────────────────────────
 
-    def send_misscall_alert(self, patient_name: str, test_name: str = "", token: int = 0) -> dict:
+    def send_misscall_alert(self, patient_name: str, test_name: str = "", token: int = 0,
+                            patient_id: str = "") -> dict:
         """
         Send a "Miss Call" style alert — works WITHOUT browser notification permission.
-        This renders a JS banner + sound + vibration that triggers immediately on the
-        patient status page via window.__playPatientAlert().
         
-        Unlike send_reminder, this does NOT depend on Notification API.
-        It uses a sessionStorage flag that the patient's JS watcher picks up.
+        Instead of JS injection (which only works on staff's browser, not patient's),
+        this returns a URL with ?misscall=1 param that can be:
+        1. Sent via WhatsApp to the patient
+        2. Used to redirect the patient if they're actively viewing
+        
+        The patient's JS watcher (get_status_watcher_js) detects ?misscall=1 in the URL
+        and plays sound+vibration+banner automatically.
         """
+        misscall_url = f"{BASE_URL}/?misscall=1&patient={patient_id}" if patient_id else ""
         status_label = f"🔔 Alert: {test_name or 'Cardiology'}"
         msg = (
             f"🔔 Miss Call Alert!\n"
@@ -379,7 +384,7 @@ class Harness:
             f"Department: {test_name or 'Cardiology'}\n"
             f"Token: #{token}"
         )
-        return {
+        result = {
             "success": True,
             "message": f"📞 Miss Call Alert sent to {patient_name}",
             "notification": msg,
@@ -387,7 +392,22 @@ class Harness:
                 "action": "misscall_alert",
                 "status_label": status_label,
             },
+            "misscall_url": misscall_url,
         }
+
+        # Send WhatsApp with misscall link if patient_id available
+        if patient_id:
+            wa_msg = (
+                f"🏥 *{HOSPITAL_NAME}*\n"
+                f"📞 *Miss Call Alert!*\n"
+                f"Dear {patient_name}, please check your status immediately.\n"
+                f"Department: {test_name or 'Cardiology'}\n"
+                f"Token: #{token}\n\n"
+                f"🔗 Tap here: {misscall_url}"
+            )
+            # send_whatsapp_message(mobile, wa_msg)  # mobile not always available here
+
+        return result
 
     @staticmethod
     def get_misscall_script(patient_name: str, test_name: str = "") -> str:

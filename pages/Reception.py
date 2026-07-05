@@ -276,15 +276,21 @@ def show():
                                      use_container_width=True, type="secondary",
                                      help="Sends alert to patient page WITHOUT needing notification permission. Works on all phones."):
                             result = harness.send_misscall_alert(
-                                p_name, ", ".join(test_names)
+                                p_name, ", ".join(test_names), patient_id=p_id
                             )
                             if result["success"]:
                                 st.success(result["message"])
-                                # Inject misscall script on patient page
-                                m_script = harness.get_misscall_script(
-                                    p_name, ", ".join(test_names)
-                                )
-                                st.markdown(m_script, unsafe_allow_html=True)
+                                # Show the misscall URL — staff can share via WhatsApp
+                                misscall_url = result.get("misscall_url", "")
+                                if misscall_url:
+                                    st.info(f"📤 Share this link with patient:\n`{misscall_url}`")
+                                    st.markdown(
+                                        f'<a href="{misscall_url}" target="_blank">'
+                                        f'<button style="background:linear-gradient(135deg,#ff4444,#cc0000);color:white;'
+                                        f'border:none;padding:10px 20px;border-radius:8px;cursor:pointer;font-size:14px;'
+                                        f'font-weight:600;">📞 Open Miss Call Alert on Patient Page</button></a>',
+                                        unsafe_allow_html=True,
+                                    )
         else:
             st.info("📭 No patients registered today yet.")
 

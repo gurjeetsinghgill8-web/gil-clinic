@@ -221,13 +221,15 @@ def show():
                             use_container_width=True,
                             help="Sends alert without notification permission.",
                         ):
+                            w_patient_id = next_p.get("patient_id", "")
                             result = harness.send_misscall_alert(
-                                w_name, dept_name, token
+                                w_name, dept_name, token, patient_id=w_patient_id
                             )
                             if result["success"]:
                                 st.success(result["message"])
-                                m_script = harness.get_misscall_script(w_name, dept_name)
-                                st.markdown(m_script, unsafe_allow_html=True)
+                                misscall_url = result.get("misscall_url", "")
+                                if misscall_url:
+                                    st.info(f"📤 [Open Miss Call on Patient Page]({misscall_url})")
                 else:
                     st.markdown("✅ No waiting patients")
 

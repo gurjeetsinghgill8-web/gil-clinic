@@ -170,14 +170,14 @@ def get_pwa_install_button() -> str:
 def get_status_watcher_js(prev_status_hash: str, patient_name: str, patient_id: str = "") -> str:
     """
     Inject JavaScript that watches for status changes and triggers:
-      - Sound (Web Audio API — double beep)
+      - Sound (Web Audio API — triple beep)
       - Vibration (long pattern)
       - Browser Notification (if permission granted)
       - Service Worker background tracking
 
-    Uses sessionStorage so hash survives Streamlit reruns/auto-refresh.
-    On every page load, compares current hash with stored hash → triggers alert if changed.
-    Also exposes window.__playPatientAlert(status) so staff can trigger remotely via server.
+    Also detects 'misscall' query param → if present, stores misscall flag in
+    sessionStorage and plays alert on next page load. This is how staff "Miss Call"
+    button reaches the patient — via URL param instead of direct JS injection.
     """
     safe_name = patient_name.replace("'", "\\'").replace('"', '\\"')
     return f"""
@@ -187,6 +187,7 @@ def get_status_watcher_js(prev_status_hash: str, patient_name: str, patient_id: 
         var PNAME = "{safe_name}";
         var HASH = "{prev_status_hash}";
         var STORAGE_KEY = "cq_h_" + PID;
+        var MISS_STORAGE_KEY = "cq_miss_" + PID;
 
         // ─── Helper: play beep on shared AudioContext ────────────────────────
         function playBeep(freq, duration, gainVal, delay) {{
@@ -238,7 +239,29 @@ def get_status_watcher_js(prev_status_hash: str, patient_name: str, patient_id: 
             }} catch(e) {{}}
         }};
 
-        // ─── 1. Compare with stored hash → alert on change ────────────────────
+        // ─── 0. Check for misscall flag in URL ──────────────────────────────
+        (function() {{
+            try {{
+                var urlParams = new URLSearchParams(window.location.search);
+                if (urlParams.get("misscall") === "1") {{
+                    // Store misscall flag — will be picked on next poll cycle
+                    sessionStorage.setItem(MISS_STORAGE_KEY, "1");
+                    // Remove misscall param from URL without reload
+                    var url = new URL(window.location);
+                    url.searchParams.delete("misscall");
+                    window.history.replaceState({{}}, "", url);
+                }}
+            }} catch(e) {{}}
+        }})();
+
+        // ─── 1. Check for pending misscall flag ──────────────────────────────
+        var pendingMisscall = sessionStorage.getItem(MISS_STORAGE_KEY);
+        if (pendingMisscall === "1") {{
+            sessionStorage.removeItem(MISS_STORAGE_KEY);
+            window.__playPatientAlert("📞 Miss Call Alert - " + PNAME);
+        }}
+
+        // ─── 2. Compare with stored hash → alert on change ────────────────────
         var oldHash = sessionStorage.getItem(STORAGE_KEY);
         var justChanged = (oldHash && oldHash !== HASH);
         sessionStorage.setItem(STORAGE_KEY, HASH);
@@ -249,7 +272,7 @@ def get_status_watcher_js(prev_status_hash: str, patient_name: str, patient_id: 
             window.__playPatientAlert(st);
         }}
 
-        // ─── 2. Register Service Worker for background tracking ────────────────
+        // ─── 3. Register Service Worker for background tracking ────────────────
         if ("serviceWorker" in navigator) {{
             navigator.serviceWorker.ready.then(function(reg) {{
                 if (reg.active) {{
@@ -263,19 +286,24 @@ def get_status_watcher_js(prev_status_hash: str, patient_name: str, patient_id: 
             }});
         }}
 
-        // ─── 3. Poll every 2 sec for DOM changes ──────────────────────────────
-        // Uses sessionStorage so hash survives Streamlit page reloads.
+        // ─── 4. Poll every 2 sec for DOM changes + misscall flag ──────────────
         setInterval(function() {{
             var el = document.getElementById("status-hash");
             if (!el) return;
             var nh = el.getAttribute("data-hash") || "";
             var ns = el.getAttribute("data-status") || "";
             var oh = sessionStorage.getItem(STORAGE_KEY) || "";
+            // Check misscall data-misscall attribute
+            var missFlag = el.getAttribute("data-misscall") || "";
+            if (missFlag === "1") {{
+                el.setAttribute("data-misscall", "0");
+                window.__playPatientAlert("📞 Miss Call - " + ns);
+            }}
             if (oh && nh && oh !== nh) {{
                 sessionStorage.setItem(STORAGE_KEY, nh);
                 window.__playPatientAlert(ns);
             }}
-        }}, 2000);
+            }}, 2000);
     }})();
     </script>
     """
@@ -401,11 +429,18 @@ def show():
     primary_status = all_statuses[0] if all_statuses else "waiting"
     primary_test = tests[0]["test_name"] if tests else ""
 
+    # ─── Detect misscall param from URL ───────────────────────────────────
+    misscall_triggered = query_params.get("misscall", None)
+    if isinstance(misscall_triggered, list):
+        misscall_triggered = misscall_triggered[0] if misscall_triggered else None
+
     # ─── Hidden element for JS status watcher ──────────────────────────────
     st.markdown(
         f'<div id="status-hash" data-hash="{status_hash}" '
         f'data-status="{STATUS_LABELS.get(primary_status, primary_status)}" '
-        f'data-test="{primary_test}" style="display:none;"></div>',
+        f'data-test="{primary_test}" '
+        f'data-misscall="{"1" if misscall_triggered == "1" else "0"}" '
+        f'style="display:none;"></div>',
         unsafe_allow_html=True,
     )
 

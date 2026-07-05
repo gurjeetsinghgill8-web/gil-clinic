@@ -158,11 +158,13 @@ def show_department(test_name: str, emoji: str = "📊"):
             if st.button("📞 Miss Call", key=f"misscall_curr_{p['id']}",
                          use_container_width=True,
                          help="Sends alert to patient page WITHOUT needing notification permission."):
-                result = harness.send_misscall_alert(p_name, test_name, token)
+                p_id_full = p.get("patient_id", "")
+                result = harness.send_misscall_alert(p_name, test_name, token, patient_id=p_id_full)
                 if result["success"]:
                     st.success(result["message"])
-                    m_script = harness.get_misscall_script(p_name, test_name)
-                    st.markdown(m_script, unsafe_allow_html=True)
+                    misscall_url = result.get("misscall_url", "")
+                    if misscall_url:
+                        st.info(f"📤 [Open Miss Call on Patient Page]({misscall_url})")
 
         with cols[4]:
             called_time = p.get("called_at", "")
@@ -244,11 +246,13 @@ def show_department(test_name: str, emoji: str = "📊"):
                     if st.button("📞 Miss Call", key=f"misscall_{w['id']}",
                                  use_container_width=True,
                                  help="Sends alert without notification permission."):
-                        result = harness.send_misscall_alert(w_name, test_name, token)
+                        w_patient_id = w.get("patient_id", "")
+                        result = harness.send_misscall_alert(w_name, test_name, token, patient_id=w_patient_id)
                         if result["success"]:
                             st.success(result["message"])
-                            m_script = harness.get_misscall_script(w_name, test_name)
-                            st.markdown(m_script, unsafe_allow_html=True)
+                            misscall_url = result.get("misscall_url", "")
+                            if misscall_url:
+                                st.info(f"📤 [Open Miss Call on Patient Page]({misscall_url})")
 
                 with cols[5]:
                     registered_time = w.get("created_at", "")
