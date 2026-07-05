@@ -52,11 +52,41 @@ def inject_pwa_meta():
         Notification.requestPermission();
     }}
 
-    // Pre-warm AudioContext (required by iOS/mobile browsers)
-    try {{
-        var warmCtx = new (window.AudioContext || window.webkitAudioContext)();
-        warmCtx.resume();
-    }} catch(e) {{}}
+    // ─── Mobile Audio: Touch-to-Enable ──────────────────────────────────
+    // Mobile browsers block AudioContext until user gesture.
+    // Create one global AudioContext and resume on first touch.
+    window.__audioCtx = null;
+    function getAudioCtx() {{
+        if (!window.__audioCtx) {{
+            try {{
+                window.__audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            }} catch(e) {{ return null; }}
+        }}
+        if (window.__audioCtx.state === "suspended") {{
+            window.__audioCtx.resume();
+        }}
+        return window.__audioCtx;
+    }}
+    // Resume on first ANY touch/click on the page
+    document.addEventListener("touchstart", function() {{ getAudioCtx(); }}, {{ once: true }});
+    document.addEventListener("click", function() {{ getAudioCtx(); }}, {{ once: true }});
+    // Also try immediate resume (works on some browsers)
+    setTimeout(function() {{ try {{ getAudioCtx(); }} catch(e) {{}} }}, 100);
+
+    // Display a "Tap to enable sound" hint for 5 seconds on mobile
+    (function() {{
+        var isMobile = /android|iphone|ipad|ipod/i.test(navigator.userAgent);
+        if (!isMobile) return;
+        var hint = document.createElement("div");
+        hint.id = "sound-hint";
+        hint.innerHTML = "🔊 Tap screen to enable sound alerts";
+        hint.style.cssText = "position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:#667eea;color:#fff;padding:10px 20px;border-radius:25px;font-size:14px;z-index:9999;opacity:0.9;box-shadow:0 4px 15px rgba(0,0,0,0.3);text-align:center;max-width:90%;animation:fadeIn 0.5s;";
+        document.body.appendChild(hint);
+        setTimeout(function() {{
+            var h = document.getElementById("sound-hint");
+            if (h) h.style.display = "none";
+        }}, 5000);
+    }})();
 
     // Add to Home Screen prompt handler
     window.addEventListener("beforeinstallprompt", function(e) {{
@@ -112,13 +142,14 @@ def get_pwa_install_button() -> str:
 def get_status_watcher_js(prev_status_hash: str, patient_name: str, patient_id: str = "") -> str:
     """
     Inject JavaScript that watches for status changes and triggers:
-      - Sound (Web Audio API beep)
-      - Vibration
-      - Browser Notification
+      - Sound (Web Audio API — double beep)
+      - Vibration (long pattern)
+      - Browser Notification (if permission granted)
       - Service Worker background tracking
 
     Uses sessionStorage so hash survives Streamlit reruns/auto-refresh.
     On every page load, compares current hash with stored hash → triggers alert if changed.
+    Also exposes window.__playPatientAlert(status) so staff can trigger remotely via server.
     """
     safe_name = patient_name.replace("'", "\\'").replace('"', '\\"')
     return f"""
@@ -129,68 +160,68 @@ def get_status_watcher_js(prev_status_hash: str, patient_name: str, patient_id: 
         var HASH = "{prev_status_hash}";
         var STORAGE_KEY = "cq_h_" + PID;
 
-        // ─── 1. Compare with stored hash → alert on change ────────────────────
-        var oldHash = sessionStorage.getItem(STORAGE_KEY);
-        var justChanged = (oldHash && oldHash !== HASH);
+        // ─── Helper: play beep on shared AudioContext ────────────────────────
+        function playBeep(freq, duration, gainVal, delay) {{
+            setTimeout(function() {{
+                try {{
+                    var ctx = getAudioCtx();
+                    if (!ctx) return;
+                    var osc = ctx.createOscillator();
+                    var g = ctx.createGain();
+                    osc.connect(g); g.connect(ctx.destination);
+                    osc.frequency.value = freq;
+                    osc.type = "sine";
+                    g.gain.value = gainVal;
+                    osc.start();
+                    osc.stop(ctx.currentTime + duration);
+                }} catch(e) {{}}
+            }}, delay || 0);
+        }}
 
-        // Always store current hash
-        sessionStorage.setItem(STORAGE_KEY, HASH);
+        // ─── Global alert function — can be called from anywhere ──────────────
+        window.__playPatientAlert = function(statusLabel) {{
+            // Sound — triple beep pattern using shared AudioContext
+            playBeep(880, 0.5, 0.6, 0);
+            playBeep(660, 0.4, 0.5, 250);
+            playBeep(1000, 0.6, 0.5, 500);
 
-        // ─── 2. Play sound+vibration+notification if status just changed ──────
-        function playAlert(statusLabel) {{
-            // Sound
-            try {{
-                var ctx = new (window.AudioContext || window.webkitAudioContext)();
-                var osc = ctx.createOscillator();
-                var g = ctx.createGain();
-                osc.connect(g); g.connect(ctx.destination);
-                osc.frequency.value = 880;
-                osc.type = "sine";
-                g.gain.value = 0.5;
-                osc.start();
-                osc.stop(ctx.currentTime + 0.6);
-                // Second beep after 200ms
-                setTimeout(function() {{
-                    var ctx2 = new (window.AudioContext || window.webkitAudioContext)();
-                    var osc2 = ctx2.createOscillator();
-                    var g2 = ctx2.createGain();
-                    osc2.connect(g2); g2.connect(ctx2.destination);
-                    osc2.frequency.value = 660;
-                    osc2.type = "sine";
-                    g2.gain.value = 0.4;
-                    osc2.start();
-                    osc2.stop(ctx2.currentTime + 0.4);
-                }}, 200);
-            }} catch(e) {{}}
-
-            // Vibration
-            try {{ if (navigator.vibrate) navigator.vibrate([400, 200, 400, 200, 600]); }} catch(e) {{}}
+            // Vibration — long pattern
+            try {{ if (navigator.vibrate) navigator.vibrate([500, 200, 500, 200, 700]); }} catch(e) {{}}
 
             // Browser Notification
             if ("Notification" in window && Notification.permission === "granted") {{
-                new Notification("🔔 " + PNAME, {{
-                    body: "Status: " + statusLabel,
-                    icon: "https://img.icons8.com/color/48/hospital.png",
-                    tag: "cq-" + Date.now(),
-                    requireInteraction: true,
-                    silent: false,
-                    vibrate: [400, 200, 400, 200, 600]
-                }});
+                try {{
+                    new Notification("🔔 " + PNAME, {{
+                        body: "Status: " + statusLabel,
+                        icon: "https://img.icons8.com/color/48/hospital.png",
+                        tag: "cq-" + Date.now(),
+                        requireInteraction: true,
+                        silent: false,
+                        vibrate: [500, 200, 500, 200, 700]
+                    }});
+                }} catch(e) {{}}
             }}
 
-            // Title flash
-            var ot = document.title;
-            var fi = setInterval(function() {{ document.title = (document.title === ot) ? "🔔 " + statusLabel : ot; }}, 700);
-            setTimeout(function() {{ clearInterval(fi); document.title = ot; }}, 5000);
-        }}
+            // Flash page title
+            try {{
+                var ot = document.title;
+                var fi = setInterval(function() {{ document.title = (document.title === ot) ? "🔔 " + statusLabel : ot; }}, 700);
+                setTimeout(function() {{ clearInterval(fi); document.title = ot; }}, 6000);
+            }} catch(e) {{}}
+        }};
+
+        // ─── 1. Compare with stored hash → alert on change ────────────────────
+        var oldHash = sessionStorage.getItem(STORAGE_KEY);
+        var justChanged = (oldHash && oldHash !== HASH);
+        sessionStorage.setItem(STORAGE_KEY, HASH);
 
         if (justChanged) {{
             var el = document.getElementById("status-hash");
             var st = el ? el.getAttribute("data-status") || "Updated" : "Updated";
-            playAlert(st);
+            window.__playPatientAlert(st);
         }}
 
-        // ─── 3. Register Service Worker for background tracking ────────────────
+        // ─── 2. Register Service Worker for background tracking ────────────────
         if ("serviceWorker" in navigator) {{
             navigator.serviceWorker.ready.then(function(reg) {{
                 if (reg.active) {{
@@ -204,7 +235,7 @@ def get_status_watcher_js(prev_status_hash: str, patient_name: str, patient_id: 
             }});
         }}
 
-        // ─── 4. Poll every 3 sec for DOM changes (catches st_autorefresh updates) ─
+        // ─── 3. Poll every 3 sec for DOM changes (st_autorefresh updates) ──────
         setInterval(function() {{
             var el = document.getElementById("status-hash");
             if (!el) return;
@@ -213,32 +244,32 @@ def get_status_watcher_js(prev_status_hash: str, patient_name: str, patient_id: 
             var oh = sessionStorage.getItem(STORAGE_KEY) || "";
             if (oh && nh && oh !== nh) {{
                 sessionStorage.setItem(STORAGE_KEY, nh);
-                // Sound
+                // Sound + vibration (using shared AudioContext)
                 try {{
-                    var c = new (window.AudioContext || window.webkitAudioContext)();
-                    var o = c.createOscillator();
-                    var g2 = c.createGain();
-                    o.connect(g2); g2.connect(c.destination);
-                    o.frequency.value = 880;
-                    o.type = "sine";
-                    g2.gain.value = 0.5;
-                    o.start();
-                    o.stop(c.currentTime + 0.5);
-                }} catch(e) {{}}
-                // Vibration
-                try {{ if (navigator.vibrate) navigator.vibrate([400, 200, 400]); }} catch(e) {{}}
-                // Notification
+                    var ctx = getAudioCtx();
+                    if (ctx) {{
+                        var o = ctx.createOscillator();
+                        var g = ctx.createGain();
+                        o.connect(g); g.connect(ctx.destination);
+                        o.frequency.value = 880;
+                        o.type = "sine";
+                        g.gain.value = 0.6;
+                        o.start();
+                        o.stop(ctx.currentTime + 0.5);
+                    }}
+                try {{ if (navigator.vibrate) navigator.vibrate([500, 200, 500]); }} catch(e) {{}}
                 if ("Notification" in window && Notification.permission === "granted") {{
-                    new Notification("🔔 " + PNAME, {{
-                        body: "Status: " + ns,
-                        icon: "https://img.icons8.com/color/48/hospital.png",
-                        tag: "cq-" + Date.now(),
-                        requireInteraction: true,
-                        silent: false,
-                        vibrate: [400, 200, 400]
-                    }});
+                    try {{
+                        new Notification("🔔 " + PNAME, {{
+                            body: "Status: " + ns,
+                            icon: "https://img.icons8.com/color/48/hospital.png",
+                            tag: "cq-" + Date.now(),
+                            requireInteraction: true,
+                            silent: false,
+                            vibrate: [500, 200, 500]
+                        }});
+                    }} catch(e) {{}}
                 }}
-                // Update SW
                 if ("serviceWorker" in navigator) {{
                     navigator.serviceWorker.ready.then(function(reg) {{
                         if (reg.active) reg.active.postMessage({{ type: "UPDATE_STATUS_HASH", statusHash: nh }});
@@ -538,7 +569,11 @@ def show():
             with st.container(border=True):
                 st.markdown(test_tips[test_name])
 
-    st.caption("🔔 Notifications: Allow browser notifications for real-time updates. Even if you close this page, you may receive updates via the installed PWA app.")
+    st.caption(
+        "🔔 **Miss Call Alert System Active!** अब बिना Notification Permission के भी "
+        "साउंड + वाइब्रेशन आएगा। बस स्क्रीन पर एक बार टैप करें 'Tap to enable sound' दिखे तो।  \n"
+        "Sound + vibration work WITHOUT browser notification permission. Just tap the screen once if you see the hint."
+    )
 
     # ─── Inject Status Watcher JS ──────────────────────────────────────────
     st.markdown(

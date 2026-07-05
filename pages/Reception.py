@@ -251,7 +251,7 @@ def show():
                 )
 
                 with st.container(border=True):
-                    col1, col2, col3 = st.columns([3, 2, 1])
+                    col1, col2, col3, col4 = st.columns([3, 2, 1, 1])
                     with col1:
                         st.markdown(f"**{p_name}** — `{p_id}`")
                         st.caption(f"📱 {p_mobile} | Tests: {', '.join(test_names)}")
@@ -271,6 +271,20 @@ def show():
                                         result["notification"], urgent=True
                                     )
                                     st.markdown(script, unsafe_allow_html=True)
+                    with col4:
+                        if st.button("📞 Miss Call", key=f"misscall_rec_{p_id}",
+                                     use_container_width=True, type="secondary",
+                                     help="Sends alert to patient page WITHOUT needing notification permission. Works on all phones."):
+                            result = harness.send_misscall_alert(
+                                p_name, ", ".join(test_names)
+                            )
+                            if result["success"]:
+                                st.success(result["message"])
+                                # Inject misscall script on patient page
+                                m_script = harness.get_misscall_script(
+                                    p_name, ", ".join(test_names)
+                                )
+                                st.markdown(m_script, unsafe_allow_html=True)
         else:
             st.info("📭 No patients registered today yet.")
 

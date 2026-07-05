@@ -154,6 +154,17 @@ def show_department(test_name: str, emoji: str = "📊"):
                         st.markdown(script, unsafe_allow_html=True)
 
         with cols[3]:
+            # 📞 Miss Call Alert — works without notification permission
+            if st.button("📞 Miss Call", key=f"misscall_curr_{p['id']}",
+                         use_container_width=True,
+                         help="Sends alert to patient page WITHOUT needing notification permission."):
+                result = harness.send_misscall_alert(p_name, test_name, token)
+                if result["success"]:
+                    st.success(result["message"])
+                    m_script = harness.get_misscall_script(p_name, test_name)
+                    st.markdown(m_script, unsafe_allow_html=True)
+
+        with cols[4]:
             called_time = p.get("called_at", "")
             if called_time:
                 try:
@@ -184,7 +195,7 @@ def show_department(test_name: str, emoji: str = "📊"):
             wait_time = calculate_wait_time(test_name, pos)
 
             with st.container(border=True):
-                cols = st.columns([2, 1, 1, 1, 1])
+                cols = st.columns([2, 1, 1, 1, 1, 1])
 
                 with cols[0]:
                     st.markdown(f"**{w_name}** — Token #{token}")
@@ -229,6 +240,17 @@ def show_department(test_name: str, emoji: str = "📊"):
                                 st.markdown(script, unsafe_allow_html=True)
 
                 with cols[4]:
+                    # 📞 Miss Call Alert
+                    if st.button("📞 Miss Call", key=f"misscall_{w['id']}",
+                                 use_container_width=True,
+                                 help="Sends alert without notification permission."):
+                        result = harness.send_misscall_alert(w_name, test_name, token)
+                        if result["success"]:
+                            st.success(result["message"])
+                            m_script = harness.get_misscall_script(w_name, test_name)
+                            st.markdown(m_script, unsafe_allow_html=True)
+
+                with cols[5]:
                     registered_time = w.get("created_at", "")
                     if registered_time:
                         try:

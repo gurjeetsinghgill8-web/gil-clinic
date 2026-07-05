@@ -39,7 +39,7 @@ from utils.queue import (
 from utils.notifications import (
     registration_message, called_message, completed_message,
     report_ready_message, browser_notification_script,
-    request_notification_permission_script
+    request_notification_permission_script, misscall_alert_script
 )
 from utils.whatsapp import send_whatsapp_message, get_whatsapp_template
 
@@ -360,6 +360,39 @@ class Harness:
             )
 
         return {"found": True, "patient": result["patient"], "tests": tests}
+
+    # ─── MISS CALL ALERT ────────────────────────────────────────────────────
+
+    def send_misscall_alert(self, patient_name: str, test_name: str = "", token: int = 0) -> dict:
+        """
+        Send a "Miss Call" style alert — works WITHOUT browser notification permission.
+        This renders a JS banner + sound + vibration that triggers immediately on the
+        patient status page via window.__playPatientAlert().
+        
+        Unlike send_reminder, this does NOT depend on Notification API.
+        It uses a sessionStorage flag that the patient's JS watcher picks up.
+        """
+        status_label = f"🔔 Alert: {test_name or 'Cardiology'}"
+        msg = (
+            f"🔔 Miss Call Alert!\n"
+            f"{patient_name}, please check your status immediately.\n"
+            f"Department: {test_name or 'Cardiology'}\n"
+            f"Token: #{token}"
+        )
+        return {
+            "success": True,
+            "message": f"📞 Miss Call Alert sent to {patient_name}",
+            "notification": msg,
+            "patient_alert": {
+                "action": "misscall_alert",
+                "status_label": status_label,
+            },
+        }
+
+    @staticmethod
+    def get_misscall_script(patient_name: str, test_name: str = "") -> str:
+        """Get the Miss Call Alert JS injection script (works without notif permission)."""
+        return misscall_alert_script(patient_name, test_name)
 
     # ─── NOTIFICATION HELPERS ────────────────────────────────────────────────
 

@@ -172,7 +172,7 @@ def show():
                     st.markdown(f"**Next:** {w_name} (Token #{token})")
                     st.caption(f"📱 {w_mobile}")
 
-                    col_a, col_b = st.columns(2)
+                    col_a, col_b, col_c = st.columns(3)
                     with col_a:
                         if st.button(
                             f"🔵 Call",
@@ -214,6 +214,20 @@ def show():
                                     st.markdown(script, unsafe_allow_html=True)
                             else:
                                 st.error(result["message"])
+                    with col_c:
+                        if st.button(
+                            f"📞 Miss Call",
+                            key=f"mgr_misscall_{dept_name}",
+                            use_container_width=True,
+                            help="Sends alert without notification permission.",
+                        ):
+                            result = harness.send_misscall_alert(
+                                w_name, dept_name, token
+                            )
+                            if result["success"]:
+                                st.success(result["message"])
+                                m_script = harness.get_misscall_script(w_name, dept_name)
+                                st.markdown(m_script, unsafe_allow_html=True)
                 else:
                     st.markdown("✅ No waiting patients")
 

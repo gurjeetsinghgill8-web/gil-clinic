@@ -146,7 +146,69 @@ def browser_notification_script(title: str, body: str, urgent: bool = False) -> 
     """
 
 
-def request_notification_permission_script() -> str:
+def misscall_alert_script(patient_name: str, test_name: str = "") -> str:
+    """
+    Returns JS that triggers a FULL-SCREEN visual banner + sound + vibration
+    on the patient status page. Works WITHOUT browser notification permission.
+
+    This is the "Miss Call" alternative — it uses window.__playPatientAlert()
+    which is exposed by get_status_watcher_js() in Patient_Status.py.
+    
+    The script:
+      1. Calls window.__playPatientAlert() if available (plays triple beep + vibrate)
+      2. Shows a bright banner at the top of the screen
+      3. Flashes the page title
+    """
+    safe_name = patient_name.replace("'", "\\'")
+    return f"""
+    <script>
+    (function() {{
+        var pname = '{safe_name}';
+        var testName = '{test_name}';
+        var label = '🔔 Alert' + (testName ? ': ' + testName : '');
+
+        // ── 1. Trigger sound+vibration via global function ──────────────────
+        if (window.__playPatientAlert) {{
+            window.__playPatientAlert(label + ' - ' + pname);
+        }}
+
+        // ── 2. Show bright banner using DOM ──────────────────────────────────
+        try {{
+            var banner = document.createElement('div');
+            banner.id = 'misscall-banner';
+            banner.innerHTML = '📞 <strong>Miss Call Alert!</strong><br>' + pname + ' — ' + label;
+            banner.style.cssText =
+                'position:fixed;top:0;left:0;right:0;z-index:99999;' +
+                'background:linear-gradient(135deg,#ff4444,#cc0000);' +
+                'color:white;padding:18px 14px;text-align:center;' +
+                'font-size:18px;font-weight:600;box-shadow:0 6px 20px rgba(0,0,0,0.5);' +
+                'animation:slideDown 0.4s ease-out;' +
+                'border-bottom:3px solid #ffaa00;' +
+                'line-height:1.6;';
+            document.body.appendChild(banner);
+
+            // Remove banner after 8 seconds
+            setTimeout(function() {{
+                var b = document.getElementById('misscall-banner');
+                if (b) {{
+                    b.style.transition = 'transform 0.4s ease-out';
+                    b.style.transform = 'translateY(-100%)';
+                    setTimeout(function() {{ if (b.parentNode) b.parentNode.removeChild(b); }}, 500);
+                }}
+            }}, 8000);
+        }} catch(e) {{}}
+
+        // ── 3. Flash title ──────────────────────────────────────────────────
+        try {{
+            var ot = document.title;
+            var fi = setInterval(function() {{
+                document.title = (document.title === ot) ? '📞 ' + label : ot;
+            }}, 700);
+            setTimeout(function() {{ clearInterval(fi); document.title = ot; }}, 8000);
+        }} catch(e) {{}}
+    }})();
+    </script>
+    """() -> str:
     """Returns JS that requests notification + vibration permission on page load."""
     return """
     <script>
