@@ -11,14 +11,10 @@ Features:
   - Full journey progress bar
   - "Add to Home Screen" PWA install prompt
   - Bilingual: Hindi + English
-
-Architecture: Patient scans QR → opens this page with ?patient=ID
-             → auto-loads patient data → refreshes every 5s
-             → JS bridge detects status changes → Notification + Sound
 """
 import streamlit as st
 from datetime import datetime
-import textwrap
+import streamlit.components.v1 as components
 
 from llm_harness import get_harness
 from utils.config import (
@@ -28,14 +24,11 @@ from utils.config import (
 from utils.queue import calculate_wait_time, calculate_expected_time
 
 
-def clean_html(html_str: str) -> str:
-    """Strip all leading whitespace from every line of HTML to prevent markdown code block rendering."""
-    return "\n".join(line.lstrip() for line in html_str.splitlines())
+# ─── PWA / META INJECTION ───────────────────────────────────────────────────────
 
-
-def inject_pwa_meta():
-    """Inject PWA manifest link, service worker registration, and audio setup."""
-    return clean_html("""
+def inject_pwa_meta() -> str:
+    """Inject PWA static manifest links and viewport meta tags into parent page head."""
+    return """
     <!-- PWA Manifest -->
     <link rel="manifest" href="/assets/manifest.json">
     <meta name="theme-color" content="#667eea">
@@ -43,354 +36,109 @@ def inject_pwa_meta():
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <meta name="apple-mobile-web-app-title" content="CardioQueue">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    """
 
-	    <!-- ─── GLOBAL AUDIO ENGINE ────────────────────────────────────────── -->
-	    <script>
-	    (function() {
-	        window.__audioCtx = null;
-	        window.__audioReady = false;
 
-	        // SessionStorage flag survives st_autorefresh page reloads
-	        var __audioActivated = sessionStorage.getItem("cq_audio_ready") === "1";
-
-	        // Create + resume AudioContext (MUST be called from user gesture)
-	        function unlockAudio() {
-	            if (window.__audioReady) return true;
-	            try {
-	                if (!window.__audioCtx) {
-	                    window.__audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-	                }
-	                if (window.__audioCtx.state === "suspended") {
-	                    window.__audioCtx.resume().then(function() {
-	                        window.__audioReady = true;
-	                        sessionStorage.setItem("cq_audio_ready", "1");
-	                    });
-	                } else {
-	                    window.__audioReady = true;
-	                    sessionStorage.setItem("cq_audio_ready", "1");
-	                }
-	                return window.__audioReady;
-	            } catch(e) {
-	                return false;
-	            }
-	        }
-
-	        function getAudioCtx() { return window.__audioCtx; }
-
-	        // Play beep(s) after AudioContext is unlocked
-	        function playBeepNow(freq, duration, volume) {
-	            var ctx = window.__audioCtx;
-	            if (!ctx) return;
-	            try {
-	                var osc = ctx.createOscillator();
-	                var g = ctx.createGain();
-	                osc.connect(g); g.connect(ctx.destination);
-	                osc.frequency.value = freq;
-	                osc.type = "sine";
-	                g.gain.value = volume || 0.3;
-	                osc.start();
-	                osc.stop(ctx.currentTime + (duration || 0.15));
-	            } catch(e) {}
-	        }
-
-	        // Public: call from onclick — unlocks + plays beep instantly using a fresh AudioContext
-        window.playTestBeep = function() {
-            try {
-                var ctx = new (window.AudioContext || window.webkitAudioContext)();
-                [0, 0.15, 0.35].forEach(function(t, i) {
-                    setTimeout(function() {
-                        try {
-                            var osc = ctx.createOscillator();
-                            var gain = ctx.createGain();
-                            osc.connect(gain); gain.connect(ctx.destination);
-                            osc.frequency.value = [880, 660, 1000][i];
-                            osc.type = "sine";
-                            gain.gain.setValueAtTime(0.5, ctx.currentTime);
-                            gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.2);
-                            osc.start(ctx.currentTime); osc.stop(ctx.currentTime + 0.2);
-                        } catch(err) {}
-                    }, t * 1000);
-                });
-            } catch(e) {}
-            if (navigator.vibrate) navigator.vibrate(300);
-            sessionStorage.setItem("cq_test_sound", "1");
-        };
-
-	        // Public: ensure audio is ready
-	        window.resumeAudio = function() { unlockAudio(); };
-
-	        // If previously activated, resume on load
-	        if (__audioActivated) {
-	            setTimeout(function() {
-	                var ctx = new (window.AudioContext || window.webkitAudioContext)();
-	                window.__audioCtx = ctx;
-	                if (ctx.state === "suspended") ctx.resume();
-	            }, 100);
-	        }
-
-	        // Re-attach listeners on every page load (survives st_autorefresh)
-	        function attachAudioListeners() {
-	            ["touchstart", "click", "touchend"].forEach(function(evt) {
-	                document.removeEventListener(evt, unlockAudio);
-	                document.addEventListener(evt, unlockAudio, { once: true });
-	            });
-	        }
-	        attachAudioListeners();
-
-	        // Periodic resume (every 3s — handles st_autorefresh reloads)
-	        setInterval(function() {
-	            var ctx = window.__audioCtx;
-	            if (ctx && ctx.state === "suspended") {
-	                ctx.resume().then(function() {
-	                    window.__audioReady = true;
-	                    sessionStorage.setItem("cq_audio_ready", "1");
-	                });
-	            }
-	            attachAudioListeners();
-	            // Check test sound flag (set before st_autorefresh reload)
-	            if (sessionStorage.getItem("cq_test_sound") === "1") {
-	                sessionStorage.removeItem("cq_test_sound");
-	                setTimeout(function() {
-	                    playBeepNow(880, 0.2, 0.5);
-	                    setTimeout(function() { playBeepNow(660, 0.15, 0.4); }, 150);
-	                    if (navigator.vibrate) navigator.vibrate(200);
-	                }, 50);
-	            }
-	        }, 3000);
-	    })();
-	
-    // ─── Service Worker ─────────────────────────────────────────────────
-    if ("serviceWorker" in navigator) {{
+def register_pwa_sw() -> str:
+    """JavaScript string to register Service Worker and request notifications inside components.html."""
+    return """
+    <script>
+    if ("serviceWorker" in navigator) {
         navigator.serviceWorker.register("/assets/service-worker.js")
-            .then(function() {{ console.log("[PWA] SW registered"); }})
-            .catch(function(err) {{ console.log("[PWA] SW reg failed:", err); }});
-    }}
-
-    // Request notification permission
-    if ("Notification" in window && Notification.permission === "default") {{
+            .then(function() { console.log("[PWA] SW registered"); })
+            .catch(function(err) { console.log("[PWA] SW reg failed:", err); });
+    }
+    if ("Notification" in window && Notification.permission === "default") {
         Notification.requestPermission();
-    }}
-
-    // Add to Home Screen prompt
-    window.addEventListener("beforeinstallprompt", function(e) {{
-        e.preventDefault();
-        window.deferredInstallPrompt = e;
-        setTimeout(function() {{
-            var btn = document.getElementById("install-pwa-btn");
-            if (btn) btn.style.display = "block";
-        }}, 3000);
-    }});
-
-    function installPWA() {{
-        var prompt = window.deferredInstallPrompt;
-        if (prompt) {{
-            prompt.prompt();
-            prompt.userChoice.then(function(choice) {{
-                if (choice.outcome === "accepted") {{
-                    console.log("[PWA] User accepted install");
-                }}
-                window.deferredInstallPrompt = null;
-                var btn = document.getElementById("install-pwa-btn");
-                if (btn) btn.style.display = "none";
-            }});
-        }}
-    }}
+    }
     </script>
-    """)
+    """
 
 
 def get_pwa_install_button() -> str:
-    """Return HTML for the PWA install button (hidden by default)."""
-    return clean_html("""
+    """Return HTML/JS for the PWA install button inside components.html."""
+    return """
     <div id="install-pwa-btn" style="display: none; text-align: center; margin: 10px 0;">
         <button onclick="installPWA()" style="
             background: linear-gradient(135deg, #667eea, #764ba2);
             color: white; border: none; padding: 12px 24px;
             border-radius: 12px; font-size: 1rem; font-weight: 600;
             width: 100%; cursor: pointer; box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+            font-family: sans-serif;
         ">
             📲 Add to Home Screen
         </button>
-        <p style="font-size: 0.75rem; color: #888; margin-top: 6px;">
+        <p style="font-size: 0.75rem; color: #888; margin-top: 6px; font-family: sans-serif;">
             Install for one-tap access & offline support
         </p>
     </div>
-    """)
-
-
-# ─── STATUS CHANGE DETECTION JS ─────────────────────────────────────────────────
-
-def get_status_watcher_js(prev_status_hash: str, patient_name: str, patient_id: str = "") -> str:
-    """
-    Inject JavaScript that watches for status changes and triggers:
-      - Sound (Web Audio API — triple beep)
-      - Vibration (long pattern)
-      - Browser Notification (if permission granted)
-      - Service Worker background tracking
-
-    Also detects 'misscall' query param → if present, stores misscall flag in
-    sessionStorage and plays alert on next page load. This is how staff "Miss Call"
-    button reaches the patient — via URL param instead of direct JS injection.
-    """
-    safe_name = patient_name.replace("'", "\\'").replace('"', '\\"')
-    return clean_html(f"""
     <script>
-    (function() {{
-        var PID = "{patient_id}";
-        var PNAME = "{safe_name}";
-        var HASH = "{prev_status_hash}";
-        var STORAGE_KEY = "cq_h_" + PID;
-        var MISS_STORAGE_KEY = "cq_miss_" + PID;
+    window.addEventListener("beforeinstallprompt", function(e) {
+        e.preventDefault();
+        window.deferredInstallPrompt = e;
+        var btn = document.getElementById("install-pwa-btn");
+        if (btn) btn.style.display = "block";
+    });
 
-        // ─── Helper: play beep on shared AudioContext ────────────────────────
-        function playBeep(freq, duration, gainVal, delay) {{
-            setTimeout(function() {{
-                try {{
-                    // Ensure audio is unlocked first
-                    if (window.resumeAudio) window.resumeAudio();
-                    var ctx = window.__audioCtx;
-                    if (!ctx) return;
-                    var osc = ctx.createOscillator();
-                    var g = ctx.createGain();
-                    osc.connect(g); g.connect(ctx.destination);
-                    osc.frequency.value = freq;
-                    osc.type = "sine";
-                    g.gain.value = gainVal;
-                    osc.start();
-                    osc.stop(ctx.currentTime + duration);
-                }} catch(e) {{}}
-            }}, delay || 0);
-        }}
-
-        // ─── Global alert function — can be called from anywhere ──────────────
-        window.__playPatientAlert = function(statusLabel) {{
-            try {{
-                var ctx = new (window.AudioContext || window.webkitAudioContext)();
-                [0, 0.25, 0.5].forEach(function(t, i) {{
-                    setTimeout(function() {{
-                        try {{
-                            var osc = ctx.createOscillator();
-                            var gain = ctx.createGain();
-                            osc.connect(gain); gain.connect(ctx.destination);
-                            osc.frequency.value = [880, 660, 1000][i];
-                            osc.type = "sine";
-                            gain.gain.setValueAtTime(0.6, ctx.currentTime);
-                            gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.45);
-                            osc.start(ctx.currentTime); osc.stop(ctx.currentTime + 0.45);
-                        }} catch(err) {{}}
-                    }}, t * 1000);
-                }});
-            }} catch(e) {{}}
-
-            // Vibration — long pattern
-            try {{ if (navigator.vibrate) navigator.vibrate([500, 200, 500, 200, 700]); }} catch(e) {{}}
-
-            // Browser Notification
-            if ("Notification" in window && Notification.permission === "granted") {{
-                try {{
-                    new Notification("🔔 " + PNAME, {{
-                        body: "Status: " + statusLabel,
-                        icon: "https://img.icons8.com/color/48/hospital.png",
-                        tag: "cq-" + Date.now(),
-                        requireInteraction: true,
-                        silent: false,
-                        vibrate: [500, 200, 500, 200, 700]
-                    }});
-                }} catch(e) {{}}
-            }}
-
-            // Flash page title
-            try {{
-                var ot = document.title;
-                var fi = setInterval(function() {{ document.title = (document.title === ot) ? "🔔 " + statusLabel : ot; }}, 700);
-                setTimeout(function() {{ clearInterval(fi); document.title = ot; }}, 6000);
-            }} catch(e) {{}}
-        }};
-
-        // ─── 0. Check for misscall flag in URL ──────────────────────────────
-        (function() {{
-            try {{
-                var urlParams = new URLSearchParams(window.location.search);
-                if (urlParams.get("misscall") === "1") {{
-                    // Store misscall flag — will be picked on next poll cycle
-                    sessionStorage.setItem(MISS_STORAGE_KEY, "1");
-                    // Remove misscall param from URL without reload
-                    var url = new URL(window.location);
-                    url.searchParams.delete("misscall");
-                    window.history.replaceState({{}}, "", url);
-                }}
-            }} catch(e) {{}}
-        }})();
-
-        // ─── 1. Check for pending misscall flag ──────────────────────────────
-        var pendingMisscall = sessionStorage.getItem(MISS_STORAGE_KEY);
-        if (pendingMisscall === "1") {{
-            sessionStorage.removeItem(MISS_STORAGE_KEY);
-            window.__playPatientAlert("📞 Miss Call Alert - " + PNAME);
-        }}
-
-        // ─── 1b. Check for test sound flag (set by HTML button) ──────────────
-        (function() {{
-            var testFlag = sessionStorage.getItem("cq_test_sound");
-            if (testFlag === "1") {{
-                sessionStorage.removeItem("cq_test_sound");
-                // Force resume and play beep after a short delay for DOM readiness
-                setTimeout(function() {{
-                    try {{
-                        if (window.resumeAudio) window.resumeAudio();
-                        if (window.playTestBeep) window.playTestBeep();
-                        if (navigator.vibrate) navigator.vibrate(300);
-                    }} catch(e) {{}}
-                }}, 100);
-            }}
-        }})();
-
-        // ─── 2. Compare with stored hash → alert on change ────────────────────
-        var oldHash = sessionStorage.getItem(STORAGE_KEY);
-        var justChanged = (oldHash && oldHash !== HASH);
-        sessionStorage.setItem(STORAGE_KEY, HASH);
-
-        if (justChanged) {{
-            var el = document.getElementById("status-hash");
-            var st = el ? el.getAttribute("data-status") || "Updated" : "Updated";
-            window.__playPatientAlert(st);
-        }}
-
-        // ─── 3. Register Service Worker for background tracking ────────────────
-        if ("serviceWorker" in navigator) {{
-            navigator.serviceWorker.ready.then(function(reg) {{
-                if (reg.active) {{
-                    reg.active.postMessage({{
-                        type: "TRACK_PATIENT",
-                        patientId: PID,
-                        patientName: PNAME,
-                        statusHash: HASH
-                    }});
-                }}
-            }});
-        }}
-
-        // ─── 4. Poll every 2 sec for DOM changes + misscall flag ──────────────
-        setInterval(function() {{
-            var el = document.getElementById("status-hash");
-            if (!el) return;
-            var nh = el.getAttribute("data-hash") || "";
-            var ns = el.getAttribute("data-status") || "";
-            var oh = sessionStorage.getItem(STORAGE_KEY) || "";
-            // Check misscall data-misscall attribute
-            var missFlag = el.getAttribute("data-misscall") || "";
-            if (missFlag === "1") {{
-                el.setAttribute("data-misscall", "0");
-                window.__playPatientAlert("📞 Miss Call - " + ns);
-            }}
-            if (oh && nh && oh !== nh) {{
-                sessionStorage.setItem(STORAGE_KEY, nh);
-                window.__playPatientAlert(ns);
-            }}
-            }}, 2000);
-    }})();
+    function installPWA() {
+        var prompt = window.deferredInstallPrompt;
+        if (prompt) {
+            prompt.prompt();
+            prompt.userChoice.then(function(choice) {
+                if (choice.outcome === "accepted") {
+                    console.log("[PWA] User accepted install");
+                }
+                window.deferredInstallPrompt = null;
+                var btn = document.getElementById("install-pwa-btn");
+                if (btn) btn.style.display = "none";
+            });
+        }
+    }
     </script>
-    """)
+    """
+
+
+# ─── BROWSER ALERT TRIGGERS ───────────────────────────────────────────────────
+
+def trigger_alert_sound(message: str = ""):
+    """Trigger triple-beep sound and vibration alert in the browser via clean HTML components."""
+    import streamlit.components.v1 as components
+    safe_msg = message.replace("'", " ").replace('"', ' ').replace("\n", " ")
+    js_code = """
+    <script>
+    (function() {
+        try {
+            var ctx = new (window.AudioContext || window.webkitAudioContext)();
+            var freqs = [880, 660, 1000];
+            var durations = [0.2, 0.15, 0.25];
+            var delays = [0, 150, 350];
+            freqs.forEach(function(f, idx) {
+                setTimeout(function() {
+                    try {
+                        var osc = ctx.createOscillator();
+                        var gain = ctx.createGain();
+                        osc.connect(gain); gain.connect(ctx.destination);
+                        osc.frequency.value = f; osc.type = 'sine';
+                        gain.gain.setValueAtTime(0.5, ctx.currentTime);
+                        gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + durations[idx]);
+                        osc.start(ctx.currentTime); osc.stop(ctx.currentTime + durations[idx]);
+                    } catch(err) {}
+                }, delays[idx]);
+            });
+        } catch(e) {}
+        if (navigator.vibrate) navigator.vibrate([500, 200, 500, 200, 700]);
+        if ("Notification" in window && Notification.permission === "granted" && "{safe_msg}" !== "") {
+            try {
+                new Notification("🔔 CardioQueue Alert", { 
+                    body: "{safe_msg}", 
+                    icon: "https://img.icons8.com/color/48/hospital.png" 
+                });
+            } catch(err) {}
+        }
+    })();
+    </script>
+    """.replace("{safe_msg}", safe_msg)
+    components.html(js_code, height=0)
 
 
 # ─── MAIN PAGE ──────────────────────────────────────────────────────────────────
@@ -402,14 +150,11 @@ def show():
     st.title(f"{CLINIC_LOGO} {CLINIC_SPECIALTY} Department")
     st.caption(f"{HOSPITAL_NAME} — {today}")
 
-    # ─── Inject PWA Meta & Service Worker ──────────────────────────────────
+    # ─── Inject PWA Meta ──────────────────────────────────────────────────
     st.markdown(inject_pwa_meta(), unsafe_allow_html=True)
+    components.html(register_pwa_sw(), height=0)
 
-    # ─── Auto-refresh via client-side meta tag ──────────────────────────────
-    # Using meta refresh instead of st_autorefresh because st_autorefresh does
-    # a full page reload that destroys AudioContext + event listeners.
-    # Meta refresh also triggers full reload, BUT we handle it via sessionStorage
-    # + status-hash comparison in get_status_watcher_js().
+    # ─── Auto-refresh ─────────────────────────────────────────────────────
     try:
         from streamlit_autorefresh import st_autorefresh
         st_autorefresh(interval=5000, key="patient_refresh")
@@ -434,7 +179,7 @@ def show():
         result = harness.get_patient_details(patient_id_from_url, by_mobile=False)
         auto_loaded = True
     elif mobile_from_url:
-        # Auto-loaded from mobile param (PWA redirect)
+        # Auto-loaded from mobile param
         result = harness.get_patient_status(mobile_from_url)
         auto_loaded = True
 
@@ -511,104 +256,86 @@ def show():
     patient = result["patient"]
     tests = result["tests"]
 
-    # Build a status hash for the JS watcher
+    # Build a status hash to detect status changes
     status_hash = "|".join(f"{t['test_name']}:{t['status']}" for t in tests)
     all_statuses = [t["status"] for t in tests]
     primary_status = all_statuses[0] if all_statuses else "waiting"
     primary_test = tests[0]["test_name"] if tests else ""
 
+    # ─── Python-Side Status Change Detection ──────────────────────────────────
+    if "prev_status_hash" not in st.session_state:
+        st.session_state.prev_status_hash = status_hash
+    elif st.session_state.prev_status_hash != status_hash:
+        st.session_state.prev_status_hash = status_hash
+        # Play alert beep when status changes!
+        trigger_alert_sound(f"Status changed to {STATUS_LABELS.get(primary_status, primary_status)}")
+
     # ─── BRICK 1: DB-Poll Alert Check ────────────────────────────────────────
-    # On every 5s auto-refresh, check if staff pressed Remind.
-    # If yes: play sound + vibrate on THIS patient's phone, then clear the flag.
     try:
         from utils.db import get_patient_alert, clear_patient_alert
         _alert_data = get_patient_alert(patient["patient_id"])
         if _alert_data["has_alert"]:
-            clear_patient_alert(patient["patient_id"])  # Clear immediately — show only once
+            clear_patient_alert(patient["patient_id"])  # Clear immediately
             _alert_msg = _alert_data["message"] or "Your turn is coming soon!"
-            # Visual alert banner
             st.warning(f"**Staff Alert:** {_alert_msg}")
-            # JS: force audio + vibration on patient's phone
-            _safe_msg = _alert_msg.replace("'", " ").replace('"', ' ').replace("\n", " ")
-            st.markdown(f"""
-            <script>
-            (function() {{
-                function playUrgentBeep() {{
-                    try {{
-                        var ctx = new (window.AudioContext || window.webkitAudioContext)();
-                        [0, 0.35, 0.7].forEach(function(t) {{
-                            var osc = ctx.createOscillator();
-                            var gain = ctx.createGain();
-                            osc.connect(gain); gain.connect(ctx.destination);
-                            osc.frequency.value = 880; osc.type = 'sine';
-                            gain.gain.setValueAtTime(0.8, ctx.currentTime + t);
-                            gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + t + 0.3);
-                            osc.start(ctx.currentTime + t); osc.stop(ctx.currentTime + t + 0.3);
-                        }});
-                    }} catch(e) {{}}
-                }}
-                if (navigator.vibrate) navigator.vibrate([200, 100, 400, 100, 200]);
-                playUrgentBeep();
-                setTimeout(playUrgentBeep, 500);
-                if (window.Notification && Notification.permission === 'granted') {{
-                    new Notification('Clinic Alert', {{ body: '{_safe_msg}', icon: '/favicon.ico' }});
-                }}
-            }})();
-            </script>
-            """, unsafe_allow_html=True)
+            # Trigger triple-beep sound
+            trigger_alert_sound(_alert_msg)
     except Exception:
-        pass  # Silent fail — alert system must never crash patient view
+        pass
 
     # ─── Detect misscall param from URL ───────────────────────────────────
     misscall_triggered = query_params.get("misscall", None)
     if isinstance(misscall_triggered, list):
         misscall_triggered = misscall_triggered[0] if misscall_triggered else None
 
-    # ─── Hidden element for JS status watcher ──────────────────────────────
-    st.markdown(
-        f'<div id="status-hash" data-hash="{status_hash}" '
-        f'data-status="{STATUS_LABELS.get(primary_status, primary_status)}" '
-        f'data-test="{primary_test}" '
-        f'data-misscall="{"1" if misscall_triggered == "1" else "0"}" '
-        f'style="display:none;"></div>',
-        unsafe_allow_html=True,
-    )
+    if misscall_triggered == "1":
+        # Clear param and play misscall beep
+        st.query_params.pop("misscall", None)
+        trigger_alert_sound("Missed Call Alert!")
 
-    # ─── Test Sound Button (Streamlit button — SURVIVES st_autorefresh) ────
-    # ─── Test Sound Button (HTML button — no page reload) ──────────────────
-    st.markdown("""
-    <div style="text-align:center;margin:6px 0;">
-        <button onclick="
-            sessionStorage.setItem('cq_test_sound', '1');
-            if(window.resumeAudio) window.resumeAudio();
-            if(window.playTestBeep) window.playTestBeep();
-            if(navigator.vibrate) navigator.vibrate(300);
-            var el = document.createElement('div');
-            el.id = 'sound-test-result';
-            el.innerHTML = '✅ Sound + Vibration working!';
-            el.style.cssText = 'text-align:center;padding:8px;margin:6px 0;'
-                + 'background:#4CAF50;color:white;border-radius:8px;font-weight:600;';
-            var parent = document.getElementById('sound-test-btn-container');
-            if(parent) parent.appendChild(el);
-            setTimeout(function() {
-                var r = document.getElementById('sound-test-result');
-                if(r) r.remove();
-            }, 4000);
-        "
-        style="background:linear-gradient(135deg,#667eea,#764ba2);color:white;
+    # ─── Test Sound Button (Iframe Sandbox, safe from React error #231) ────
+    components.html("""
+    <div style="text-align:center;">
+        <button id="ts-btn" style="background:linear-gradient(135deg,#667eea,#764ba2);color:white;
                border:none;padding:14px 24px;border-radius:12px;font-size:16px;
-               font-weight:600;cursor:pointer;width:100%;
+               font-weight:600;cursor:pointer;width:100%;font-family:sans-serif;
                box-shadow:0 4px 15px rgba(102,126,234,0.4);">
             🔊 Test Sound — Tap to Enable Alert Sounds
         </button>
-        <p style="font-size:0.75rem;color:#888;margin-top:4px;">
+        <p style="font-size:0.75rem;color:#888;margin-top:4px;font-family:sans-serif;">
             इसे टैप करें — Tap this to enable sound + vibration alerts
         </p>
-    </div>
-    """, unsafe_allow_html=True)
+        <div id="test-res"></div>
+     </div>
+     <script>
+     document.getElementById('ts-btn').onclick = function() {
+         try {
+             var ctx = new (window.AudioContext || window.webkitAudioContext)();
+             [0, 0.15, 0.35].forEach(function(t, i) {
+                 setTimeout(function() {
+                     try {
+                         var osc = ctx.createOscillator();
+                         var gain = ctx.createGain();
+                         osc.connect(gain); gain.connect(ctx.destination);
+                         osc.frequency.value = [880, 660, 1000][i];
+                         osc.type = "sine";
+                         gain.gain.setValueAtTime(0.5, ctx.currentTime);
+                         gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.2);
+                         osc.start(ctx.currentTime); osc.stop(ctx.currentTime + 0.2);
+                     } catch(err) {}
+                 }, t * 1000);
+             });
+         } catch(e) {}
+         if (navigator.vibrate) navigator.vibrate(300);
+         var res = document.getElementById('test-res');
+         res.innerHTML = '<div style="text-align:center;padding:8px;margin:6px 0;background:#4CAF50;color:white;border-radius:8px;font-weight:600;font-family:sans-serif;font-size:0.85rem;">✅ Sound + Vibration working!</div>';
+         setTimeout(function() { res.innerHTML = ''; }, 3000);
+     };
+     </script>
+    """, height=120)
 
     # ─── PWA Install Button ────────────────────────────────────────────────
-    st.markdown(get_pwa_install_button(), unsafe_allow_html=True)
+    components.html(get_pwa_install_button(), height=100)
 
     # ─── Patient Info Card ─────────────────────────────────────────────────
     with st.container(border=True):
@@ -622,153 +349,135 @@ def show():
 
     # ─── Live Queue Pulse Indicator ────────────────────────────────────────
     st.markdown(
-        """
-        <div style="text-align: center; padding: 6px; margin: 8px 0;">
-            <span style="display: inline-block; width: 10px; height: 10px;
-                  background: #4CAF50; border-radius: 50%;
-                  animation: pulse 2s infinite; margin-right: 8px;"></span>
-            <span style="color: #666; font-size: 0.85rem;">
-                Live — Auto-updating every 5 seconds
-            </span>
-        </div>
-        <style>
-        @keyframes pulse {
-            0% { opacity: 1; transform: scale(1); }
-            50% { opacity: 0.5; transform: scale(1.3); }
-            100% { opacity: 1; transform: scale(1); }
-        }
-        </style>
-        """,
+        f'<div class="glass-banner" style="margin-top: 1rem;">'
+        f'<div style="display: flex; align-items: center; justify-content: space-between;">'
+        f'<div>'
+        f'<span class="live-dot"></span>'
+        f'<span style="font-weight:600; font-size:1.1rem; color:var(--text-primary);">LIVE Queue Tracker</span>'
+        f'<div style="font-size:0.8rem; color:var(--text-secondary);">Auto-refreshes every 5s • Auto-refresh चालू है</div>'
+        f'</div>'
+        f'<div style="text-align: right;">'
+        f'<div style="font-size:0.75rem; text-transform:uppercase; color:var(--text-light); letter-spacing:0.05em;">Updated</div>'
+        f'<div style="font-size:0.9rem; font-weight:700; color:var(--primary);">{datetime.now().strftime("%I:%M:%S %p")}</div>'
+        f'</div>'
+        f'</div>'
+        f'</div>',
         unsafe_allow_html=True,
     )
 
-    # ─── Test Status Cards ─────────────────────────────────────────────────
+    # ─── Queue Status Summary ──────────────────────────────────────────────
+    st.markdown("#### 📋 Queue Details / क्यू की जानकारी")
     st.divider()
-    st.markdown("### 📋 आपके टेस्ट / Your Tests")
 
-    if not tests:
-        st.info("📭 No tests registered yet.")
-        return
+    # Active tests list
+    active_tests = [t for t in tests if t["status"] not in ["completed", "delivered", "report_ready"]]
+    completed_tests = [t for t in tests if t["status"] in ["completed", "delivered", "report_ready"]]
 
-    # Calculate overall progress
-    status_order = ["waiting", "called", "in_progress", "completed", "report_ready", "delivered"]
-    max_progress = 0
-    for t in tests:
-        try:
-            idx = status_order.index(t["status"])
-            max_progress = max(max_progress, (idx + 1) / len(status_order))
-        except ValueError:
-            pass
+    if active_tests:
+        for idx, t in enumerate(active_tests):
+            t_name = t["test_name"]
+            status = t["status"]
+            q_pos = t.get("queue_position", 0)
+            token_num = t.get("token_number", 0)
+            room = t.get("room", ROOM_NAMES.get(t_name, "Room 1"))
 
-    # ─── Overall Progress Bar ──────────────────────────────────────────────
-    st.markdown("**Overall Progress**")
-    st.progress(max_progress, text=f"{int(max_progress * 100)}%")
+            # Calculate wait time & expected time
+            wait_time = calculate_wait_time(t_name, q_pos)
+            expected_time = calculate_expected_time(t_name, q_pos)
 
-    for test in tests:
-        test_name = test["test_name"]
-        status = test["status"]
-        token = test.get("token_number", 0)
-        room = ROOM_NAMES.get(test_name, f"{test_name} Room")
-        wait_time = calculate_wait_time(test_name, test.get("queue_position", 0))
-        pos = test.get("queue_position", 0)
+            # Build status badge HTML
+            status_class = f"status-{status}"
+            badge_html = f'<span class="status-badge {status_class}">{STATUS_ICONS.get(status, "")} {STATUS_LABELS.get(status, status)}</span>'
 
-        # Color mapping
-        border_color = {
-            "waiting": "#FFA500",
-            "called": "#2196F3",
-            "in_progress": "#FF9800",
-            "completed": "#4CAF50",
-            "report_ready": "#9C27B0",
-            "delivered": "#607D8B",
-        }.get(status, "#E0E0E0")
+            # Header info
+            st.markdown(
+                f'<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">'
+                f'<span style="font-size: 1.15rem; font-weight: 700; color: var(--text-primary);">{t_name}</span>'
+                f'{badge_html}'
+                f'</div>',
+                unsafe_allow_html=True
+            )
 
-        with st.container(border=True):
-            col1, col2 = st.columns([3, 1])
-
+            col1, col2 = st.columns(2)
             with col1:
-                st.markdown(f"### {test_name}")
-                st.caption(f"🏠 {room} | 🎫 Token #{token}")
+                st.markdown(f"🚪 **{room}**")
+                st.markdown(f"🎫 Token Number: **#{token_num}**")
+                # Wait time progress steps visual
+                done_steps = {
+                    "waiting": 1,
+                    "called": 2,
+                    "in_progress": 3,
+                }.get(status, 1)
 
-                # Status with icon
-                icon = STATUS_ICONS.get(status, "❓")
-                label = STATUS_LABELS.get(status, status.replace("_", " ").title())
-                st.markdown(f"**{icon} {label}**")
+                steps_html = "".join(
+                    f'<div class="progress-step {"done" if i < done_steps else "active" if i == done_steps else ""}"></div>'
+                    for i in range(1, 5)
+                )
+                st.markdown(
+                    f'<div class="progress-steps">{steps_html}</div>',
+                    unsafe_allow_html=True
+                )
 
             with col2:
-                # Time / Position info
-                if status in ["waiting", "called"]:
-                    expected_time = calculate_expected_time(test_name, pos)
-                    st.markdown(f"### ⏰")
-                    st.markdown(f"**{expected_time}**")
-                    if wait_time > 0:
-                        st.caption(f"~{wait_time} min | #{pos} in queue")
-                    else:
-                        st.caption("Your turn is now!")
-                elif status == "in_progress":
-                    st.markdown(f"### 🔄")
-                    st.markdown("**In Progress...**")
-                elif status == "completed":
-                    st.markdown(f"### ✅")
-                    st.markdown("**Done**")
-                elif status == "report_ready":
-                    st.markdown(f"### 📋")
-                    st.markdown("**Collect at Counter**")
-                elif status == "delivered":
-                    st.markdown(f"### 📄")
-                    st.markdown("**Delivered**")
-
-            # Individual progress for this test
-            try:
-                idx = status_order.index(status)
-                test_progress = (idx + 1) / len(status_order)
-            except ValueError:
-                test_progress = 0
-            st.progress(test_progress, text=f"{test_name}: {int(test_progress * 100)}%")
-
-    # ─── Summary Section ───────────────────────────────────────────────────
-    st.divider()
-    st.markdown("### 📊 सारांश / Summary")
-
-    all_completed = all(t["status"] in ["completed", "report_ready", "delivered"] for t in tests)
-    any_in_progress = any(t["status"] == "in_progress" for t in tests)
-    any_called = any(t["status"] == "called" for t in tests)
-
-    if all_completed:
-        st.success("🎉 सभी टेस्ट पूरे हो गए! कृपया काउंटर से रिपोर्ट लें।\n\nAll tests complete! Please collect reports from reception.")
-    elif any_in_progress:
-        st.info("🔄 कुछ टेस्ट चल रहे हैं। कृपया प्रतीक्षा करें।\n\nSome tests are in progress. Please wait.")
-    elif any_called:
-        st.info("🔵 आपको बुलाया गया है! कृपया संबंधित कमरे में जाएं।\n\nYou've been called! Please proceed to the test room.")
+                if status == "called":
+                    st.markdown(
+                        f'<div style="background:rgba(253,203,110,0.15); border:1px solid rgba(253,203,110,0.4); padding:10px; border-radius:8px; text-align:center;">'
+                        f'<span style="font-size: 1.1rem; font-weight: 700; color: hsl(37,90%,38%);">📢 PLEASE PROCEED NOW</span><br/>'
+                        f'<span style="font-size:0.8rem; color:hsl(37,90%,38%);">कृपया रूम में प्रवेश करें</span>'
+                        f'</div>',
+                        unsafe_allow_html=True
+                    )
+                else:
+                    st.markdown(
+                        f'<div style="background:var(--bg-glass); border:1px solid var(--border); padding:8px 12px; border-radius:8px; text-align:center;">'
+                        f'<span style="font-size: 0.75rem; text-transform: uppercase; color: var(--text-light);">Estimated Time</span><br/>'
+                        f'<span class="token-number" style="font-size: 1.6rem !important;">{expected_time}</span><br/>'
+                        f'<span style="font-size: 0.8rem; color: var(--text-secondary);">Waiting list position: <strong>#{q_pos}</strong> (~{wait_time} min)</span>'
+                        f'</div>',
+                        unsafe_allow_html=True
+                    )
+            st.markdown("<br/>", unsafe_allow_html=True)
     else:
-        max_wait = max((calculate_wait_time(t["test_name"], t.get("queue_position", 0)) for t in tests), default=0)
-        st.info(f"⏳ अनुमानित प्रतीक्षा: ~{max_wait} मिनट\n\nEstimated wait: ~{max_wait} minutes")
+        st.success("🎉 All your scheduled tests are completed today! / आपके आज के सभी टेस्ट पूरे हो चुके हैं!")
 
-    st.caption(
-        "🔔 **Miss Call Alert System Active!** अब बिना Notification Permission के भी "
-        "साउंड + वाइब्रेशन आएगा।  \n"
-        "Sound + vibration work WITHOUT browser notification permission."
-    )
+    # Completed tests summary
+    if completed_tests:
+        st.markdown("#### ✅ Completed Tests / पूरे हो चुके टेस्ट")
+        for t in completed_tests:
+            t_name = t["test_name"]
+            status = t["status"]
+            status_class = f"status-{status}"
+            badge_html = f'<span class="status-badge {status_class}">{STATUS_ICONS.get(status, "")} {STATUS_LABELS.get(status, status)}</span>'
+
+            st.markdown(
+                f'<div style="display: flex; justify-content: space-between; align-items: center; background:rgba(0,184,148,0.06); padding:8px 16px; border-radius:8px; margin: 4px 0;">'
+                f'<span style="font-weight: 600; color:var(--text-primary);">{t_name}</span>'
+                f'{badge_html}'
+                f'</div>',
+                unsafe_allow_html=True
+            )
 
     # ─── Copy Tracking Link Button (Client-side, Free) ───────────────────────────────
     try:
         _status_url = f"{BASE_URL}/?patient={patient.get('patient_id', '')}"
-        st.markdown(
-            f"""
-            <div style="text-align:center; margin: 8px 0;">
-                <button onclick="
-                    navigator.clipboard.writeText('{_status_url}');
-                    this.innerText = '✅ Link Copied! / लिंक कॉपी हो गया!';
-                    setTimeout(() => {{ this.innerText = '🔗 Copy Status Link / ट्रैकिंग लिंक कॉपी करें'; }}, 2000);
-                "
-                style="background:linear-gradient(135deg,#667eea,#764ba2);
-                color:white;border:none;padding:10px 18px;border-radius:10px;text-align:center;
-                font-weight:600;font-size:0.9rem;width:100%;cursor:pointer;transition:all 0.3s ease;">
-                🔗 Copy Status Link / ट्रैकिंग लिंक कॉपी करें
-                </button>
-            </div>
-            """,
-            unsafe_allow_html=True
-        )
+        components.html(f"""
+        <div style="text-align:center;">
+            <button id="cp-btn" style="background:linear-gradient(135deg,#667eea,#764ba2);
+            color:white;border:none;padding:10px 18px;border-radius:10px;text-align:center;
+            font-weight:600;font-size:0.9rem;width:100%;cursor:pointer;transition:all 0.3s ease;
+            font-family:sans-serif;">
+            🔗 Copy Status Link / ट्रैकिंग लिंक कॉपी करें
+            </button>
+        </div>
+        <script>
+        document.getElementById('cp-btn').onclick = function() {{
+            navigator.clipboard.writeText('{_status_url}');
+            this.innerText = '✅ Link Copied! / लिंक कॉपी हो गया!';
+            var t = this;
+            setTimeout(function() {{ t.innerText = '🔗 Copy Status Link / ट्रैकिंग लिंक कॉपी करें'; }}, 2000);
+        }};
+        </script>
+        """, height=50)
     except Exception:
         pass
 
@@ -781,46 +490,18 @@ def show():
     test_tips = {
         "ECG": "🫀 **ECG (Electrocardiogram)**: बिल्कुल सामान्य प्रक्रिया है। आराम से लेटें और गहरी सांस लें।\nNo special preparation needed. Lie still and breathe normally.",
         "Echo": "🫀 **Echo (Echocardiography)**: अल्ट्रासाउंड जैसी प्रक्रिया है — पूरी तरह दर्द रहित।\nPainless ultrasound of your heart. Lie on your left side as instructed.",
-        "TMT": "🏃 **TMT (Treadmill Test)**: हल्के कपड़े पहनें। टेस्ट से 2 घंटे पहले कुछ न खाएं।\nWear comfortable shoes. Don't eat 2 hours before the test.",
-        "Holter": "📟 **Holter Monitor**: 24 घंटे portable ECG machine लगाई जाएगी। सामान्य काम करें।\nA portable ECG device for 24 hours. Continue normal activities.",
-        "ABPM": "💓 **ABPM (Ambulatory BP)**: 24 घंटे BP monitor लगेगा। हर 30 मिनट में BP लेगा।\n24-hour blood pressure monitor. Records BP every 30 minutes.",
-        "OPD": "🩺 **OPD Consultation**: डॉक्टर से परामर्श लें। अपनी सारी पुरानी रिपोर्ट लेकर आएं।\nDoctor consultation. Bring all previous medical reports.",
+        "TMT": "🏃 **TMT (Treadmill Test)**: ट्रेडमिल पर चलने/दौड़ने की तैयारी रखें। ढीले कपडे और जूते पहनें।\nWear comfortable clothes and walking shoes. Inform staff if you feel chest pain.",
+        "Holter": "📟 **Holter Monitor**: 24 घंटे का पोर्टेबल ईसीजी। डिवाइस को गीला न करें, सामान्य गतिविधियां जारी रखें।\nKeep monitor dry. Do not shower. Log any symptoms in the diary.",
+        "ABPM": "🩺 **ABPM (Ambulatory BP)**: 24 घंटे का बीपी मॉनिटर। हर बार कफ फूलने पर हाथ सीधा और शांत रखें।\nKeep arm still and straight when cuff inflates. Keep device on at night.",
+        "OPD": "🩺 **Doctor Consultation**: डॉक्टर से मिलने से पहले अपने सभी पुराने प्रिस्क्रिप्शन और रिपोर्ट्स तैयार रखें।\nKeep your medical history files ready. Write down questions for the doctor.",
     }
 
-    # Get unique test types from the patient's tests
-    booked_tests = set(t["test_name"] for t in tests)
-    for test_name in sorted(booked_tests):
-        if test_name in test_tips:
-            with st.container(border=True):
-                st.markdown(test_tips[test_name])
+    shown_tips = 0
+    for t in tests:
+        t_name = t["test_name"]
+        if t_name in test_tips:
+            st.info(test_tips[t_name])
+            shown_tips += 1
 
-    st.caption(
-        "🔔 **Miss Call Alert System Active!** अब बिना Notification Permission के भी "
-        "साउंड + वाइब्रेशन आएगा। बस स्क्रीन पर एक बार टैप करें 'Tap to enable sound' दिखे तो।  \n"
-        "Sound + vibration work WITHOUT browser notification permission. Just tap the screen once if you see the hint."
-    )
-
-    # ─── Inject Status Watcher JS ──────────────────────────────────────────
-    st.markdown(
-        get_status_watcher_js(status_hash, patient["name"], patient["patient_id"]),
-        unsafe_allow_html=True,
-    )
-
-    # ─── Footer with QR re-scan option ─────────────────────────────────────
-    st.divider()
-    qr_data = harness.generate_qr_code_base64(patient["patient_id"])
-    if qr_data:
-        with st.expander("📱 अपना QR Code देखें / View Your QR Code"):
-            st.markdown(
-                f"""
-                <div style="text-align: center; padding: 10px;">
-                    <img src="{qr_data}" style="width: 150px; height: 150px;
-                         border: 2px solid #e0e0e0; border-radius: 12px; padding: 8px;
-                         background: white;" alt="QR Code">
-                    <p style="font-size: 0.8rem; color: #666; margin-top: 8px;">
-                        Scan to re-open this dashboard
-                    </p>
-                </div>
-                """,
-                unsafe_allow_html=True,
-            )
+    if shown_tips == 0:
+        st.info("🫀 स्वस्थ हृदय के लिए रोजाना 30 मिनट टहलें और कम नमक का सेवन करें।\nFor a healthy heart, walk 30 minutes daily and reduce salt intake.")
