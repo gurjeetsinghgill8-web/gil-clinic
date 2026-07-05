@@ -213,20 +213,26 @@ def show():
     # ─── Detect patient from query param ───────────────────────────────────
     query_params = st.query_params
     patient_id_from_url = query_params.get("patient", None)
+    mobile_from_url = query_params.get("mobile", None)
     if isinstance(patient_id_from_url, list):
         patient_id_from_url = patient_id_from_url[0] if patient_id_from_url else None
+    if isinstance(mobile_from_url, list):
+        mobile_from_url = mobile_from_url[0] if mobile_from_url else None
 
     # ─── Mobile Input OR auto-load from URL ────────────────────────────────
-    if patient_id_from_url:
-        # Auto-loaded from QR scan — no mobile input needed
+    result = None
+    auto_loaded = False
+
+    if patient_id_from_url and patient_id_from_url != "common":
+        # Auto-loaded from per-patient QR scan — no mobile input needed
         result = harness.get_patient_details(patient_id_from_url, by_mobile=False)
         auto_loaded = True
-    else:
-        result = None
-        auto_loaded = False
+    elif mobile_from_url:
+        # Auto-loaded from mobile param (PWA redirect)
+        result = harness.get_patient_status(mobile_from_url)
+        auto_loaded = True
 
     # Show manual input only when not auto-loaded
-    if not auto_loaded:
         st.markdown("### 🔍 अपना स्टेटस देखें / Check Your Status")
         st.markdown(
             "अपना रजिस्टर्ड मोबाइल नंबर डालें — Enter your registered mobile number"
