@@ -21,7 +21,7 @@ BABLU_MOBILE = os.getenv("BABLU_MOBILE", "")
 
 # ─── Admin Credentials (for the new Admin role) ──────────────────────────────
 ADMIN_USERNAME = os.getenv("ADMIN_USERNAME", "admin")
-ADMIN_PASS = os.getenv("ADMIN_PASS", "admin123")
+ADMIN_PASS = os.getenv("ADMIN_PASS", "gurjas@123")
 
 # ─── Test Types ──────────────────────────────────────────────────────────────
 TEST_TYPES = ["ECG", "Echo", "TMT", "Holter", "ABPM", "OPD"]
