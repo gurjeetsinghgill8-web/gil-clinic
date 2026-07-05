@@ -373,46 +373,38 @@ class Harness:
     def send_misscall_alert(self, patient_name: str, test_name: str = "", token: int = 0,
                             patient_pid: str = "") -> dict:
         """
-        Send a "Miss Call" style alert — works WITHOUT browser notification permission.
-        
-        Instead of JS injection (which only works on staff's browser, not patient's),
-        this returns a URL with ?misscall=1 param that can be:
-        1. Sent via WhatsApp to the patient
-        2. Used to redirect the patient if they're actively viewing
-        
-        The patient's JS watcher (get_status_watcher_js) detects ?misscall=1 in the URL
-        and plays sound+vibration+banner automatically.
+        Send a "Miss Call" style alert — updates patient dashboard instantly via DB poll alert.
         """
+        from utils.db import set_patient_alert
+
         misscall_url = f"{BASE_URL}/?misscall=1&patient={patient_pid}" if patient_pid else ""
-        status_label = f"🔔 Alert: {test_name or 'Cardiology'}"
+        status_label = f"📞 Miss Call Alert: {test_name or 'Clinic'}"
         msg = (
-            f"🔔 Miss Call Alert!\n"
-            f"{patient_name}, please check your status immediately.\n"
-            f"Department: {test_name or 'Cardiology'}\n"
-            f"Token: #{token}"
+            f"📞 Missed Call Alert! / मिस्ड कॉल अलर्ट!\n"
+            f"Dear {patient_name}, you were called for {test_name or 'test'} but were not present.\n"
+            f"Please proceed to the room immediately! / कृपया तुरंत रूम में संपर्क करें!"
         )
+
+        # Write to DB alert flag so patient's page picks it up on next 5s auto-refresh
+        alert_sent = False
+        if patient_pid:
+            alert_sent = set_patient_alert(patient_pid, msg)
+
         result = {
             "success": True,
-            "message": f"📞 Miss Call Alert sent to {patient_name}",
+            "message": (
+                f"📞 Miss Call alert sent! Will appear on {patient_name}'s phone within 5 seconds."
+                if alert_sent else
+                f"📞 Miss Call noted for {patient_name}"
+            ),
             "notification": msg,
             "patient_alert": {
                 "action": "misscall_alert",
                 "status_label": status_label,
             },
             "misscall_url": misscall_url,
+            "db_alert_set": alert_sent
         }
-
-        # Send WhatsApp with misscall link if patient_pid available
-        if patient_pid:
-            wa_msg = (
-                f"🏥 *{HOSPITAL_NAME}*\n"
-                f"📞 *Miss Call Alert!*\n"
-                f"Dear {patient_name}, please check your status immediately.\n"
-                f"Department: {test_name or 'Cardiology'}\n"
-                f"Token: #{token}\n\n"
-                f"🔗 Tap here: {misscall_url}"
-            )
-            # send_whatsapp_message(mobile, wa_msg)  # mobile not always available here
 
         return result
 
