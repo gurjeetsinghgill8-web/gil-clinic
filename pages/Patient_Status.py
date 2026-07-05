@@ -233,6 +233,7 @@ def show():
         auto_loaded = True
 
     # Show manual input only when not auto-loaded
+    if not auto_loaded:
         st.markdown("### 🔍 अपना स्टेटस देखें / Check Your Status")
         st.markdown(
             "अपना रजिस्टर्ड मोबाइल नंबर डालें — Enter your registered mobile number"
