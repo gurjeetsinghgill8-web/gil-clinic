@@ -30,7 +30,7 @@ from utils.queue import calculate_wait_time
 
 def inject_pwa_meta():
     """Inject PWA manifest link, service worker registration, and audio setup."""
-    return f"""
+    return """
     <!-- PWA Manifest -->
     <link rel="manifest" href="/assets/manifest.json">
     <meta name="theme-color" content="#667eea">
@@ -39,117 +39,110 @@ def inject_pwa_meta():
     <meta name="apple-mobile-web-app-title" content="CardioQueue">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 
-    <!-- ─── GLOBAL AUDIO ENGINE ────────────────────────────────────────── -->
-    <script>
-    window.__audioCtx = null;
-    window.__audioReady = false;
+	    <!-- ─── GLOBAL AUDIO ENGINE ────────────────────────────────────────── -->
+	    <script>
+	    (function() {
+	        window.__audioCtx = null;
+	        window.__audioReady = false;
 
-    // Check sessionStorage for audio activation flag (survives st_autorefresh)
-    var __audioActivated = sessionStorage.getItem("cq_audio_ready") === "1";
+	        // SessionStorage flag survives st_autorefresh page reloads
+	        var __audioActivated = sessionStorage.getItem("cq_audio_ready") === "1";
 
-    function getAudioCtx() {{
-        if (!window.__audioCtx) {{
-            try {{
-                window.__audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-            }} catch(e) {{ return null; }}
-        }}
-        if (window.__audioCtx.state === "suspended") {{
-            window.__audioCtx.resume().then(function() {{
-                window.__audioReady = true;
-                sessionStorage.setItem("cq_audio_ready", "1");
-            }});
-        }} else {{
-            window.__audioReady = true;
-            if (!__audioActivated) {{
-                sessionStorage.setItem("cq_audio_ready", "1");
-                __audioActivated = true;
-            }}
-        }}
-        return window.__audioCtx;
-    }}
+	        // Create + resume AudioContext (MUST be called from user gesture)
+	        function unlockAudio() {
+	            if (window.__audioReady) return true;
+	            try {
+	                if (!window.__audioCtx) {
+	                    window.__audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+	                }
+	                if (window.__audioCtx.state === "suspended") {
+	                    window.__audioCtx.resume().then(function() {
+	                        window.__audioReady = true;
+	                        sessionStorage.setItem("cq_audio_ready", "1");
+	                    });
+	                } else {
+	                    window.__audioReady = true;
+	                    sessionStorage.setItem("cq_audio_ready", "1");
+	                }
+	                return window.__audioReady;
+	            } catch(e) {
+	                return false;
+	            }
+	        }
 
-    // If audio was active before reload, resume immediately
-    if (__audioActivated) {{
-        setTimeout(function() {{ getAudioCtx(); }}, 100);
-    }}
+	        function getAudioCtx() { return window.__audioCtx; }
 
-    // Play a test beep — called manually AND on first touch
-    function playTestBeep() {{
-        var ctx = getAudioCtx();
-        if (!ctx) return;
-        try {{
-            var osc = ctx.createOscillator();
-            var g = ctx.createGain();
-            osc.connect(g); g.connect(ctx.destination);
-            osc.frequency.value = 880;
-            osc.type = "sine";
-            g.gain.value = 0.3;
-            osc.start();
-            osc.stop(ctx.currentTime + 0.15);
-            setTimeout(function() {{
-                var osc2 = ctx.createOscillator();
-                var g2 = ctx.createGain();
-                osc2.connect(g2); g2.connect(ctx.destination);
-                osc2.frequency.value = 660;
-                osc2.type = "sine";
-                g2.gain.value = 0.2;
-                osc2.start();
-                osc2.stop(ctx.currentTime + 0.1);
-            }}, 120);
-        }} catch(e) {{}}
-    }}
+	        // Play beep(s) after AudioContext is unlocked
+	        function playBeepNow(freq, duration, volume) {
+	            var ctx = window.__audioCtx;
+	            if (!ctx) return;
+	            try {
+	                var osc = ctx.createOscillator();
+	                var g = ctx.createGain();
+	                osc.connect(g); g.connect(ctx.destination);
+	                osc.frequency.value = freq;
+	                osc.type = "sine";
+	                g.gain.value = volume || 0.3;
+	                osc.start();
+	                osc.stop(ctx.currentTime + (duration || 0.15));
+	            } catch(e) {}
+	        }
 
-    // Resume AudioContext on ANY user interaction
-    function resumeAudio() {{
-        getAudioCtx();
-        if (!window.__audioWarmed) {{
-            window.__audioWarmed = true;
-            playTestBeep();
-        }}
-    }}
+	        // Public: call from onclick — unlocks + plays beep instantly
+	        window.playTestBeep = function() {
+	            unlockAudio();
+	            setTimeout(function() {
+	                playBeepNow(880, 0.2, 0.5);
+	                setTimeout(function() { playBeepNow(660, 0.15, 0.4); }, 150);
+	                setTimeout(function() { playBeepNow(1000, 0.25, 0.4); }, 350);
+	            }, 30);
+	            if (navigator.vibrate) navigator.vibrate(300);
+	            sessionStorage.setItem("cq_test_sound", "1");
+	        };
 
-    // Re-attach event listeners on every page load (survives st_autorefresh)
-    function attachAudioListeners() {{
-        document.removeEventListener("touchstart", resumeAudio);
-        document.removeEventListener("click", resumeAudio);
-        document.removeEventListener("touchend", resumeAudio);
-        document.addEventListener("touchstart", resumeAudio, {{ once: true }});
-        document.addEventListener("click", resumeAudio, {{ once: true }});
-        document.addEventListener("touchend", resumeAudio, {{ once: true }});
-    }}
-    attachAudioListeners();
+	        // Public: ensure audio is ready
+	        window.resumeAudio = function() { unlockAudio(); };
 
-    // Periodic resume (every 3s — helps when st_autorefresh kills AudioContext)
-    setInterval(function() {{
-        var ctx = window.__audioCtx;
-        if (ctx && ctx.state === "suspended") {{
-            ctx.resume().then(function() {{
-                window.__audioReady = true;
-                sessionStorage.setItem("cq_audio_ready", "1");
-            }});
-        }}
-        // Re-attach listeners after st_autorefresh (page reloads)
-        attachAudioListeners();
-        // Check if test sound flag was set during reload
-        if (sessionStorage.getItem("cq_test_sound") === "1") {{
-            sessionStorage.removeItem("cq_test_sound");
-            try {{
-                var ctx = getAudioCtx();
-                if (ctx) {{
-                    var osc = ctx.createOscillator();
-                    var g = ctx.createGain();
-                    osc.connect(g); g.connect(ctx.destination);
-                    osc.frequency.value = 880;
-                    osc.type = "sine";
-                    g.gain.value = 0.3;
-                    osc.start();
-                    osc.stop(ctx.currentTime + 0.15);
-                }}
-                if (navigator.vibrate) navigator.vibrate(200);
-            }} catch(e) {{}}
-        }}
-    }}, 3000);
+	        // If previously activated, resume on load
+	        if (__audioActivated) {
+	            setTimeout(function() {
+	                var ctx = new (window.AudioContext || window.webkitAudioContext)();
+	                window.__audioCtx = ctx;
+	                if (ctx.state === "suspended") ctx.resume();
+	            }, 100);
+	        }
 
+	        // Re-attach listeners on every page load (survives st_autorefresh)
+	        function attachAudioListeners() {
+	            ["touchstart", "click", "touchend"].forEach(function(evt) {
+	                document.removeEventListener(evt, unlockAudio);
+	                document.addEventListener(evt, unlockAudio, { once: true });
+	            });
+	        }
+	        attachAudioListeners();
+
+	        // Periodic resume (every 3s — handles st_autorefresh reloads)
+	        setInterval(function() {
+	            var ctx = window.__audioCtx;
+	            if (ctx && ctx.state === "suspended") {
+	                ctx.resume().then(function() {
+	                    window.__audioReady = true;
+	                    sessionStorage.setItem("cq_audio_ready", "1");
+	                });
+	            }
+	            attachAudioListeners();
+	            // Check test sound flag (set before st_autorefresh reload)
+	            if (sessionStorage.getItem("cq_test_sound") === "1") {
+	                sessionStorage.removeItem("cq_test_sound");
+	                setTimeout(function() {
+	                    playBeepNow(880, 0.2, 0.5);
+	                    setTimeout(function() { playBeepNow(660, 0.15, 0.4); }, 150);
+	                    if (navigator.vibrate) navigator.vibrate(200);
+	                }, 50);
+	            }
+	        }, 3000);
+	    })();
+	
     // ─── Service Worker ─────────────────────────────────────────────────
     if ("serviceWorker" in navigator) {{
         navigator.serviceWorker.register("/assets/service-worker.js")
@@ -237,7 +230,9 @@ def get_status_watcher_js(prev_status_hash: str, patient_name: str, patient_id: 
         function playBeep(freq, duration, gainVal, delay) {{
             setTimeout(function() {{
                 try {{
-                    var ctx = getAudioCtx();
+                    // Ensure audio is unlocked first
+                    if (window.resumeAudio) window.resumeAudio();
+                    var ctx = window.__audioCtx;
                     if (!ctx) return;
                     var osc = ctx.createOscillator();
                     var g = ctx.createGain();
