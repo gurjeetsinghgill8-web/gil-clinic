@@ -721,24 +721,24 @@ def show():
         "Sound + vibration work WITHOUT browser notification permission."
     )
 
-    # ─── WhatsApp Share Button (Brick 4) ─────────────────────────────────────────────
+    # ─── Copy Tracking Link Button (Client-side, Free) ───────────────────────────────
     try:
-        _status_url = f"{BASE_URL}/Patient_Status?mobile={patient.get('mobile', '')}"
-        _wa_text = (
-            f"🏥 *{HOSPITAL_NAME} — Live Status*\n"
-            f"👤 {patient.get('name', '')}\n"
-            f"📊 Tests: {', '.join(t['test_name'] for t in tests)}\n"
-            f"🔗 Live Track: {_status_url}"
-        )
-        import urllib.parse
-        _wa_url = f"https://wa.me/?text={urllib.parse.quote(_wa_text)}"
+        _status_url = f"{BASE_URL}/?patient={patient.get('patient_id', '')}"
         st.markdown(
-            f'<a href="{_wa_url}" target="_blank" style="text-decoration:none;">'
-            f'<div style="background:linear-gradient(135deg,#25D366,#128C7E);'
-            f'color:white;padding:10px 18px;border-radius:10px;text-align:center;'
-            f'font-weight:600;font-size:0.9rem;margin:8px 0;cursor:pointer;">'
-            f'📲 Share Status on WhatsApp / WhatsApp पर भेजें'
-            f'</div></a>',
+            f"""
+            <div style="text-align:center; margin: 8px 0;">
+                <button onclick="
+                    navigator.clipboard.writeText('{_status_url}');
+                    this.innerText = '✅ Link Copied! / लिंक कॉपी हो गया!';
+                    setTimeout(() => {{ this.innerText = '🔗 Copy Status Link / ट्रैकिंग लिंक कॉपी करें'; }}, 2000);
+                "
+                style="background:linear-gradient(135deg,#667eea,#764ba2);
+                color:white;border:none;padding:10px 18px;border-radius:10px;text-align:center;
+                font-weight:600;font-size:0.9rem;width:100%;cursor:pointer;transition:all 0.3s ease;">
+                🔗 Copy Status Link / ट्रैकिंग लिंक कॉपी करें
+                </button>
+            </div>
+            """,
             unsafe_allow_html=True
         )
     except Exception:

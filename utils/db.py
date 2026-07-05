@@ -246,28 +246,12 @@ def _seed_default_users():
 
 
 # Detect and configure database connection
-if (
-    SUPABASE_URL 
-    and SUPABASE_KEY 
-    and "your-project-id" not in SUPABASE_URL 
-    and "your-supabase-anon" not in SUPABASE_KEY
-    and SUPABASE_URL.strip() != ""
-    and SUPABASE_KEY.strip() != ""
-):
-    try:
-        from supabase import create_client
-        _supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
-        USE_SUPABASE = True
-        print("[DB] Configured to run on Supabase Cloud database.")
-    except Exception as e:
-        print(f"[DB] Error connecting to Supabase: {e}. Falling back to SQLite.")
-        USE_SUPABASE = False
-else:
-    print("[DB] Supabase credentials not set or left as default. Using local SQLite database.")
+    # Supabase is disabled by default to keep data local to the device
     USE_SUPABASE = False
 
 if not USE_SUPABASE:
     init_sqlite()
+
 
 
 def get_client():
