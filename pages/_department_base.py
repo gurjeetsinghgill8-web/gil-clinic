@@ -105,11 +105,11 @@ def show_department(test_name: str, emoji: str = "📊"):
         """, unsafe_allow_html=True)
 
         # Action buttons
-        cols = st.columns([1, 1, 1, 2])
+        cols = st.columns([1, 1, 1, 1, 1])
 
         with cols[0]:
             if current_status == "called":
-                if st.button("▶️ Start Test", key=f"start_{p['id']}",
+                if st.button("▶️ Start", key=f"start_{p['id']}",
                              type="primary", use_container_width=True):
                     result = harness.start_test(p["id"])
                     if result["success"]:
@@ -120,7 +120,7 @@ def show_department(test_name: str, emoji: str = "📊"):
 
         with cols[1]:
             if current_status in ["called", "in_progress"]:
-                btn_label = "✅ Complete" if current_status == "in_progress" else "❌ Complete (skip)"
+                btn_label = "✅ Complete" if current_status == "in_progress" else "❌ Skip"
                 if st.button(btn_label, key=f"complete_{p['id']}",
                              use_container_width=True):
                     result = harness.complete_test(
@@ -138,6 +138,22 @@ def show_department(test_name: str, emoji: str = "📊"):
                         st.error(result["message"])
 
         with cols[2]:
+            # 🔔 Reminder button — always visible for current patient
+            if st.button("🔔 Remind", key=f"remind_curr_{p['id']}",
+                         use_container_width=True):
+                result = harness.send_reminder(
+                    p_name, test_name, p_mobile, token
+                )
+                if result["success"]:
+                    st.success(result["message"])
+                    if result.get("notification"):
+                        script = harness.get_notification_script(
+                            f"🔔 Reminder — {test_name}",
+                            result["notification"], urgent=True
+                        )
+                        st.markdown(script, unsafe_allow_html=True)
+
+        with cols[3]:
             called_time = p.get("called_at", "")
             if called_time:
                 try:
@@ -168,7 +184,7 @@ def show_department(test_name: str, emoji: str = "📊"):
             wait_time = calculate_wait_time(test_name, pos)
 
             with st.container(border=True):
-                cols = st.columns([2, 1, 1, 1])
+                cols = st.columns([2, 1, 1, 1, 1])
 
                 with cols[0]:
                     st.markdown(f"**{w_name}** — Token #{token}")
@@ -179,7 +195,7 @@ def show_department(test_name: str, emoji: str = "📊"):
                     st.caption(f"Position: #{pos}")
 
                 with cols[2]:
-                    if st.button("🔵 Call Patient", key=f"call_{w['id']}",
+                    if st.button("🔵 Call", key=f"call_{w['id']}",
                                  type="primary", use_container_width=True):
                         result = harness.call_patient(
                             w["id"], w_name, test_name, token,
@@ -198,6 +214,21 @@ def show_department(test_name: str, emoji: str = "📊"):
                             st.error(result["message"])
 
                 with cols[3]:
+                    if st.button("🔔 Remind", key=f"remind_{w['id']}",
+                                 use_container_width=True):
+                        result = harness.send_reminder(
+                            w_name, test_name, w_mobile, token
+                        )
+                        if result["success"]:
+                            st.success(result["message"])
+                            if result.get("notification"):
+                                script = harness.get_notification_script(
+                                    f"🔔 Reminder — {test_name}",
+                                    result["notification"], urgent=True
+                                )
+                                st.markdown(script, unsafe_allow_html=True)
+
+                with cols[4]:
                     registered_time = w.get("created_at", "")
                     if registered_time:
                         try:

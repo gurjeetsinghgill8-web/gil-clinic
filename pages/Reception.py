@@ -238,37 +238,39 @@ def show():
         today_patients = get_today_patients()
 
         if today_patients:
-            # Create display data
-            table_data = []
+            # Show each patient with remind button
             for p in today_patients:
+                p_id = p.get("patient_id", "")
+                p_name = p.get("name", "")
+                p_mobile = p.get("mobile", "")
                 tests = harness.get_patient_details(p["patient_id"], by_mobile=False)
                 test_names = [t["test_name"] for t in tests["tests"]]
-                table_data.append({
-                    "ID": p["patient_id"],
-                    "Name": p["name"],
-                    "Mobile": p["mobile"],
-                    "Age": p["age"],
-                    "Tests": ", ".join(test_names),
-                    "Status": " | ".join(
-                        f"{STATUS_ICONS.get(t['status'], '❓')} {t['test_name']}: {STATUS_LABELS.get(t['status'], t['status'])}"
-                        for t in tests["tests"]
-                    ),
-                })
+                status_text = " | ".join(
+                    f"{STATUS_ICONS.get(t['status'], '❓')} {t['test_name']}: {STATUS_LABELS.get(t['status'], t['status'])}"
+                    for t in tests["tests"]
+                )
 
-            st.data_editor(
-                table_data,
-                use_container_width=True,
-                hide_index=True,
-                column_config={
-                    "ID": st.column_config.TextColumn("Patient ID", width="small"),
-                    "Name": st.column_config.TextColumn("Name", width="medium"),
-                    "Mobile": st.column_config.TextColumn("Mobile", width="small"),
-                    "Age": st.column_config.NumberColumn("Age", width="small"),
-                    "Tests": st.column_config.TextColumn("Tests", width="medium"),
-                    "Status": st.column_config.TextColumn("Status", width="large"),
-                },
-                disabled=True,
-            )
+                with st.container(border=True):
+                    col1, col2, col3 = st.columns([3, 2, 1])
+                    with col1:
+                        st.markdown(f"**{p_name}** — `{p_id}`")
+                        st.caption(f"📱 {p_mobile} | Tests: {', '.join(test_names)}")
+                    with col2:
+                        st.markdown(f"{status_text}")
+                    with col3:
+                        if st.button("🔔 Remind", key=f"remind_rec_{p_id}",
+                                     use_container_width=True):
+                            result = harness.send_reminder(
+                                p_name, ", ".join(test_names), p_mobile
+                            )
+                            if result["success"]:
+                                st.success(result["message"])
+                                if result.get("notification"):
+                                    script = harness.get_notification_script(
+                                        "🔔 Reminder from Reception",
+                                        result["notification"], urgent=True
+                                    )
+                                    st.markdown(script, unsafe_allow_html=True)
         else:
             st.info("📭 No patients registered today yet.")
 

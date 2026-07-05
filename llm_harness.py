@@ -260,6 +260,37 @@ class Harness:
             "notification": msg,
         }
 
+    def send_reminder(self, patient_name: str, test_name: str = "", mobile: str = "", token: int = 0) -> dict:
+        """
+        Send a reminder notification (sound + vibration) to a patient.
+        Does NOT change any status — just pushes notification.
+        Staff can click this button repeatedly.
+        """
+        room = ROOM_NAMES.get(test_name, "Cardiology Department")
+        msg = (
+            f"🔔 Reminder!\n"
+            f"{patient_name}, please check your status.\n"
+            f"Department: {test_name or 'Cardiology'}\n"
+            f"Token: #{token}"
+        )
+
+        # ─── WhatsApp Reminder (if mobile available) ─────────────────────────
+        if mobile:
+            wa_msg = (
+                f"🏥 *{HOSPITAL_NAME}*\n"
+                f"🔔 *Reminder*\n"
+                f"Dear {patient_name}, your test ({test_name}) is pending.\n"
+                f"Token #{token} • Room: {room}\n"
+                f"Please check your status."
+            )
+            send_whatsapp_message(mobile, wa_msg)
+
+        return {
+            "success": True,
+            "message": f"🔔 Reminder sent to {patient_name}",
+            "notification": msg,
+        }
+
     # ─── DOCTOR OPERATIONS ────────────────────────────────────────────────────
 
     def get_doctor_dashboard(self) -> dict:

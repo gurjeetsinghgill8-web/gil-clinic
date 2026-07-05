@@ -168,29 +168,52 @@ def show():
                     w_name = p.get("name", "Unknown")
                     w_mobile = p.get("mobile", "")
                     token = next_p.get("token_number", 0)
-                    st.markdown(f"**Next:** {w_name} (Token #{token})")
 
-                    if st.button(
-                        f"🔵 Call — {w_name}",
-                        key=f"mgr_call_{dept_name}",
-                        type="primary",
-                        use_container_width=True,
-                    ):
-                        result = harness.call_patient(
-                            next_p["id"], w_name, dept_name, token,
-                            w_mobile, next_p.get("patient_id", "")
-                        )
-                        if result["success"]:
-                            st.success(result["message"])
-                            if result.get("notification"):
-                                script = harness.get_notification_script(
-                                    f"🔵 {dept_name} — Patient Called",
-                                    result["notification"], urgent=True
-                                )
-                                st.markdown(script, unsafe_allow_html=True)
-                            st.rerun()
-                        else:
-                            st.error(result["message"])
+                    st.markdown(f"**Next:** {w_name} (Token #{token})")
+                    st.caption(f"📱 {w_mobile}")
+
+                    col_a, col_b = st.columns(2)
+                    with col_a:
+                        if st.button(
+                            f"🔵 Call",
+                            key=f"mgr_call_{dept_name}",
+                            type="primary",
+                            use_container_width=True,
+                        ):
+                            result = harness.call_patient(
+                                next_p["id"], w_name, dept_name, token,
+                                w_mobile, next_p.get("patient_id", "")
+                            )
+                            if result["success"]:
+                                st.success(result["message"])
+                                if result.get("notification"):
+                                    script = harness.get_notification_script(
+                                        f"🔵 {dept_name} — Patient Called",
+                                        result["notification"], urgent=True
+                                    )
+                                    st.markdown(script, unsafe_allow_html=True)
+                                st.rerun()
+                            else:
+                                st.error(result["message"])
+                    with col_b:
+                        if st.button(
+                            f"🔔 Remind",
+                            key=f"mgr_remind_{dept_name}",
+                            use_container_width=True,
+                        ):
+                            result = harness.send_reminder(
+                                w_name, dept_name, w_mobile, token
+                            )
+                            if result["success"]:
+                                st.success(result["message"])
+                                if result.get("notification"):
+                                    script = harness.get_notification_script(
+                                        f"🔔 Reminder — {dept_name}",
+                                        result["notification"], urgent=True
+                                    )
+                                    st.markdown(script, unsafe_allow_html=True)
+                            else:
+                                st.error(result["message"])
                 else:
                     st.markdown("✅ No waiting patients")
 
