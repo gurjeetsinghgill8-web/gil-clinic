@@ -18,6 +18,7 @@ Architecture: Patient scans QR → opens this page with ?patient=ID
 """
 import streamlit as st
 from datetime import datetime
+import textwrap
 
 from llm_harness import get_harness
 from utils.config import (
@@ -31,7 +32,7 @@ from utils.queue import calculate_wait_time, calculate_expected_time
 
 def inject_pwa_meta():
     """Inject PWA manifest link, service worker registration, and audio setup."""
-    return """
+    return textwrap.dedent("""
     <!-- PWA Manifest -->
     <link rel="manifest" href="/assets/manifest.json">
     <meta name="theme-color" content="#667eea">
@@ -181,12 +182,12 @@ def inject_pwa_meta():
         }}
     }}
     </script>
-    """
+    """)
 
 
 def get_pwa_install_button() -> str:
     """Return HTML for the PWA install button (hidden by default)."""
-    return """
+    return textwrap.dedent("""
     <div id="install-pwa-btn" style="display: none; text-align: center; margin: 10px 0;">
         <button onclick="installPWA()" style="
             background: linear-gradient(135deg, #667eea, #764ba2);
@@ -200,7 +201,7 @@ def get_pwa_install_button() -> str:
             Install for one-tap access & offline support
         </p>
     </div>
-    """
+    """)
 
 
 # ─── STATUS CHANGE DETECTION JS ─────────────────────────────────────────────────
@@ -218,7 +219,7 @@ def get_status_watcher_js(prev_status_hash: str, patient_name: str, patient_id: 
     button reaches the patient — via URL param instead of direct JS injection.
     """
     safe_name = patient_name.replace("'", "\\'").replace('"', '\\"')
-    return f"""
+    return textwrap.dedent(f"""
     <script>
     (function() {{
         var PID = "{patient_id}";
@@ -362,7 +363,7 @@ def get_status_watcher_js(prev_status_hash: str, patient_name: str, patient_id: 
             }}, 2000);
     }})();
     </script>
-    """
+    """)
 
 
 # ─── MAIN PAGE ──────────────────────────────────────────────────────────────────
