@@ -141,6 +141,72 @@ def trigger_alert_sound(message: str = ""):
     components.html(js_code, height=0)
 
 
+def trigger_dynamic_voice_alert(test_name: str, status: str):
+    """Trigger dynamic bilingual English and Hindi voice announcements based on test and status updates."""
+    import streamlit.components.v1 as components
+    
+    # 1. Map status to custom patient directions
+    en_msg = ""
+    hi_msg = ""
+    
+    hi_test = {
+        "ECG": "ई सी जी",
+        "Echo": "इको",
+        "TMT": "टी एम टी",
+        "Holter": "होल्टर",
+        "ABPM": "ए बी पी एम",
+        "OPD": "ओ पी डी consultation"
+    }.get(test_name, test_name)
+    
+    if status == "called":
+        en_msg = f"Welcome to Doctor Gill Clinic. Please proceed to the {test_name} Room for your test."
+        hi_msg = f"डॉक्टर गिल के क्लिनिक में आपका स्वागत है। कृपया अपने {hi_test} टेस्ट के लिए रूम में प्रवेश करें।"
+    elif status == "in_progress":
+        en_msg = f"Your {test_name} test is now in progress."
+        hi_msg = f"आपका {hi_test} टेस्ट शुरू हो चुका है और चल रहा है।"
+    elif status == "report_ready":
+        en_msg = f"Your {test_name} report is ready. Please collect it from the counter."
+        hi_msg = f"आपकी {hi_test} रिपोर्ट तैयार है। कृपया काउंटर से इसे प्राप्त करें।"
+    elif status in ["completed", "delivered"]:
+        en_msg = "Thank you for visiting Doctor Gill Clinic. Have a nice day."
+        hi_msg = "डॉक्टर गिल के क्लिनिक में आने के लिए आपका धन्यवाद। आपका दिन शुभ रहे।"
+    else:
+        en_msg = f"Your {test_name} test is updated to {status}."
+        hi_msg = f"आपका {hi_test} टेस्ट {status} पर अपडेट हो गया है।"
+
+    # Escape quotes for safety
+    en_msg = en_msg.replace("'", "\\'").replace('"', '\\"').replace("\n", " ")
+    hi_msg = hi_msg.replace("'", "\\'").replace('"', '\\"').replace("\n", " ")
+
+    js_code = f"""
+    <script>
+    (function() {{
+        try {{
+            window.speechSynthesis.cancel(); // Cancel any ongoing speech
+            
+            // Speak English
+            var speakEn = new SpeechSynthesisUtterance("{en_msg}");
+            speakEn.lang = "en-US";
+            speakEn.rate = 0.95;
+            window.speechSynthesis.speak(speakEn);
+            
+            // Speak Hindi when English finishes
+            speakEn.onend = function() {{
+                try {{
+                    var speakHi = new SpeechSynthesisUtterance("{hi_msg}");
+                    speakHi.lang = "hi-IN";
+                    speakHi.rate = 0.95;
+                    window.speechSynthesis.speak(speakHi);
+                }} catch(err) {{}}
+            }};
+        }} catch(e) {{}}
+        if (navigator.vibrate) navigator.vibrate([500, 200, 500, 200, 700]);
+    }})();
+    </script>
+    """
+    components.html(js_code, height=0)
+
+
 # ─── MAIN PAGE ──────────────────────────────────────────────────────────────────
 
 def show():
@@ -263,12 +329,17 @@ def show():
     primary_test = tests[0]["test_name"] if tests else ""
 
     # ─── Python-Side Status Change Detection ──────────────────────────────────
-    if "prev_status_hash" not in st.session_state:
-        st.session_state.prev_status_hash = status_hash
-    elif st.session_state.prev_status_hash != status_hash:
-        st.session_state.prev_status_hash = status_hash
-        # Play alert beep when status changes!
-        trigger_alert_sound(f"Status changed to {STATUS_LABELS.get(primary_status, primary_status)}")
+    if "prev_test_statuses" not in st.session_state:
+        st.session_state.prev_test_statuses = {t["test_name"]: t["status"] for t in tests}
+    else:
+        prev = st.session_state.prev_test_statuses
+        for t in tests:
+            t_name = t["test_name"]
+            curr_status = t["status"]
+            old_status = prev.get(t_name, None)
+            if old_status is not None and old_status != curr_status:
+                trigger_dynamic_voice_alert(t_name, curr_status)
+        st.session_state.prev_test_statuses = {t["test_name"]: t["status"] for t in tests}
 
     # ─── BRICK 1: DB-Poll Alert Check ────────────────────────────────────────
     try:
