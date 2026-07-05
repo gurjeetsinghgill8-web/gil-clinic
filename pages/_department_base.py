@@ -159,7 +159,7 @@ def show_department(test_name: str, emoji: str = "📊"):
                          use_container_width=True,
                          help="Sends alert to patient page WITHOUT needing notification permission."):
                 p_id_full = p.get("patient_id", "")
-                result = harness.send_misscall_alert(p_name, test_name, token, patient_id=p_id_full)
+                result = harness.send_misscall_alert(p_name, test_name, token, patient_pid=p_id_full)
                 if result["success"]:
                     st.success(result["message"])
                     misscall_url = result.get("misscall_url", "")
@@ -247,7 +247,7 @@ def show_department(test_name: str, emoji: str = "📊"):
                                  use_container_width=True,
                                  help="Sends alert without notification permission."):
                         w_patient_id = w.get("patient_id", "")
-                        result = harness.send_misscall_alert(w_name, test_name, token, patient_id=w_patient_id)
+                        result = harness.send_misscall_alert(w_name, test_name, token, patient_pid=w_patient_id)
                         if result["success"]:
                             st.success(result["message"])
                             misscall_url = result.get("misscall_url", "")

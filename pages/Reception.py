@@ -276,7 +276,7 @@ def show():
                                      use_container_width=True, type="secondary",
                                      help="Sends alert to patient page WITHOUT needing notification permission. Works on all phones."):
                             result = harness.send_misscall_alert(
-                                p_name, ", ".join(test_names), patient_id=p_id
+                                p_name, ", ".join(test_names), patient_pid=p_id
                             )
                             if result["success"]:
                                 st.success(result["message"])

@@ -223,7 +223,7 @@ def show():
                         ):
                             w_patient_id = next_p.get("patient_id", "")
                             result = harness.send_misscall_alert(
-                                w_name, dept_name, token, patient_id=w_patient_id
+                                w_name, dept_name, token, patient_pid=w_patient_id
                             )
                             if result["success"]:
                                 st.success(result["message"])

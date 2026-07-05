@@ -364,7 +364,7 @@ class Harness:
     # ─── MISS CALL ALERT ────────────────────────────────────────────────────
 
     def send_misscall_alert(self, patient_name: str, test_name: str = "", token: int = 0,
-                            patient_id: str = "") -> dict:
+                            patient_pid: str = "") -> dict:
         """
         Send a "Miss Call" style alert — works WITHOUT browser notification permission.
         
@@ -376,7 +376,7 @@ class Harness:
         The patient's JS watcher (get_status_watcher_js) detects ?misscall=1 in the URL
         and plays sound+vibration+banner automatically.
         """
-        misscall_url = f"{BASE_URL}/?misscall=1&patient={patient_id}" if patient_id else ""
+        misscall_url = f"{BASE_URL}/?misscall=1&patient={patient_pid}" if patient_pid else ""
         status_label = f"🔔 Alert: {test_name or 'Cardiology'}"
         msg = (
             f"🔔 Miss Call Alert!\n"
