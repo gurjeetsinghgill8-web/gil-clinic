@@ -186,6 +186,11 @@ def misscall_alert_script(patient_name: str, test_name: str = "") -> str:
         var testName = '{test_name}';
         var label = '🔔 Alert' + (testName ? ': ' + testName : '');
 
+        // ── 0. Force resume AudioContext ────────────────────────────────────
+        try {{
+            if (window.getAudioCtx) window.getAudioCtx();
+        }} catch(e) {{}}
+
         // ── 1. Trigger sound+vibration via global function ──────────────────
         if (window.__playPatientAlert) {{
             window.__playPatientAlert(label + ' - ' + pname);

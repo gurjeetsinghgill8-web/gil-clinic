@@ -29,7 +29,7 @@ from utils.queue import calculate_wait_time
 # ─── PWA / META INJECTION ───────────────────────────────────────────────────────
 
 def inject_pwa_meta():
-    """Inject PWA manifest link, service worker registration, and install prompt JS."""
+    """Inject PWA manifest link, service worker registration, and audio setup."""
     return f"""
     <!-- PWA Manifest -->
     <link rel="manifest" href="/assets/manifest.json">
@@ -39,23 +39,11 @@ def inject_pwa_meta():
     <meta name="apple-mobile-web-app-title" content="CardioQueue">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 
-    <!-- Service Worker Registration + Notif Perm + Audio Warmup -->
+    <!-- ─── GLOBAL AUDIO ENGINE ────────────────────────────────────────── -->
     <script>
-    if ("serviceWorker" in navigator) {{
-        navigator.serviceWorker.register("/assets/service-worker.js")
-            .then(function() {{ console.log("[PWA] Service Worker registered"); }})
-            .catch(function(err) {{ console.log("[PWA] SW registration failed:", err); }});
-    }}
-
-    // Request notification permission on first visit
-    if ("Notification" in window && Notification.permission === "default") {{
-        Notification.requestPermission();
-    }}
-
-    // ─── Mobile Audio: Touch-to-Enable ──────────────────────────────────
-    // Mobile browsers block AudioContext until user gesture.
-    // Create one global AudioContext and resume on first touch.
     window.__audioCtx = null;
+    window.__audioReady = false;
+
     function getAudioCtx() {{
         if (!window.__audioCtx) {{
             try {{
@@ -63,43 +51,83 @@ def inject_pwa_meta():
             }} catch(e) {{ return null; }}
         }}
         if (window.__audioCtx.state === "suspended") {{
-            window.__audioCtx.resume();
+            window.__audioCtx.resume().then(function() {{
+                window.__audioReady = true;
+            }});
+        }} else {{
+            window.__audioReady = true;
         }}
         return window.__audioCtx;
     }}
-    // Resume on first ANY touch/click on the page
-    document.addEventListener("touchstart", function() {{ getAudioCtx(); }}, {{ once: true }});
-    document.addEventListener("click", function() {{ getAudioCtx(); }}, {{ once: true }});
-    // Also try immediate resume (works on some browsers)
-    setTimeout(function() {{ try {{ getAudioCtx(); }} catch(e) {{}} }}, 100);
 
-    // Display a "Tap to enable sound" hint for 5 seconds on mobile
-    (function() {{
-        var isMobile = /android|iphone|ipad|ipod/i.test(navigator.userAgent);
-        if (!isMobile) return;
-        var hint = document.createElement("div");
-        hint.id = "sound-hint";
-        hint.innerHTML = "🔊 Tap screen to enable sound alerts";
-        hint.style.cssText = "position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:#667eea;color:#fff;padding:10px 20px;border-radius:25px;font-size:14px;z-index:9999;opacity:0.9;box-shadow:0 4px 15px rgba(0,0,0,0.3);text-align:center;max-width:90%;animation:fadeIn 0.5s;";
-        document.body.appendChild(hint);
-        setTimeout(function() {{
-            var h = document.getElementById("sound-hint");
-            if (h) h.style.display = "none";
-        }}, 5000);
-    }})();
+    // Play a test beep — called manually AND on first touch
+    function playTestBeep() {{
+        var ctx = getAudioCtx();
+        if (!ctx) return;
+        try {{
+            var osc = ctx.createOscillator();
+            var g = ctx.createGain();
+            osc.connect(g); g.connect(ctx.destination);
+            osc.frequency.value = 880;
+            osc.type = "sine";
+            g.gain.value = 0.3;
+            osc.start();
+            osc.stop(ctx.currentTime + 0.15);
+            setTimeout(function() {{
+                var osc2 = ctx.createOscillator();
+                var g2 = ctx.createGain();
+                osc2.connect(g2); g2.connect(ctx.destination);
+                osc2.frequency.value = 660;
+                osc2.type = "sine";
+                g2.gain.value = 0.2;
+                osc2.start();
+                osc2.stop(ctx.currentTime + 0.1);
+            }}, 120);
+        }} catch(e) {{}}
+    }}
 
-    // Add to Home Screen prompt handler
+    // Resume AudioContext on ANY user interaction
+    function resumeAudio() {{
+        getAudioCtx();
+        if (!window.__audioWarmed) {{
+            window.__audioWarmed = true;
+            playTestBeep();
+        }}
+    }}
+    document.addEventListener("touchstart", resumeAudio, {{ once: true }});
+    document.addEventListener("click", resumeAudio, {{ once: true }});
+    document.addEventListener("touchend", resumeAudio, {{ once: true }});
+
+    // Also try periodically (some browsers need multiple attempts)
+    setInterval(function() {{
+        var ctx = window.__audioCtx;
+        if (ctx && ctx.state === "suspended") {{
+            ctx.resume().then(function() {{ window.__audioReady = true; }});
+        }}
+    }}, 2000);
+
+    // ─── Service Worker ─────────────────────────────────────────────────
+    if ("serviceWorker" in navigator) {{
+        navigator.serviceWorker.register("/assets/service-worker.js")
+            .then(function() {{ console.log("[PWA] SW registered"); }})
+            .catch(function(err) {{ console.log("[PWA] SW reg failed:", err); }});
+    }}
+
+    // Request notification permission
+    if ("Notification" in window && Notification.permission === "default") {{
+        Notification.requestPermission();
+    }}
+
+    // Add to Home Screen prompt
     window.addEventListener("beforeinstallprompt", function(e) {{
         e.preventDefault();
         window.deferredInstallPrompt = e;
-        // Show install button after 3 seconds
         setTimeout(function() {{
             var btn = document.getElementById("install-pwa-btn");
             if (btn) btn.style.display = "block";
         }}, 3000);
     }});
 
-    // Handle install button click
     function installPWA() {{
         var prompt = window.deferredInstallPrompt;
         if (prompt) {{
@@ -235,7 +263,8 @@ def get_status_watcher_js(prev_status_hash: str, patient_name: str, patient_id: 
             }});
         }}
 
-        // ─── 3. Poll every 3 sec for DOM changes (st_autorefresh updates) ──────
+        // ─── 3. Poll every 2 sec for DOM changes ──────────────────────────────
+        // Uses sessionStorage so hash survives Streamlit page reloads.
         setInterval(function() {{
             var el = document.getElementById("status-hash");
             if (!el) return;
@@ -244,39 +273,9 @@ def get_status_watcher_js(prev_status_hash: str, patient_name: str, patient_id: 
             var oh = sessionStorage.getItem(STORAGE_KEY) || "";
             if (oh && nh && oh !== nh) {{
                 sessionStorage.setItem(STORAGE_KEY, nh);
-                // Sound + vibration (using shared AudioContext)
-                try {{
-                    var ctx = getAudioCtx();
-                    if (ctx) {{
-                        var o = ctx.createOscillator();
-                        var g = ctx.createGain();
-                        o.connect(g); g.connect(ctx.destination);
-                        o.frequency.value = 880;
-                        o.type = "sine";
-                        g.gain.value = 0.6;
-                        o.start();
-                        o.stop(ctx.currentTime + 0.5);
-                    }}
-                try {{ if (navigator.vibrate) navigator.vibrate([500, 200, 500]); }} catch(e) {{}}
-                if ("Notification" in window && Notification.permission === "granted") {{
-                    try {{
-                        new Notification("🔔 " + PNAME, {{
-                            body: "Status: " + ns,
-                            icon: "https://img.icons8.com/color/48/hospital.png",
-                            tag: "cq-" + Date.now(),
-                            requireInteraction: true,
-                            silent: false,
-                            vibrate: [500, 200, 500]
-                        }});
-                    }} catch(e) {{}}
-                }}
-                if ("serviceWorker" in navigator) {{
-                    navigator.serviceWorker.ready.then(function(reg) {{
-                        if (reg.active) reg.active.postMessage({{ type: "UPDATE_STATUS_HASH", statusHash: nh }});
-                    }});
-                }}
+                window.__playPatientAlert(ns);
             }}
-        }}, 3000);
+        }}, 2000);
     }})();
     </script>
     """
@@ -574,6 +573,22 @@ def show():
         "साउंड + वाइब्रेशन आएगा। बस स्क्रीन पर एक बार टैप करें 'Tap to enable sound' दिखे तो।  \n"
         "Sound + vibration work WITHOUT browser notification permission. Just tap the screen once if you see the hint."
     )
+
+    # ─── Test Sound Button ────────────────────────────────────────────────
+    st.markdown("""
+    <div style="text-align:center;margin:8px 0;">
+        <button onclick="resumeAudio();playTestBeep();navigator.vibrate(200);"
+                style="background:linear-gradient(135deg,#667eea,#764ba2);color:white;
+                       border:none;padding:12px 24px;border-radius:12px;font-size:16px;
+                       font-weight:600;cursor:pointer;width:100%;
+                       box-shadow:0 4px 15px rgba(102,126,234,0.4);">
+            🔊 Test Sound — Tap to Enable Alert Sounds
+        </button>
+        <p style="font-size:0.75rem;color:#888;margin-top:4px;">
+            Agar sound nahi aa raha to ise tap karein / Tap this if you don't hear anything
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
 
     # ─── Inject Status Watcher JS ──────────────────────────────────────────
     st.markdown(
