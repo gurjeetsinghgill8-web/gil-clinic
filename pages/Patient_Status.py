@@ -416,6 +416,50 @@ def show():
             st.markdown(f"### {STATUS_ICONS.get(primary_status, '❓')}")
             st.markdown(f"**{STATUS_LABELS.get(primary_status, primary_status)}**")
 
+    # ─── Patient Help Desk: Ask Reception ──────────────────────────────────
+    try:
+        from utils.db import set_patient_inquiry, get_patient_inquiry
+        active_inquiry = get_patient_inquiry(patient["patient_id"])
+        
+        inq_cols = st.columns([2, 1])
+        with inq_cols[0]:
+            if active_inquiry:
+                st.warning("⏳ Status check request sent to Receptionist. / रिसेप्शनिस्ट से संपर्क किया जा रहा है...")
+            else:
+                st.info("💡 Want an update? Click 'Ask Reception' to notify the front desk. / समय की जानकारी के लिए रिसेप्शन से पूछें।")
+        with inq_cols[1]:
+            if not active_inquiry:
+                if st.button("🙋 Ask Reception", key="ask_rec_btn", use_container_width=True, type="primary"):
+                    set_patient_inquiry(patient["patient_id"], "How much time is left?")
+                    # Speech synthesis confirmation
+                    js_speech = """
+                    <script>
+                    (function() {
+                        try {
+                            window.speechSynthesis.cancel();
+                            var speakEn = new SpeechSynthesisUtterance("Thank you. The receptionist is checking your queue status and will update you shortly.");
+                            speakEn.lang = "en-US";
+                            speakEn.rate = 0.95;
+                            window.speechSynthesis.speak(speakEn);
+                            
+                            speakEn.onend = function() {
+                                try {
+                                    var speakHi = new SpeechSynthesisUtterance("धन्यवाद। रिसेप्शनिस्ट आपके क्यू का स्टेटस चेक कर रही हैं और जल्द ही आपको अपडेट करेंगी।");
+                                    speakHi.lang = "hi-IN";
+                                    speakHi.rate = 0.95;
+                                    window.speechSynthesis.speak(speakHi);
+                                } catch(err) {}
+                            };
+                        } catch(e) {}
+                    })();
+                    </script>
+                    """
+                    components.html(js_speech, height=0)
+                    st.toast("📨 Status check requested!")
+                    st.rerun()
+    except Exception:
+        pass
+
     # ─── Live Queue Pulse Indicator ────────────────────────────────────────
     st.markdown(
         f'<div class="glass-banner" style="margin-top: 1rem;">'

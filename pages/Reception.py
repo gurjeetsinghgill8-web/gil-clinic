@@ -250,31 +250,72 @@ def show():
                     for t in tests["tests"]
                 )
 
+                # Get active inquiry message
+                inquiry_msg = p.get("reception_inquiry", None)
+
                 with st.container(border=True):
+                    if inquiry_msg:
+                        st.markdown(
+                            f'<div style="background:rgba(255,76,76,0.08); border:1px solid rgba(255,76,76,0.3); '
+                            f'padding:8px 12px; border-radius:8px; margin-bottom:8px; font-weight:700; color:#d63031;">'
+                            f'🚨 PATIENT REQUEST: How much time is left? / पूछताछ: कितना समय लगेगा?'
+                            f'</div>',
+                            unsafe_allow_html=True
+                        )
+
                     col1, col2, col3, col4 = st.columns([3.5, 2.5, 1, 1])
                     with col1:
-                        st.markdown(f"**{p_name}** — `{p_id}`")
+                        badge_help = " 🚨 HELP" if inquiry_msg else ""
+                        st.markdown(f"**{p_name}** — `{p_id}`{badge_help}")
                         st.caption(f"📱 {p_mobile} | Tests: {', '.join(test_names)}")
                     with col2:
                         st.markdown(f"{status_text}")
                     with col3:
-                        if st.button("🔔 Remind", key=f"remind_rec_{p_id}",
-                                     use_container_width=True):
-                            result = harness.send_reminder(
-                                p_name, ", ".join(test_names), p_mobile,
-                                patient_id=p_id
-                            )
-                            if result["success"]:
-                                st.success(result["message"])
+                        if inquiry_msg:
+                            if st.button("✅ Clear", key=f"clear_inq_{p_id}", use_container_width=True, type="primary"):
+                                from utils.db import clear_patient_inquiry
+                                clear_patient_inquiry(p_id)
+                                st.toast("👍 Inquiry cleared!")
+                                st.rerun()
+                        else:
+                            if st.button("🔔 Remind", key=f"remind_rec_{p_id}",
+                                         use_container_width=True):
+                                result = harness.send_reminder(
+                                    p_name, ", ".join(test_names), p_mobile,
+                                    patient_id=p_id
+                                )
+                                if result["success"]:
+                                    # Clear inquiry if active
+                                    from utils.db import clear_patient_inquiry
+                                    clear_patient_inquiry(p_id)
+                                    st.success(result["message"])
+                                    st.rerun()
                     with col4:
-                        if st.button("📞 Miss Call", key=f"misscall_rec_{p_id}",
-                                     use_container_width=True, type="secondary",
-                                     help="Sends alert to patient page without notification permission."):
-                            result = harness.send_misscall_alert(
-                                p_name, ", ".join(test_names), patient_pid=p_id
-                            )
-                            if result["success"]:
-                                st.success(result["message"])
+                        if inquiry_msg:
+                            # If inquiry is active, put Remind here as secondary action
+                            if st.button("🔔 Remind", key=f"remind_rec_{p_id}",
+                                         use_container_width=True, type="secondary"):
+                                result = harness.send_reminder(
+                                    p_name, ", ".join(test_names), p_mobile,
+                                    patient_id=p_id
+                                )
+                                if result["success"]:
+                                    from utils.db import clear_patient_inquiry
+                                    clear_patient_inquiry(p_id)
+                                    st.success(result["message"])
+                                    st.rerun()
+                        else:
+                            if st.button("📞 Miss Call", key=f"misscall_rec_{p_id}",
+                                         use_container_width=True, type="secondary",
+                                         help="Sends alert to patient page without notification permission."):
+                                result = harness.send_misscall_alert(
+                                    p_name, ", ".join(test_names), patient_pid=p_id
+                                )
+                                if result["success"]:
+                                    from utils.db import clear_patient_inquiry
+                                    clear_patient_inquiry(p_id)
+                                    st.success(result["message"])
+                                    st.rerun()
         else:
             st.info("📭 No patients registered today yet.")
 

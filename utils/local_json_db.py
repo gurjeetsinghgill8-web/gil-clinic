@@ -417,3 +417,49 @@ def _clear_patient_alert_json(patient_id: str) -> bool:
     except Exception as e:
         print(f"[LocalJSON] _clear_patient_alert_json error: {e}")
         return False
+
+
+# ─── PATIENT INQUIRY SYSTEM (for Local JSON mode) ───────────────────────────
+
+def _inquiry_path(patient_id: str) -> str:
+    """Path to the per-patient inquiry file."""
+    safe_id = patient_id.replace("/", "_").replace("\\", "_")
+    return os.path.join(_today_dir(), f"inquiry_{safe_id}.json")
+
+
+def set_patient_inquiry_json(patient_id: str, message: str) -> bool:
+    """Set patient inquiry text (Local JSON mode)."""
+    try:
+        with open(_inquiry_path(patient_id), "w", encoding="utf-8") as f:
+            json.dump({"inquiry": message, "set_at": _now_str()}, f)
+        return True
+    except Exception as e:
+        print(f"[LocalJSON] set_patient_inquiry_json error: {e}")
+        return False
+
+
+def get_patient_inquiry_json(patient_id: str) -> str | None:
+    """Get active patient inquiry text (Local JSON mode)."""
+    try:
+        path = _inquiry_path(patient_id)
+        if os.path.exists(path):
+            with open(path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            return data.get("inquiry", None)
+        return None
+    except Exception as e:
+        print(f"[LocalJSON] get_patient_inquiry_json error: {e}")
+        return None
+
+
+def clear_patient_inquiry_json(patient_id: str) -> bool:
+    """Clear active patient inquiry (Local JSON mode)."""
+    try:
+        path = _inquiry_path(patient_id)
+        if os.path.exists(path):
+            os.remove(path)
+        return True
+    except Exception as e:
+        print(f"[LocalJSON] clear_patient_inquiry_json error: {e}")
+        return False
+

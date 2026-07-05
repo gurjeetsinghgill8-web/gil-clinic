@@ -176,6 +176,10 @@ def init_sqlite():
         cursor.execute("ALTER TABLE tests ADD COLUMN alert_message TEXT DEFAULT ''")
     except Exception:
         pass  # Column already exists
+    try:
+        cursor.execute("ALTER TABLE patients ADD COLUMN reception_inquiry TEXT DEFAULT NULL")
+    except Exception:
+        pass
     
     # 3. messages table
     cursor.execute("""
@@ -1363,6 +1367,109 @@ def clear_patient_alert(patient_id: str) -> bool:
         return True
     except Exception as e:
         print(f"[SQLite] clear_patient_alert error: {e}")
+        return False
+    finally:
+        conn.close()
+
+
+# ─── PATIENT INQUIRIES (Help/Time requests to Reception) ──────────────────────
+
+def set_patient_inquiry(patient_id: str, message: str) -> bool:
+    """Set a pending inquiry request from a patient for the reception desk."""
+    if USE_GOOGLE_SHEETS and not _gs_failed:
+        # Fallback for GS (just log or return True)
+        return True
+
+    if USE_LOCAL_JSON:
+        try:
+            from utils.local_json_db import set_patient_inquiry_json
+            return set_patient_inquiry_json(patient_id, message)
+        except Exception:
+            return True
+
+    if USE_SUPABASE:
+        try:
+            get_client().table("patients").update({"reception_inquiry": message}).eq("patient_id", patient_id).execute()
+            return True
+        except Exception as e:
+            print(f"[DB] set_patient_inquiry (Supabase) error: {e}")
+            return False
+
+    # SQLite
+    conn = sqlite3.connect(DB_FILE)
+    try:
+        conn.execute("UPDATE patients SET reception_inquiry=? WHERE patient_id=?", (message, patient_id))
+        conn.commit()
+        return True
+    except Exception as e:
+        print(f"[SQLite] set_patient_inquiry error: {e}")
+        return False
+    finally:
+        conn.close()
+
+
+def get_patient_inquiry(patient_id: str) -> str | None:
+    """Get the active inquiry request for a patient."""
+    if USE_GOOGLE_SHEETS and not _gs_failed:
+        return None
+
+    if USE_LOCAL_JSON:
+        try:
+            from utils.local_json_db import get_patient_inquiry_json
+            return get_patient_inquiry_json(patient_id)
+        except Exception:
+            return None
+
+    if USE_SUPABASE:
+        try:
+            res = get_client().table("patients").select("reception_inquiry").eq("patient_id", patient_id).limit(1).execute()
+            return res.data[0].get("reception_inquiry") if res.data else None
+        except Exception as e:
+            print(f"[DB] get_patient_inquiry (Supabase) error: {e}")
+            return None
+
+    # SQLite
+    conn = sqlite3.connect(DB_FILE)
+    try:
+        cursor = conn.cursor()
+        cursor.execute("SELECT reception_inquiry FROM patients WHERE patient_id=?", (patient_id,))
+        row = cursor.fetchone()
+        return row[0] if row else None
+    except Exception as e:
+        print(f"[SQLite] get_patient_inquiry error: {e}")
+        return None
+    finally:
+        conn.close()
+
+
+def clear_patient_inquiry(patient_id: str) -> bool:
+    """Clear/dismiss a patient's pending inquiry."""
+    if USE_GOOGLE_SHEETS and not _gs_failed:
+        return True
+
+    if USE_LOCAL_JSON:
+        try:
+            from utils.local_json_db import clear_patient_inquiry_json
+            return clear_patient_inquiry_json(patient_id)
+        except Exception:
+            return True
+
+    if USE_SUPABASE:
+        try:
+            get_client().table("patients").update({"reception_inquiry": None}).eq("patient_id", patient_id).execute()
+            return True
+        except Exception as e:
+            print(f"[DB] clear_patient_inquiry (Supabase) error: {e}")
+            return False
+
+    # SQLite
+    conn = sqlite3.connect(DB_FILE)
+    try:
+        conn.execute("UPDATE patients SET reception_inquiry=NULL WHERE patient_id=?", (patient_id,))
+        conn.commit()
+        return True
+    except Exception as e:
+        print(f"[SQLite] clear_patient_inquiry error: {e}")
         return False
     finally:
         conn.close()
