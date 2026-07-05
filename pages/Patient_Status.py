@@ -130,6 +130,24 @@ def inject_pwa_meta():
         }}
         // Re-attach listeners after st_autorefresh (page reloads)
         attachAudioListeners();
+        // Check if test sound flag was set during reload
+        if (sessionStorage.getItem("cq_test_sound") === "1") {{
+            sessionStorage.removeItem("cq_test_sound");
+            try {{
+                var ctx = getAudioCtx();
+                if (ctx) {{
+                    var osc = ctx.createOscillator();
+                    var g = ctx.createGain();
+                    osc.connect(g); g.connect(ctx.destination);
+                    osc.frequency.value = 880;
+                    osc.type = "sine";
+                    g.gain.value = 0.3;
+                    osc.start();
+                    osc.stop(ctx.currentTime + 0.15);
+                }}
+                if (navigator.vibrate) navigator.vibrate(200);
+            }} catch(e) {{}}
+        }}
     }}, 3000);
 
     // ─── Service Worker ─────────────────────────────────────────────────
@@ -286,6 +304,22 @@ def get_status_watcher_js(prev_status_hash: str, patient_name: str, patient_id: 
             sessionStorage.removeItem(MISS_STORAGE_KEY);
             window.__playPatientAlert("📞 Miss Call Alert - " + PNAME);
         }}
+
+        // ─── 1b. Check for test sound flag (set by HTML button) ──────────────
+        (function() {{
+            var testFlag = sessionStorage.getItem("cq_test_sound");
+            if (testFlag === "1") {{
+                sessionStorage.removeItem("cq_test_sound");
+                // Force resume and play beep after a short delay for DOM readiness
+                setTimeout(function() {{
+                    try {{
+                        if (window.resumeAudio) window.resumeAudio();
+                        if (window.playTestBeep) window.playTestBeep();
+                        if (navigator.vibrate) navigator.vibrate(300);
+                    }} catch(e) {{}}
+                }}, 100);
+            }}
+        }})();
 
         // ─── 2. Compare with stored hash → alert on change ────────────────────
         var oldHash = sessionStorage.getItem(STORAGE_KEY);
@@ -475,36 +509,37 @@ def show():
     )
 
     # ─── Test Sound Button (Streamlit button — SURVIVES st_autorefresh) ────
-    sound_test_clicked = st.button(
-        "🔊 Test Sound — Tap to Enable Alert Sounds",
-        key="test_sound_btn",
-        use_container_width=True,
-        type="primary",
-        help="Tap to test sound and vibration. AudioContext will be activated.",
-    )
-    if sound_test_clicked:
-        sound_js = """
-        <script>
-        (function() {
-            try {
-                if (window.resumeAudio) window.resumeAudio();
-                if (window.playTestBeep) window.playTestBeep();
-                if (navigator.vibrate) navigator.vibrate(300);
-                var el = document.createElement('div');
-                el.id = 'sound-test-result';
-                el.innerHTML = '✅ Sound + Vibration working!';
-                el.style.cssText = 'text-align:center;padding:8px;margin:6px 0;'
-                    + 'background:#4CAF50;color:white;border-radius:8px;font-weight:600;';
-                document.querySelector('[data-testid="stMarkdownContainer"]')?.before(el);
-                setTimeout(function() {
-                    var r = document.getElementById('sound-test-result');
-                    if (r) r.remove();
-                }, 4000);
-            } catch(e) { console.log('Sound test error:', e); }
-        })();
-        </script>
-        """
-        st.markdown(sound_js, unsafe_allow_html=True)
+    # ─── Test Sound Button (HTML button — no page reload) ──────────────────
+    st.markdown("""
+    <div style="text-align:center;margin:6px 0;">
+        <button onclick="
+            sessionStorage.setItem('cq_test_sound', '1');
+            if(window.resumeAudio) window.resumeAudio();
+            if(window.playTestBeep) window.playTestBeep();
+            if(navigator.vibrate) navigator.vibrate(300);
+            var el = document.createElement('div');
+            el.id = 'sound-test-result';
+            el.innerHTML = '✅ Sound + Vibration working!';
+            el.style.cssText = 'text-align:center;padding:8px;margin:6px 0;'
+                + 'background:#4CAF50;color:white;border-radius:8px;font-weight:600;';
+            var parent = document.getElementById('sound-test-btn-container');
+            if(parent) parent.appendChild(el);
+            setTimeout(function() {
+                var r = document.getElementById('sound-test-result');
+                if(r) r.remove();
+            }, 4000);
+        "
+        style="background:linear-gradient(135deg,#667eea,#764ba2);color:white;
+               border:none;padding:14px 24px;border-radius:12px;font-size:16px;
+               font-weight:600;cursor:pointer;width:100%;
+               box-shadow:0 4px 15px rgba(102,126,234,0.4);">
+            🔊 Test Sound — Tap to Enable Alert Sounds
+        </button>
+        <p style="font-size:0.75rem;color:#888;margin-top:4px;">
+            इसे टैप करें — Tap this to enable sound + vibration alerts
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
 
     # ─── PWA Install Button ────────────────────────────────────────────────
     st.markdown(get_pwa_install_button(), unsafe_allow_html=True)
