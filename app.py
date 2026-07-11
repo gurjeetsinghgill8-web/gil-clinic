@@ -87,7 +87,7 @@ DEPARTMENT_PAGES = {
 
 PUBLIC_PAGES = ["📋 Patient Status"]
 
-STAFF_PAGES = ["📋 Patient History"]  # Shared by Reception, Manager, Admin
+STAFF_PAGES = ["📋 Patient History", "📄 Daily List"]  # Shared by Reception, Manager, Admin
 
 ALL_PAGES = list(ROLE_PAGES.values()) + PUBLIC_PAGES + STAFF_PAGES + ["🏠 Home"]
 
@@ -560,6 +560,10 @@ def main():
 
     elif page == "📋 Patient History":
         from pages.Patient_History import show
+        show()
+
+    elif page == "📄 Daily List":
+        from pages.Daily_List import show
         show()
 
     elif page == "👑 Admin Panel":
