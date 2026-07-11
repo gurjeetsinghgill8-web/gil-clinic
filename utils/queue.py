@@ -103,3 +103,116 @@ def format_token_slip(patient_name: str, patient_id: str, tests: list[dict]) -> 
         "=" * 40,
     ]
     return "\n".join(lines)
+
+
+def format_html_token_slip(
+    patient_name: str,
+    patient_id: str,
+    tests: list[dict],
+    clinic_name: str = "GIL CLINIC",
+    clinic_logo: str = "🏥",
+    clinic_address: str = "",
+    clinic_phone: str = "",
+    qr_data_uri: str = "",
+) -> str:
+    """
+    Generate a print-optimised HTML token slip with clinic branding,
+    QR code, and estimated wait times for each test.
+
+    Returns a complete HTML page with @media print CSS.
+    """
+    today_str = date.today().strftime("%d-%b-%Y")
+    now_str = datetime.now().strftime("%I:%M %p").lstrip("0")
+
+    # Build test rows
+    test_rows = ""
+    for t in tests:
+        tn = t.get("token_number", "?")
+        tname = t.get("test_name", "Test")
+        room = t.get("room", ROOM_NAMES.get(tname, f"{tname} Room"))
+        pos = t.get("queue_position", 0)
+        eta = calculate_expected_time(tname, pos)
+        test_rows += f"""
+            <tr>
+                <td style="font-size:18px;font-weight:700;">#{tn:03d}</td>
+                <td style="font-size:16px;">{tname}</td>
+                <td style="font-size:14px;color:#555;">{room}</td>
+                <td style="font-size:14px;color:#667eea;font-weight:600;text-align:right;">{eta}</td>
+            </tr>"""
+
+    qr_html = ""
+    if qr_data_uri:
+        qr_html = f"""
+            <div style="text-align:center;margin:16px 0;">
+                <img src="{qr_data_uri}" style="width:130px;height:130px;border-radius:6px;
+                     background:white;padding:6px;border:1px solid #ddd;" alt="QR">
+                <p style="font-size:11px;color:#888;margin:4px 0 0;">Scan to track live status</p>
+            </div>"""
+
+    return f"""<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><title>Token Slip — {patient_name}</title>
+<style>
+    * {{ margin:0; padding:0; box-sizing:border-box; }}
+    body {{ font-family:'Segoe UI','Arial',sans-serif; background:#f5f5f5; padding:20px; }}
+    .slip {{
+        max-width:380px; margin:0 auto; background:#fff;
+        border-radius:14px; box-shadow:0 4px 24px rgba(0,0,0,0.12);
+        overflow:hidden;
+    }}
+    .header {{
+        background:linear-gradient(135deg,#667eea,#764ba2);
+        color:#fff; text-align:center; padding:20px 16px 14px;
+    }}
+    .header h1 {{ font-size:28px; margin:0; }}
+    .header h2 {{ font-size:16px; font-weight:400; opacity:0.9; margin:4px 0 2px; }}
+    .header .details {{ font-size:12px; opacity:0.75; margin-top:6px; line-height:1.5; }}
+    .body {{ padding:16px 18px; }}
+    .patient-info {{ margin-bottom:12px; }}
+    .patient-info .name {{ font-size:20px; font-weight:700; color:#222; }}
+    .patient-info .meta {{ font-size:13px; color:#666; margin-top:2px; }}
+    table {{ width:100%; border-collapse:collapse; }}
+    th {{ text-align:left; font-size:11px; text-transform:uppercase; color:#999;
+         padding:6px 4px 4px; border-bottom:2px solid #eee; }}
+    td {{ padding:8px 4px; border-bottom:1px solid #f0f0f0; }}
+    tr:last-child td {{ border-bottom:none; }}
+    .footer {{ text-align:center; padding:12px 16px 18px; font-size:11px; color:#aaa;
+              border-top:1px solid #f0f0f0; }}
+    .badge {{ display:inline-block; background:#e8f0fe; color:#667eea; font-size:10px;
+              font-weight:700; padding:2px 10px; border-radius:20px; }}
+    @media print {{
+        body {{ background:#fff; padding:0; }}
+        .slip {{ box-shadow:none; border-radius:0; max-width:100%; }}
+        .header {{ -webkit-print-color-adjust:exact; print-color-adjust:exact; }}
+    }}
+</style></head>
+<body>
+<div class="slip">
+    <div class="header">
+        <h1>{clinic_logo}</h1>
+        <h2>{clinic_name}</h2>
+        <div class="details">
+            {clinic_address}{" · " if clinic_address and clinic_phone else ""}{clinic_phone}
+        </div>
+    </div>
+    <div class="body">
+        <div class="patient-info">
+            <div class="name">{patient_name}</div>
+            <div class="meta">ID: {patient_id} &nbsp;|&nbsp; {today_str} &nbsp;|&nbsp; {now_str}</div>
+        </div>
+        {qr_html}
+        <table>
+            <tr><th>Token</th><th>Test</th><th>Room</th><th style="text-align:right;">ETA</th></tr>
+            {test_rows}
+        </table>
+        <div style="text-align:center;margin-top:14px;">
+            <span class="badge">⚡ Please wait for your call</span>
+        </div>
+    </div>
+    <div class="footer">
+        CardioQueue v2 &middot; Live status: scan QR or visit reception
+    </div>
+</div>
+<script>window.print();</script>
+</body>
+</html>"""

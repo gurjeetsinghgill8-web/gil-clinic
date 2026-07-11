@@ -126,10 +126,25 @@ def show():
                             name, patient_id, result["tests"]
                         )
                         st.code(slip, language="text")
-                        st.markdown(
-                            "👉 Click **Print Token** button above or use Ctrl+P to print.",
-                            help="Print this token slip",
+
+                        # Print-ready HTML slip (opens in new tab + auto-print)
+                        html_slip = harness.printable_token_slip_html(
+                            name, patient_id, result["tests"]
                         )
+                        # Escape backticks for JS template literal inside the HTML
+                        escaped_slip = html_slip.replace("`", "\\`").replace("${", "\\${")
+                        print_html = f"""
+                        <button onclick="(function(){{
+                            var w=window.open('','_blank');
+                            w.document.write(`{escaped_slip}`);
+                            w.document.close();
+                        }})();" style="background:linear-gradient(135deg,#667eea,#764ba2);color:white;
+                            border:none;padding:10px 24px;border-radius:10px;cursor:pointer;
+                            font-size:1rem;font-weight:600;margin-top:8px;">
+                            🖨️ Print Slip
+                        </button>
+                        """
+                        st.markdown(print_html, unsafe_allow_html=True)
             else:
                 st.error(result["message"])
 
@@ -137,26 +152,25 @@ def show():
         if print_clicked:
             if "last_patient" in st.session_state:
                 lp = st.session_state.last_patient
+                # Use the new HTML print slip with branding + QR + ETA
+                html_slip = harness.printable_token_slip_html(
+                    lp["name"], lp["patient_id"], lp["tests"]
+                )
+                escaped = html_slip.replace("`", "\\`").replace("${", "\\${")
+                js = f"""
+                <script>
+                    var w = window.open('', '_blank');
+                    w.document.write(`{escaped}`);
+                    w.document.close();
+                </script>
+                """
+                st.components.v1.html(js, height=0, width=0)
+                st.success("🖨️ Token slip opened in new tab for printing!")
+
+                # Also show text preview
                 slip = harness.generate_token_slip(
                     lp["name"], lp["patient_id"], lp["tests"]
                 )
-                # Use HTML + CSS for better print formatting
-                html_slip = f"""
-                <html>
-                <head><style>
-                    body {{ font-family: monospace; padding: 20px; }}
-                    .slip {{ white-space: pre; font-size: 14px; line-height: 1.6; }}
-                </style></head>
-                <body>
-                    <div class="slip">{slip}</div>
-                    <script>window.print();</script>
-                </body>
-                </html>
-                """
-                st.components.v1.html(html_slip, height=0, width=0)
-                st.success("🖨️ Token sent to printer!")
-
-                # Also show it
                 st.code(slip, language="text")
             else:
                 st.warning("⚠️ Please register a patient first before printing.")

@@ -34,7 +34,7 @@ from utils.db import (
 )
 from utils.queue import (
     generate_patient_id, calculate_wait_time, format_status_display,
-    get_available_actions, format_token_slip
+    get_available_actions, format_token_slip, format_html_token_slip
 )
 from utils.notifications import (
     registration_message, called_message, completed_message,
@@ -431,6 +431,40 @@ class Harness:
                             tests: list[dict]) -> str:
         """Generate a formatted token slip for printing."""
         return format_token_slip(patient_name, patient_id, tests)
+
+    def get_clinic_settings(self) -> dict:
+        """Get clinic branding settings from DB, falling back to config defaults."""
+        from utils.db import get_clinic_settings_db
+        settings = get_clinic_settings_db()
+        if settings:
+            return settings
+        from utils.config import HOSPITAL_NAME, CLINIC_SPECIALTY, CLINIC_LOGO
+        return {
+            "clinic_name": HOSPITAL_NAME,
+            "specialty": CLINIC_SPECIALTY,
+            "logo_emoji": CLINIC_LOGO,
+            "phone": "",
+            "address": "",
+        }
+
+    def printable_token_slip_html(self, patient_name: str, patient_id: str,
+                                   tests: list[dict]) -> str:
+        """
+        Generate a print-optimised HTML token slip with clinic branding,
+        QR code, and estimated arrival times for each test.
+        """
+        settings = self.get_clinic_settings()
+        qr_uri = self.generate_qr_code_base64(patient_id) or ""
+        return format_html_token_slip(
+            patient_name=patient_name,
+            patient_id=patient_id,
+            tests=tests,
+            clinic_name=settings.get("clinic_name", "GIL CLINIC"),
+            clinic_logo=settings.get("logo_emoji", "🏥"),
+            clinic_address=settings.get("address", ""),
+            clinic_phone=settings.get("phone", ""),
+            qr_data_uri=qr_uri,
+        )
 
     # ─── QR CODE GENERATION ──────────────────────────────────────────────────
 
