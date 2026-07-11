@@ -22,6 +22,11 @@ from utils.config import APP_NAME, HOSPITAL_NAME, CLINIC_SPECIALTY, CLINIC_LOGO,
 from utils.db import get_all_active_users, verify_login
 from utils.notifications import request_notification_permission_script
 
+from datetime import datetime
+
+# ─── Inactivity Timeout ──────────────────────────────────────────────────────
+INACTIVITY_TIMEOUT_MINUTES = 30  # Auto-logout after this many idle minutes
+
 
 # ═══════════════════════════════════════════════════════════════════════════════
 #  LOAD CUSTOM CSS
@@ -61,6 +66,8 @@ def init_session():
         st.session_state.selected_user = None
     if "show_admin_login" not in st.session_state:
         st.session_state.show_admin_login = False
+    if "last_activity" not in st.session_state:
+        st.session_state.last_activity = None
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -342,14 +349,56 @@ def logout_button():
         </div>
         """, unsafe_allow_html=True)
 
+        # Show inactivity timer
+        if st.session_state.last_activity:
+            elapsed = datetime.now() - st.session_state.last_activity
+            remaining = INACTIVITY_TIMEOUT_MINUTES * 60 - int(elapsed.total_seconds())
+            if remaining > 0:
+                mins, secs = divmod(remaining, 60)
+                st.caption(f"⏱️ Auto-logout in {mins}m {secs}s")
+            else:
+                st.caption("⏱️ Session expired — logging out...")
+
         if st.button("🚪 Logout", use_container_width=True):
-            st.session_state.authenticated = False
-            st.session_state.auth_role = None
-            st.session_state.auth_username = None
-            st.session_state.login_step = "select"
-            st.session_state.selected_user = None
-            st.session_state.show_admin_login = False
+            _clear_session()
             st.rerun()
+
+
+def _check_inactivity_logout():
+    """
+    Check if the session has been idle too long.
+    If so, clear session and show a toast. Called from main().
+    """
+    if not st.session_state.authenticated:
+        return
+
+    now = datetime.now()
+    last = st.session_state.last_activity
+
+    if last is None:
+        # First activity timestamp
+        st.session_state.last_activity = now
+        return
+
+    elapsed = (now - last).total_seconds()
+    if elapsed > INACTIVITY_TIMEOUT_MINUTES * 60:
+        _clear_session()
+        st.info("⏱️ Session auto-expired due to inactivity. Please log in again.")
+        st.rerun()
+
+    # Update timestamp on every page load
+    st.session_state.last_activity = now
+
+
+def _clear_session():
+    """Clear auth-related session state (logout)."""
+    st.session_state.authenticated = False
+    st.session_state.auth_role = None
+    st.session_state.auth_username = None
+    st.session_state.login_step = "select"
+    st.session_state.selected_user = None
+    st.session_state.show_admin_login = False
+    st.session_state.last_activity = None
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -517,6 +566,9 @@ def main():
         from pages.Patient_Status import show
         show()
         return
+
+    # ─── Inactivity auto-logout check (staff only) ────────────────────────
+    _check_inactivity_logout()
 
     # ─── Login Flow ──────────────────────────────────────────────────────────
     if not st.session_state.authenticated:
