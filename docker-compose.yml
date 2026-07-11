@@ -1,0 +1,14 @@
+version: "3.8"
+
+services:
+  cardioqueue:
+    build: .
+    container_name: cardioqueue
+    ports:
+      - "8501:8501"
+    volumes:
+      - ./cardioqueue_data:/app/cardioqueue_data
+    environment:
+      - BASE_URL=http://localhost:8501
+      - HOSPITAL_NAME=GIL CLINIC
+    restart: unless-stopped

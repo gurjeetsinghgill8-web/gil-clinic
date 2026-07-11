@@ -1,0 +1,7 @@
+# CardioQueue
+.cardioqueue.db
+cardioqueue.db
+__pycache__/
+*.pyc
+.env
+.streamlit/
