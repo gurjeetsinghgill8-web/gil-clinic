@@ -418,6 +418,147 @@ def get_department_stats_json(test_name: str) -> dict:
     return stats
 
 
+# ═══════════════════════════════════════════════════════════════════════════════════
+#  ANALYTICS / AGGREGATION (cross-date, used by Reports & Analytics page)
+# ═══════════════════════════════════════════════════════════════════════════════════
+
+def _tests_files_in_range(start_date: str, end_date: str) -> list[str]:
+    """Get all tests_*.json files from date folders within [start_date, end_date]."""
+    files = []
+    if not os.path.exists(DATA_DIR):
+        return files
+    for day in sorted(os.listdir(DATA_DIR)):
+        if day == "meta.json" or day.startswith("."):
+            continue
+        if day < start_date or day > end_date:
+            continue
+        dir_path = os.path.join(DATA_DIR, day)
+        if not os.path.isdir(dir_path):
+            continue
+        for fname in sorted(os.listdir(dir_path)):
+            if fname.startswith("tests_") and fname.endswith(".json"):
+                files.append(os.path.join(dir_path, fname))
+    return files
+
+
+def _patients_files_in_range(start_date: str, end_date: str) -> list[str]:
+    """Get patients.json files from date folders within [start_date, end_date]."""
+    files = []
+    if not os.path.exists(DATA_DIR):
+        return files
+    for day in sorted(os.listdir(DATA_DIR)):
+        if day == "meta.json" or day.startswith("."):
+            continue
+        if day < start_date or day > end_date:
+            continue
+        pfile = os.path.join(DATA_DIR, day, "patients.json")
+        if os.path.exists(pfile):
+            files.append(pfile)
+    return files
+
+
+def get_department_stats_date_range_json(test_name: str, start_date: str, end_date: str) -> dict:
+    """Get status counts for a test type across a date range (JSON folder iteration)."""
+    stats = {s: 0 for s in ["waiting", "called", "in_progress", "completed", "report_ready", "delivered"]}
+    for f in _tests_files_in_range(start_date, end_date):
+        try:
+            tests = json.load(open(f, "r", encoding="utf-8"))
+            for t in tests:
+                if t.get("test_name") == test_name and t.get("status") in stats:
+                    stats[t["status"]] += 1
+        except Exception:
+            continue
+    return stats
+
+
+def get_daily_patient_counts_json(days: int = 30) -> list[dict]:
+    """Get patient counts per day across JSON date folders for the last N days."""
+    from datetime import timedelta
+    today = date.today()
+    start_dt = today - timedelta(days=days - 1)
+    start_str = start_dt.isoformat()
+    end_str = today.isoformat()
+
+    counts: dict[str, int] = {}
+    for pf in _patients_files_in_range(start_str, end_str):
+        try:
+            patients = json.load(open(pf, "r", encoding="utf-8"))
+            for p in patients:
+                reg_date = p.get("registration_date", "")
+                if start_str <= reg_date <= end_str:
+                    counts[reg_date] = counts.get(reg_date, 0) + 1
+        except Exception:
+            continue
+
+    return [{"date": d, "count": counts[d]} for d in sorted(counts.keys())]
+
+
+def get_test_duration_stats_json(test_name: str) -> dict:
+    """Calculate average durations across ALL dates for a test type (JSON)."""
+    from datetime import datetime
+    # We need to look at ALL date folders
+    totals = {"wait_to_call": 0.0, "wait_to_start": 0.0, "wait_to_complete": 0.0}
+    counts_dur = {"wait_to_call": 0, "wait_to_start": 0, "wait_to_complete": 0}
+
+    if not os.path.exists(DATA_DIR):
+        return _empty_durations_json()
+
+    for day in sorted(os.listdir(DATA_DIR)):
+        if day == "meta.json" or day.startswith("."):
+            continue
+        dir_path = os.path.join(DATA_DIR, day)
+        if not os.path.isdir(dir_path):
+            continue
+        for fname in sorted(os.listdir(dir_path)):
+            if not fname.startswith("tests_") or not fname.endswith(".json"):
+                continue
+            try:
+                tests = json.load(open(os.path.join(dir_path, fname), "r", encoding="utf-8"))
+            except Exception:
+                continue
+            for t in tests:
+                if t.get("test_name") != test_name or t.get("status") != "completed":
+                    continue
+                try:
+                    created = datetime.fromisoformat(t["created_at"]) if t.get("created_at") else None
+                    called = datetime.fromisoformat(t["called_at"]) if t.get("called_at") else None
+                    started = datetime.fromisoformat(t["started_at"]) if t.get("started_at") else None
+                    completed = datetime.fromisoformat(t["completed_at"]) if t.get("completed_at") else None
+                except Exception:
+                    continue
+                if created and called:
+                    diff = (called - created).total_seconds() / 60
+                    if diff >= 0:
+                        totals["wait_to_call"] += diff
+                        counts_dur["wait_to_call"] += 1
+                if created and started:
+                    diff = (started - created).total_seconds() / 60
+                    if diff >= 0:
+                        totals["wait_to_start"] += diff
+                        counts_dur["wait_to_start"] += 1
+                if created and completed:
+                    diff = (completed - created).total_seconds() / 60
+                    if diff >= 0:
+                        totals["wait_to_complete"] += diff
+                        counts_dur["wait_to_complete"] += 1
+
+    return {
+        "avg_wait_to_call": round(totals["wait_to_call"] / counts_dur["wait_to_call"], 1) if counts_dur["wait_to_call"] else 0,
+        "avg_wait_to_start": round(totals["wait_to_start"] / counts_dur["wait_to_start"], 1) if counts_dur["wait_to_start"] else 0,
+        "avg_wait_to_complete": round(totals["wait_to_complete"] / counts_dur["wait_to_complete"], 1) if counts_dur["wait_to_complete"] else 0,
+        "total_completed": counts_dur["wait_to_complete"],
+    }
+
+
+def _empty_durations_json() -> dict:
+    return {
+        "avg_wait_to_call": 0,
+        "avg_wait_to_start": 0,
+        "avg_wait_to_complete": 0,
+        "total_completed": 0,
+    }
+
+
 def log_message_json(patient_id: str, mobile: str, msg_type: str, text: str,
                      sent_via: str = "none", actor: str = ""):
     """Log a message to today's messages file."""

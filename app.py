@@ -96,7 +96,7 @@ PUBLIC_PAGES = ["📋 Patient Status"]
 
 STAFF_PAGES = ["📋 Patient History", "📄 Daily List"]  # Shared by Reception, Manager, Admin
 
-MANAGER_PAGES = ["📋 Activity Log"]  # Manager + Admin only
+MANAGER_PAGES = ["📋 Activity Log", "📊 Reports & Analytics"]  # Manager + Admin only
 
 ALL_PAGES = list(ROLE_PAGES.values()) + PUBLIC_PAGES + STAFF_PAGES + MANAGER_PAGES + ["🏠 Home"]
 
@@ -628,6 +628,10 @@ def main():
 
     elif page == "📋 Activity Log":
         from pages.Activity_Log import show
+        show()
+
+    elif page == "📊 Reports & Analytics":
+        from pages.Analytics import show
         show()
 
     elif page == "👑 Admin Panel":

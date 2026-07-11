@@ -657,6 +657,84 @@ class Harness:
             stats[test] = get_department_stats(test)
         return stats
 
+    # ─── ANALYTICS / REPORTS ──────────────────────────────────────────────────
+
+    def get_analytics_summary(self, start_date: str, end_date: str) -> dict:
+        """
+        Get aggregated KPI data for the analytics dashboard across a date range.
+        Returns:
+          total_patients, total_tests, avg_daily, peak_day, peak_count,
+          busiest_dept, dept_stats (per-department status counts)
+        """
+        from utils.db import get_daily_patient_counts, get_department_stats_date_range
+        from utils.queue import calculate_wait_time
+        from datetime import datetime
+
+        daily = get_daily_patient_counts(days=30)
+        total_patients = sum(d["count"] for d in daily)
+
+        # Average daily
+        num_days = len(daily) if daily else 1
+        avg_daily = round(total_patients / num_days, 1)
+
+        # Peak day
+        peak_day = max(daily, key=lambda d: d["count"]) if daily else {"date": "—", "count": 0}
+        peak_date_str = peak_day.get("date", "—")
+        try:
+            peak_date_dt = datetime.fromisoformat(peak_date_str).strftime("%d-%b-%Y")
+        except Exception:
+            peak_date_dt = peak_date_str
+
+        # Per-department stats in date range
+        dept_stats = {}
+        for test in TEST_TYPES:
+            dept_stats[test] = get_department_stats_date_range(test, start_date, end_date)
+
+        # Busiest department (most total tests)
+        busiest_dept = max(dept_stats, key=lambda d: sum(dept_stats[d].values())) if dept_stats else "—"
+        total_tests = sum(sum(s.values()) for s in dept_stats.values())
+
+        return {
+            "total_patients": total_patients,
+            "total_tests": total_tests,
+            "avg_daily": avg_daily,
+            "peak_day": {"date": peak_date_dt, "count": peak_day.get("count", 0)},
+            "busiest_dept": busiest_dept,
+            "dept_stats": dept_stats,
+        }
+
+    def get_daily_trends(self, days: int = 30) -> dict:
+        """
+        Get daily patient registration counts for the last N days.
+        Returns dict with 'dates' (list) and 'counts' (list) for charting.
+        """
+        from utils.db import get_daily_patient_counts
+        data = get_daily_patient_counts(days)
+        return {
+            "dates": [d["date"] for d in data],
+            "counts": [d["count"] for d in data],
+            "raw": data,
+        }
+
+    def get_department_performance(self, start_date: str, end_date: str) -> dict:
+        """
+        Get performance metrics for all departments across a date range.
+        Returns dict with per-dept duration stats and status breakdowns.
+        """
+        from utils.db import get_department_stats_date_range, get_test_duration_stats
+
+        results = {}
+        for test in TEST_TYPES:
+            stats = get_department_stats_date_range(test, start_date, end_date)
+            durations = get_test_duration_stats(test)
+            total = sum(stats.values())
+            results[test] = {
+                "stats": stats,
+                "durations": durations,
+                "total": total,
+            }
+        return results
+
     # ─── DATA EXPORT ──────────────────────────────────────────────────────────
 
     def export_today_csv(self) -> str:

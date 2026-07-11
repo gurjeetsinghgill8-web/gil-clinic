@@ -41,6 +41,9 @@ if not USE_GOOGLE_SHEETS:
         _get_patient_visits_by_mobile_json,
         _get_recent_activity_json,
         _save_test_notes_json,
+        get_department_stats_date_range_json,
+        get_daily_patient_counts_json,
+        get_test_duration_stats_json,
     )
     print("[DB] Google Sheets not set. Using Local JSON file storage.")
     print(f"[DB] Data directory: {os.path.abspath('cardioqueue_data/')}")
@@ -83,6 +86,7 @@ def _auto_enable_local_json():
     global _set_patient_alert_json, _get_patient_alert_json, _clear_patient_alert_json
     global _get_patient_visit_count_json, _get_patient_visits_by_mobile_json
     global _get_recent_activity_json, _save_test_notes_json
+    global get_department_stats_date_range_json, get_daily_patient_counts_json, get_test_duration_stats_json
     from utils.local_json_db import (
         create_patient_json as _create_patient,
         get_patient_by_id_json as _get_patient_by_id,
@@ -103,6 +107,9 @@ def _auto_enable_local_json():
         _get_patient_visits_by_mobile_json,
         _get_recent_activity_json,
         _save_test_notes_json,
+        get_department_stats_date_range_json,
+        get_daily_patient_counts_json,
+        get_test_duration_stats_json,
     )
     USE_LOCAL_JSON = True
     print("[DB] Google Sheets failed. Switched to Local JSON folder storage.")
@@ -1413,6 +1420,213 @@ def get_department_stats(test_name: str) -> dict:
         finally:
             conn.close()
     return stats
+
+
+# ════════════════════════════════════════════════════════════════════════════════════════════
+#  ANALYTICS / AGGREGATION FUNCTIONS (cross-date queries, used by Reports & Analytics page)
+# ════════════════════════════════════════════════════════════════════════════════════════════
+
+def get_department_stats_date_range(test_name: str, start_date: str, end_date: str) -> dict:
+    """
+    Get status counts for a test type across a date range (inclusive).
+    Falls back to JSON folder iteration when not using SQLite.
+    """
+    # ─── Local JSON fallback ──────────────────────────────────────────────────────
+    if USE_LOCAL_JSON:
+        from utils.local_json_db import get_department_stats_date_range_json
+        return get_department_stats_date_range_json(test_name, start_date, end_date)
+
+    stats = {s: 0 for s in ["waiting", "called", "in_progress", "completed", "report_ready", "delivered"]}
+
+    # ─── Supabase ─────────────────────────────────────────────────────────────────
+    if USE_SUPABASE:
+        try:
+            result = (get_client().table("tests")
+                      .select("status, patients!inner(registration_date)")
+                      .eq("test_name", test_name)
+                      .gte("patients.registration_date", start_date)
+                      .lte("patients.registration_date", end_date)
+                      .execute())
+            for t in (result.data or []):
+                s = t["status"]
+                if s in stats:
+                    stats[s] += 1
+        except Exception as e:
+            print(f"[DB] get_department_stats_date_range (Supabase) error: {e}")
+        return stats
+
+    # ─── SQLite ───────────────────────────────────────────────────────────────────
+    conn = sqlite3.connect(DB_FILE)
+    cursor = conn.cursor()
+    try:
+        sql = """
+            SELECT tests.status, COUNT(*)
+            FROM tests
+            JOIN patients ON tests.patient_id = patients.patient_id
+            WHERE tests.test_name = ?
+              AND patients.registration_date >= ?
+              AND patients.registration_date <= ?
+            GROUP BY tests.status
+        """
+        cursor.execute(sql, (test_name, start_date, end_date))
+        for row in cursor.fetchall():
+            status, count = row
+            if status in stats:
+                stats[status] = count
+    except Exception as e:
+        print(f"[SQLite] get_department_stats_date_range error: {e}")
+    finally:
+        conn.close()
+    return stats
+
+
+def get_daily_patient_counts(days: int = 30) -> list[dict]:
+    """
+    Get patient registration counts grouped by date, for the last N days.
+    Returns list of { "date": "YYYY-MM-DD", "count": int } sorted ascending.
+    """
+    # ─── Local JSON fallback ──────────────────────────────────────────────────────
+    if USE_LOCAL_JSON:
+        from utils.local_json_db import get_daily_patient_counts_json
+        return get_daily_patient_counts_json(days)
+
+    from datetime import timedelta
+    today_dt = date.today()
+    start_dt = today_dt - timedelta(days=days - 1)
+
+    # ─── Supabase ─────────────────────────────────────────────────────────────────
+    if USE_SUPABASE:
+        try:
+            result = (get_client().table("patients")
+                      .select("registration_date")
+                      .gte("registration_date", start_dt.isoformat())
+                      .lte("registration_date", today_dt.isoformat())
+                      .execute())
+            counts = {}
+            for r in (result.data or []):
+                d = r.get("registration_date", "")
+                counts[d] = counts.get(d, 0) + 1
+            return [{"date": d, "count": counts[d]} for d in sorted(counts.keys())]
+        except Exception as e:
+            print(f"[DB] get_daily_patient_counts (Supabase) error: {e}")
+            return []
+
+    # ─── SQLite ───────────────────────────────────────────────────────────────────
+    conn = sqlite3.connect(DB_FILE)
+    cursor = conn.cursor()
+    try:
+        cursor.execute("""
+            SELECT registration_date, COUNT(*)
+            FROM patients
+            WHERE registration_date >= ? AND registration_date <= ?
+            GROUP BY registration_date
+            ORDER BY registration_date ASC
+        """, (start_dt.isoformat(), today_dt.isoformat()))
+        return [{"date": row[0], "count": row[1]} for row in cursor.fetchall()]
+    except Exception as e:
+        print(f"[SQLite] get_daily_patient_counts error: {e}")
+        return []
+    finally:
+        conn.close()
+
+
+def get_test_duration_stats(test_name: str) -> dict:
+    """
+    Calculate average durations (in minutes) between test status transitions
+    for a specific test type across ALL dates (all-time).
+    Returns dict with keys: avg_wait_to_call, avg_wait_to_start, avg_wait_to_complete
+    Uses only completed tests that have valid timestamps.
+    """
+    # ─── Local JSON fallback ──────────────────────────────────────────────────────
+    if USE_LOCAL_JSON:
+        from utils.local_json_db import get_test_duration_stats_json
+        return get_test_duration_stats_json(test_name)
+
+    from datetime import datetime
+
+    # ─── Supabase ─────────────────────────────────────────────────────────────────
+    if USE_SUPABASE:
+        try:
+            result = (get_client().table("tests")
+                      .select("created_at,called_at,started_at,completed_at")
+                      .eq("test_name", test_name)
+                      .eq("status", "completed")
+                      .execute())
+            return _compute_durations_from_rows(result.data or [])
+        except Exception as e:
+            print(f"[DB] get_test_duration_stats (Supabase) error: {e}")
+            return _empty_durations()
+
+    # ─── SQLite ───────────────────────────────────────────────────────────────────
+    conn = sqlite3.connect(DB_FILE)
+    cursor = conn.cursor()
+    try:
+        cursor.execute("""
+            SELECT created_at, called_at, started_at, completed_at
+            FROM tests
+            WHERE test_name = ? AND status = 'completed'
+              AND completed_at IS NOT NULL
+        """, (test_name,))
+        rows = cursor.fetchall()
+        return _compute_durations_from_rows(rows)
+    except Exception as e:
+        print(f"[SQLite] get_test_duration_stats error: {e}")
+        return _empty_durations()
+    finally:
+        conn.close()
+
+
+def _compute_durations_from_rows(rows: list) -> dict:
+    """Shared helper: compute average durations from a list of timestamp tuples."""
+    from datetime import datetime
+    totals = {"wait_to_call": 0, "wait_to_start": 0, "wait_to_complete": 0}
+    counts = {"wait_to_call": 0, "wait_to_start": 0, "wait_to_complete": 0}
+
+    for row in rows:
+        created_str, called_str, started_str, completed_str = row if isinstance(row, (list, tuple)) else \
+            (row.get("created_at"), row.get("called_at"), row.get("started_at"), row.get("completed_at"))
+
+        try:
+            created = datetime.fromisoformat(created_str) if created_str else None
+            called = datetime.fromisoformat(called_str) if called_str else None
+            started = datetime.fromisoformat(started_str) if started_str else None
+            completed = datetime.fromisoformat(completed_str) if completed_str else None
+        except Exception:
+            continue
+
+        if created and called:
+            diff = (called - created).total_seconds() / 60
+            if diff >= 0:
+                totals["wait_to_call"] += diff
+                counts["wait_to_call"] += 1
+
+        if created and started:
+            diff = (started - created).total_seconds() / 60
+            if diff >= 0:
+                totals["wait_to_start"] += diff
+                counts["wait_to_start"] += 1
+
+        if created and completed:
+            diff = (completed - created).total_seconds() / 60
+            if diff >= 0:
+                totals["wait_to_complete"] += diff
+                counts["wait_to_complete"] += 1
+
+    return {
+        "avg_wait_to_call": round(totals["wait_to_call"] / counts["wait_to_call"], 1) if counts["wait_to_call"] else 0,
+        "avg_wait_to_start": round(totals["wait_to_start"] / counts["wait_to_start"], 1) if counts["wait_to_start"] else 0,
+        "avg_wait_to_complete": round(totals["wait_to_complete"] / counts["wait_to_complete"], 1) if counts["wait_to_complete"] else 0,
+        "total_completed": counts["wait_to_complete"],
+    }
+
+
+def _empty_durations() -> dict:
+    return {
+        "avg_wait_to_call": 0,
+        "avg_wait_to_start": 0,
+        "avg_wait_to_complete": 0,
+        "total_completed": 0,
+    }
 
 
 # ─── PATIENT ALERT SYSTEM (DB-Poll Push) ───────────────────────────────────────────────────
