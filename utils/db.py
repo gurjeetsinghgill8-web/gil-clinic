@@ -38,6 +38,7 @@ if not USE_GOOGLE_SHEETS:
         log_message_json as _log_message,
         _set_patient_alert_json, _get_patient_alert_json, _clear_patient_alert_json,
         _get_patient_visit_count_json,
+        _get_patient_visits_by_mobile_json,
     )
     print("[DB] Google Sheets not set. Using Local JSON file storage.")
     print(f"[DB] Data directory: {os.path.abspath('cardioqueue_data/')}")
@@ -78,6 +79,7 @@ def _auto_enable_local_json():
     global _get_queue, _update_test_status, _get_completed_tests, _get_report_ready_tests
     global _get_current_patient, _get_department_stats, _log_message
     global _set_patient_alert_json, _get_patient_alert_json, _clear_patient_alert_json
+    global _get_patient_visit_count_json, _get_patient_visits_by_mobile_json
     from utils.local_json_db import (
         create_patient_json as _create_patient,
         get_patient_by_id_json as _get_patient_by_id,
@@ -95,6 +97,7 @@ def _auto_enable_local_json():
         log_message_json as _log_message,
         _set_patient_alert_json, _get_patient_alert_json, _clear_patient_alert_json,
         _get_patient_visit_count_json,
+        _get_patient_visits_by_mobile_json,
     )
     USE_LOCAL_JSON = True
     print("[DB] Google Sheets failed. Switched to Local JSON folder storage.")
@@ -480,6 +483,49 @@ def get_patient_visit_count(mobile: str) -> int:
         except Exception as e:
             print(f"[SQLite] get_patient_visit_count error: {e}")
             return 0
+        finally:
+            conn.close()
+
+
+def get_patient_visits_by_mobile(mobile: str) -> list[dict]:
+    """
+    Fetch ALL patient records (all visits) for a mobile number,
+    ordered most recent first. Returns empty list if none found.
+
+    Used by Patient History page — shows every past visit.
+    """
+    if not mobile or len(mobile) != 10:
+        return []
+
+    if USE_LOCAL_JSON:
+        return _get_patient_visits_by_mobile_json(mobile)
+
+    if USE_SUPABASE:
+        try:
+            result = (get_client().table("patients")
+                      .select("*")
+                      .eq("mobile", mobile)
+                      .order("registration_date", desc=True)
+                      .order("created_at", desc=True)
+                      .execute())
+            return result.data or []
+        except Exception as e:
+            print(f"[DB] get_patient_visits_by_mobile error: {e}")
+            return []
+    else:
+        conn = sqlite3.connect(DB_FILE)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        try:
+            cursor.execute(
+                "SELECT * FROM patients WHERE mobile = ? ORDER BY registration_date DESC, created_at DESC",
+                (mobile,)
+            )
+            rows = cursor.fetchall()
+            return [dict(row) for row in rows]
+        except Exception as e:
+            print(f"[SQLite] get_patient_visits_by_mobile error: {e}")
+            return []
         finally:
             conn.close()
 

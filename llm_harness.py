@@ -178,6 +178,39 @@ class Harness:
         from utils.db import get_patient_visit_count
         return get_patient_visit_count(mobile)
 
+    def get_patient_visit_history(self, mobile: str) -> list[dict]:
+        """
+        Get ALL past visits for a patient by mobile number.
+        Returns list of dicts, each with:
+          { "visit": dict, "tests": list[dict], "date_str": str }
+        Ordered most recent first.
+        """
+        from utils.db import get_patient_visits_by_mobile, get_tests_for_patient
+        from datetime import datetime
+
+        visits = get_patient_visits_by_mobile(mobile)
+        result = []
+        for v in visits:
+            tests = get_tests_for_patient(v["patient_id"])
+            # Enrich tests with display helpers
+            for t in tests:
+                t["status_display"] = format_status_display(t["status"])
+                t["wait_time"] = calculate_wait_time(
+                    t["test_name"], t.get("queue_position", 0)
+                )
+            # Format date for display
+            try:
+                dt = datetime.fromisoformat(v.get("registration_date", ""))
+                date_str = dt.strftime("%d-%b-%Y")
+            except Exception:
+                date_str = v.get("registration_date", "Unknown")
+            result.append({
+                "visit": v,
+                "tests": tests,
+                "date_str": date_str,
+            })
+        return result
+
     # ─── QUEUE OPERATIONS ────────────────────────────────────────────────────
 
     def get_department_queue(self, test_name: str) -> dict:

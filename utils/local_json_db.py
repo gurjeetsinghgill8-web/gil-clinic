@@ -157,6 +157,33 @@ def _get_patient_visit_count_json(mobile: str) -> int:
     return count
 
 
+def _get_patient_visits_by_mobile_json(mobile: str) -> list[dict]:
+    """Fetch ALL patient records (all visits) for a mobile across all date folders."""
+    results = []
+    if not mobile or len(mobile) != 10:
+        return results
+    # Check today first
+    today_patients = _load_patients()
+    for p in today_patients:
+        if p.get("mobile") == mobile:
+            results.append(p)
+    # Check previous days (newest first)
+    if os.path.exists(DATA_DIR):
+        for day in sorted(os.listdir(DATA_DIR), reverse=True):
+            if day == "meta.json" or day.startswith("."):
+                continue
+            path = os.path.join(DATA_DIR, day, "patients.json")
+            if os.path.exists(path):
+                with open(path, "r", encoding="utf-8") as f:
+                    patients = json.load(f)
+                    for p in patients:
+                        if p.get("mobile") == mobile:
+                            results.append(p)
+    # Sort by registration_date DESC, created_at DESC
+    results.sort(key=lambda x: (x.get("registration_date", ""), x.get("created_at", "")), reverse=True)
+    return results
+
+
 # ═══════════════════════════════════════════════════════════════════════════════
 #  TESTS
 # ═══════════════════════════════════════════════════════════════════════════════

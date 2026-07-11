@@ -87,7 +87,9 @@ DEPARTMENT_PAGES = {
 
 PUBLIC_PAGES = ["📋 Patient Status"]
 
-ALL_PAGES = list(ROLE_PAGES.values()) + PUBLIC_PAGES + ["🏠 Home"]
+STAFF_PAGES = ["📋 Patient History"]  # Shared by Reception, Manager, Admin
+
+ALL_PAGES = list(ROLE_PAGES.values()) + PUBLIC_PAGES + STAFF_PAGES + ["🏠 Home"]
 
 # Role-to-emoji mapping for staff cards
 ROLE_EMOJIS = {
@@ -362,6 +364,7 @@ def page_selector():
     if role == "Admin":
         nav_options.extend(list(ROLE_PAGES.values()))
         nav_options.append("📋 Patient Status")
+        nav_options.append("📋 Patient History")
         nav_options.append("🔐 Password Management")
     elif role in ROLE_PAGES:
         nav_options.append(ROLE_PAGES[role])
@@ -369,6 +372,10 @@ def page_selector():
     # Doctor can also see status
     if role == "Doctor":
         nav_options.append("📋 Patient Status")
+
+    # Reception and Manager also get Patient History
+    if role in ("Reception", "Manager"):
+        nav_options.append("📋 Patient History")
 
     # Patient role only sees status
     if role == "Patient":
@@ -549,6 +556,10 @@ def main():
 
     elif page == "📋 Patient Status":
         from pages.Patient_Status import show
+        show()
+
+    elif page == "📋 Patient History":
+        from pages.Patient_History import show
         show()
 
     elif page == "👑 Admin Panel":
