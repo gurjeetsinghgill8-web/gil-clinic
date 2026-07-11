@@ -173,6 +173,11 @@ class Harness:
         tests = get_tests_for_patient(patient["patient_id"])
         return {"found": True, "patient": patient, "tests": tests}
 
+    def get_patient_visit_count(self, mobile: str) -> int:
+        """Get how many times a patient with this mobile has visited."""
+        from utils.db import get_patient_visit_count
+        return get_patient_visit_count(mobile)
+
     # ─── QUEUE OPERATIONS ────────────────────────────────────────────────────
 
     def get_department_queue(self, test_name: str) -> dict:

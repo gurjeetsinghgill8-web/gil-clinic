@@ -410,7 +410,9 @@ def show():
     with st.container(border=True):
         cols = st.columns([2, 1])
         with cols[0]:
-            st.markdown(f"### 👤 {patient['name']}")
+            visits = harness.get_patient_visit_count(patient.get("mobile", ""))
+            visit_badge = f"<span style='background:#667eea;color:white;font-size:0.75rem;padding:2px 10px;border-radius:12px;margin-left:8px;font-weight:600;'>🔄 #{visits}</span>" if visits > 1 else ""
+            st.markdown(f"### 👤 {patient['name']}{visit_badge}", unsafe_allow_html=True)
             st.markdown(f"🆔 `{patient['patient_id']}`")
         with cols[1]:
             st.markdown(f"### {STATUS_ICONS.get(primary_status, '❓')}")

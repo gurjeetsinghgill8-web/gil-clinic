@@ -267,6 +267,10 @@ def show():
                     f"| 📱 {p.get('mobile', '—')} "
                     f"| 🎫 {p.get('patient_id', '—')}"
                 ):
+                    # Visit counter
+                    visits = harness.get_patient_visit_count(p.get("mobile", ""))
+                    if visits > 0:
+                        st.markdown(f"<span style='background:#667eea;color:white;padding:2px 12px;border-radius:12px;font-size:0.8rem;font-weight:600;'>🔄 Visit #{visits}</span>", unsafe_allow_html=True)
                     cols = st.columns(2)
                     with cols[0]:
                         st.markdown(f"**Age:** {p.get('age', '—')}  |  **Gender:** {p.get('gender', '—')}")

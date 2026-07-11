@@ -132,6 +132,31 @@ def get_today_patients_json() -> list[dict]:
     return _load_patients()
 
 
+def _get_patient_visit_count_json(mobile: str) -> int:
+    """Count how many times a mobile number appears across all date folders."""
+    count = 0
+    if not mobile or len(mobile) != 10:
+        return 0
+    # Check today
+    today_patients = _load_patients()
+    for p in today_patients:
+        if p.get("mobile") == mobile:
+            count += 1
+    # Check previous days
+    if os.path.exists(DATA_DIR):
+        for day in sorted(os.listdir(DATA_DIR), reverse=True):
+            if day == "meta.json" or day.startswith("."):
+                continue
+            path = os.path.join(DATA_DIR, day, "patients.json")
+            if os.path.exists(path):
+                with open(path, "r", encoding="utf-8") as f:
+                    patients = json.load(f)
+                    for p in patients:
+                        if p.get("mobile") == mobile:
+                            count += 1
+    return count
+
+
 # ═══════════════════════════════════════════════════════════════════════════════
 #  TESTS
 # ═══════════════════════════════════════════════════════════════════════════════

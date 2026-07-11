@@ -37,6 +37,7 @@ if not USE_GOOGLE_SHEETS:
         get_department_stats_json as _get_department_stats,
         log_message_json as _log_message,
         _set_patient_alert_json, _get_patient_alert_json, _clear_patient_alert_json,
+        _get_patient_visit_count_json,
     )
     print("[DB] Google Sheets not set. Using Local JSON file storage.")
     print(f"[DB] Data directory: {os.path.abspath('cardioqueue_data/')}")
@@ -93,6 +94,7 @@ def _auto_enable_local_json():
         get_department_stats_json as _get_department_stats,
         log_message_json as _log_message,
         _set_patient_alert_json, _get_patient_alert_json, _clear_patient_alert_json,
+        _get_patient_visit_count_json,
     )
     USE_LOCAL_JSON = True
     print("[DB] Google Sheets failed. Switched to Local JSON folder storage.")
@@ -445,6 +447,41 @@ def get_today_patients_with_tests() -> list[dict]:
     for p in patients:
         p["tests"] = get_tests_for_patient(p["patient_id"])
     return patients
+
+
+def get_patient_visit_count(mobile: str) -> int:
+    """
+    Count how many times a patient with this mobile has visited
+    (i.e. number of registration records). Used for visit counter badge.
+    """
+    if not mobile or len(mobile) != 10:
+        return 0
+
+    if USE_LOCAL_JSON:
+        return _get_patient_visit_count_json(mobile)
+
+    if USE_SUPABASE:
+        try:
+            result = (get_client().table("patients")
+                      .select("patient_id", count="exact")
+                      .eq("mobile", mobile)
+                      .execute())
+            return result.count or 0
+        except Exception as e:
+            print(f"[DB] get_patient_visit_count error: {e}")
+            return 0
+    else:
+        conn = sqlite3.connect(DB_FILE)
+        cursor = conn.cursor()
+        try:
+            cursor.execute("SELECT COUNT(*) FROM patients WHERE mobile = ?", (mobile,))
+            count = cursor.fetchone()[0]
+            return count or 0
+        except Exception as e:
+            print(f"[SQLite] get_patient_visit_count error: {e}")
+            return 0
+        finally:
+            conn.close()
 
 
 def _get_today_patient_count() -> int:

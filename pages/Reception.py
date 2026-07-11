@@ -291,8 +291,11 @@ def show():
 
                     col1, col2, col3, col4 = st.columns([3.5, 2.5, 1, 1])
                     with col1:
+                        # Visit counter badge
+                        visits = harness.get_patient_visit_count(p_mobile)
+                        visit_badge = f"<span style='background:#667eea;color:white;font-size:0.7rem;padding:1px 8px;border-radius:12px;margin-left:6px;font-weight:600;'>#{visits}</span>" if visits > 0 else ""
                         badge_help = " 🚨 HELP" if inquiry_msg else ""
-                        st.markdown(f"**{p_name}** — `{p_id}`{badge_help}")
+                        st.markdown(f"**{p_name}** — `{p_id}`{visit_badge}{badge_help}", unsafe_allow_html=True)
                         st.caption(f"📱 {p_mobile} | Tests: {', '.join(test_names)}")
                     with col2:
                         st.markdown(f"{status_text}")
