@@ -289,7 +289,7 @@ def show():
                             unsafe_allow_html=True
                         )
 
-                    col1, col2, col3, col4 = st.columns([3.5, 2.5, 1, 1])
+                    col1, col2, col3, col4, col5 = st.columns([3, 2, 1, 1, 1])
                     with col1:
                         # Visit counter badge
                         visits = harness.get_patient_visit_count(p_mobile)
@@ -345,6 +345,10 @@ def show():
                                     clear_patient_inquiry(p_id)
                                     st.success(result["message"])
                                     st.rerun()
+                    with col5:
+                        status_url = harness.get_patient_status_url(p_id)
+                        copy_script = harness.get_copy_link_script(status_url, "Link copied!")
+                        st.markdown(copy_script, unsafe_allow_html=True)
         else:
             st.info("📭 No patients registered today yet.")
 

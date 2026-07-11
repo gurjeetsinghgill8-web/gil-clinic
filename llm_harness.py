@@ -463,6 +463,34 @@ class Harness:
         """Get notification permission request script."""
         return request_notification_permission_script()
 
+    @staticmethod
+    def get_copy_link_script(url: str, label: str = "Link copied!") -> str:
+        """
+        Get an HTML button + JS that copies a URL to clipboard.
+        Shows a toast/message when copied.
+        """
+        escaped_url = url.replace("'", "\\'")
+        return f"""
+        <div style="display:inline-block;">
+            <button onclick="(function(){{
+                navigator.clipboard.writeText('{escaped_url}').then(function(){{
+                    var t=document.createElement('div');
+                    t.style.cssText='position:fixed;bottom:20px;left:50%;transform:translateX(-50%);
+                        background:#00b894;color:white;padding:10px 24px;border-radius:12px;
+                        font-weight:600;z-index:9999;box-shadow:0 4px 16px rgba(0,0,0,0.2);
+                        font-family:sans-serif;';
+                    t.textContent='✅ {label}';
+                    document.body.appendChild(t);
+                    setTimeout(function(){{t.remove();}},2500);
+                }});
+            }})();" style="background:#00b894;color:white;border:none;padding:8px 18px;
+                border-radius:8px;cursor:pointer;font-size:0.9rem;font-weight:600;
+                display:inline-flex;align-items:center;gap:4px;">
+                📋 Copy Link
+            </button>
+        </div>
+        """
+
     # ─── TOKEN PRINTING ──────────────────────────────────────────────────────
 
     def generate_token_slip(self, patient_name: str, patient_id: str,
@@ -535,6 +563,10 @@ class Harness:
 
     def get_qr_url(self, patient_id: str) -> str:
         """Get the URL encoded in the QR code for a patient."""
+        return f"{BASE_URL}/?patient={patient_id}"
+
+    def get_patient_status_url(self, patient_id: str) -> str:
+        """Get the full patient status page URL for sharing."""
         return f"{BASE_URL}/?patient={patient_id}"
 
     # ─── DASHBOARD STATS ─────────────────────────────────────────────────────

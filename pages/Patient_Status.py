@@ -414,6 +414,10 @@ def show():
             visit_badge = f"<span style='background:#667eea;color:white;font-size:0.75rem;padding:2px 10px;border-radius:12px;margin-left:8px;font-weight:600;'>🔄 #{visits}</span>" if visits > 1 else ""
             st.markdown(f"### 👤 {patient['name']}{visit_badge}", unsafe_allow_html=True)
             st.markdown(f"🆔 `{patient['patient_id']}`")
+            # Copy link button
+            status_url = harness.get_patient_status_url(patient["patient_id"])
+            copy_script = harness.get_copy_link_script(status_url, "Link copied!")
+            st.markdown(copy_script, unsafe_allow_html=True)
         with cols[1]:
             st.markdown(f"### {STATUS_ICONS.get(primary_status, '❓')}")
             st.markdown(f"**{STATUS_LABELS.get(primary_status, primary_status)}**")
