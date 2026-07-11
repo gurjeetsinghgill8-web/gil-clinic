@@ -25,3 +25,10 @@ pwa/secret.txt
 .DS_Store
 Thumbs.db
 nul
+
+# ZCode
+.zcode/
+
+# GHOS (separate project)
+ghos/
+ghos_memory/
