@@ -42,6 +42,7 @@ from utils.notifications import (
     request_notification_permission_script, misscall_alert_script
 )
 from utils.whatsapp import send_whatsapp_message, get_whatsapp_template
+from utils.sms import send_sms_message, get_sms_template
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -119,7 +120,6 @@ class Harness:
         log_message(patient_id, mobile, "registration", msg, "browser", actor=self._get_actor())
 
         # ─── WhatsApp Registration Notifications ─────────────────────────────
-        # 1. Patient Notification
         token = created_tests[0]["token_number"] if created_tests else 1
         wait_time = calculate_wait_time(selected_tests[0], 1) if selected_tests else 15
         patient_wa_msg = get_whatsapp_template(
@@ -132,7 +132,7 @@ class Harness:
         )
         send_whatsapp_message(mobile, patient_wa_msg)
 
-        # 2. Doctor Notification
+        # 2. Doctor WhatsApp Notification
         if DOCTOR_MOBILE:
             doc_wa_msg = (
                 f"🏥 *{HOSPITAL_NAME}*\n"
@@ -144,7 +144,7 @@ class Harness:
             )
             send_whatsapp_message(DOCTOR_MOBILE, doc_wa_msg)
 
-        # 3. Bablu Notification
+        # 3. Bablu WhatsApp Notification
         if BABLU_MOBILE:
             bablu_wa_msg = (
                 f"🏥 *{HOSPITAL_NAME}*\n"
@@ -154,6 +154,20 @@ class Harness:
                 f"Tests: {', '.join(selected_tests)}"
             )
             send_whatsapp_message(BABLU_MOBILE, bablu_wa_msg)
+
+        # ─── SMS Registration Notification ──────────────────────────────────
+        patient_sms_msg = get_sms_template(
+            "registration",
+            hospital=HOSPITAL_NAME,
+            name=name.strip(),
+            test=", ".join(selected_tests),
+            token=token,
+            wait=wait_time,
+            url=self.get_patient_status_url(patient_id)
+        )
+        sms_result = send_sms_message(mobile, patient_sms_msg)
+        if sms_result["success"]:
+            log_message(patient_id, mobile, "registration", patient_sms_msg, "sms", actor=self._get_actor())
 
         return {
             "success": True,
@@ -329,6 +343,18 @@ class Harness:
         )
         send_whatsapp_message(mobile, patient_wa_msg)
 
+        # ─── SMS Call Notification ──────────────────────────────────────────
+        patient_sms_msg = get_sms_template(
+            "called",
+            hospital=HOSPITAL_NAME,
+            name=patient_name,
+            room=room,
+            token=token
+        )
+        sms_result = send_sms_message(mobile, patient_sms_msg)
+        if sms_result["success"]:
+            log_message(patient_id, mobile, "called", patient_sms_msg, "sms", actor=self._get_actor())
+
         return {
             "success": True,
             "message": f"🔵 Called {patient_name} to {room}",
@@ -361,6 +387,17 @@ class Harness:
             test=test_name
         )
         send_whatsapp_message(mobile, patient_wa_msg)
+
+        # ─── SMS Completed Notification ─────────────────────────────────────
+        patient_sms_msg = get_sms_template(
+            "completed",
+            hospital=HOSPITAL_NAME,
+            name=patient_name,
+            test=test_name
+        )
+        sms_result = send_sms_message(mobile, patient_sms_msg)
+        if sms_result["success"]:
+            log_message(patient_id, mobile, "completed", patient_sms_msg, "sms", actor=self._get_actor())
 
         return {
             "success": True,
@@ -445,6 +482,17 @@ class Harness:
             test=test_name
         )
         send_whatsapp_message(mobile, patient_wa_msg)
+
+        # ─── SMS Report Ready Notification ──────────────────────────────────
+        patient_sms_msg = get_sms_template(
+            "report_ready",
+            hospital=HOSPITAL_NAME,
+            name=patient_name,
+            test=test_name
+        )
+        sms_result = send_sms_message(mobile, patient_sms_msg)
+        if sms_result["success"]:
+            log_message(patient_id, mobile, "report_ready", patient_sms_msg, "sms", actor=self._get_actor())
 
         return {
             "success": True,
@@ -789,6 +837,171 @@ class Harness:
         """
         from utils.db import get_recent_activity
         return get_recent_activity(limit)
+
+    # ═══════════════════════════════════════════════════════════════════════════
+    #  IPD (INPATIENT) OPERATIONS
+    # ═══════════════════════════════════════════════════════════════════════════
+
+    def admit_to_ipd(self, patient_id: str, patient_name: str, mobile: str,
+                     source: str = "direct", admitting_doctor: str = "",
+                     diagnosis_primary: str = "", diagnosis_secondary: str = "",
+                     bed_id: str = "", notes: str = "") -> dict:
+        """
+        Admit a patient to the Inpatient Department.
+        Returns: {"success": bool, "message": str, "admission": dict | None}
+        """
+        from utils.ipd import admit_patient
+        return admit_patient(
+            patient_id, patient_name, mobile, source, admitting_doctor,
+            diagnosis_primary, diagnosis_secondary, bed_id, notes
+        )
+
+    def discharge_from_ipd(self, admission_id: str, discharge_type: str = "normal",
+                           discharge_summary: str = "", follow_up_date: str = "") -> dict:
+        """Discharge a patient from IPD."""
+        from utils.ipd import discharge_patient
+        return discharge_patient(admission_id, discharge_type, discharge_summary, follow_up_date)
+
+    def get_ipd_ward_data(self) -> dict:
+        """
+        Get full IPD ward data for the dashboard.
+        Returns: {
+            "occupancy": list[ward_stats],
+            "active_admissions": list[admission],
+            "available_beds": list[bed],
+        }
+        """
+        from utils.ipd import get_ward_occupancy, get_active_admissions, get_available_beds
+        return {
+            "occupancy": get_ward_occupancy(),
+            "active_admissions": get_active_admissions(),
+            "available_beds": get_available_beds(),
+        }
+
+    def record_ipd_vitals(self, admission_id: str, bp_systolic: int = 0,
+                          bp_diastolic: int = 0, pulse: int = 0,
+                          temperature: float = 0.0, spo2: int = 0,
+                          weight: float = 0.0, recorded_by: str = "") -> dict:
+        """Record vital signs for an admitted patient."""
+        from utils.ipd import record_vitals
+        return record_vitals(admission_id, bp_systolic, bp_diastolic,
+                             pulse, temperature, spo2, weight, recorded_by)
+
+    def add_ipd_note(self, admission_id: str, doctor_name: str, notes: str,
+                     note_type: str = "progress") -> dict:
+        """Add a clinical note for an admitted patient."""
+        from utils.ipd import add_ipd_note
+        return add_ipd_note(admission_id, doctor_name, notes, note_type)
+
+    def get_ipd_patient_status(self, patient_id: str) -> dict | None:
+        """Get active admission for a patient. None if not admitted."""
+        from utils.ipd import get_ipd_patient_status
+        return get_ipd_patient_status(patient_id)
+
+    def update_bed_status(self, bed_id: str, new_status: str) -> bool:
+        """Update a bed's status (cleaning, maintenance, available)."""
+        from utils.ipd import update_bed_status
+        return update_bed_status(bed_id, new_status)
+
+    # ═══════════════════════════════════════════════════════════════════════════
+    #  INVENTORY / PHARMACY METHODS
+    # ═══════════════════════════════════════════════════════════════════════════
+
+    def get_inventory_summary(self) -> dict:
+        """Get inventory dashboard summary stats."""
+        from utils.inventory import get_inventory_summary
+        return get_inventory_summary()
+
+    def get_categories(self, category_type: str = "") -> list[dict]:
+        """Get inventory categories."""
+        from utils.inventory import get_categories
+        return get_categories(category_type)
+
+    def create_item(self, name: str, category_id: str, unit: str = "tab",
+                    generic_name: str = "", manufacturer: str = "",
+                    reorder_level: float = 10.0, reorder_qty: float = 50.0,
+                    sku_code: str = "", hsn_code: str = "") -> dict:
+        """Create a new inventory item."""
+        from utils.inventory import create_item
+        return create_item(name, category_id, unit, generic_name, manufacturer,
+                           reorder_level, reorder_qty, sku_code, hsn_code)
+
+    def get_items(self, category_id: str = "", search: str = "",
+                  active_only: bool = True) -> list[dict]:
+        """Get inventory items with optional filters."""
+        from utils.inventory import get_items
+        return get_items(category_id, search, active_only)
+
+    def add_batch(self, item_id: str, batch_no: str, quantity: float,
+                  unit_rate: float, mrp: float = 0.0,
+                  mfg_date: str = "", expiry_date: str = "",
+                  supplier_id: str = "", grn_ref: str = "",
+                  is_cold_chain: bool = False, created_by: str = "") -> dict:
+        """Add stock batch (purchase receipt)."""
+        from utils.inventory import add_batch
+        return add_batch(item_id, batch_no, quantity, unit_rate, mrp,
+                         mfg_date, expiry_date, supplier_id, grn_ref,
+                         is_cold_chain, created_by)
+
+    def get_batches(self, item_id: str = "", low_stock_only: bool = False,
+                    expiring_within_days: int = 0) -> list[dict]:
+        """Get inventory batches with optional filters."""
+        from utils.inventory import get_batches
+        return get_batches(item_id, low_stock_only, expiring_within_days)
+
+    def get_total_stock(self, item_id: str) -> float:
+        """Get total available stock for an item."""
+        from utils.inventory import get_total_stock
+        return get_total_stock(item_id)
+
+    def dispense_item(self, item_id: str, quantity: float,
+                      reference_type: str = "dispense",
+                      reference_id: str = "", created_by: str = "",
+                      notes: str = "") -> dict:
+        """Dispense stock using FEFO."""
+        from utils.inventory import dispense_item
+        return dispense_item(item_id, quantity, reference_type,
+                             reference_id, created_by, notes)
+
+    def get_movements(self, item_id: str = "", movement_type: str = "",
+                      days: int = 30) -> list[dict]:
+        """Get stock movement log."""
+        from utils.inventory import get_movements
+        return get_movements(item_id, movement_type, days)
+
+    def get_low_stock_items(self) -> list[dict]:
+        """Get items with stock below reorder level."""
+        from utils.inventory import get_low_stock_items
+        return get_low_stock_items()
+
+    def get_expiring_batches(self, days: int = 30) -> list[dict]:
+        """Get batches expiring within X days."""
+        from utils.inventory import get_expiring_batches
+        return get_expiring_batches(days)
+
+    def create_audit(self, audit_type: str = "full", notes: str = "",
+                     created_by: str = "") -> dict:
+        """Create a stock audit session."""
+        from utils.inventory import create_audit
+        return create_audit(audit_type, notes, created_by)
+
+    def record_audit_item(self, audit_id: str, item_id: str, batch_id: str,
+                          expected_qty: float, actual_qty: float,
+                          resolution_notes: str = "") -> dict:
+        """Record an audit item count."""
+        from utils.inventory import record_audit_item
+        return record_audit_item(audit_id, item_id, batch_id,
+                                 expected_qty, actual_qty, resolution_notes)
+
+    def complete_audit(self, audit_id: str) -> dict:
+        """Mark audit as completed."""
+        from utils.inventory import complete_audit
+        return complete_audit(audit_id)
+
+    def get_audits(self, limit: int = 20) -> list[dict]:
+        """Get recent audits."""
+        from utils.inventory import get_audits
+        return get_audits(limit)
 
     # ═══════════════════════════════════════════════════════════════════════════
     #  FUTURE: LLM ROUTING

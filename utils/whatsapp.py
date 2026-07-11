@@ -1,3 +1,4 @@
+# WhatsApp Integration (legacy — use utils/whatsapp_upgrade.py for Meta Cloud API)
 """
 WhatsApp Notification Module — Phase 2
 ========================================

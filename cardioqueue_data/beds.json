@@ -1,0 +1,182 @@
+[
+  {
+    "id": "0f648e2a-e959-4b2b-b46d-7dfb08efcd0b",
+    "ward_id": "79a0e448-eadf-47bc-a64f-64a965103ca2",
+    "bed_label": "G-01 Bed-01",
+    "status": "available",
+    "last_cleaned": null,
+    "is_active": 1,
+    "created_at": "2026-07-11T21:43:10.650363"
+  },
+  {
+    "id": "4588649e-9cf9-49a0-b901-5bdf68231c55",
+    "ward_id": "79a0e448-eadf-47bc-a64f-64a965103ca2",
+    "bed_label": "G-02 Bed-02",
+    "status": "available",
+    "last_cleaned": null,
+    "is_active": 1,
+    "created_at": "2026-07-11T21:43:10.650363"
+  },
+  {
+    "id": "c9e62d6f-e655-4d7b-95d4-e959f23f5735",
+    "ward_id": "79a0e448-eadf-47bc-a64f-64a965103ca2",
+    "bed_label": "G-03 Bed-03",
+    "status": "available",
+    "last_cleaned": null,
+    "is_active": 1,
+    "created_at": "2026-07-11T21:43:10.650363"
+  },
+  {
+    "id": "f045b3fd-c396-4d45-8c9c-a662b00f9823",
+    "ward_id": "79a0e448-eadf-47bc-a64f-64a965103ca2",
+    "bed_label": "G-04 Bed-04",
+    "status": "available",
+    "last_cleaned": null,
+    "is_active": 1,
+    "created_at": "2026-07-11T21:43:10.650363"
+  },
+  {
+    "id": "c1ec9dc7-e0ce-49ad-be4f-42f04291f34e",
+    "ward_id": "79a0e448-eadf-47bc-a64f-64a965103ca2",
+    "bed_label": "G-05 Bed-05",
+    "status": "available",
+    "last_cleaned": null,
+    "is_active": 1,
+    "created_at": "2026-07-11T21:43:10.650363"
+  },
+  {
+    "id": "8efbfdfb-8151-40c0-ab50-ec879c8d65a6",
+    "ward_id": "79a0e448-eadf-47bc-a64f-64a965103ca2",
+    "bed_label": "G-06 Bed-06",
+    "status": "available",
+    "last_cleaned": null,
+    "is_active": 1,
+    "created_at": "2026-07-11T21:43:10.650363"
+  },
+  {
+    "id": "44021fdc-6f1d-41c7-9f1e-9044320d9ce9",
+    "ward_id": "79a0e448-eadf-47bc-a64f-64a965103ca2",
+    "bed_label": "G-07 Bed-07",
+    "status": "available",
+    "last_cleaned": null,
+    "is_active": 1,
+    "created_at": "2026-07-11T21:43:10.650363"
+  },
+  {
+    "id": "52cf6f13-e686-444a-8a89-14423d4b0292",
+    "ward_id": "79a0e448-eadf-47bc-a64f-64a965103ca2",
+    "bed_label": "G-08 Bed-08",
+    "status": "available",
+    "last_cleaned": null,
+    "is_active": 1,
+    "created_at": "2026-07-11T21:43:10.650363"
+  },
+  {
+    "id": "41ffd5c3-bc95-45c6-b1c5-9862f643cd73",
+    "ward_id": "79a0e448-eadf-47bc-a64f-64a965103ca2",
+    "bed_label": "G-09 Bed-09",
+    "status": "available",
+    "last_cleaned": null,
+    "is_active": 1,
+    "created_at": "2026-07-11T21:43:10.650363"
+  },
+  {
+    "id": "117593b8-055c-4b8a-8c02-0fac8a9013ed",
+    "ward_id": "79a0e448-eadf-47bc-a64f-64a965103ca2",
+    "bed_label": "G-10 Bed-10",
+    "status": "available",
+    "last_cleaned": null,
+    "is_active": 1,
+    "created_at": "2026-07-11T21:43:10.650363"
+  },
+  {
+    "id": "fcaa91da-7496-4c08-8982-86a5298c21f6",
+    "ward_id": "96528d16-3f5a-4172-950e-5529e3fa4071",
+    "bed_label": "P-01 Bed-01",
+    "status": "available",
+    "last_cleaned": null,
+    "is_active": 1,
+    "created_at": "2026-07-11T21:43:10.650363"
+  },
+  {
+    "id": "b390ecce-4a95-4f63-9579-05aa0fd8db13",
+    "ward_id": "96528d16-3f5a-4172-950e-5529e3fa4071",
+    "bed_label": "P-02 Bed-02",
+    "status": "available",
+    "last_cleaned": null,
+    "is_active": 1,
+    "created_at": "2026-07-11T21:43:10.650363"
+  },
+  {
+    "id": "0224ab91-4102-42e2-879f-7d563da7051f",
+    "ward_id": "96528d16-3f5a-4172-950e-5529e3fa4071",
+    "bed_label": "P-03 Bed-03",
+    "status": "available",
+    "last_cleaned": null,
+    "is_active": 1,
+    "created_at": "2026-07-11T21:43:10.650363"
+  },
+  {
+    "id": "7a3ed241-2343-4fd1-8d3e-919245b0bdb5",
+    "ward_id": "96528d16-3f5a-4172-950e-5529e3fa4071",
+    "bed_label": "P-04 Bed-04",
+    "status": "available",
+    "last_cleaned": null,
+    "is_active": 1,
+    "created_at": "2026-07-11T21:43:10.650363"
+  },
+  {
+    "id": "e9b825c8-a856-4130-bef9-dbc527f620a5",
+    "ward_id": "96528d16-3f5a-4172-950e-5529e3fa4071",
+    "bed_label": "P-05 Bed-05",
+    "status": "available",
+    "last_cleaned": null,
+    "is_active": 1,
+    "created_at": "2026-07-11T21:43:10.650363"
+  },
+  {
+    "id": "2058d863-46c3-4bf3-bf78-a21d4e585759",
+    "ward_id": "96528d16-3f5a-4172-950e-5529e3fa4071",
+    "bed_label": "P-06 Bed-06",
+    "status": "available",
+    "last_cleaned": null,
+    "is_active": 1,
+    "created_at": "2026-07-11T21:43:10.650363"
+  },
+  {
+    "id": "13b53504-3848-4da4-9148-3f4ba7f5ee22",
+    "ward_id": "f5798a9f-0466-4e2c-9112-69c12d549f9f",
+    "bed_label": "I-01 Bed-01",
+    "status": "available",
+    "last_cleaned": null,
+    "is_active": 1,
+    "created_at": "2026-07-11T21:43:10.650363"
+  },
+  {
+    "id": "eda54aa9-f461-4416-bd1c-d4a1520aa1ac",
+    "ward_id": "f5798a9f-0466-4e2c-9112-69c12d549f9f",
+    "bed_label": "I-02 Bed-02",
+    "status": "available",
+    "last_cleaned": null,
+    "is_active": 1,
+    "created_at": "2026-07-11T21:43:10.650363"
+  },
+  {
+    "id": "2c55440a-7216-4333-91e9-fe3fede0ebdc",
+    "ward_id": "f5798a9f-0466-4e2c-9112-69c12d549f9f",
+    "bed_label": "I-03 Bed-03",
+    "status": "available",
+    "last_cleaned": null,
+    "is_active": 1,
+    "created_at": "2026-07-11T21:43:10.650363"
+  },
+  {
+    "id": "95520abf-e073-43e1-9565-33c7e546f496",
+    "ward_id": "f5798a9f-0466-4e2c-9112-69c12d549f9f",
+    "bed_label": "I-04 Bed-04",
+    "status": "available",
+    "last_cleaned": null,
+    "is_active": 1,
+    "created_at": "2026-07-11T21:43:10.650363"
+  }
+]

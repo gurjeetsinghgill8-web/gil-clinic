@@ -17,16 +17,22 @@ HOSPITAL_NAME = os.getenv("HOSPITAL_NAME", "GIL CLINIC")
 CLINIC_SPECIALTY = os.getenv("CLINIC_SPECIALTY", "Cardiology")  # e.g. Dental, Radiology
 CLINIC_LOGO = os.getenv("CLINIC_LOGO", "🏥")  # Emoji for branding
 
-# ─── Staff Mobile Numbers (for WhatsApp alerts) ──────────────────────────────
+# ─── Staff Mobile Numbers (for WhatsApp/SMS alerts) ──────────────────────────
 DOCTOR_MOBILE = os.getenv("DOCTOR_MOBILE", "")
 BABLU_MOBILE = os.getenv("BABLU_MOBILE", "")
+
+# ─── SMS / Twilio ────────────────────────────────────────────────────────────
+TWILIO_ACCOUNT_SID = os.getenv("TWILIO_ACCOUNT_SID", "")
+TWILIO_AUTH_TOKEN = os.getenv("TWILIO_AUTH_TOKEN", "")
+TWILIO_FROM_NUMBER = os.getenv("TWILIO_FROM_NUMBER", "")
+SMS_ENABLED = os.getenv("SMS_ENABLED", "false").lower() == "true"
 
 # ─── Admin Credentials (for the new Admin role) ──────────────────────────────
 ADMIN_USERNAME = os.getenv("ADMIN_USERNAME", "admin")
 ADMIN_PASS = os.getenv("ADMIN_PASS", "gurjas@123")
 
 # ─── Test Types ──────────────────────────────────────────────────────────────
-TEST_TYPES = ["ECG", "Echo", "TMT", "Holter", "ABPM", "OPD"]
+TEST_TYPES = ["ECG", "Echo", "TMT", "Holter", "ABPM", "OPD", "X-Ray", "Ultrasound"]
 
 # ─── Status Flow ─────────────────────────────────────────────────────────────
 # The lifecycle of a test status
@@ -47,6 +53,8 @@ AVG_TEST_TIME = {
     "Holter": int(os.getenv("AVG_HOLTER_TIME", "15")),
     "ABPM":  int(os.getenv("AVG_ABPM_TIME", "15")),
     "OPD":   int(os.getenv("AVG_OPD_TIME", "10")),
+    "X-Ray":   int(os.getenv("AVG_XRAY_TIME", "10")),
+    "Ultrasound": int(os.getenv("AVG_ULTRASOUND_TIME", "20")),
 }
 
 # ─── Room Names ──────────────────────────────────────────────────────────────
@@ -57,6 +65,8 @@ ROOM_NAMES = {
     "Holter": "Holter Room",
     "ABPM":  "ABPM Room",
     "OPD":   "OPD Room",
+    "X-Ray":   "X-Ray Room 1",
+    "Ultrasound": "Ultrasound Room 1",
 }
 
 # ─── Patient ID Prefix ──────────────────────────────────────────────────────
@@ -84,3 +94,34 @@ STATUS_LABELS = {
     "report_ready":  "Report Ready",
     "delivered":     "Delivered",
 }
+
+# ─── IPD (Inpatient) Constants ───────────────────────────────────────────────
+IPD_WARD_TYPES = ["general", "private", "icu", "maternity", "pediatric", "isolation"]
+IPD_BED_STATUSES = ["available", "occupied", "cleaning", "maintenance", "discharge_pending"]
+IPD_ADMISSION_SOURCES = ["opd", "emergency", "direct"]
+IPD_DISCHARGE_TYPES = ["normal", "lama", "abscond", "referred", "expired"]
+IPD_NOTE_TYPES = ["progress", "consultation", "instruction"]
+
+IPD_BED_STATUS_ICONS = {
+    "available": "🟢",
+    "occupied": "🔴",
+    "cleaning": "🟡",
+    "maintenance": "⚪",
+    "discharge_pending": "🟠",
+}
+IPD_BED_STATUS_LABELS = {
+    "available": "Available",
+    "occupied": "Occupied",
+    "cleaning": "Cleaning",
+    "maintenance": "Maintenance",
+    "discharge_pending": "Discharge Pending",
+}
+
+# ─── Inventory / Pharmacy Constants ─────────────────────────────────────────
+INVENTORY_CATEGORY_TYPES = ["medicine", "consumable", "surgical", "lab_reagent", "other"]
+INVENTORY_UNITS = ["tab", "cap", "ml", "mg", "g", "l", "sheet", "pair", "bottle", "ampoule"]
+MOVEMENT_TYPES = ["in", "out", "transfer", "adjustment"]
+MOVEMENT_REFERENCES = ["purchase", "dispense", "return", "audit", "expiry"]
+AUDIT_TYPES = ["full", "cyclical", "spot", "event"]
+
+STOCK_ALERT_DAYS = [30, 60, 90]  # Lookahead for expiry alerts

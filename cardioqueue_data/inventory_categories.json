@@ -1,0 +1,62 @@
+[
+  {
+    "id": "3e9bbc02-4a4b-441b-8f46-4267f6329842",
+    "name": "Cardiac Medications",
+    "category_type": "medicine",
+    "parent_id": null,
+    "requires_batch": 1,
+    "requires_expiry": 1,
+    "is_cold_chain": 0,
+    "created_at": "2026-07-11T21:57:01.813437"
+  },
+  {
+    "id": "c90c6088-dfe6-4115-a2f4-f20ca34afa3a",
+    "name": "General Medications",
+    "category_type": "medicine",
+    "parent_id": null,
+    "requires_batch": 1,
+    "requires_expiry": 1,
+    "is_cold_chain": 0,
+    "created_at": "2026-07-11T21:57:01.813437"
+  },
+  {
+    "id": "34fb5c0e-f43d-4e9e-8738-9814df5f206c",
+    "name": "Consumables",
+    "category_type": "consumable",
+    "parent_id": null,
+    "requires_batch": 1,
+    "requires_expiry": 1,
+    "is_cold_chain": 0,
+    "created_at": "2026-07-11T21:57:01.813437"
+  },
+  {
+    "id": "590eadca-3fce-4da8-b59d-ec24d30f31c9",
+    "name": "Surgical Supplies",
+    "category_type": "surgical",
+    "parent_id": null,
+    "requires_batch": 1,
+    "requires_expiry": 1,
+    "is_cold_chain": 0,
+    "created_at": "2026-07-11T21:57:01.813437"
+  },
+  {
+    "id": "a60d7cde-8891-42af-a61a-567d214b8526",
+    "name": "Lab Reagents",
+    "category_type": "lab_reagent",
+    "parent_id": null,
+    "requires_batch": 1,
+    "requires_expiry": 1,
+    "is_cold_chain": 0,
+    "created_at": "2026-07-11T21:57:01.813437"
+  },
+  {
+    "id": "7788e473-037f-4240-9833-569bea746e41",
+    "name": "Other Supplies",
+    "category_type": "other",
+    "parent_id": null,
+    "requires_batch": 1,
+    "requires_expiry": 1,
+    "is_cold_chain": 0,
+    "created_at": "2026-07-11T21:57:01.813437"
+  }
+]

@@ -81,8 +81,10 @@ ROLE_PAGES = {
     "TMT":  "📊 TMT",
     "OPD":  "🩺 OPD",
     "Doctor": "🩺 Doctor",
+    "Nurse": "👩‍⚕️ Nurse Station",
     "Manager": "📈 Manager Dashboard",
     "Admin": "👑 Admin Panel",
+    "Pharmacist": "💊 Pharmacist",
 }
 
 DEPARTMENT_PAGES = {
@@ -90,13 +92,17 @@ DEPARTMENT_PAGES = {
     "Echo": "📊 Echo",
     "TMT": "📊 TMT",
     "OPD": "🩺 OPD",
+    "X-Ray": "🩻 X-Ray",
+    "Ultrasound": "📡 Ultrasound",
+    "Lab": "🧪 Lab",
+    "Pharmacy": "💊 Pharmacy",
 }
 
 PUBLIC_PAGES = ["📋 Patient Status"]
 
-STAFF_PAGES = ["📋 Patient History", "📄 Daily List"]  # Shared by Reception, Manager, Admin
+STAFF_PAGES = ["📋 Patient History", "📄 Daily List", "📅 Appointments", "💳 Billing"]  # Shared by Reception, Manager, Admin
 
-MANAGER_PAGES = ["📋 Activity Log", "📊 Reports & Analytics"]  # Manager + Admin only
+MANAGER_PAGES = ["📋 Activity Log", "📊 Reports & Analytics", "⭐ Feedback"]  # Manager + Admin only
 
 ALL_PAGES = list(ROLE_PAGES.values()) + PUBLIC_PAGES + STAFF_PAGES + MANAGER_PAGES + ["🏠 Home"]
 
@@ -107,7 +113,12 @@ ROLE_EMOJIS = {
     "Echo": "🔬",
     "TMT": "🏃",
     "OPD": "🩺",
+    "X-Ray": "🩻",
+    "Ultrasound": "📡",
+    "Lab": "🧪",
+    "Pharmacy": "💊",
     "Doctor": "👨‍⚕️",
+    "Nurse": "👩‍⚕️",
     "Manager": "📈",
     "Admin": "👑",
 }
@@ -410,6 +421,7 @@ def page_selector():
     role = st.session_state.auth_role
 
     # Build navigation options
+    # Build navigation options
     nav_options = ["🏠 Home"]
 
     if role == "Admin":
@@ -417,24 +429,113 @@ def page_selector():
         nav_options.append("📋 Patient Status")
         nav_options.append("📋 Patient History")
         nav_options.append("📋 Activity Log")
+        nav_options.append("📅 Appointments")
+        nav_options.append("💳 Billing")
+        nav_options.append("⭐ Feedback")
+        nav_options.append("🚑 Emergency")
+        nav_options.append("🏥 IPD Ward")
+        nav_options.append("📦 Inventory")
+        nav_options.append("🧪 Lab")
+        nav_options.append("💊 Pharmacy")
+        nav_options.append("📅 Follow-up")
         nav_options.append("🔐 Password Management")
+        nav_options.append("📋 Purchase Orders")
+        nav_options.append("🏢 Vendors")
+        nav_options.append("👥 HR")
+        nav_options.append("💰 Payroll")
+        nav_options.append("📊 Finance")
+        nav_options.append("🤖 AI Triage")
+        nav_options.append("🤖 AI Follow-up")
+        nav_options.append("📱 WhatsApp Business")
+        nav_options.append("📧 Email")
+        nav_options.append("📱 SMS Manager")
+        nav_options.append("🤖 AI Receptionist")
+        nav_options.append("📧 Email")
+        nav_options.append("📱 Push Notifications")
+        nav_options.append("📱 SMS Manager")
+        nav_options.append("📱 WhatsApp Business")
+        nav_options.append("📊 System Monitoring")
+        nav_options.append("📋 System Logs")
+        nav_options.append("💾 Backup")
+        nav_options.append("📋 Compliance")
+        nav_options.append("🏢 Multi-Branch")
+        nav_options.append("👑 Owner Dashboard")
+        nav_options.append("🏥 Patient Portal")
+        nav_options.append("🧪 Lab Technician")
+        nav_options.append("💰 Accountant")
+        nav_options.append("🧾 GST")
+        nav_options.append("🥗 AI Dietician")
+        nav_options.append("📄 AI Report Explainer")
+        nav_options.append("📧 Email")
+        nav_options.append("🔔 Push Notifications")
+        nav_options.append("📞 Voice Calls")
+        nav_options.append("🎥 Telemedicine")
+        nav_options.append("💊 AI Prescription")
+        nav_options.append("🎙️ AI Voice Agent")
+        nav_options.append("💾 Backup")
+        nav_options.append("🔐 RBAC")
+        nav_options.append("📋 Compliance")
+        nav_options.append("📱 SMS Manager")
+        nav_options.append("📱 WhatsApp Business")
+        nav_options.append("🔒 Encryption")
+        nav_options.append("📊 System Monitoring")
+        nav_options.append("📋 System Logs")
+        nav_options.append("💊 Pharmacist")
+        nav_options.append("🕐 Patient Timeline")
+        nav_options.append("📍 Patient Tracking")
     elif role in ROLE_PAGES:
         nav_options.append(ROLE_PAGES[role])
 
-    # Doctor can also see status
+    # Doctor can also see status + IPD
     if role == "Doctor":
         nav_options.append("📋 Patient Status")
+        nav_options.append("🚑 Emergency")
+        nav_options.append("🏥 IPD Ward")
+        nav_options.append("📦 Inventory")
+        nav_options.append("📅 Follow-up")
+        nav_options.append("🤖 AI Triage")
+        nav_options.append("🤖 AI Follow-up")
+        nav_options.append("📱 WhatsApp Business")
+        nav_options.append("📧 Email")
+        nav_options.append("📱 SMS Manager")
 
-    # Reception and Manager also get Patient History
+    # Reception and Manager get additional staff pages
     if role in ("Reception", "Manager"):
         nav_options.append("📋 Patient History")
         nav_options.append("📄 Daily List")
+        nav_options.append("📅 Appointments")
+        nav_options.append("💳 Billing")
 
-    # Manager also gets Activity Log
+    # Manager gets Activity Log + Feedback + IPD + Inventory
     if role == "Manager":
         nav_options.append("📋 Activity Log")
+        nav_options.append("⭐ Feedback")
+        nav_options.append("🚑 Emergency")
+        nav_options.append("🏥 IPD Ward")
+        nav_options.append("📦 Inventory")
+        nav_options.append("🧪 Lab")
+        nav_options.append("💊 Pharmacy")
+        nav_options.append("📅 Follow-up")
+        nav_options.append("📋 Purchase Orders")
+        nav_options.append("🏢 Vendors")
+        nav_options.append("👥 HR")
+        nav_options.append("💰 Payroll")
+        nav_options.append("📊 Finance")
+        nav_options.append("🤖 AI Receptionist")
+        nav_options.append("📧 Email")
+        nav_options.append("📱 Push Notifications")
+        nav_options.append("📱 SMS Manager")
+        nav_options.append("📱 WhatsApp Business")
+        nav_options.append("📊 System Monitoring")
+        nav_options.append("📋 System Logs")
+        nav_options.append("💾 Backup")
+        nav_options.append("📋 Compliance")
+        nav_options.append("💊 Pharmacist")
+        nav_options.append("🕐 Patient Timeline")
+        nav_options.append("📍 Patient Tracking")
+        nav_options.append("🏢 Multi-Branch")
 
-    # Patient role only sees status
+        # Patient role only sees status
     if role == "Patient":
         nav_options = ["📋 Patient Status"]
 
@@ -606,6 +707,34 @@ def main():
         from pages.OPD import show
         show()
 
+    elif page == "🩻 X-Ray":
+        from pages.XRay import show
+        show()
+
+    elif page == "📡 Ultrasound":
+        from pages.Ultrasound import show
+        show()
+
+    elif page == "🧪 Lab":
+        from pages.Lab import show
+        show()
+
+    elif page == "💊 Pharmacy":
+        from pages.Pharmacy import show
+        show()
+
+    elif page == "📅 Follow-up":
+        from pages.FollowUp import show
+        show()
+
+    elif page == "🚑 Emergency":
+        from pages.Emergency import show
+        show()
+
+    elif page == "👩‍⚕️ Nurse Station":
+        from pages.Nurse import show
+        show()
+
     elif page == "📈 Manager Dashboard":
         from pages.Manager import show
         show()
@@ -635,13 +764,169 @@ def main():
         show()
 
     elif page == "👑 Admin Panel":
-        st.info("👑 Admin Panel — You have full access to all pages via the sidebar navigation.")
-        st.markdown("Use the sidebar to navigate to any department, or go to **🔐 Password Management** to manage staff accounts.")
+        from pages.Admin import show
+        show()
 
     elif page == "🔐 Password Management":
         from pages.Password_Management import show
         show()
 
+    elif page == "📅 Appointments":
+        from pages.Appointments import show
+        show()
 
-if __name__ == "__main__":
-    main()
+    elif page == "💳 Billing":
+        from pages.Billing import show
+        show()
+
+    elif page == "⭐ Feedback":
+        from pages.Feedback import show
+        show()
+
+    elif page == "🏥 IPD Ward":
+        from pages.IPD_Ward import show
+        show()
+
+    elif page == "🏥 IPD Ward":
+        from pages.IPD_Ward import show
+        show()
+
+    elif page == "📦 Inventory":
+        from pages.Inventory import show
+        show()
+
+    elif page == "📋 Purchase Orders":
+        from pages.Purchase import show
+        show()
+
+    elif page == "🏢 Vendors":
+        from pages.Vendor import show
+        show()
+
+    elif page == "👥 HR":
+        from pages.HR import show
+        show()
+
+    elif page == "💰 Payroll":
+        from pages.Payroll import show
+        show()
+
+    elif page == "📊 Finance":
+        from pages.Finance import show
+        show()
+
+    elif page == "🤖 AI Triage":
+        from pages.AI_Triage import show
+        show()
+
+    elif page == "🤖 AI Follow-up":
+        from pages.AI_FollowUp import show
+        show()
+
+    elif page == "🤖 AI Receptionist":
+        from pages.AI_Receptionist import show
+        show()
+
+    elif page == "👑 Owner Dashboard":
+        from pages.Owner_Dashboard import show
+        show()
+
+    elif page == "🏥 Patient Portal":
+        from pages.Patient_Portal import show
+        show()
+
+    elif page == "🧪 Lab Technician":
+        from pages.Lab_Technician import show
+        show()
+
+    elif page == "💰 Accountant":
+        from pages.Accountant import show
+        show()
+
+    elif page == "🧾 GST":
+        from pages.GST import show
+        show()
+
+    elif page == "🥗 AI Dietician":
+        from pages.AI_Dietician import show
+        show()
+
+    elif page == "📄 AI Report Explainer":
+        from pages.AI_Report_Explainer import show
+        show()
+
+    elif page == "📧 Email":
+        from pages.Email import show
+        show()
+
+    elif page == "🔔 Push Notifications":
+        from pages.PushNotifications import show
+        show()
+
+    elif page == "📞 Voice Calls":
+        from pages.VoiceCall import show
+        show()
+
+    elif page == "🎥 Telemedicine":
+        from pages.VideoCall import show
+        show()
+
+    elif page == "💊 AI Prescription":
+        from pages.AI_Prescription import show
+        show()
+
+    elif page == "🎙️ AI Voice Agent":
+        from pages.AI_VoiceAgent import show
+        show()
+
+    elif page == "💾 Backup":
+        from pages.Backup import show
+        show()
+
+    elif page == "🔐 RBAC":
+        from pages.RBAC import show
+        show()
+
+    elif page == "📋 Compliance":
+        from pages.Compliance import show
+        show()
+
+    elif page == "📱 SMS Manager":
+        from pages.SMS_Upgrade import show
+        show()
+
+    elif page == "🔒 Encryption":
+        from pages.EncryptionPage import show
+        show()
+
+    elif page == "📊 System Monitoring":
+        from pages.Monitoring import show
+        show()
+
+    elif page == "📋 System Logs":
+        from pages.Logging import show
+        show()
+
+    elif page == "🏢 Multi-Branch":
+        from pages.MultiBranch import show
+        show()
+
+    elif page == "📱 WhatsApp Business":
+        from pages.WhatsAppUpgrade import show
+        show()
+
+    elif page == "💊 Pharmacist":
+        from pages.Pharmacist import show
+        show()
+
+    elif page == "🕐 Patient Timeline":
+        from pages.Patient_Timeline import show
+        show()
+
+    elif page == "📍 Patient Tracking":
+        from pages.Patient_Tracking import show
+        show()
+
+
+    if __name__ == "__main__":
+        main()

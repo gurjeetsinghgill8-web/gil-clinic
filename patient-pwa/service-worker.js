@@ -1,132 +1,28 @@
-/**
- * CardioQueue Patient PWA — Service Worker
- * ==========================================
- * Provides offline caching, push notifications, and background status polling.
- */
-const CACHE_NAME = "cardioqueue-patient-v1";
-const APP_SHELL = [
-  "./",
-  "./index.html",
-  "./style.css",
-  "./app.js",
-  "./manifest.json"
-];
+const CACHE_NAME = "cq-cache-v3";
+const STATIC_ASSETS = ["/", "/assets/style.css", "/assets/manifest.json", "/assets/icon-192.png", "/assets/icon-512.png"];
 
-self.addEventListener("install", (event) => {
-  self.skipWaiting();
-  event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => {
-      return cache.addAll(APP_SHELL);
-    })
-  );
+self.addEventListener("install", (e) => { self.skipWaiting(); e.waitUntil(caches.open(CACHE_NAME).then((c) => c.addAll(STATIC_ASSETS))); });
+
+self.addEventListener("activate", (e) => { e.waitUntil(caches.keys().then((k) => Promise.all(k.filter((x) => x !== CACHE_NAME).map((x) => caches.delete(x))))); self.clients.claim(); });
+
+self.addEventListener("fetch", (e) => {
+  if (e.request.url.includes("/api/") || e.request.method === "POST") {
+    return e.respondWith(fetch(e.request).catch(() => new Response(JSON.stringify({ offline: true }), { status: 200, headers: { "Content-Type": "application/json" } })));
+  }
+  e.respondWith(fetch(e.request).catch(() => caches.match(e.request)));
 });
 
-self.addEventListener("activate", (event) => {
-  event.waitUntil(
-    caches.keys().then((cacheNames) => {
-      return Promise.all(
-        cacheNames
-          .filter((name) => name !== CACHE_NAME)
-          .map((name) => caches.delete(name))
-      );
-    })
-  );
-  self.clients.claim();
+self.addEventListener("push", (e) => {
+  const d = e.data ? e.data.json() : {};
+  e.waitUntil(self.registration.showNotification(d.title || "CardioQueue", { body: d.body || "", icon: "/assets/icon-192.png", badge: "/assets/icon-192.png", vibrate: [200, 100, 200], data: { url: d.url || "/" } }));
 });
 
-// Network-first, cache fallback
-self.addEventListener("fetch", (event) => {
-  if (event.request.method !== "GET") return;
-  const url = new URL(event.request.url);
-  if (!url.protocol.startsWith("http")) return;
+self.addEventListener("notificationclick", (e) => { e.notification.close(); e.waitUntil(clients.openWindow(e.notification.data?.url || "/")); });
 
-  event.respondWith(
-    fetch(event.request)
-      .then((response) => {
-        const clone = response.clone();
-        caches.open(CACHE_NAME).then((cache) => {
-          cache.put(event.request, clone);
-        });
-        return response;
-      })
-      .catch(() => {
-        return caches.match(event.request).then((cached) => {
-          return cached || new Response("Offline", { status: 503 });
-        });
-      })
-  );
-});
+self.addEventListener("sync", (e) => { if (e.tag === "cq-sync") e.waitUntil(syncData()); });
 
-// Background polling for patient status
-let trackedMobile = null;
-let lastStatusHash = "";
-let pollingInterval = null;
-
-self.addEventListener("message", (event) => {
-  const data = event.data;
-  if (data && data.type === "TRACK_PATIENT") {
-    trackedMobile = data.mobile;
-    lastStatusHash = data.statusHash || "";
-    if (pollingInterval) clearInterval(pollingInterval);
-    pollingInterval = setInterval(pollStatus, 30000);
-  }
-  if (data && data.type === "UNTRACK_PATIENT") {
-    trackedMobile = null;
-    lastStatusHash = "";
-    if (pollingInterval) {
-      clearInterval(pollingInterval);
-      pollingInterval = null;
-    }
-  }
-  if (data && data.type === "UPDATE_STATUS_HASH") {
-    lastStatusHash = data.statusHash || "";
-  }
-});
-
-async function pollStatus() {
-  if (!trackedMobile) return;
-  try {
-    const response = await fetch(`/?mobile=${trackedMobile}&sw_check=1`, {
-      method: "GET",
-      headers: { "Cache-Control": "no-cache" },
-    });
-    if (!response.ok) return;
-    const text = await response.text();
-    const hashMatch = text.match(
-      /<div id="status-hash" data-hash="([^"]+)" data-status="([^"]+)"/
-    );
-    if (hashMatch) {
-      const currentHash = hashMatch[1];
-      const currentStatus = hashMatch[2];
-      if (lastStatusHash && currentHash !== lastStatusHash) {
-        self.registration.showNotification("🔄 Status Updated", {
-          body: `Your status changed to: ${currentStatus}`,
-          icon: "https://img.icons8.com/color/48/hospital.png",
-          badge: "https://img.icons8.com/color/48/hospital.png",
-          tag: "cq-status-" + currentHash,
-          requireInteraction: true,
-          vibrate: [200, 100, 200, 100, 400],
-          data: { mobile: trackedMobile, status: currentStatus },
-        });
-      }
-      lastStatusHash = currentHash;
-    }
-  } catch (err) {
-    // Silently fail
-  }
+async function syncData() {
+  const cache = await caches.open("cq-offline-queue");
+  const requests = await cache.keys();
+  for (const req of requests) { try { const res = await fetch(req); if (res.ok) await cache.delete(req); } catch (e) {} }
 }
-
-self.addEventListener("notificationclick", (event) => {
-  event.notification.close();
-  const targetMobile = event.notification.data?.mobile || "";
-  event.waitUntil(
-    clients.matchAll({ type: "window", includeUncontrolled: true }).then((windows) => {
-      for (const client of windows) {
-        if (client.url.includes(self.location.origin)) {
-          return client.focus();
-        }
-      }
-      return clients.openWindow(self.location.origin);
-    })
-  );
-});

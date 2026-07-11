@@ -262,6 +262,12 @@ def _seed_default_users():
             (str(uuid.uuid4()), "ecg1", "ECG Technician", "ECG", "1234", 1, now),
             (str(uuid.uuid4()), "echo1", "Echo Technician", "Echo", "1234", 1, now),
             (str(uuid.uuid4()), "tmt1", "TMT Technician", "TMT", "1234", 1, now),
+            (str(uuid.uuid4()), "opd1", "OPD Staff", "OPD", "1234", 1, now),
+            (str(uuid.uuid4()), "xray1", "X-Ray Technician", "X-Ray", "1234", 1, now),
+            (str(uuid.uuid4()), "us1", "Ultrasound Technician", "Ultrasound", "1234", 1, now),
+            (str(uuid.uuid4()), "lab1", "Lab Technician", "Lab", "1234", 1, now),
+            (str(uuid.uuid4()), "pharmacy1", "Pharmacist", "Pharmacy", "1234", 1, now),
+            (str(uuid.uuid4()), "nurse1", "Staff Nurse", "Nurse", "1234", 1, now),
             (str(uuid.uuid4()), "doctor1", "Dr. Sharma", "Doctor", "1234", 1, now),
             (str(uuid.uuid4()), "manager1", "Manager", "Manager", "1234", 1, now),
         ]

@@ -76,7 +76,7 @@ def show():
             completed_at = test.get("completed_at", "")
 
             with st.container(border=True):
-                cols = st.columns([2, 1.5, 2, 1, 1])  # name, time, notes, action, room
+                cols = st.columns([2, 1.5, 2, 1, 1, 1, 1])  # name, time, notes, action, room, ipd, prescribe
 
                 with cols[0]:
                     st.markdown(f"**{p_name}** — {test_name} (Token #{token})")
@@ -126,6 +126,42 @@ def show():
 
                 with cols[4]:
                     st.markdown(f"🏥 {test_name}")
+
+                with cols[5]:
+                    # Admit to IPD button — links to IPD page with patient pre-loaded
+                    if st.button("🏥 Admit to IPD", key=f"ipd_{test['id']}",
+                                 use_container_width=True,
+                                 help="Admit this patient to Inpatient Department"):
+                        st.session_state.ipd_admit_patient_id = test.get("patient_id", "")
+                        st.session_state.ipd_admit_patient_name = p_name
+                        st.session_state.ipd_admit_mobile = p_mobile
+                        st.success(f"✅ {p_name} selected for IPD admission. Go to IPD Ward → New Admission tab.")
+                        st.info("Navigate to 🏥 IPD Ward page to complete the admission.")
+
+                with cols[6]:
+                    # Prescribe Medicine button
+                    if st.button("💊 Prescribe", key=f"rx_{test['id']}",
+                                 use_container_width=True,
+                                 help="Prescribe medicine for this patient"):
+                        st.session_state.rx_patient_id = test.get("patient_id", "")
+                        st.session_state.rx_patient_name = p_name
+                        st.session_state.rx_patient_mobile = p_mobile
+                        st.session_state.rx_test_id = test.get("id", "")
+                        st.success(f"✅ {p_name} selected for prescription. Go to 📦 Inventory → Dispense.")
+                        st.info("Navigate to 📦 Inventory page to dispense medicine.")
+
+                # Follow-up row
+                fu_cols = st.columns([5, 2])
+                with fu_cols[1]:
+                    if st.button("📅 Schedule Follow-up", key=f"fu_{test['id']}",
+                                 use_container_width=True,
+                                 help="Schedule follow-up for this patient"):
+                        st.session_state.fu_patient = {
+                            "patient_id": test.get("patient_id", ""),
+                            "name": p_name,
+                            "mobile": p_mobile,
+                        }
+                        st.success(f"✅ {p_name} selected. Go to 📅 Follow-up page to schedule.")
     else:
         st.success("✅ No pending reports. All completed tests have been processed.")
 

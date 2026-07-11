@@ -610,6 +610,42 @@ def show():
     except Exception:
         pass
 
+    # ─── IPD Status Section (if patient is admitted) ───────────────────────────
+    try:
+        ipd_status = harness.get_ipd_patient_status(patient.get("patient_id", ""))
+        if ipd_status:
+            ward_name = ipd_status.get("ward_name", "—")
+            bed_label = ipd_status.get("bed_label", "—")
+            diagnosis = ipd_status.get("diagnosis_primary", "—")
+            doctor = ipd_status.get("admitting_doctor", "—")
+            adm_date = ipd_status.get("admission_date", "")
+            try:
+                adm_dt = datetime.strptime(adm_date, "%Y-%m-%d").date()
+                days_since = (datetime.now().date() - adm_dt).days
+                day_str = f"Day {days_since}" if days_since >= 0 else "Today"
+            except Exception:
+                day_str = adm_date
+
+            st.divider()
+            st.markdown(f"""
+            <div style="background:linear-gradient(135deg,#667eea15,#764ba215);
+                        border:2px solid #667eea30;border-radius:12px;padding:1rem;margin:0.5rem 0;">
+                <div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.5rem;">
+                    <span style="font-size:1.3rem;">🏥</span>
+                    <span style="font-size:1.1rem;font-weight:700;">IPD Status — Admitted / भर्ती</span>
+                </div>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.5rem;font-size:0.9rem;">
+                    <div><strong>Ward / वार्ड:</strong> {ward_name}</div>
+                    <div><strong>Bed / बेड:</strong> {bed_label}</div>
+                    <div><strong>Doctor / डॉक्टर:</strong> {doctor}</div>
+                    <div><strong>Duration:</strong> {day_str}</div>
+                    <div style="grid-column:1/3;"><strong>Diagnosis / निदान:</strong> {diagnosis}</div>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+    except Exception:
+        pass
+
     # ─── Education Messages Section ──────────────────────────────────────────
     st.divider()
     st.markdown("### 📚 स्वास्थ्य शिक्षा / Health Education")

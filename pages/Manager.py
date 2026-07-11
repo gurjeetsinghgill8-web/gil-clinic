@@ -67,6 +67,50 @@ def show():
             </div>
             """, unsafe_allow_html=True)
 
+    # ─── Quick Links to All Modules ──────────────────────────────────────────
+    st.markdown("### 🔗 Quick Module Access")
+    st.caption("One-click navigation to all clinic modules")
+
+    quick_links = [
+        ("🩺 Reception", "Reception"), ("👨‍⚕️ Doctor", "Doctor"),
+        ("🩺 OPD", "OPD"), ("❤️ ECG", "ECG"), ("🔬 Echo", "Echo"),
+        ("🏃 TMT", "TMT"), ("📟 Holter", "Holter"), ("💓 ABPM", "ABPM"),
+        ("🩻 XRay", "XRay"), ("🔊 Ultrasound", "Ultrasound"),
+        ("🧪 Lab", "Lab"), ("🔬 Lab Technician", "Lab_Technician"),
+        ("💊 Pharmacy", "Pharmacy"), ("🏥 IPD Ward", "IPD_Ward"),
+        ("💰 Billing", "Billing"), ("📋 Daily List", "Daily_List"),
+        ("📊 Analytics", "Analytics"), ("💳 Finance", "Finance"),
+        ("📦 Inventory", "Inventory"), ("🛒 Purchase", "Purchase"),
+        ("🏢 Multi-Branch", "MultiBranch"), ("📅 Appointments", "Appointments"),
+        ("📝 Feedback", "Feedback"), ("📧 Email", "Email"),
+        ("🔔 Push Notifications", "PushNotifications"), ("📱 SMS Upgrade", "SMS_Upgrade"),
+        ("💬 WhatsApp", "WhatsAppUpgrade"), ("📹 Video Call", "VideoCall"),
+        ("📞 Voice Call", "VoiceCall"), ("🚨 Emergency", "Emergency"),
+        ("👥 Patient History", "Patient_History"), ("🔐 Password Mgmt", "Password_Management"),
+        ("📋 Patient Portal", "Patient_Portal"), ("📊 Patient Status", "Patient_Status"),
+        ("👤 HR", "HR"), ("💰 Payroll", "Payroll"),
+        ("🏪 Vendor", "Vendor"), ("📋 Compliance", "Compliance"),
+        ("🔒 RBAC", "RBAC"), ("🔑 Encryption", "EncryptionPage"),
+        ("📈 Activity Log", "Activity_Log"), ("📝 Logging", "Logging"),
+        ("🔄 Backup", "Backup"), ("📡 Monitoring", "Monitoring"),
+        ("📊 Owner Dashboard", "Owner_Dashboard"), ("📋 GST", "GST"),
+        ("👩‍⚕️ Nurse", "Nurse"), ("🤖 AI Receptionist", "AI_Receptionist"),
+        ("🤖 AI Triage", "AI_Triage"), ("🤖 AI Prescription", "AI_Prescription"),
+        ("🤖 AI FollowUp", "AI_FollowUp"), ("🤖 AI Dietician", "AI_Dietician"),
+        ("🤖 AI Report Explainer", "AI_Report_Explainer"),
+        ("🤖 AI Voice Agent", "AI_VoiceAgent"),
+        ("📋 FollowUp", "FollowUp"), ("📋 Accountant", "Accountant"),
+    ]
+
+    # Split into rows of 6 columns
+    for i in range(0, len(quick_links), 6):
+        row_links = quick_links[i:i+6]
+        cols = st.columns(6)
+        for col_idx, (label, page_name) in enumerate(row_links):
+            with cols[col_idx]:
+                if st.button(label, key=f"ql_{page_name}", use_container_width=True):
+                    st.switch_page(f"pages/{page_name}.py")
+
     st.divider()
 
     # ─── Department-wise Breakdown ───────────────────────────────────────────
