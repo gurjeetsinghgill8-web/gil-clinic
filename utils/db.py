@@ -39,6 +39,7 @@ if not USE_GOOGLE_SHEETS:
         _set_patient_alert_json, _get_patient_alert_json, _clear_patient_alert_json,
         _get_patient_visit_count_json,
         _get_patient_visits_by_mobile_json,
+        _get_recent_activity_json,
     )
     print("[DB] Google Sheets not set. Using Local JSON file storage.")
     print(f"[DB] Data directory: {os.path.abspath('cardioqueue_data/')}")
@@ -80,6 +81,7 @@ def _auto_enable_local_json():
     global _get_current_patient, _get_department_stats, _log_message
     global _set_patient_alert_json, _get_patient_alert_json, _clear_patient_alert_json
     global _get_patient_visit_count_json, _get_patient_visits_by_mobile_json
+    global _get_recent_activity_json
     from utils.local_json_db import (
         create_patient_json as _create_patient,
         get_patient_by_id_json as _get_patient_by_id,
@@ -98,6 +100,7 @@ def _auto_enable_local_json():
         _set_patient_alert_json, _get_patient_alert_json, _clear_patient_alert_json,
         _get_patient_visit_count_json,
         _get_patient_visits_by_mobile_json,
+        _get_recent_activity_json,
     )
     USE_LOCAL_JSON = True
     print("[DB] Google Sheets failed. Switched to Local JSON folder storage.")
@@ -196,9 +199,16 @@ def init_sqlite():
         message_text TEXT NOT NULL,
         sent_via TEXT NOT NULL DEFAULT 'none',
         sent_at TEXT NOT NULL,
+        actor TEXT DEFAULT '',
         FOREIGN KEY (patient_id) REFERENCES patients(patient_id) ON DELETE CASCADE
     )
     """)
+
+    # Migrate existing DB: add actor column if missing
+    try:
+        cursor.execute("ALTER TABLE messages ADD COLUMN actor TEXT DEFAULT ''")
+    except Exception:
+        pass
 
     # 4. users table (for password-based auth)
     cursor.execute("""
@@ -1037,13 +1047,14 @@ def get_current_patient(test_name: str) -> dict | None:
 
 # ─── MESSAGES ────────────────────────────────────────────────────────────────
 
-def log_message(patient_id: str, mobile: str, msg_type: str, text: str, sent_via: str = "none"):
+def log_message(patient_id: str, mobile: str, msg_type: str, text: str,
+                sent_via: str = "none", actor: str = ""):
     """Log a sent notification to the messages table."""
     if USE_GOOGLE_SHEETS:
         return
 
     if USE_LOCAL_JSON:
-        return _log_message(patient_id, mobile, msg_type, text, sent_via)
+        return _log_message(patient_id, mobile, msg_type, text, sent_via, actor)
 
     if USE_SUPABASE:
         data = {
@@ -1052,6 +1063,7 @@ def log_message(patient_id: str, mobile: str, msg_type: str, text: str, sent_via
             "message_type": msg_type,
             "message_text": text,
             "sent_via": sent_via,
+            "actor": actor,
         }
         try:
             get_client().table("messages").insert(data).execute()
@@ -1064,13 +1076,55 @@ def log_message(patient_id: str, mobile: str, msg_type: str, text: str, sent_via
         cursor = conn.cursor()
         try:
             cursor.execute(
-                """INSERT INTO messages (id, patient_id, mobile, message_type, message_text, sent_via, sent_at)
-                   VALUES (?, ?, ?, ?, ?, ?, ?)""",
-                (msg_uuid, patient_id, mobile, msg_type, text, sent_via, now_str)
-            )
+                """INSERT INTO messages (id, patient_id, mobile, message_type, message_text, sent_via, sent_at, actor)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+                (msg_uuid, patient_id, mobile, msg_type, text, sent_via, now_str, actor))
             conn.commit()
         except Exception as e:
             print(f"[SQLite] log_message error: {e}")
+        finally:
+            conn.close()
+
+
+def get_recent_activity(limit: int = 50) -> list[dict]:
+    """
+    Get the most recent activity log entries (messages table).
+    Joins with patients for name. Returns newest first.
+    Used by Manager and Admin activity feed.
+    """
+    if USE_LOCAL_JSON:
+        return _get_recent_activity_json(limit)
+
+    if USE_SUPABASE:
+        try:
+            result = (get_client().table("messages")
+                      .select("*, patients!inner(name)")
+                      .order("sent_at", desc=True)
+                      .limit(limit)
+                      .execute())
+            return result.data or []
+        except Exception as e:
+            print(f"[DB] get_recent_activity error: {e}")
+            return []
+    else:
+        conn = sqlite3.connect(DB_FILE)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        try:
+            cursor.execute(f"""
+                SELECT m.id, m.patient_id, m.mobile, m.message_type,
+                       m.message_text, m.sent_via, m.sent_at, m.actor,
+                       p.name as patient_name
+                FROM messages m
+                LEFT JOIN patients p ON m.patient_id = p.patient_id
+                ORDER BY m.sent_at DESC
+                LIMIT ?
+            """, (limit,))
+            rows = cursor.fetchall()
+            return [dict(row) for row in rows]
+        except Exception as e:
+            print(f"[SQLite] get_recent_activity error: {e}")
+            return []
         finally:
             conn.close()
 

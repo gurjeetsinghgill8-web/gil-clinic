@@ -61,6 +61,12 @@ class Harness:
         self.hospital = HOSPITAL_NAME
         self.today = date.today()
 
+    @staticmethod
+    def _get_actor() -> str:
+        """Get the current logged-in user's display name for audit logging."""
+        import streamlit as st
+        return st.session_state.get("auth_username", "Unknown")
+
     # ─── PATIENT OPERATIONS ───────────────────────────────────────────────────
 
     def register_patient(self, name: str, mobile: str, age: int, gender: str,
@@ -110,7 +116,7 @@ class Harness:
 
         # Log notification message
         msg = registration_message(name, selected_tests)
-        log_message(patient_id, mobile, "registration", msg, "browser")
+        log_message(patient_id, mobile, "registration", msg, "browser", actor=self._get_actor())
 
         # ─── WhatsApp Registration Notifications ─────────────────────────────
         # 1. Patient Notification
@@ -247,7 +253,7 @@ class Harness:
 
         room = ROOM_NAMES.get(test_name, f"{test_name} Room")
         msg = called_message(patient_name, test_name, token, room)
-        log_message(patient_id, mobile, "called", msg, "browser")
+        log_message(patient_id, mobile, "called", msg, "browser", actor=self._get_actor())
 
         # ─── WhatsApp Call Notification ─────────────────────────────────────
         patient_wa_msg = get_whatsapp_template(
@@ -281,7 +287,7 @@ class Harness:
             return {"success": False, "message": "❌ Failed to complete test."}
 
         msg = completed_message(patient_name, test_name)
-        log_message(patient_id, mobile, "completed", msg, "browser")
+        log_message(patient_id, mobile, "completed", msg, "browser", actor=self._get_actor())
 
         # ─── WhatsApp Completed Notification ─────────────────────────────────
         patient_wa_msg = get_whatsapp_template(
@@ -356,7 +362,7 @@ class Harness:
             return {"success": False, "message": "❌ Failed to mark report ready."}
 
         msg = report_ready_message(patient_name, test_name)
-        log_message(patient_id, mobile, "report_ready", msg, "browser")
+        log_message(patient_id, mobile, "report_ready", msg, "browser", actor=self._get_actor())
 
         # ─── WhatsApp Report Ready Notification ──────────────────────────────
         patient_wa_msg = get_whatsapp_template(
@@ -621,6 +627,17 @@ class Harness:
                 writer.writerow([p_id, name, mobile, age, gender, "", "", "", "", ""])
 
         return buf.getvalue()
+
+    # ─── ACTIVITY LOG ─────────────────────────────────────────────────────────
+
+    def get_recent_activity(self, limit: int = 50) -> list[dict]:
+        """
+        Get recent activity log entries for the audit trail view.
+        Returns list with keys: patient_id, patient_name, message_type,
+        message_text, actor, sent_at.
+        """
+        from utils.db import get_recent_activity
+        return get_recent_activity(limit)
 
     # ═══════════════════════════════════════════════════════════════════════════
     #  FUTURE: LLM ROUTING

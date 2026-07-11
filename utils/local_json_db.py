@@ -401,7 +401,8 @@ def get_department_stats_json(test_name: str) -> dict:
     return stats
 
 
-def log_message_json(patient_id: str, mobile: str, msg_type: str, text: str, sent_via: str = "none"):
+def log_message_json(patient_id: str, mobile: str, msg_type: str, text: str,
+                     sent_via: str = "none", actor: str = ""):
     """Log a message to today's messages file."""
     msgs_path = os.path.join(_today_dir(), "messages.json")
     msgs = []
@@ -415,10 +416,53 @@ def log_message_json(patient_id: str, mobile: str, msg_type: str, text: str, sen
         "message_type": msg_type,
         "message_text": text,
         "sent_via": sent_via,
+        "actor": actor,
         "sent_at": _now_str()
     })
     with open(msgs_path, "w", encoding="utf-8") as f:
         json.dump(msgs, f, indent=2, ensure_ascii=False)
+
+
+def _get_recent_activity_json(limit: int = 50) -> list[dict]:
+    """Get recent activity across all date folders (JSON fallback)."""
+    all_msgs = []
+    # Today first
+    msgs_path = os.path.join(_today_dir(), "messages.json")
+    if os.path.exists(msgs_path):
+        with open(msgs_path, "r", encoding="utf-8") as f:
+            all_msgs.extend(json.load(f))
+    # Previous days
+    if os.path.exists(DATA_DIR):
+        for day in sorted(os.listdir(DATA_DIR), reverse=True):
+            if day == "meta.json" or day.startswith("."):
+                continue
+            path = os.path.join(DATA_DIR, day, "messages.json")
+            if os.path.exists(path) and day != os.path.basename(_today_dir()):
+                with open(path, "r", encoding="utf-8") as f:
+                    all_msgs.extend(json.load(f))
+    # Sort by sent_at DESC, take limit
+    all_msgs.sort(key=lambda x: x.get("sent_at", ""), reverse=True)
+    # Attach patient name from patients file in same directory
+    results = []
+    for msg in all_msgs[:limit]:
+        pid = msg.get("patient_id", "")
+        pname = pid  # fallback
+        # Try to find patient name from today's or any patients file
+        for day in sorted(os.listdir(DATA_DIR), reverse=True):
+            if day == "meta.json" or day.startswith("."):
+                continue
+            ppath = os.path.join(DATA_DIR, day, "patients.json")
+            if os.path.exists(ppath):
+                with open(ppath, "r", encoding="utf-8") as f:
+                    for p in json.load(f):
+                        if p.get("patient_id") == pid:
+                            pname = p.get("name", pid)
+                            break
+                if pname != pid:
+                    break
+        msg["patient_name"] = pname
+        results.append(msg)
+    return results
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
