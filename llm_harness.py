@@ -354,6 +354,15 @@ class Harness:
             "reports_ready": report_ready,
         }
 
+    def save_doctor_notes(self, test_id: str, notes: str) -> dict:
+        """Save doctor's consultation notes for a completed test."""
+        from utils.db import save_test_notes
+        success = save_test_notes(test_id, notes)
+        return {
+            "success": success,
+            "message": "📝 Notes saved!" if success else "❌ Failed to save notes.",
+        }
+
     def mark_report_ready(self, test_id: str, patient_name: str,
                           test_name: str, mobile: str, patient_id: str) -> dict:
         """Mark a test report as ready."""

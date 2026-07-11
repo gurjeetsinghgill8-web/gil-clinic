@@ -76,7 +76,7 @@ def show():
             completed_at = test.get("completed_at", "")
 
             with st.container(border=True):
-                cols = st.columns([2.5, 1.5, 1.5, 1])
+                cols = st.columns([2, 1.5, 2, 1, 1])  # name, time, notes, action, room
 
                 with cols[0]:
                     st.markdown(f"**{p_name}** — {test_name} (Token #{token})")
@@ -92,6 +92,21 @@ def show():
                             st.info("✅ Completed")
 
                 with cols[2]:
+                    # Notes text area (small, inline)
+                    notes_key = f"notes_{test['id']}"
+                    current_notes = test.get("doctor_notes", "")
+                    notes_val = st.text_area(
+                        "📝 Notes",
+                        value=current_notes,
+                        placeholder="Consultation notes...",
+                        key=notes_key,
+                        label_visibility="collapsed",
+                        height=60,
+                    )
+                    if notes_val != current_notes:
+                        harness.save_doctor_notes(test["id"], notes_val)
+
+                with cols[3]:
                     if st.button("📋 Report Ready", key=f"ready_{test['id']}",
                                  type="primary", use_container_width=True):
                         result = harness.mark_report_ready(
@@ -109,7 +124,7 @@ def show():
                         else:
                             st.error(result["message"])
 
-                with cols[3]:
+                with cols[4]:
                     st.markdown(f"🏥 {test_name}")
     else:
         st.success("✅ No pending reports. All completed tests have been processed.")

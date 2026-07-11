@@ -337,6 +337,23 @@ def update_test_status_json(test_id: str, new_status: str) -> bool:
     return False
 
 
+def _save_test_notes_json(test_id: str, notes: str) -> bool:
+    """Save doctor's consultation notes to a test record in JSON."""
+    for f in _all_tests_files():
+        tests = json.load(open(f, "r", encoding="utf-8"))
+        updated = False
+        for t in tests:
+            if t["id"] == test_id:
+                t["doctor_notes"] = notes
+                updated = True
+                break
+        if updated:
+            with open(f, "w", encoding="utf-8") as fh:
+                json.dump(tests, fh, indent=2, ensure_ascii=False)
+            return True
+    return False
+
+
 def get_completed_tests_json() -> list[dict]:
     """Get all tests registered today with status 'completed'."""
     patients = _load_patients()

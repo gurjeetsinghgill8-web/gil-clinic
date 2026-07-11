@@ -575,6 +575,16 @@ def show():
                 f'</div>',
                 unsafe_allow_html=True
             )
+            # Show doctor notes if present
+            notes = t.get("doctor_notes", "").strip()
+            if notes:
+                st.markdown(
+                    f'<div style="background:rgba(102,126,234,0.06); border-left:3px solid #667eea; '
+                    f'padding:6px 12px; margin:2px 0 8px 0; border-radius:4px; font-size:0.9rem;">'
+                    f'📝 <strong>Doctor\'s Notes:</strong> {notes}'
+                    f'</div>',
+                    unsafe_allow_html=True
+                )
 
     # ─── Copy Tracking Link Button (Client-side, Free) ───────────────────────────────
     try:

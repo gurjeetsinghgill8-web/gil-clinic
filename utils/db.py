@@ -40,6 +40,7 @@ if not USE_GOOGLE_SHEETS:
         _get_patient_visit_count_json,
         _get_patient_visits_by_mobile_json,
         _get_recent_activity_json,
+        _save_test_notes_json,
     )
     print("[DB] Google Sheets not set. Using Local JSON file storage.")
     print(f"[DB] Data directory: {os.path.abspath('cardioqueue_data/')}")
@@ -81,7 +82,7 @@ def _auto_enable_local_json():
     global _get_current_patient, _get_department_stats, _log_message
     global _set_patient_alert_json, _get_patient_alert_json, _clear_patient_alert_json
     global _get_patient_visit_count_json, _get_patient_visits_by_mobile_json
-    global _get_recent_activity_json
+    global _get_recent_activity_json, _save_test_notes_json
     from utils.local_json_db import (
         create_patient_json as _create_patient,
         get_patient_by_id_json as _get_patient_by_id,
@@ -101,6 +102,7 @@ def _auto_enable_local_json():
         _get_patient_visit_count_json,
         _get_patient_visits_by_mobile_json,
         _get_recent_activity_json,
+        _save_test_notes_json,
     )
     USE_LOCAL_JSON = True
     print("[DB] Google Sheets failed. Switched to Local JSON folder storage.")
@@ -183,7 +185,11 @@ def init_sqlite():
     try:
         cursor.execute("ALTER TABLE tests ADD COLUMN alert_message TEXT DEFAULT ''")
     except Exception:
-        pass  # Column already exists
+        pass
+    try:
+        cursor.execute("ALTER TABLE tests ADD COLUMN doctor_notes TEXT DEFAULT ''")
+    except Exception:
+        pass
     try:
         cursor.execute("ALTER TABLE patients ADD COLUMN reception_inquiry TEXT DEFAULT NULL")
     except Exception:
@@ -910,6 +916,32 @@ def get_report_ready_tests() -> list[dict]:
         except Exception as e:
             print(f"[SQLite] get_report_ready_tests error: {e}")
             return []
+        finally:
+            conn.close()
+
+
+def save_test_notes(test_id: str, notes: str) -> bool:
+    """Save doctor's consultation notes for a test. Updates in-place."""
+    if USE_LOCAL_JSON:
+        return _save_test_notes_json(test_id, notes)
+
+    if USE_SUPABASE:
+        try:
+            get_client().table("tests").update({"doctor_notes": notes}).eq("id", test_id).execute()
+            return True
+        except Exception as e:
+            print(f"[DB] save_test_notes error: {e}")
+            return False
+    else:
+        conn = sqlite3.connect(DB_FILE)
+        cursor = conn.cursor()
+        try:
+            cursor.execute("UPDATE tests SET doctor_notes = ? WHERE id = ?", (notes, test_id))
+            conn.commit()
+            return True
+        except Exception as e:
+            print(f"[SQLite] save_test_notes error: {e}")
+            return False
         finally:
             conn.close()
 

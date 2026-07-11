@@ -146,6 +146,16 @@ def show():
                 cols[3].markdown(f"{icon} {label}")
                 cols[4].markdown(f"<span style='font-size:0.85rem;color:#666;'>{ts_display}</span>", unsafe_allow_html=True)
 
+                # Show doctor notes if present
+                notes = t.get("doctor_notes", "").strip()
+                if notes:
+                    st.markdown(
+                        f"<div style='background:rgba(102,126,234,0.06);border-left:3px solid #667eea;"
+                        f"padding:4px 12px;margin:0 0 6px 0;border-radius:4px;font-size:0.85rem;'>"
+                        f"📝 <strong>Dr:</strong> {notes}</div>",
+                        unsafe_allow_html=True,
+                    )
+
             # Registration timestamp
             if reg_date:
                 st.caption(f"📅 Registered: {reg_date}")
