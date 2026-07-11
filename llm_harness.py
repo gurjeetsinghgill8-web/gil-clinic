@@ -508,6 +508,50 @@ class Harness:
             stats[test] = get_department_stats(test)
         return stats
 
+    # ─── DATA EXPORT ──────────────────────────────────────────────────────────
+
+    def export_today_csv(self) -> str:
+        """
+        Export today's patient data as CSV string.
+        Columns: Patient ID, Name, Mobile, Age, Gender, Test, Token, Room, Status, ETA
+        """
+        from utils.db import get_today_patients_with_tests
+        from utils.queue import calculate_expected_time
+
+        patients = get_today_patients_with_tests()
+        if not patients:
+            return ""
+
+        import csv
+        import io
+
+        buf = io.StringIO()
+        writer = csv.writer(buf)
+        writer.writerow([
+            "Patient ID", "Name", "Mobile", "Age", "Gender",
+            "Test", "Token #", "Room", "Status", "ETA"
+        ])
+
+        for p in patients:
+            p_id = p.get("patient_id", "")
+            name = p.get("name", "")
+            mobile = p.get("mobile", "")
+            age = p.get("age", "")
+            gender = p.get("gender", "")
+            tests = p.get("tests", [])
+            if tests:
+                for t in tests:
+                    tn = t.get("test_name", "")
+                    token = t.get("token_number", "")
+                    room = t.get("room", "")
+                    status = STATUS_LABELS.get(t.get("status", ""), t.get("status", ""))
+                    eta = calculate_expected_time(tn, t.get("queue_position", 0))
+                    writer.writerow([p_id, name, mobile, age, gender, tn, token, room, status, eta])
+            else:
+                writer.writerow([p_id, name, mobile, age, gender, "", "", "", "", ""])
+
+        return buf.getvalue()
+
     # ═══════════════════════════════════════════════════════════════════════════
     #  FUTURE: LLM ROUTING
     # ═══════════════════════════════════════════════════════════════════════════

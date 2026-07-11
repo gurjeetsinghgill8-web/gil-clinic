@@ -434,6 +434,19 @@ def get_today_patients() -> list[dict]:
             conn.close()
 
 
+def get_today_patients_with_tests() -> list[dict]:
+    """
+    Get all patients registered today, each with their tests nested inside.
+    Returns list of dicts with patient fields + 'tests' list.
+
+    Used by CSV export.
+    """
+    patients = get_today_patients()
+    for p in patients:
+        p["tests"] = get_tests_for_patient(p["patient_id"])
+    return patients
+
+
 def _get_today_patient_count() -> int:
     """Count today's patients for ID generation."""
     today = date.today().isoformat()

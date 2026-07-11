@@ -245,6 +245,18 @@ def show():
     st.divider()
     st.subheader("📋 Today's Registered Patients")
 
+    # Export CSV button (top-right area)
+    csv_data = harness.export_today_csv()
+    if csv_data:
+        st.download_button(
+            label="📥 Download CSV",
+            data=csv_data,
+            file_name=f"patients_{date.today().isoformat()}.csv",
+            mime="text/csv",
+            use_container_width=False,
+            type="secondary",
+        )
+
     try:
         patients = harness.get_patient_details("", by_mobile=False)
         # Refresh from DB directly for today's list

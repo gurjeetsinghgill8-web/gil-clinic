@@ -26,6 +26,18 @@ def show():
     st.markdown("### 📊 Overall Status")
     st.caption("Real-time summary across all departments")
 
+    # Export CSV button
+    csv_data = harness.export_today_csv()
+    if csv_data:
+        st.download_button(
+            label="📥 Download CSV",
+            data=csv_data,
+            file_name=f"patients_{datetime.now().strftime('%Y-%m-%d')}.csv",
+            mime="text/csv",
+            use_container_width=False,
+            type="secondary",
+        )
+
     dept_stats = harness.get_all_dashboard_stats()
 
     # Compute totals
