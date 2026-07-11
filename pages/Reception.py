@@ -190,6 +190,67 @@ def show():
                     "number to see their live test statuses."
                 )
 
+    # ─── Bulk Import ────────────────────────────────────────────────────────────
+    st.divider()
+    with st.expander("📦 Bulk Import Patients from CSV"):
+        st.markdown(
+            "एक CSV फ़ाइल अपलोड करें और एक साथ कई मरीज़ रजिस्टर करें। "
+            "Upload a CSV file to register multiple patients at once."
+        )
+
+        # Sample CSV download
+        sample_csv = "Name,Mobile,Age,Gender,Tests\nRajesh Kumar,9876543210,45,Male,ECG+Echo\nPriya Sharma,9876543211,32,Female,TMT"
+        st.download_button(
+            label="📄 Download Sample CSV",
+            data=sample_csv,
+            file_name="sample_import.csv",
+            mime="text/csv",
+            type="secondary",
+        )
+
+        uploaded = st.file_uploader(
+            "Choose a CSV file", type="csv",
+            help="Columns: Name, Mobile, Age, Gender, Tests. Use '+' for multiple tests (e.g. ECG+Echo)."
+        )
+
+        if uploaded:
+            content = uploaded.getvalue().decode("utf-8")
+            # Preview
+            import csv, io
+            preview_reader = csv.DictReader(io.StringIO(content))
+            preview_rows = list(preview_reader)
+
+            if not preview_rows:
+                st.warning("⚠️ CSV file is empty or has no data rows.")
+            else:
+                st.markdown(f"##### 👁️ Preview ({len(preview_rows)} patient(s))")
+                preview_data = []
+                for r in preview_rows:
+                    preview_data.append({
+                        "Name": r.get("Name", ""),
+                        "Mobile": r.get("Mobile", ""),
+                        "Age": r.get("Age", ""),
+                        "Gender": r.get("Gender", ""),
+                        "Tests": r.get("Tests", ""),
+                    })
+                st.dataframe(preview_data, use_container_width=True, hide_index=True)
+
+                if st.button("🚀 Import All Patients", type="primary", use_container_width=True):
+                    with st.spinner(f"Importing {len(preview_rows)} patient(s)..."):
+                        result = harness.bulk_register_patients(content)
+
+                    st.success(f"✅ {result['succeeded']} / {result['total']} imported successfully")
+
+                    if result["failed"] > 0:
+                        st.warning(f"⚠️ {result['failed']} row(s) failed:")
+                        for r in result["results"]:
+                            if not r["success"]:
+                                st.error(f"Row #{r['row']} — {r['name']}: {r['message']}")
+
+                    # Summary
+                    st.divider()
+                    st.caption(f"📊 Total: {result['total']} | ✅ Success: {result['succeeded']} | ❌ Failed: {result['failed']}")
+
     # ─── Common QR Code for Patient Status ─────────────────────────────────────
     st.divider()
     st.subheader("📸 एक ही QR Code सबके लिए / One QR Code for All Patients")

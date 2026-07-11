@@ -163,6 +163,70 @@ class Harness:
             "notification": msg,
         }
 
+    def bulk_register_patients(self, csv_content: str) -> dict:
+        """
+        Bulk register patients from a CSV string.
+        CSV columns: Name, Mobile, Age, Gender, Tests
+        Tests column uses '+' separator (e.g. 'ECG+Echo')
+
+        Returns: {
+            "total": int, "succeeded": int, "failed": int,
+            "results": [{"row": int, "name": str, "success": bool, "message": str}]
+        }
+        """
+        import csv
+        import io
+
+        results = []
+        reader = csv.DictReader(io.StringIO(csv_content))
+
+        for idx, row in enumerate(reader, start=2):  # row 1 = header
+            name = (row.get("Name") or "").strip()
+            mobile = (row.get("Mobile") or "").strip()
+            age_str = (row.get("Age") or "").strip()
+            gender = (row.get("Gender") or "").strip()
+            tests_str = (row.get("Tests") or "").strip()
+
+            # Parse tests
+            selected_tests = [t.strip() for t in tests_str.split("+") if t.strip()]
+            # Validate test names against known types
+            valid_tests = [t for t in selected_tests if t in TEST_TYPES]
+            if not valid_tests:
+                results.append({
+                    "row": idx, "name": name, "success": False,
+                    "message": f"No valid tests found in '{tests_str}'. Valid: {', '.join(TEST_TYPES)}"
+                })
+                continue
+
+            # Parse age
+            try:
+                age = int(age_str)
+            except (ValueError, TypeError):
+                results.append({
+                    "row": idx, "name": name, "success": False,
+                    "message": f"Invalid age: '{age_str}'"
+                })
+                continue
+
+            # Register
+            result = self.register_patient(name, mobile, age, gender, valid_tests)
+            results.append({
+                "row": idx,
+                "name": name,
+                "success": result["success"],
+                "message": result["message"] if result["success"] else result["message"],
+            })
+
+        total = len(results)
+        succeeded = sum(1 for r in results if r["success"])
+        failed = total - succeeded
+        return {
+            "total": total,
+            "succeeded": succeeded,
+            "failed": failed,
+            "results": results,
+        }
+
     def get_patient_details(self, identifier: str, by_mobile: bool = True) -> dict:
         """
         Get patient details and all their tests.
