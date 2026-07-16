@@ -41,8 +41,18 @@ from utils.notifications import (
     report_ready_message, browser_notification_script,
     request_notification_permission_script, misscall_alert_script
 )
-from utils.whatsapp import send_whatsapp_message, get_whatsapp_template
-from utils.sms import send_sms_message, get_sms_template
+# Optional imports — WhatsApp/SMS modules handle missing dependencies gracefully
+try:
+    from utils.whatsapp import send_whatsapp_message, get_whatsapp_template
+except Exception:
+    send_whatsapp_message = None
+    get_whatsapp_template = None
+
+try:
+    from utils.sms import send_sms_message, get_sms_template
+except Exception:
+    send_sms_message = None
+    get_sms_template = None
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

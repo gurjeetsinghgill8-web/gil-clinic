@@ -14,7 +14,7 @@ from datetime import datetime
 try:
     import pywhatkit
     PYWHATKIT_AVAILABLE = True
-except ImportError:
+except Exception:
     PYWHATKIT_AVAILABLE = False
 
 
