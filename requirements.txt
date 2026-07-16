@@ -31,7 +31,6 @@ cryptography>=42.0.0
 bcrypt>=4.1.0
 
 # Notifications
-pywhatkit>=5.0
 APScheduler>=3.10.0
 
 # AI Integrations (optional — comment out if not needed)
