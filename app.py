@@ -688,32 +688,61 @@ def main():
         show_home()
 
     elif page == "📋 Reception":
-        from pages.Reception import show
-        show()
+        try:
+            from pages.Reception import show
+            show()
+        except Exception as e:
+            st.error(f"❌ Reception page error: {e}")
+            import traceback
+            st.code(traceback.format_exc(), language="python")
 
     elif page == "📊 ECG":
-        from pages.ECG import show
-        show()
+        try:
+            from pages.ECG import show
+            show()
+        except Exception as e:
+            st.error(f"❌ ECG page error: {e}")
+            import traceback; st.code(traceback.format_exc(), language="python")
 
     elif page == "📊 Echo":
-        from pages.Echo import show
-        show()
+        try:
+            from pages.Echo import show
+            show()
+        except Exception as e:
+            st.error(f"❌ Echo page error: {e}")
+            import traceback; st.code(traceback.format_exc(), language="python")
 
     elif page == "📊 TMT":
-        from pages.TMT import show
-        show()
+        try:
+            from pages.TMT import show
+            show()
+        except Exception as e:
+            st.error(f"❌ TMT page error: {e}")
+            import traceback; st.code(traceback.format_exc(), language="python")
 
     elif page == "🩺 OPD":
-        from pages.OPD import show
-        show()
+        try:
+            from pages.OPD import show
+            show()
+        except Exception as e:
+            st.error(f"❌ OPD page error: {e}")
+            import traceback; st.code(traceback.format_exc(), language="python")
 
     elif page == "🩻 X-Ray":
-        from pages.XRay import show
-        show()
+        try:
+            from pages.XRay import show
+            show()
+        except Exception as e:
+            st.error(f"❌ X-Ray page error: {e}")
+            import traceback; st.code(traceback.format_exc(), language="python")
 
     elif page == "📡 Ultrasound":
-        from pages.Ultrasound import show
-        show()
+        try:
+            from pages.Ultrasound import show
+            show()
+        except Exception as e:
+            st.error(f"❌ Ultrasound page error: {e}")
+            import traceback; st.code(traceback.format_exc(), language="python")
 
     elif page == "🧪 Lab":
         from pages.Lab import show
