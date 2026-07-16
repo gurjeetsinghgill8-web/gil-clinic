@@ -162,6 +162,9 @@ def render_login_page():
     Step 2: Enter PIN (4-6 digits)
     Also has: Patient access button + Admin login link
     """
+    import sys
+    print("[Login] render_login_page called", flush=True)
+    
     # ─── Center the login card using columns ───────────────────────────────
     col1, col2, col3 = st.columns([1, 2, 1])
 
@@ -211,6 +214,7 @@ def render_login_page():
 
             # Get all active staff users grouped by role
             all_users = get_all_active_users()
+            print(f"[Login] Found {len(all_users)} active users", flush=True)
             if not all_users:
                 st.warning("⚠️ No staff accounts found. Contact Admin to create accounts.")
                 st.info("💡 Admin login: नीचे Admin link पर click karein.")
@@ -673,8 +677,12 @@ def main():
 
     # ─── Login Flow ──────────────────────────────────────────────────────────
     if not st.session_state.authenticated:
-        # Hide sidebar during login for clean look
-        render_login_page()
+        try:
+            render_login_page()
+        except Exception as e:
+            st.error(f"❌ Login page error: {e}")
+            import traceback
+            st.code(traceback.format_exc(), language="python")
         return
 
     # ─── Authenticated Flow ──────────────────────────────────────────────────
