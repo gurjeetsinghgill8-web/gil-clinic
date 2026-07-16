@@ -11,11 +11,8 @@ import time
 from datetime import datetime
 
 # Optional import — will only work when pywhatkit is installed
-try:
-    import pywhatkit
-    PYWHATKIT_AVAILABLE = True
-except Exception:
-    PYWHATKIT_AVAILABLE = False
+# Note: pywhatkit requires a DISPLAY (graphical environment) and will fail on headless servers
+PYWHATKIT_AVAILABLE = False
 
 
 # Thread-safe queue for sequential WhatsApp message sending
