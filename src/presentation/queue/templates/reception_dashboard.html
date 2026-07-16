@@ -1,0 +1,1545 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="theme-color" content="#e74c3c">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <title>{{CLINIC_NAME}} — Reception</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            background: #f0f2f5;
+            min-height: 100vh;
+            color: #2c3e50;
+        }
+
+        /* ── Header ──────────────────────────────────────────── */
+        .header {
+            background: linear-gradient(135deg, #e74c3c 0%, #c0392b 100%);
+            color: white;
+            padding: 16px 20px 20px;
+            position: sticky;
+            top: 0;
+            z-index: 50;
+        }
+        .header .htop {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .header h1 { font-size: 22px; font-weight: 700; }
+        .header .sub { font-size: 14px; opacity: 0.8; margin-top: 2px; }
+        .header .header-actions { display: flex; gap: 8px; }
+        .header-btn {
+            padding: 6px 14px;
+            border: 1px solid rgba(255,255,255,0.4);
+            border-radius: 8px;
+            background: rgba(255,255,255,0.15);
+            color: white;
+            font-size: 13px;
+            cursor: pointer;
+        }
+
+        .content { padding: 16px; max-width: 800px; margin: 0 auto; }
+
+        .card {
+            background: white;
+            border-radius: 16px;
+            padding: 20px;
+            margin-bottom: 16px;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+        }
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+        .section-title {
+            font-size: 13px;
+            font-weight: 700;
+            color: #888;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .section-badge {
+            font-size: 11px;
+            padding: 2px 10px;
+            border-radius: 10px;
+            background: #e74c3c15;
+            color: #e74c3c;
+            font-weight: 600;
+        }
+
+        /* ── Stats Bar ──────────────────────────────────────── */
+        .stats-row {
+            display: flex;
+            gap: 8px;
+            padding: 12px 16px;
+        }
+        .stat-card {
+            flex: 1;
+            background: white;
+            border-radius: 12px;
+            padding: 12px 8px;
+            text-align: center;
+            box-shadow: 0 1px 6px rgba(0,0,0,0.04);
+        }
+        .stat-card .num { font-size: 26px; font-weight: 800; }
+        .stat-card .lbl { font-size: 11px; color: #888; margin-top: 2px; }
+        .stat-card.waiting .num { color: #f39c12; }
+        .stat-card.called .num { color: #3498db; }
+        .stat-card.active .num { color: #2ecc71; }
+
+        /* ── Search ─────────────────────────────────────────── */
+        .search-row {
+            display: flex;
+            gap: 10px;
+        }
+        .search-box {
+            flex: 1;
+            padding: 16px 20px;
+            border: 2px solid #e0e0e0;
+            border-radius: 14px;
+            font-size: 18px;
+            background: white;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+        .search-box:focus { border-color: #e74c3c; }
+        .search-box.new-patient-mode { border-color: #27ae60; background: #e8f5e9; }
+
+        .quick-btn {
+            padding: 16px 20px;
+            border: 2px dashed #27ae60;
+            border-radius: 14px;
+            background: #e8f5e9;
+            color: #27ae60;
+            font-size: 14px;
+            font-weight: 700;
+            cursor: pointer;
+            white-space: nowrap;
+            transition: all 0.15s;
+        }
+        .quick-btn:active { transform: scale(0.95); }
+
+        .search-results {
+            background: white;
+            border-radius: 12px;
+            margin-top: 4px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+            max-height: 250px;
+            overflow-y: auto;
+            display: none;
+        }
+        .search-results.show { display: block; }
+        .search-item {
+            padding: 14px 18px;
+            cursor: pointer;
+            border-bottom: 1px solid #f0f0f0;
+            transition: background 0.15s;
+        }
+        .search-item:active { background: #f5f5f5; }
+        .search-item:last-child { border-bottom: none; }
+        .search-item .si-name { font-size: 16px; font-weight: 600; }
+        .search-item .si-meta { font-size: 13px; color: #888; margin-top: 2px; }
+        .search-item .si-badge {
+            float: right;
+            font-size: 11px;
+            padding: 2px 8px;
+            border-radius: 8px;
+            background: #e3f2fd;
+            color: #3498db;
+        }
+        .search-item .si-duplicate {
+            float: right;
+            font-size: 11px;
+            padding: 2px 8px;
+            border-radius: 8px;
+            background: #fff3e0;
+            color: #e67e22;
+        }
+
+        /* ── Registration Form ──────────────────────────────── */
+        .reg-form { display: none; }
+        .reg-form.show { display: block; }
+        .reg-form .form-row {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 12px;
+        }
+        .reg-form .form-group {
+            flex: 1;
+        }
+        .reg-form .form-group label {
+            font-size: 12px;
+            font-weight: 600;
+            color: #888;
+            display: block;
+            margin-bottom: 4px;
+        }
+        .reg-form .form-group input,
+        .reg-form .form-group select {
+            width: 100%;
+            padding: 12px 14px;
+            border: 2px solid #e0e0e0;
+            border-radius: 10px;
+            font-size: 16px;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+        .reg-form .form-group input:focus,
+        .reg-form .form-group select:focus {
+            border-color: #e74c3c;
+        }
+        .reg-form .form-actions {
+            display: flex;
+            gap: 10px;
+            margin-top: 4px;
+        }
+        .reg-form .form-actions button {
+            flex: 1;
+            padding: 14px;
+            border: none;
+            border-radius: 12px;
+            font-size: 16px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+        .reg-form .form-actions button:active { transform: scale(0.97); }
+        .reg-form .form-actions .btn-submit {
+            background: linear-gradient(135deg, #27ae60, #2ecc71);
+            color: white;
+        }
+        .reg-form .form-actions .btn-submit:disabled { opacity: 0.5; cursor: not-allowed; }
+        .reg-form .form-actions .btn-cancel {
+            background: #f0f0f0;
+            color: #666;
+        }
+        .registration-loading {
+            text-align: center;
+            padding: 20px;
+            color: #888;
+        }
+
+        /* ── Selected Patient ───────────────────────────────── */
+        .patient-card {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .patient-card .pc-info { flex: 1; }
+        .patient-card .pc-name { font-size: 20px; font-weight: 700; }
+        .patient-card .pc-meta { font-size: 14px; color: #888; margin-top: 2px; }
+        .patient-card .pc-id { font-size: 12px; color: #aaa; margin-top: 1px; }
+        .patient-card .pc-actions { display: flex; gap: 8px; }
+        .patient-card .pc-change {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 10px;
+            background: #f0f0f0;
+            font-size: 14px;
+            cursor: pointer;
+        }
+        .patient-card .pc-qr {
+            padding: 8px 12px;
+            border: none;
+            border-radius: 10px;
+            background: #e3f2fd;
+            color: #3498db;
+            font-size: 14px;
+            cursor: pointer;
+        }
+
+        /* ── Service Buttons ────────────────────────────────── */
+        .service-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+        }
+        .service-btn {
+            padding: 18px 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 14px;
+            font-size: 16px;
+            font-weight: 600;
+            text-align: center;
+            background: white;
+            cursor: pointer;
+            transition: all 0.15s;
+            user-select: none;
+            -webkit-tap-highlight-color: transparent;
+            min-height: 72px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+        .service-btn:active { transform: scale(0.95); }
+        .service-btn .hindi {
+            font-size: 12px;
+            font-weight: 400;
+            color: #888;
+            margin-top: 4px;
+        }
+        .service-btn.selected {
+            border-color: #27ae60;
+            background: #e8f5e9;
+            color: #27ae60;
+        }
+        .service-btn.selected .hindi { color: #66bb6a; }
+
+        /* ── Register Button ────────────────────────────────── */
+        .register-btn {
+            width: 100%;
+            padding: 20px;
+            border: none;
+            border-radius: 16px;
+            font-size: 20px;
+            font-weight: 700;
+            color: white;
+            background: linear-gradient(135deg, #27ae60, #2ecc71);
+            cursor: pointer;
+            transition: all 0.15s;
+            margin-bottom: 16px;
+        }
+        .register-btn:active { transform: scale(0.97); }
+        .register-btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+        .register-btn.registering { opacity: 0.7; }
+
+        /* ── Success Card ───────────────────────────────────── */
+        .success-card {
+            background: #e8f5e9;
+            border: 2px solid #27ae60;
+            border-radius: 16px;
+            padding: 20px;
+            margin-bottom: 16px;
+            display: none;
+        }
+        .success-card.show { display: block; }
+        .success-card .sc-title { font-size: 18px; font-weight: 700; color: #27ae60; }
+        .success-card .sc-visit { font-size: 14px; color: #555; margin: 4px 0 12px; }
+        .success-card .sc-tokens { display: flex; gap: 12px; flex-wrap: wrap; }
+        .sc-token {
+            background: white;
+            border-radius: 12px;
+            padding: 12px 18px;
+            text-align: center;
+            min-width: 100px;
+            box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+        .sc-token:active { transform: scale(0.95); }
+        .sc-token .st-service { font-size: 12px; color: #888; }
+        .sc-token .st-number { font-size: 28px; font-weight: 800; color: #27ae60; }
+        .sc-token .st-room { font-size: 12px; color: #888; }
+        .sc-actions {
+            display: flex;
+            gap: 10px;
+            margin-top: 14px;
+            flex-wrap: wrap;
+        }
+        .sc-actions button {
+            padding: 10px 20px;
+            border: 2px solid #27ae60;
+            border-radius: 10px;
+            background: white;
+            color: #27ae60;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.15s;
+            flex: 1;
+            min-width: 120px;
+        }
+        .sc-actions button:active { transform: scale(0.95); }
+        .sc-actions .btn-print { background: #27ae60; color: white; }
+
+        /* ── Report Delivery Panel ──────────────────────────── */
+        .report-card {
+            background: #fff3e0;
+            border: 1px solid #ffe0b2;
+            border-radius: 12px;
+            padding: 14px 16px;
+            margin-bottom: 10px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .report-card .rc-info { flex: 1; }
+        .report-card .rc-patient { font-size: 16px; font-weight: 600; }
+        .report-card .rc-meta { font-size: 12px; color: #888; margin-top: 2px; }
+        .report-card .rc-deliver {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 10px;
+            background: #e74c3c;
+            color: white;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            white-space: nowrap;
+        }
+        .report-card .rc-deliver:active { transform: scale(0.95); }
+        .no-reports {
+            text-align: center;
+            padding: 20px;
+            color: #888;
+        }
+
+        /* ── Department Status Cards ────────────────────────── */
+        .dept-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+        }
+        .dept-status-card {
+            background: white;
+            border: 2px solid #e0e0e0;
+            border-radius: 14px;
+            padding: 14px;
+            text-align: center;
+            transition: all 0.15s;
+        }
+        .dept-status-card .dsc-name { font-size: 14px; font-weight: 700; }
+        .dept-status-card .dsc-waiting { font-size: 24px; font-weight: 800; color: #f39c12; }
+        .dept-status-card .dsc-label { font-size: 11px; color: #888; margin-top: 2px; }
+        .dept-status-card.active { border-color: #27ae60; background: #e8f5e9; }
+
+        /* ── Live Queue ─────────────────────────────────────── */
+        .live-section {
+            background: white;
+            border-radius: 16px;
+            padding: 16px 20px;
+            margin-bottom: 12px;
+            box-shadow: 0 1px 6px rgba(0,0,0,0.04);
+        }
+        .live-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 13px;
+            font-weight: 700;
+            color: #888;
+            margin-bottom: 10px;
+            padding-bottom: 8px;
+            border-bottom: 1px solid #f0f0f0;
+        }
+        .live-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 8px 0;
+            border-bottom: 1px solid #f5f5f5;
+        }
+        .live-item:last-child { border-bottom: none; }
+        .live-item .li-token {
+            font-size: 20px;
+            font-weight: 800;
+            color: #e74c3c;
+            min-width: 40px;
+        }
+        .live-item .li-name { font-size: 14px; font-weight: 600; flex: 1; }
+        .live-item .li-service { font-size: 12px; color: #aaa; min-width: 40px; }
+        .live-item .li-payment {
+            font-size: 11px;
+            padding: 2px 8px;
+            border-radius: 8px;
+            min-width: 50px;
+            text-align: center;
+        }
+        .li-payment.pending { background: #fff8e1; color: #f39c12; }
+        .li-payment.paid { background: #e8f5e9; color: #27ae60; }
+        .li-payment.unpaid { background: #fbe9e7; color: #e74c3c; }
+        .li-payment.na { background: #f5f5f5; color: #bbb; }
+
+        .live-item .li-status {
+            font-size: 12px;
+            padding: 2px 10px;
+            border-radius: 8px;
+            min-width: 60px;
+            text-align: center;
+        }
+        .li-status.waiting { background: #fff8e1; color: #f39c12; }
+        .li-status.called { background: #e3f2fd; color: #3498db; }
+        .li-status.progress { background: #e8f5e9; color: #2ecc71; }
+        .li-status.completed { background: #f3e5f5; color: #9c27b0; }
+
+        .empty-state {
+            text-align: center;
+            padding: 30px 20px;
+            color: #888;
+        }
+        .empty-state .empty-icon { font-size: 48px; margin-bottom: 8px; }
+        .empty-state .empty-text { font-size: 16px; }
+
+        .last-updated { text-align: center; font-size: 11px; color: #bbb; margin-top: 12px; padding-bottom: 20px; }
+
+        /* ── Toast ──────────────────────────────────────────── */
+        .toast {
+            position: fixed;
+            bottom: 24px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #2c3e50;
+            color: white;
+            padding: 14px 24px;
+            border-radius: 12px;
+            font-size: 16px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+            z-index: 200;
+            display: none;
+            max-width: 90%;
+        }
+        .toast.show { display: block; animation: fadeInUp 0.3s; }
+        .toast.error { background: #e74c3c; }
+        @keyframes fadeInUp {
+            from { opacity: 0; transform: translateX(-50%) translateY(20px); }
+            to { opacity: 1; transform: translateX(-50%) translateY(0); }
+        }
+
+        .loading { text-align: center; padding: 20px; color: #888; }
+
+        /* ── Tabs ───────────────────────────────────────────── */
+        .tabs {
+            display: flex;
+            gap: 4px;
+            margin-bottom: 16px;
+            background: white;
+            border-radius: 14px;
+            padding: 4px;
+            box-shadow: 0 1px 6px rgba(0,0,0,0.04);
+        }
+        .tab-btn {
+            flex: 1;
+            padding: 10px;
+            border: none;
+            border-radius: 10px;
+            background: transparent;
+            font-size: 13px;
+            font-weight: 600;
+            color: #888;
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+        .tab-btn.active {
+            background: #e74c3c;
+            color: white;
+        }
+
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+
+        /* ── Modal ──────────────────────────────────────────── */
+        .modal-overlay {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.5);
+            z-index: 100;
+            display: none;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+        .modal-overlay.show { display: flex; }
+        .modal-box {
+            background: white;
+            border-radius: 20px;
+            padding: 24px;
+            max-width: 400px;
+            width: 100%;
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+        .modal-box .modal-title { font-size: 20px; font-weight: 700; margin-bottom: 16px; }
+        .modal-box .modal-body { margin-bottom: 16px; }
+        .modal-box .modal-close {
+            width: 100%;
+            padding: 14px;
+            border: none;
+            border-radius: 12px;
+            background: #f0f0f0;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+        }
+
+        /* ── Print Slip ─────────────────────────────────────── */
+        .print-slip {
+            font-family: 'Courier New', monospace;
+            padding: 20px;
+            max-width: 300px;
+            margin: 0 auto;
+        }
+        .print-slip .ps-header { text-align: center; font-weight: 700; font-size: 18px; margin-bottom: 4px; }
+        .print-slip .ps-sub { text-align: center; font-size: 12px; color: #555; margin-bottom: 12px; }
+        .print-slip .ps-divider { border-top: 1px dashed #333; margin: 8px 0; }
+        .print-slip .ps-row { display: flex; justify-content: space-between; font-size: 14px; padding: 2px 0; }
+        .print-slip .ps-token { text-align: center; font-size: 36px; font-weight: 800; margin: 8px 0; }
+        .print-slip .ps-service { text-align: center; font-size: 16px; margin: 4px 0; }
+        .print-slip .ps-room { text-align: center; font-size: 14px; color: #555; }
+        .print-slip .ps-footer { text-align: center; font-size: 11px; color: #888; margin-top: 12px; }
+
+        @media print {
+            body * { visibility: hidden; }
+            .print-area, .print-area * { visibility: visible; }
+            .print-area { position: absolute; left: 0; top: 0; width: 100%; }
+            .no-print { display: none !important; }
+        }
+
+        /* ── Activity Log ───────────────────────────────────── */
+        .activity-item {
+            padding: 8px 0;
+            border-bottom: 1px solid #f5f5f5;
+            font-size: 13px;
+        }
+        .activity-item:last-child { border-bottom: none; }
+        .activity-item .ai-time { color: #aaa; font-size: 11px; }
+        .activity-item .ai-text { color: #555; margin-top: 1px; }
+
+        /* ── Responsive ─────────────────────────────────────── */
+        @media (max-width: 480px) {
+            .header h1 { font-size: 18px; }
+            .service-grid { grid-template-columns: 1fr 1fr; }
+            .dept-grid { grid-template-columns: 1fr 1fr; }
+            .reg-form .form-row { flex-direction: column; gap: 8px; }
+            .sc-actions { flex-direction: column; }
+            .sc-actions button { width: 100%; }
+        }
+        @media (min-width: 600px) {
+            .service-grid { grid-template-columns: 1fr 1fr 1fr; }
+            .dept-grid { grid-template-columns: 1fr 1fr 1fr; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="header">
+    <div class="htop">
+        <div>
+            <h1>{{CLINIC_LOGO}} {{CLINIC_NAME}}</h1>
+            <div class="sub">🖥️ Reception — Register patients for tests</div>
+        </div>
+        <div class="header-actions">
+            <button class="header-btn" onclick="togglePrintMode()">🖨️</button>
+        </div>
+    </div>
+    <div class="stats-row" style="padding: 8px 0 0; margin: 0 -20px -8px;">
+        <div class="stat-card waiting" style="background: rgba(255,255,255,0.15);">
+            <div class="num" id="statWaiting" style="color: white;">0</div>
+            <div class="lbl" style="color: rgba(255,255,255,0.7);">⏳ Waiting</div>
+        </div>
+        <div class="stat-card called" style="background: rgba(255,255,255,0.15);">
+            <div class="num" id="statCalled" style="color: white;">0</div>
+            <div class="lbl" style="color: rgba(255,255,255,0.7);">📞 Called</div>
+        </div>
+        <div class="stat-card active" style="background: rgba(255,255,255,0.15);">
+            <div class="num" id="statActive" style="color: white;">0</div>
+            <div class="lbl" style="color: rgba(255,255,255,0.7);">🔄 In Progress</div>
+        </div>
+    </div>
+</div>
+
+<div class="content">
+
+    <!-- ═══ Tabs ═══ -->
+    <div class="tabs no-print">
+        <button class="tab-btn active" onclick="switchTab('register', this)">🆕 Register</button>
+        <button class="tab-btn" onclick="switchTab('queue', this)">📋 Queue</button>
+        <button class="tab-btn" onclick="switchTab('reports', this)">📄 Reports</button>
+        <button class="tab-btn" onclick="switchTab('activity', this)">📜 Activity</button>
+    </div>
+
+    <!-- ════════════════════════ TAB: REGISTER ════════════════════════ -->
+    <div class="tab-content active" id="tabRegister">
+
+        <!-- ── Patient Search ── -->
+        <div class="card">
+            <div class="card-header">
+                <div class="section-title">🔍 Search Patient</div>
+                <span class="section-badge" id="searchCount">—</span>
+            </div>
+            <div class="search-row">
+                <input type="text" class="search-box" id="searchInput"
+                       placeholder="Search by name, phone, or ID..."
+                       autocomplete="off"
+                       oninput="onSearchInput(this.value)">
+                <button class="quick-btn" onclick="showRegistrationForm()">+ New</button>
+            </div>
+            <div class="search-results" id="searchResults"></div>
+        </div>
+
+        <!-- ── Quick Registration Form ── -->
+        <div class="card reg-form" id="regForm">
+            <div class="section-title">📝 New Patient Registration</div>
+            <p style="font-size:13px; color:#888; margin-bottom:12px;">
+                Walk-in patient — fill basic details to register
+            </p>
+
+            <div id="duplicateWarning" style="display:none; background:#fff3e0; border:1px solid #ffe0b2; border-radius:10px; padding:10px 14px; margin-bottom:12px; font-size:13px; color:#e67e22;">
+                ⚠️ Possible duplicate: <span id="dupPhone"></span> already registered as <span id="dupName"></span>
+                <button style="margin-left:8px; padding:2px 10px; border:none; border-radius:6px; background:#e74c3c; color:white; font-size:12px; cursor:pointer;" onclick="clearDuplicateWarning()">Ignore</button>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Full Name *</label>
+                    <input type="text" id="regName" placeholder="e.g. Ramesh Kumar" oninput="validateRegForm()">
+                </div>
+                <div class="form-group">
+                    <label>Phone *</label>
+                    <input type="tel" id="regPhone" placeholder="10-digit mobile" maxlength="10" oninput="checkDuplicate(); validateRegForm();">
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Age *</label>
+                    <input type="number" id="regAge" placeholder="e.g. 45" min="1" max="150" oninput="validateRegForm()">
+                </div>
+                <div class="form-group">
+                    <label>Gender *</label>
+                    <select id="regGender" onchange="validateRegForm()">
+                        <option value="">Select</option>
+                        <option value="male">👨 Male</option>
+                        <option value="female">👩 Female</option>
+                        <option value="other">🧑 Other</option>
+                    </select>
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Address</label>
+                    <input type="text" id="regAddress" placeholder="Optional">
+                </div>
+            </div>
+            <div class="form-actions">
+                <button class="btn-cancel" onclick="hideRegistrationForm()">Cancel</button>
+                <button class="btn-submit" id="regSubmitBtn" onclick="registerNewPatient()" disabled>
+                    ✅ Register & Continue
+                </button>
+            </div>
+            <div class="registration-loading" id="regLoading" style="display:none;">⏳ Registering...</div>
+        </div>
+
+        <!-- ── Selected Patient ── -->
+        <div class="card" id="selectedPatientCard" style="display:none;">
+            <div class="patient-card">
+                <div class="pc-info">
+                    <div class="pc-name" id="selPatientName">—</div>
+                    <div class="pc-meta" id="selPatientMeta">—</div>
+                    <div class="pc-id" id="selPatientId">—</div>
+                </div>
+                <div class="pc-actions">
+                    <button class="pc-qr" id="qrBtn" onclick="showQR()" style="display:none;">📱 QR</button>
+                    <button class="pc-change" onclick="clearPatient()">Change</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- ── Service Selector ── -->
+        <div class="card" id="serviceCard" style="display:none;">
+            <div class="card-header">
+                <div class="section-title">🩺 Select Tests</div>
+                <span class="section-badge" id="selectedCount">0 selected</span>
+            </div>
+            <div class="service-grid" id="serviceGrid">
+                <div class="loading" style="grid-column:1/-1;padding:20px;text-align:center;">Loading services...</div>
+            </div>
+        </div>
+
+        <!-- ── Register Button ── -->
+        <button class="register-btn" id="registerBtn"
+                onclick="createQueue()" disabled>
+            🟢 Register for Selected Tests
+        </button>
+
+        <!-- ── Success Card ── -->
+        <div class="success-card" id="successCard">
+            <div class="sc-title">✅ Registered Successfully!</div>
+            <div class="sc-visit" id="successVisit">Visit ID: —</div>
+            <div class="sc-tokens" id="successTokens"></div>
+            <div class="sc-actions">
+                <button class="btn-print" onclick="printTokenSlip()">🖨️ Print Slip</button>
+                <button onclick="newRegistration()">➕ New Registration</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ════════════════════════ TAB: QUEUE ════════════════════════ -->
+    <div class="tab-content" id="tabQueue">
+
+        <!-- ── Department Status Cards ── -->
+        <div class="card">
+            <div class="card-header">
+                <div class="section-title">🏥 Department Status</div>
+                <span class="section-badge" id="deptUpdateTime">—</span>
+            </div>
+            <div class="dept-grid" id="deptGrid">
+                <div class="loading" style="grid-column:1/-1;">Loading departments...</div>
+            </div>
+        </div>
+
+        <!-- ── Today's Queue ── -->
+        <div class="card">
+            <div class="card-header">
+                <div class="section-title">📋 Today's Queue</div>
+                <span class="section-badge" id="queueCount">—</span>
+            </div>
+            <div id="liveQueue">
+                <div class="loading">Loading...</div>
+            </div>
+        </div>
+
+        <div class="last-updated" id="lastUpdated">Waiting for activity...</div>
+    </div>
+
+    <!-- ════════════════════════ TAB: REPORTS ════════════════════════ -->
+    <div class="tab-content" id="tabReports">
+        <div class="card">
+            <div class="card-header">
+                <div class="section-title">📄 Report Delivery</div>
+                <span class="section-badge" id="reportsCount">0</span>
+            </div>
+            <div id="reportsList">
+                <div class="empty-state">
+                    <div class="empty-icon">📋</div>
+                    <div class="empty-text">No reports ready for delivery</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="section-title">💰 Payment Status</div>
+            <div id="paymentPlaceholder">
+                <div class="empty-state">
+                    <div class="empty-icon">🛒</div>
+                    <div class="empty-text">Payment tracking coming in Phase 5 (Billing Engine)</div>
+                    <p style="font-size:13px; color:#aaa; margin-top:4px;">For now, payment status shows as "—" in the queue</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ════════════════════════ TAB: ACTIVITY ════════════════════════ -->
+    <div class="tab-content" id="tabActivity">
+        <div class="card">
+            <div class="card-header">
+                <div class="section-title">📜 Activity Log</div>
+                <span class="section-badge" id="activityCount">0</span>
+            </div>
+            <div id="activityList">
+                <div class="empty-state">
+                    <div class="empty-icon">📝</div>
+                    <div class="empty-text">No recent activity</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ════════════════════════ TOAST ════════════════════════ -->
+    <div class="toast" id="toast"></div>
+
+    <!-- ════════════════════════ MODAL ════════════════════════ -->
+    <div class="modal-overlay" id="modalOverlay">
+        <div class="modal-box">
+            <div class="modal-title" id="modalTitle">—</div>
+            <div class="modal-body" id="modalBody"></div>
+            <button class="modal-close" onclick="closeModal()">Close</button>
+        </div>
+    </div>
+
+</div>
+
+<script>
+    const API_BASE = '/api/v1/queue';
+    const PATIENT_API = '/api/v1/patient';
+    const CLINIC_API = '/api/v1/clinic';
+    let refreshInterval = null;
+    const REFRESH_SECONDS = 10;
+    let selectedPatient = null;
+    let selectedPatientData = null;
+    let selectedServices = new Set();
+    let currentTab = 'register';
+    let currentDepartment = '';
+    let lastSuccessData = null;
+    let activityLog = [];
+    let allPatients = [];
+
+    // ─── Toast ──────────────────────────────────────────────
+    function showToast(msg, isError = false) {
+        const t = document.getElementById('toast');
+        t.textContent = msg;
+        t.className = 'toast show' + (isError ? ' error' : '');
+        setTimeout(() => t.classList.remove('show'), 3000);
+    }
+
+    // ─── API ────────────────────────────────────────────────
+    async function apiCall(base, endpoint, options = {}) {
+        try {
+            const resp = await fetch(`${base}${endpoint}`, {
+                ...options,
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...(options.headers || {}),
+                },
+            });
+            if (!resp.ok) {
+                const err = await resp.json().catch(() => ({ detail: resp.statusText }));
+                throw new Error(err.detail || 'API error');
+            }
+            return resp.json();
+        } catch (e) {
+            showToast('❌ ' + e.message, true);
+            return null;
+        }
+    }
+
+    // ─── Tab Switching ──────────────────────────────────────
+    function switchTab(tab, btn) {
+        currentTab = tab;
+        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+        document.getElementById('tab' + tab.charAt(0).toUpperCase() + tab.slice(1)).classList.add('active');
+
+        if (tab === 'queue') loadQueueOverview();
+        if (tab === 'reports') loadReports();
+        if (tab === 'activity') loadActivity();
+    }
+
+    // ─── Patient Search ─────────────────────────────────────
+    let searchTimeout = null;
+    function onSearchInput(value) {
+        clearTimeout(searchTimeout);
+        value = value.trim();
+        const resultsDiv = document.getElementById('searchResults');
+
+        if (value.length < 2) {
+            resultsDiv.classList.remove('show');
+            resultsDiv.innerHTML = '';
+            document.getElementById('searchCount').textContent = '—';
+            return;
+        }
+
+        searchTimeout = setTimeout(async () => {
+            try {
+                const resp = await fetch(
+                    `${PATIENT_API}/lookup?q=${encodeURIComponent(value)}&limit=10`
+                );
+                if (!resp.ok) return;
+                const data = await resp.json();
+                const patients = data.patients || [];
+
+                document.getElementById('searchCount').textContent = patients.length + ' found';
+
+                if (patients.length === 0) {
+                    resultsDiv.innerHTML = `
+                        <div class="search-item" style="color:#888; cursor:default;">
+                            No patients found — 
+                            <span style="color:#27ae60; font-weight:600;" onclick="showRegistrationForm()">Register new</span>
+                        </div>`;
+                } else {
+                    resultsDiv.innerHTML = patients.map(p =>
+                        `<div class="search-item" onclick="selectPatient('${p.id}')">
+                            <div class="si-name">${p.name}</div>
+                            <div class="si-meta">
+                                🆔 ${p.patient_id} · 📞 ${p.phone || '—'} · ${p.age}y ${p.gender || ''}
+                                ${p.total_visits > 0 ? '· 🏥 ' + p.total_visits + ' visits' : ''}
+                            </div>
+                            ${p.total_visits > 0
+                                ? '<span class="si-badge">Returning</span>'
+                                : '<span class="si-badge" style="background:#e8f5e9;color:#27ae60;">New</span>'}
+                        </div>`
+                    ).join('');
+                }
+                resultsDiv.classList.add('show');
+            } catch {}
+        }, 300);
+    }
+
+    // ─── Select Patient ─────────────────────────────────────
+    async function selectPatient(patientId) {
+        selectedPatient = patientId;
+        document.getElementById('searchResults').classList.remove('show');
+
+        // Fetch full patient data
+        try {
+            const data = await apiCall('', `${PATIENT_API}/${patientId}`);
+            if (!data) { showToast('❌ Failed to load patient', true); return; }
+            selectedPatientData = data;
+
+            document.getElementById('selectedPatientCard').style.display = 'block';
+            document.getElementById('selPatientName').textContent = data.name;
+            document.getElementById('selPatientMeta').textContent =
+                `${data.age}y ${data.gender} · 📞 ${data.phone || '—'} · 🏥 ${data.total_visits || 0} visits`;
+            document.getElementById('selPatientId').textContent = '🆔 ' + data.patient_id;
+            document.getElementById('searchInput').value = data.name + ' (' + data.patient_id + ')';
+            document.getElementById('searchInput').classList.remove('new-patient-mode');
+
+            // Show QR button if has QR
+            if (data.has_qr_identity) {
+                document.getElementById('qrBtn').style.display = 'inline-block';
+            }
+
+            document.getElementById('serviceCard').style.display = 'block';
+            updateRegisterBtn();
+
+            // Add activity
+            addActivity('👤 Selected patient ' + data.name);
+
+        } catch (e) {
+            showToast('❌ Error loading patient', true);
+        }
+    }
+
+    function clearPatient() {
+        selectedPatient = null;
+        selectedPatientData = null;
+        selectedServices.clear();
+        document.getElementById('selectedPatientCard').style.display = 'none';
+        document.getElementById('serviceCard').style.display = 'none';
+        document.getElementById('successCard').classList.remove('show');
+        document.getElementById('searchInput').value = '';
+        document.getElementById('searchInput').classList.remove('new-patient-mode');
+        document.getElementById('searchInput').focus();
+        updateRegisterBtn();
+        document.querySelectorAll('.service-btn').forEach(b => b.classList.remove('selected'));
+        document.getElementById('selectedCount').textContent = '0 selected';
+        hideRegistrationForm();
+    }
+
+    // ─── Registration Form ──────────────────────────────────
+    function showRegistrationForm() {
+        document.getElementById('regForm').classList.add('show');
+        document.getElementById('searchInput').classList.add('new-patient-mode');
+        document.getElementById('searchInput').placeholder = 'Search existing patient...';
+        document.getElementById('searchResults').classList.remove('show');
+        document.getElementById('regName').focus();
+    }
+
+    function hideRegistrationForm() {
+        document.getElementById('regForm').classList.remove('show');
+        document.getElementById('searchInput').classList.remove('new-patient-mode');
+        document.getElementById('searchInput').placeholder = 'Search by name, phone, or ID...';
+        clearDuplicateWarning();
+        // Reset form
+        document.getElementById('regName').value = '';
+        document.getElementById('regPhone').value = '';
+        document.getElementById('regAge').value = '';
+        document.getElementById('regGender').value = '';
+        document.getElementById('regAddress').value = '';
+        document.getElementById('regLoading').style.display = 'none';
+        document.getElementById('regSubmitBtn').disabled = true;
+    }
+
+    function validateRegForm() {
+        const name = document.getElementById('regName').value.trim();
+        const phone = document.getElementById('regPhone').value.trim();
+        const age = document.getElementById('regAge').value.trim();
+        const gender = document.getElementById('regGender').value;
+        const valid = name.length >= 2 && phone.length === 10 && age >= 1 && age <= 150 && gender;
+        document.getElementById('regSubmitBtn').disabled = !valid;
+    }
+
+    // ─── Duplicate Detection ────────────────────────────────
+    let duplicateCheckTimeout = null;
+    async function checkDuplicate() {
+        clearTimeout(duplicateCheckTimeout);
+        const phone = document.getElementById('regPhone').value.trim();
+        if (phone.length !== 10) { clearDuplicateWarning(); return; }
+
+        duplicateCheckTimeout = setTimeout(async () => {
+            try {
+                const resp = await fetch(`${PATIENT_API}/lookup?phone=${phone}&limit=3`);
+                if (!resp.ok) return;
+                const data = await resp.json();
+                const patients = data.patients || [];
+                if (patients.length > 0) {
+                    const p = patients[0];
+                    document.getElementById('duplicateWarning').style.display = 'block';
+                    document.getElementById('dupPhone').textContent = phone;
+                    document.getElementById('dupName').textContent = p.name + ' (' + p.patient_id + ')';
+                } else {
+                    clearDuplicateWarning();
+                }
+            } catch {}
+        }, 500);
+    }
+
+    function clearDuplicateWarning() {
+        document.getElementById('duplicateWarning').style.display = 'none';
+    }
+
+    // ─── Register New Patient ───────────────────────────────
+    async function registerNewPatient() {
+        const name = document.getElementById('regName').value.trim();
+        const phone = document.getElementById('regPhone').value.trim();
+        const age = parseInt(document.getElementById('regAge').value);
+        const gender = document.getElementById('regGender').value;
+        const address = document.getElementById('regAddress').value.trim();
+
+        if (!name || !phone || !age || !gender) { showToast('❌ Fill all required fields', true); return; }
+
+        document.getElementById('regLoading').style.display = 'block';
+        document.getElementById('regSubmitBtn').disabled = true;
+
+        const data = await apiCall('', `${PATIENT_API}/register`, {
+            method: 'POST',
+            body: JSON.stringify({
+                name, phone, age, gender,
+                address: address || undefined,
+            }),
+        });
+
+        document.getElementById('regLoading').style.display = 'none';
+
+        if (!data) return;
+
+        showToast('✅ ' + data.message);
+        addActivity('✅ Registered new patient: ' + data.name + ' (' + data.patient_id + ')');
+
+        // Now select the newly registered patient (use patient_id, not uuid)
+        await selectPatient(data.patient_id);
+        hideRegistrationForm();
+    }
+
+    // ─── Service Toggle ─────────────────────────────────────
+    function toggleService(btn) {
+        const code = btn.dataset.code;
+        if (selectedServices.has(code)) {
+            selectedServices.delete(code);
+            btn.classList.remove('selected');
+        } else {
+            selectedServices.add(code);
+            btn.classList.add('selected');
+        }
+        updateRegisterBtn();
+        document.getElementById('selectedCount').textContent = selectedServices.size + ' selected';
+    }
+
+    // ─── Update Register Button ─────────────────────────────
+    function updateRegisterBtn() {
+        const btn = document.getElementById('registerBtn');
+        if (selectedPatient && selectedServices.size > 0) {
+            btn.disabled = false;
+            btn.textContent = `🟢 Register for ${selectedServices.size} test(s)`;
+        } else {
+            btn.disabled = true;
+            btn.textContent = selectedPatient
+                ? 'Select at least one test'
+                : '🟢 Register for Selected Tests';
+        }
+    }
+
+    // ─── Create Queue (Register patient for tests) ──────────
+    async function createQueue() {
+        if (!selectedPatient || selectedServices.size === 0) return;
+
+        const btn = document.getElementById('registerBtn');
+        btn.disabled = true;
+        btn.classList.add('registering');
+        btn.textContent = '⏳ Registering...';
+
+        const result = await apiCall(API_BASE, '/create', {
+            method: 'POST',
+            body: JSON.stringify({
+                patient_id: selectedPatient,
+                services: Array.from(selectedServices),
+                created_by: 'reception',
+            }),
+        });
+
+        btn.disabled = false;
+        btn.classList.remove('registering');
+        updateRegisterBtn();
+
+        if (!result) return;
+
+        // Store for printing
+        lastSuccessData = result;
+
+        // Show success
+        showToast('✅ ' + result.message);
+        addActivity('🎫 Created queue: ' + selectedPatientData?.name + ' — ' + selectedServices.size + ' test(s)');
+
+        const successCard = document.getElementById('successCard');
+        successCard.classList.add('show');
+
+        document.getElementById('successVisit').textContent =
+            'Visit ID: ' + result.visit_id + ' · Patient: ' + result.patient_name;
+
+        const tokensDiv = document.getElementById('successTokens');
+        tokensDiv.innerHTML = result.entries.map(e =>
+            `<div class="sc-token" onclick="printSingleToken('${e.id}', '${e.service_name}', ${e.token_number}, '${e.room}')">
+                <div class="st-service">${e.service_name}</div>
+                <div class="st-number">#${e.token_number}</div>
+                <div class="st-room">${e.room || ''}</div>
+            </div>`
+        ).join('');
+
+        // Auto-navigate to queue tab after brief delay
+        setTimeout(() => {
+            const qBtn = document.querySelector('.tab-btn:nth-child(2)');
+            if (qBtn) switchTab('queue', qBtn);
+        }, 1500);
+    }
+
+    function newRegistration() {
+        clearPatient();
+        document.getElementById('successCard').classList.remove('show');
+        document.getElementById('searchInput').focus();
+        lastSuccessData = null;
+
+        // Switch back to register tab
+        const rBtn = document.querySelector('.tab-btn:nth-child(1)');
+        if (rBtn) switchTab('register', rBtn);
+    }
+
+    // ─── Print Token Slip ───────────────────────────────────
+    function printTokenSlip() {
+        if (!lastSuccessData || !lastSuccessData.entries || lastSuccessData.entries.length === 0) {
+            showToast('❌ No data to print', true);
+            return;
+        }
+
+        // Build a combined slip for all tokens
+        const entries = lastSuccessData.entries;
+        const slipHTML = `
+        <div class="print-slip print-area">
+            <div class="ps-header">{{CLINIC_NAME}}</div>
+            <div class="ps-sub">{{CLINIC_SPECIALTY}}</div>
+            <div class="ps-divider"></div>
+            <div class="ps-row"><span>Patient</span><span>${lastSuccessData.patient_name}</span></div>
+            <div class="ps-row"><span>Visit</span><span>${lastSuccessData.visit_id}</span></div>
+            <div class="ps-divider"></div>
+            ${entries.map(e => `
+                <div class="ps-token">#${e.token_number}</div>
+                <div class="ps-service">${e.service_name}</div>
+                <div class="ps-room">📍 ${e.room || 'Room —'}</div>
+                <div class="ps-divider"></div>
+            `).join('')}
+            <div class="ps-footer">
+                ${new Date().toLocaleDateString()} ${new Date().toLocaleTimeString()}<br>
+                Thank you for choosing {{CLINIC_NAME}}
+            </div>
+        </div>`;
+
+        showPrintDialog('Token Slip', slipHTML);
+    }
+
+    function printSingleToken(entryId, serviceName, tokenNumber, room) {
+        const slipHTML = `
+        <div class="print-slip print-area">
+            <div class="ps-header">{{CLINIC_NAME}}</div>
+            <div class="ps-sub">{{CLINIC_SPECIALTY}}</div>
+            <div class="ps-divider"></div>
+            <div class="ps-row"><span>Patient</span><span>${selectedPatientData?.name || '—'}</span></div>
+            <div class="ps-divider"></div>
+            <div class="ps-token">#${tokenNumber}</div>
+            <div class="ps-service">${serviceName}</div>
+            <div class="ps-room">📍 ${room || 'Room —'}</div>
+            <div class="ps-divider"></div>
+            <div class="ps-footer">
+                ${new Date().toLocaleDateString()} ${new Date().toLocaleTimeString()}<br>
+                Thank you for choosing {{CLINIC_NAME}}
+            </div>
+        </div>`;
+
+        showPrintDialog('Token #' + tokenNumber, slipHTML);
+    }
+
+    function showPrintDialog(title, contentHTML) {
+        document.getElementById('modalTitle').textContent = '🖨️ ' + title;
+        document.getElementById('modalBody').innerHTML = contentHTML +
+            '<button style="width:100%; margin-top:16px; padding:14px; border:none; border-radius:12px; background:#27ae60; color:white; font-size:16px; font-weight:700; cursor:pointer;" onclick="window.print()">🖨️ Print</button>';
+        document.getElementById('modalOverlay').classList.add('show');
+    }
+
+    function togglePrintMode() {
+        showToast('🖨️ Use print button on success card or tap a token to print individually');
+    }
+
+    // ─── QR ─────────────────────────────────────────────────
+    function showQR() {
+        if (!selectedPatientData) return;
+        const qrUrl = window.location.origin + '/patient/portal?pid=' + selectedPatientData.patient_id;
+        document.getElementById('modalTitle').textContent = '📱 Patient QR';
+        document.getElementById('modalBody').innerHTML = `
+            <div style="text-align:center;">
+                <div style="font-size:18px; font-weight:700; margin-bottom:4px;">${selectedPatientData.name}</div>
+                <div style="font-size:14px; color:#888; margin-bottom:16px;">${selectedPatientData.patient_id}</div>
+                <div id="qrCode" style="margin:0 auto 16px; width:200px; height:200px; background:#f5f5f5; display:flex; align-items:center; justify-content:center; border-radius:12px;">
+                    <img src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(qrUrl)}"
+                         alt="QR Code" style="width:180px; height:180px;">
+                </div>
+                <p style="font-size:12px; color:#888;">Patient scans to view status on their phone</p>
+            </div>`;
+        document.getElementById('modalOverlay').classList.add('show');
+    }
+
+    // ─── Close Modal ────────────────────────────────────────
+    function closeModal() {
+        document.getElementById('modalOverlay').classList.remove('show');
+    }
+
+    // ─── Fetch Services & Departments ───────────────────────
+    async function fetchServices() {
+        try {
+            const resp = await fetch(`${CLINIC_API}/services?active_only=true`);
+            if (!resp.ok) throw new Error('Failed');
+            const data = await resp.json();
+            const services = data.services || [];
+
+            const grid = document.getElementById('serviceGrid');
+            grid.innerHTML = '';
+
+            services.forEach(s => {
+                const btn = document.createElement('button');
+                btn.className = 'service-btn';
+                btn.dataset.code = s.code;
+                btn.onclick = function() { toggleService(this); };
+                btn.innerHTML = `${s.display_name || s.code}` +
+                    `<div class="hindi">${s.room_name ? '📍 ' + s.room_name : ''}</div>`;
+                grid.appendChild(btn);
+            });
+        } catch (err) {
+            console.warn('Failed to load services:', err);
+            const grid = document.getElementById('serviceGrid');
+            grid.innerHTML = `<div class="loading" style="grid-column:1/-1;">Failed to load services</div>`;
+        }
+    }
+
+    async function fetchDepartments() {
+        try {
+            const resp = await fetch(`${CLINIC_API}/departments?active_only=true`);
+            if (!resp.ok) throw new Error('Failed');
+            const data = await resp.json();
+            const depts = data.departments || [];
+
+            if (depts.length > 0) {
+                currentDepartment = depts[0].code;
+            }
+
+            // Populate dept status cards
+            const grid = document.getElementById('deptGrid');
+
+            if (depts.length === 0) {
+                grid.innerHTML = '<div class="loading" style="grid-column:1/-1;">No departments configured</div>';
+                return;
+            }
+
+            grid.innerHTML = depts.map(d =>
+                `<div class="dept-status-card" id="deptCard_${d.code}">
+                    <div class="dsc-name">${d.name}</div>
+                    <div class="dsc-waiting" id="deptWait_${d.code}">—</div>
+                    <div class="dsc-label">waiting</div>
+                </div>`
+            ).join('');
+
+            document.getElementById('deptUpdateTime').textContent = depts.length + ' depts';
+
+        } catch (err) {
+            console.warn('Failed to load departments:', err);
+            currentDepartment = 'CARDIO';
+        }
+    }
+
+    // ─── Queue Overview ─────────────────────────────────────
+    async function loadQueueOverview() {
+        const dept = currentDepartment || 'CARDIO';
+        const data = await apiCall(API_BASE, `/dashboard?department=${encodeURIComponent(dept)}&limit=30`);
+        if (!data) return;
+
+        document.getElementById('statWaiting').textContent = data.stats.waiting;
+        document.getElementById('statCalled').textContent = data.stats.called;
+        document.getElementById('statActive').textContent = data.stats.in_progress;
+
+        const container = document.getElementById('liveQueue');
+        const entries = data.entries || [];
+
+        document.getElementById('queueCount').textContent = entries.length + ' entries';
+
+        if (entries.length === 0) {
+            container.innerHTML = '<div class="empty-state"><div class="empty-icon">🎉</div><div class="empty-text">All clear — no patients in queue</div></div>';
+        } else {
+            container.innerHTML = `
+                <div class="live-header">
+                    <span style="min-width:40px;">Token</span>
+                    <span style="flex:1;">Patient</span>
+                    <span style="min-width:40px;">Test</span>
+                    <span style="min-width:50px;text-align:center;">Payment</span>
+                    <span style="min-width:60px;text-align:center;">Status</span>
+                </div>
+            ` + entries.map(e => {
+                const statusClass = e.status === 'WAITING' ? 'waiting' :
+                    e.status === 'CALLED' ? 'called' :
+                    e.status === 'IN_PROGRESS' ? 'progress' : 'completed';
+                const paymentClass = 'na';
+                const paymentLabel = '—';
+                return `<div class="live-item">
+                    <div class="li-token">${e.token_number}</div>
+                    <div class="li-name">${e.patient_name}</div>
+                    <div class="li-service">${e.service_code}</div>
+                    <span class="li-payment ${paymentClass}">${paymentLabel}</span>
+                    <span class="li-status ${statusClass}">${e.status_display}</span>
+                </div>`;
+            }).join('');
+        }
+
+        document.getElementById('lastUpdated').textContent =
+            'Updated: ' + new Date().toLocaleTimeString();
+
+        // Also update department cards
+        await updateDeptCards();
+    }
+
+    // ─── Department Cards ───────────────────────────────────
+    async function updateDeptCards() {
+        try {
+            const deptResp = await fetch(`${CLINIC_API}/departments?active_only=true`);
+            if (!deptResp.ok) return;
+            const deptData = await deptResp.json();
+            const depts = deptData.departments || [];
+
+            for (const d of depts) {
+                const resp = await fetch(`${API_BASE}/dashboard?department=${encodeURIComponent(d.code)}&limit=5`);
+                if (!resp.ok) continue;
+                const qData = await resp.json();
+
+                const waitEl = document.getElementById('deptWait_' + d.code);
+                if (waitEl) {
+                    waitEl.textContent = qData.stats.waiting;
+                    const card = waitEl.closest('.dept-status-card');
+                    if (card) {
+                        card.classList.toggle('active', qData.stats.waiting > 0);
+                    }
+                }
+            }
+        } catch {}
+    }
+
+    // ─── Reports (Doctor Dashboard) ─────────────────────────
+	    async function loadReports() {
+	        try {
+	            const resp = await fetch(`${API_BASE}/reports/ready`);
+	            if (!resp.ok) throw new Error('Failed');
+	            const data = await resp.json();
+
+	            const readyList = data.reports || [];
+	            const container = document.getElementById('reportsList');
+	            document.getElementById('reportsCount').textContent = readyList.length;
+
+	            if (readyList.length === 0) {
+	                container.innerHTML = `
+	                    <div class="empty-state">
+	                        <div class="empty-icon">📋</div>
+	                        <div class="empty-text">No reports ready for delivery</div>
+	                    </div>`;
+	                return;
+	            }
+
+	            container.innerHTML = readyList.map(r =>
+	                `<div class="report-card">
+	                    <div class="rc-info">
+	                        <div class="rc-patient">${r.patient_name}</div>
+	                        <div class="rc-meta">${r.service_name || r.service_code} · 🆔 ${r.patient_id}${r.patient_age ? ' · 👤 ' + r.patient_age + 'y/' + (r.patient_gender || '') : ''} · 📍 ${r.room || '—'}</div>
+	                    </div>
+	                    <button class="rc-deliver" onclick="deliverReport('${r.entry_id}', '${r.patient_name}')">
+	                        📤 Deliver
+	                    </button>
+	                </div>`
+	            ).join('');
+
+	        } catch (err) {
+	            const container = document.getElementById('reportsList');
+	            container.innerHTML = `
+	                <div class="empty-state">
+	                    <div class="empty-icon">📋</div>
+	                    <div class="empty-text">Unable to load reports</div>
+	                </div>`;
+	        }
+	    }
+
+    async function deliverReport(entryId, patientName) {
+        const result = await apiCall(API_BASE, '/action', {
+            method: 'POST',
+            body: JSON.stringify({
+                entry_id: entryId,
+                action: 'deliver',
+                updated_by: 'reception',
+            }),
+        });
+
+        if (!result) return;
+
+        showToast('✅ Report delivered to ' + patientName);
+        addActivity('📤 Delivered report: ' + patientName);
+        loadReports();
+        loadQueueOverview();
+    }
+
+    // ─── Activity Log ───────────────────────────────────────
+    function addActivity(text) {
+        const now = new Date();
+        const timeStr = now.toLocaleTimeString();
+        activityLog.unshift({ time: timeStr, text: text, ts: now.getTime() });
+        // Keep last 50
+        if (activityLog.length > 50) activityLog.pop();
+        renderActivity();
+    }
+
+    function renderActivity() {
+        const container = document.getElementById('activityList');
+        document.getElementById('activityCount').textContent = activityLog.length;
+
+        if (activityLog.length === 0) {
+            container.innerHTML = `
+                <div class="empty-state">
+                    <div class="empty-icon">📝</div>
+                    <div class="empty-text">No recent activity</div>
+                </div>`;
+            return;
+        }
+
+        container.innerHTML = activityLog.map(a =>
+            `<div class="activity-item">
+                <div class="ai-time">${a.time}</div>
+                <div class="ai-text">${a.text}</div>
+            </div>`
+        ).join('');
+    }
+
+    function loadActivity() {
+        renderActivity();
+    }
+
+    // ─── Auto-refresh ───────────────────────────────────────
+    function startAutoRefresh() {
+        if (refreshInterval) clearInterval(refreshInterval);
+        refreshInterval = setInterval(() => {
+            if (currentTab === 'queue') loadQueueOverview();
+            if (currentTab === 'reports') loadReports();
+        }, REFRESH_SECONDS * 1000);
+    }
+
+    // ─── Init ───────────────────────────────────────────────
+    Promise.all([
+        fetchServices(),
+        fetchDepartments(),
+    ]).then(() => {
+        loadQueueOverview();
+        startAutoRefresh();
+        addActivity('🔄 Reception dashboard started');
+    });
+
+    // Close modal on overlay click
+    document.getElementById('modalOverlay').addEventListener('click', function(e) {
+        if (e.target === this) closeModal();
+    });
+</script>
+</body>
+</html>

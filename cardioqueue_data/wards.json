@@ -1,29 +1,29 @@
 [
   {
-    "id": "79a0e448-eadf-47bc-a64f-64a965103ca2",
+    "id": "29048733-ca37-485c-926a-9a21f2829c80",
     "name": "General Ward",
     "ward_type": "general",
     "total_beds": 10,
     "description": "General medicine ward",
     "is_active": 1,
-    "created_at": "2026-07-11T21:43:10.650363"
+    "created_at": "2026-07-15T00:33:55.832011"
   },
   {
-    "id": "96528d16-3f5a-4172-950e-5529e3fa4071",
+    "id": "35de6851-43cd-476e-9af3-5de02987bbfe",
     "name": "Private Wing",
     "ward_type": "private",
     "total_beds": 6,
     "description": "Private rooms with attached bathroom",
     "is_active": 1,
-    "created_at": "2026-07-11T21:43:10.650363"
+    "created_at": "2026-07-15T00:33:55.832011"
   },
   {
-    "id": "f5798a9f-0466-4e2c-9112-69c12d549f9f",
+    "id": "62fad8ff-76a7-4f45-9c91-d62a3183ddde",
     "name": "ICU",
     "ward_type": "icu",
     "total_beds": 4,
     "description": "Intensive Care Unit — cardiac monitoring",
     "is_active": 1,
-    "created_at": "2026-07-11T21:43:10.650363"
+    "created_at": "2026-07-15T00:33:55.832011"
   }
 ]

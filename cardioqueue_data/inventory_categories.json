@@ -1,62 +1,62 @@
 [
   {
-    "id": "3e9bbc02-4a4b-441b-8f46-4267f6329842",
+    "id": "8ee40f8b-81dc-4455-a8dc-f446fe9ae554",
     "name": "Cardiac Medications",
     "category_type": "medicine",
     "parent_id": null,
     "requires_batch": 1,
     "requires_expiry": 1,
     "is_cold_chain": 0,
-    "created_at": "2026-07-11T21:57:01.813437"
+    "created_at": "2026-07-15T00:33:55.838008"
   },
   {
-    "id": "c90c6088-dfe6-4115-a2f4-f20ca34afa3a",
+    "id": "e70aa7d8-bd91-49fb-adac-0e4076490619",
     "name": "General Medications",
     "category_type": "medicine",
     "parent_id": null,
     "requires_batch": 1,
     "requires_expiry": 1,
     "is_cold_chain": 0,
-    "created_at": "2026-07-11T21:57:01.813437"
+    "created_at": "2026-07-15T00:33:55.838008"
   },
   {
-    "id": "34fb5c0e-f43d-4e9e-8738-9814df5f206c",
+    "id": "0f55864c-5419-40b1-810b-a1b03c2e1fff",
     "name": "Consumables",
     "category_type": "consumable",
     "parent_id": null,
     "requires_batch": 1,
     "requires_expiry": 1,
     "is_cold_chain": 0,
-    "created_at": "2026-07-11T21:57:01.813437"
+    "created_at": "2026-07-15T00:33:55.838008"
   },
   {
-    "id": "590eadca-3fce-4da8-b59d-ec24d30f31c9",
+    "id": "3024cc9f-f49c-4077-9325-99e5c6204a5e",
     "name": "Surgical Supplies",
     "category_type": "surgical",
     "parent_id": null,
     "requires_batch": 1,
     "requires_expiry": 1,
     "is_cold_chain": 0,
-    "created_at": "2026-07-11T21:57:01.813437"
+    "created_at": "2026-07-15T00:33:55.838008"
   },
   {
-    "id": "a60d7cde-8891-42af-a61a-567d214b8526",
+    "id": "824cec3c-143b-4f10-a808-a14df3a11558",
     "name": "Lab Reagents",
     "category_type": "lab_reagent",
     "parent_id": null,
     "requires_batch": 1,
     "requires_expiry": 1,
     "is_cold_chain": 0,
-    "created_at": "2026-07-11T21:57:01.813437"
+    "created_at": "2026-07-15T00:33:55.838008"
   },
   {
-    "id": "7788e473-037f-4240-9833-569bea746e41",
+    "id": "e868a615-74e8-48b3-996d-79f5f280ba59",
     "name": "Other Supplies",
     "category_type": "other",
     "parent_id": null,
     "requires_batch": 1,
     "requires_expiry": 1,
     "is_cold_chain": 0,
-    "created_at": "2026-07-11T21:57:01.813437"
+    "created_at": "2026-07-15T00:33:55.838008"
   }
 ]

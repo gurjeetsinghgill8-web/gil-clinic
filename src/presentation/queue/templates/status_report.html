@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{CLINIC_NAME}} — GHOS V2 Status Report</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            background: #0a0e1a;
+            color: #e0e6ed;
+            padding: 20px;
+        }
+        .container { max-width: 900px; margin: 0 auto; }
+
+        .header {
+            text-align: center;
+            padding: 40px 20px;
+            background: linear-gradient(135deg, #1a2332, #2c3e50);
+            border-radius: 24px;
+            margin-bottom: 24px;
+            border: 1px solid rgba(255,255,255,0.06);
+        }
+        .header h1 { font-size: 28px; font-weight: 800; }
+        .header .sub { font-size: 14px; opacity: 0.5; margin-top: 8px; }
+        .header .date { font-size: 12px; opacity: 0.3; margin-top: 12px; }
+
+        .card {
+            background: rgba(255,255,255,0.04);
+            border: 1px solid rgba(255,255,255,0.06);
+            border-radius: 20px;
+            padding: 24px;
+            margin-bottom: 16px;
+        }
+        .card-title {
+            font-size: 16px;
+            font-weight: 700;
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        /* ── Overall Progress ───────────────────────────── */
+        .big-number {
+            font-size: 56px;
+            font-weight: 800;
+            text-align: center;
+            padding: 10px 0;
+        }
+        .big-number .percent { font-size: 24px; opacity: 0.5; }
+
+        .progress-container { margin: 16px 0; }
+        .progress-row {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 12px;
+        }
+        .progress-row .label { flex: 0 0 120px; font-size: 13px; font-weight: 600; }
+        .progress-row .bar-wrap {
+            flex: 1;
+            height: 24px;
+            background: rgba(255,255,255,0.04);
+            border-radius: 12px;
+            overflow: hidden;
+        }
+        .progress-row .bar {
+            height: 100%;
+            border-radius: 12px;
+            transition: width 1s ease;
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            padding-right: 8px;
+            font-size: 11px;
+            font-weight: 700;
+            color: white;
+            min-width: 35px;
+        }
+        .bar.green { background: linear-gradient(90deg, #27ae60, #2ecc71); }
+        .bar.blue { background: linear-gradient(90deg, #2980b9, #3498db); }
+        .bar.yellow { background: linear-gradient(90deg, #e67e22, #f39c12); }
+        .bar.red { background: linear-gradient(90deg, #c0392b, #e74c3c); }
+        .bar.purple { background: linear-gradient(90deg, #8e44ad, #9b59b6); }
+
+        .progress-row .pct { flex: 0 0 40px; text-align: right; font-size: 14px; font-weight: 700; }
+
+        /* ── Module Grid ────────────────────────────────── */
+        .module-grid {
+            display: grid;
+            gap: 10px;
+        }
+        .module-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 14px 16px;
+            background: rgba(255,255,255,0.03);
+            border-radius: 14px;
+            border: 1px solid rgba(255,255,255,0.04);
+        }
+        .module-item .m-icon { font-size: 24px; flex: 0 0 36px; }
+        .module-item .m-info { flex: 1; }
+        .module-item .m-name { font-size: 15px; font-weight: 600; }
+        .module-item .m-desc { font-size: 12px; opacity: 0.4; margin-top: 2px; }
+        .module-item .m-bar {
+            flex: 0 0 120px;
+            height: 8px;
+            background: rgba(255,255,255,0.06);
+            border-radius: 4px;
+            overflow: hidden;
+        }
+        .module-item .m-fill {
+            height: 100%;
+            border-radius: 4px;
+            transition: width 0.8s ease;
+        }
+        .module-item .m-pct { flex: 0 0 36px; font-size: 13px; font-weight: 700; text-align: right; }
+        .module-item .m-status { flex: 0 0 60px; font-size: 12px; text-align: right; }
+
+        .module-item.status-done { border-left: 3px solid #2ecc71; }
+        .module-item.status-partial { border-left: 3px solid #f39c12; }
+        .module-item.status-todo { border-left: 3px solid #e74c3c; }
+        .module-item.status-future { border-left: 3px solid #555; }
+
+        .status-done .m-name { color: #2ecc71; }
+        .status-partial .m-name { color: #f39c12; }
+        .status-todo .m-name { color: #e74c3c; }
+
+        /* ── Stats Grid ─────────────────────────────────── */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr 1fr;
+            gap: 10px;
+        }
+        .stat-box {
+            text-align: center;
+            padding: 16px 8px;
+            background: rgba(255,255,255,0.03);
+            border-radius: 14px;
+        }
+        .stat-box .num { font-size: 28px; font-weight: 800; }
+        .stat-box .lbl { font-size: 11px; opacity: 0.4; margin-top: 4px; }
+
+        /* ── Timeline ───────────────────────────────────── */
+        .timeline { position: relative; padding-left: 24px; }
+        .timeline::before {
+            content: '';
+            position: absolute;
+            left: 8px;
+            top: 0;
+            bottom: 0;
+            width: 2px;
+            background: rgba(255,255,255,0.06);
+        }
+        .tl-item { position: relative; padding: 0 0 16px 16px; }
+        .tl-item::before {
+            content: '';
+            position: absolute;
+            left: -20px;
+            top: 6px;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #2ecc71;
+        }
+        .tl-item.pending::before { background: #555; }
+        .tl-item.current::before { background: #3498db; box-shadow: 0 0 8px #3498db; }
+        .tl-item .tl-title { font-size: 14px; font-weight: 600; }
+        .tl-item .tl-desc { font-size: 12px; opacity: 0.4; margin-top: 2px; }
+
+        /* ── Responsive ──────────────────────────────────── */
+        @media (max-width: 600px) {
+            .stats-grid { grid-template-columns: 1fr 1fr; }
+            .module-item { flex-wrap: wrap; }
+            .module-item .m-bar { flex: 1 1 100%; margin-top: 6px; }
+            .progress-row .label { flex: 0 0 80px; font-size: 12px; }
+            .big-number { font-size: 40px; }
+        }
+
+        .footer {
+            text-align: center;
+            padding: 20px;
+            font-size: 12px;
+            opacity: 0.3;
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+
+    <!-- ═══ HEADER ═══ -->
+    <div class="header">
+        <h1>{{CLINIC_LOGO}} GHOS V2 — Status Report</h1>
+        <div class="sub">{{CLINIC_NAME}} · {{CLINIC_SPECIALTY}} · Phase 1 — Department Pilot</div>
+        <div class="date">Report generated: <span id="reportDate"></span></div>
+    </div>
+
+    <!-- ═══ OVERALL STATS ═══ -->
+    <div class="card">
+        <div class="card-title">📊 Overall Progress</div>
+        <div class="big-number">
+            <span id="totalPct">8</span><span class="percent">%</span>
+        </div>
+        <div class="stats-grid">
+            <div class="stat-box"><div class="num" style="color:#2ecc71;">5</div><div class="lbl">✅ Done</div></div>
+            <div class="stat-box"><div class="num" style="color:#f39c12;">2</div><div class="lbl">⚡ Partial</div></div>
+            <div class="stat-box"><div class="num" style="color:#e74c3c;">17</div><div class="lbl">⏳ Pending</div></div>
+            <div class="stat-box"><div class="num" style="color:#3498db;">24</div><div class="lbl">📦 Total</div></div>
+        </div>
+    </div>
+
+    <!-- ═══ PHASE PROGRESS ═══ -->
+    <div class="card">
+        <div class="card-title">📈 Phase-Wise Progress</div>
+        <div class="progress-container">
+            <div class="progress-row">
+                <div class="label">Phase 0</div>
+                <div class="bar-wrap"><div class="bar green" style="width:100%;">100%</div></div>
+                <div class="pct">100%</div>
+            </div>
+            <div class="progress-row">
+                <div class="label">Phase 1</div>
+                <div class="bar-wrap"><div class="bar blue" style="width:8%;">8%</div></div>
+                <div class="pct">8%</div>
+            </div>
+            <div class="progress-row">
+                <div class="label">Phases 2-12</div>
+                <div class="bar-wrap"><div class="bar" style="width:0%;background:#555;">0%</div></div>
+                <div class="pct">0%</div>
+            </div>
+            <div class="progress-row">
+                <div class="label">Overall</div>
+                <div class="bar-wrap"><div class="bar purple" style="width:8%;">8%</div></div>
+                <div class="pct">8%</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ═══ MODULES ═══ -->
+    <div class="card">
+        <div class="card-title">🎯 Module Status — Phase 1 (Department Pilot)</div>
+        <div class="module-grid" id="moduleGrid"></div>
+    </div>
+
+    <!-- ═══ TIMELINE ═══ -->
+    <div class="card">
+        <div class="card-title">🗓️ Projected Timeline</div>
+        <div class="timeline">
+            <div class="tl-item">
+                <div class="tl-title">✅ Phase 0 — Foundation</div>
+                <div class="tl-desc">Identity, Patient, Queue, Experience, Clinic — Complete</div>
+            </div>
+            <div class="tl-item current">
+                <div class="tl-title">🔴 Phase 1 — Department Pilot (Jul-Aug 2026)</div>
+                <div class="tl-desc">12 Modules — Module 1 (Reception) ✅ Complete. Module 2 (Technician) 🔨 Building.</div>
+            </div>
+            <div class="tl-item pending">
+                <div class="tl-title">⏳ Phase 2 — Clinical Engine (Sep 2026)</div>
+                <div class="tl-desc">Structured ECG, Echo, TMT reports with measurements</div>
+            </div>
+            <div class="tl-item pending">
+                <div class="tl-title">⏳ Phase 3 — Appointment Engine (Oct 2026)</div>
+                <div class="tl-desc">Booking, Calendar, Follow-up, Reminders</div>
+            </div>
+            <div class="tl-item pending">
+                <div class="tl-title">⏳ Phase 4-6 — Billing, Inventory, Communication (Nov-Dec 2026)</div>
+                <div class="tl-desc">Full hospital operations</div>
+            </div>
+            <div class="tl-item pending">
+                <div class="tl-title">⏳ Phase 7-12 — Advanced Features (2027)</div>
+                <div class="tl-desc">Lab, HR, Finance, Analytics, AI Platform</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ═══ KEY FACTS ═══ -->
+    <div class="card">
+        <div class="card-title">⚡ Key Facts</div>
+        <div style="display:grid; gap:8px;">
+            <div>• <strong style="color:#2ecc71;">270+ Python files</strong> — Already built in Phase 0 Foundation</div>
+            <div>• <strong style="color:#2ecc71;">6 PWA Templates</strong> — TV Display, Technician, Reception, Doctor, Patient Login, Patient Status</div>
+            <div>• <strong style="color:#f39c12;">8 Services</strong> — ECG, Echo, TMT, Holter, ABPM, OPD, X-Ray, Ultrasound — all dynamic from API</div>
+            <div>• <strong style="color:#f39c12;">1 Department</strong> — CARDIO (can add more via admin API)</div>
+            <div>• <strong style="color:#e74c3c;">~24 Modules total</strong> — 5 done, 2 partial, 17 remaining</div>
+            <div>• Architecture: FastAPI + Clean Architecture + DDD + SQLite/JSON</div>
+            <div>• UI: PWA (HTML/CSS/JS) — ❌ No Streamlit</div>
+        </div>
+    </div>
+
+    <!-- ═══ WHAT'S NEXT ═══ -->
+    <div class="card" style="border: 1px solid #3498db44; background: rgba(52,152,219,0.05);">
+        <div class="card-title" style="color:#3498db;">🎯 Immediately Next — Module 2: Technician Workspace</div>
+        <div style="display:grid; gap:6px; font-size:14px;">
+            <div>✅ <strong>Module 1 — Reception Dashboard</strong> — <span style="color:#2ecc71;">COMPLETE</span></div>
+            <div>🔨 <strong style="color:#3498db;">Module 2 — Technician Workspace</strong> — <span style="color:#3498db;">IN PROGRESS</span></div>
+            <div style="margin-top:8px; padding-left:16px; font-size:13px; opacity:0.6;">
+                Features: Call, Start, Complete, Report Ready · Timer · Room Display · Patient Timeline · Service Notes · 5 Departments
+            </div>
+            <div style="padding-left:16px; font-size:13px; opacity:0.6;">
+                Estimated: <strong>2-3 days</strong> for completion
+            </div>
+            <div style="margin-top:8px;">
+                <strong>Then:</strong> Module 3 (Doctor Workspace) → Module 4 (Manager Dashboard) → Module 5 (Patient PWA Enhancements)
+            </div>
+            <div style="margin-top:8px; font-size:13px; opacity:0.6;">
+                <strong>Phase 1 Target Completion:</strong> August 2026
+            </div>
+        </div>
+    </div>
+
+    <div class="footer">
+        {{CLINIC_NAME}} — {{CLINIC_SPECIALTY}}<br>
+        GHOS V2 — Gurjas Hospital Operating System
+    </div>
+</div>
+
+<script>
+    // Module data: icon, name, desc, pct, status (done/partial/todo/future)
+    const MODULES = [
+        ['🖥️','Reception Dashboard','Patient search, register, queue, token, print, reports',100,'done'],
+        ['🔧','Technician Workspace','Call, Start, Complete, Report Ready, Timer, Notes, 5 depts',40,'partial'],
+        ['👨‍⚕️','Doctor Workspace','Patient summary, reports, approve/reject, clinical notes',0,'todo'],
+        ['📊','Manager Dashboard','KPIs, dept load, staff performance, export CSV/PDF',0,'todo'],
+        ['📱','Patient PWA','QR login, live status, wait time, Hindi, offline',25,'partial'],
+        ['📺','TV Display','Queue display, dept rotation, voice calling, alerts',25,'partial'],
+        ['⏱️','Patient Timeline','Full journey: register → queue → called → complete → report → deliver',0,'todo'],
+        ['📄','Report Workflow','Technician complete → Doctor approve → Reception deliver',0,'todo'],
+        ['⚙️','Settings UI','Clinic, departments, services, doctors, rooms, printer, language',10,'partial'],
+        ['📋','Audit Log Viewer','Search, filter, export audit trail',10,'partial'],
+        ['🔄','Error Recovery','Retry, offline queue, crash recovery, session restore',0,'todo'],
+        ['🧪','Integration Test','100 real patients, all depts, bug fix, freeze, release',0,'todo'],
+    ];
+
+    const grid = document.getElementById('moduleGrid');
+    MODULES.forEach(m => {
+        const [icon, name, desc, pct, status] = m;
+        const statusLabels = {done:'✅ Done', partial:'⚡ WIP', todo:'⏳ Pending', future:'📅 Later'};
+        const fillColor = status === 'done' ? '#2ecc71' :
+            status === 'partial' ? '#f39c12' : status === 'todo' ? '#e74c3c' : '#555';
+        grid.innerHTML += `
+            <div class="module-item status-${status}">
+                <div class="m-icon">${icon}</div>
+                <div class="m-info">
+                    <div class="m-name">${name}</div>
+                    <div class="m-desc">${desc}</div>
+                </div>
+                <div class="m-bar"><div class="m-fill" style="width:${pct}%;background:${fillColor};"></div></div>
+                <div class="m-pct">${pct}%</div>
+                <div class="m-status">${statusLabels[status]}</div>
+            </div>`;
+    });
+
+    document.getElementById('reportDate').textContent = new Date().toLocaleString();
+</script>
+</body>
+</html>

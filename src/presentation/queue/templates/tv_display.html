@@ -1,0 +1,912 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="theme-color" content="#1a1a2e">
+    <title>{{CLINIC_NAME}} — Live Queue Display</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        html, body { height: 100%; overflow: hidden; }
+        body {
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            background: #1a1a2e;
+            color: white;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+        }
+
+        /* ── Fullscreen button ──────────────────────────────── */
+        .fs-btn {
+            position: fixed; bottom: 20px; right: 20px; z-index: 999;
+            background: rgba(255,255,255,0.1);
+            border: 1px solid rgba(255,255,255,0.2); color: #8899aa;
+            padding: 8px 14px; border-radius: 8px; cursor: pointer;
+            font-size: 14px; transition: all 0.2s; opacity: 0.5;
+        }
+        .fs-btn:hover { opacity: 1; background: rgba(255,255,255,0.2); }
+        .kiosk .fs-btn { display: none; }
+
+        /* ── Settings gear ──────────────────────────────────── */
+        .settings-gear {
+            position: fixed; bottom: 20px; left: 20px; z-index: 999;
+            background: rgba(255,255,255,0.1);
+            border: 1px solid rgba(255,255,255,0.2); color: #8899aa;
+            padding: 8px 14px; border-radius: 8px; cursor: pointer;
+            font-size: 16px; transition: all 0.2s; opacity: 0.5;
+        }
+        .settings-gear:hover { opacity: 1; background: rgba(255,255,255,0.2); }
+        .kiosk .settings-gear { display: none; }
+        .tts-indicator {
+            position: fixed; top: 12px; left: 12px; z-index: 1000;
+            font-size: 11px; color: #556677; opacity: 0.6;
+        }
+
+        /* ── Settings Panel (slide-out) ─────────────────────── */
+        .settings-overlay {
+            display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.5); z-index: 2000;
+        }
+        .settings-overlay.show { display: block; }
+        .settings-panel {
+            position: fixed; top: 0; left: -360px; bottom: 0; width: 340px;
+            background: #16213e; z-index: 2001; transition: left 0.3s ease;
+            padding: 28px 24px; overflow-y: auto;
+            border-right: 2px solid #2a2a4a;
+        }
+        .settings-panel.open { left: 0; }
+        .settings-panel h2 {
+            font-size: 22px; font-weight: 700; margin-bottom: 24px; color: #e94560;
+        }
+        .settings-group { margin-bottom: 20px; }
+        .settings-group label {
+            display: block; font-size: 13px; color: #8899aa;
+            text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px;
+        }
+        .settings-group .value {
+            font-size: 16px; font-weight: 600; color: white;
+        }
+        .toggle-row {
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 12px 0; border-bottom: 1px solid #1a1a3e;
+        }
+        .toggle-row .label { font-size: 16px; }
+        .toggle-switch {
+            width: 48px; height: 26px; background: #2a2a4a; border-radius: 13px;
+            cursor: pointer; position: relative; transition: background 0.2s;
+        }
+        .toggle-switch.on { background: #2ecc71; }
+        .toggle-switch::after {
+            content: ''; position: absolute; top: 3px; left: 3px;
+            width: 20px; height: 20px; background: white; border-radius: 50%;
+            transition: transform 0.2s;
+        }
+        .toggle-switch.on::after { transform: translateX(22px); }
+        .select-styled {
+            width: 100%; padding: 10px 14px; background: #1a1a3e;
+            border: 1px solid #2a2a4a; border-radius: 8px; color: white;
+            font-size: 15px; cursor: pointer; outline: none;
+        }
+        .close-settings {
+            position: absolute; top: 20px; right: 20px;
+            background: none; border: none; color: #8899aa;
+            font-size: 24px; cursor: pointer;
+        }
+        .close-settings:hover { color: white; }
+
+        /* ── Header ────────────────────────────────────────────── */
+        .header {
+            background: linear-gradient(135deg, #16213e 0%, #0f3460 100%);
+            padding: 20px 40px 16px;
+            display: flex; justify-content: space-between; align-items: center;
+            border-bottom: 2px solid #e94560; flex-shrink: 0; min-height: 80px;
+        }
+        .kiosk .header { padding: 28px 48px 24px; min-height: 96px; }
+        .kiosk .header-right select { display: none; }
+        .header-left { display: flex; align-items: center; gap: 16px; }
+        .hospital-name { font-size: 28px; font-weight: 700; letter-spacing: 1px; }
+        .kiosk .hospital-name { font-size: 34px; }
+        .hospital-sub { font-size: 16px; color: #8899aa; margin-top: 4px; }
+        .kiosk .hospital-sub { font-size: 18px; }
+        .header-right { display: flex; align-items: center; gap: 20px; }
+        .clock { font-size: 36px; font-weight: 300; font-variant-numeric: tabular-nums; color: #e94560; }
+        .kiosk .clock { font-size: 42px; }
+        .department-select {
+            padding: 10px 20px; border: 2px solid #e94560; border-radius: 10px;
+            font-size: 18px; font-weight: 600; background: #16213e; color: white;
+            cursor: pointer; outline: none;
+        }
+        .department-select option { background: #16213e; color: white; }
+        .dept-indicator { display: none; font-size: 22px; font-weight: 600; color: #e94560; letter-spacing: 2px; }
+        .kiosk .dept-indicator { display: block; }
+        .auto-rotate-badge {
+            display: none; font-size: 13px; color: #e94560;
+            background: rgba(233,69,96,0.15); padding: 4px 12px; border-radius: 20px;
+        }
+        .auto-rotate-badge.show { display: inline-block; }
+        .tts-badge {
+            display: none; font-size: 13px; color: #2ecc71;
+            background: rgba(46,204,113,0.15); padding: 4px 12px; border-radius: 20px;
+        }
+        .tts-badge.show { display: inline-block; }
+        .tts-badge.muted { color: #8899aa; background: rgba(136,153,170,0.15); }
+
+        /* ── Main Grid ─────────────────────────────────────────── */
+        .main { flex: 1; display: flex; gap: 0; padding: 24px 32px; min-height: 0; transition: opacity 0.3s; }
+        .main.fade { opacity: 0.3; }
+        .kiosk .main { padding: 28px 40px; }
+
+        /* ── Left: Now Calling + In Progress ───────────────────── */
+        .left-panel { flex: 1; display: flex; flex-direction: column; gap: 20px; min-width: 0; }
+        .now-calling {
+            flex: 1; background: linear-gradient(135deg, #16213e 0%, #1a1a3e 100%);
+            border-radius: 20px; border: 3px solid #e94560;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            padding: 30px; animation: pulse-border 2s infinite;
+            position: relative; min-height: 200px; transition: all 0.5s;
+        }
+        .now-calling.active-call {
+            border-color: #ff2d55;
+            box-shadow: 0 0 60px rgba(233,69,96,0.3), 0 0 120px rgba(233,69,96,0.1);
+        }
+        .now-calling.active-call .label { color: #ff2d55; }
+        @keyframes pulse-border {
+            0% { box-shadow: 0 0 0 0 rgba(233,69,96,0.5); }
+            70% { box-shadow: 0 0 0 40px rgba(233,69,96,0); }
+            100% { box-shadow: 0 0 0 0 rgba(233,69,96,0); }
+        }
+        .now-calling .label {
+            font-size: 20px; font-weight: 600; color: #e94560;
+            text-transform: uppercase; letter-spacing: 4px; margin-bottom: 8px;
+        }
+        .now-calling .token { font-size: 120px; font-weight: 900; line-height: 1; color: white; }
+        .now-calling .name { font-size: 42px; font-weight: 600; margin-top: 8px; }
+        .now-calling .service { font-size: 24px; color: #8899aa; margin-top: 4px; }
+        .now-calling .room { font-size: 20px; color: #e94560; font-weight: 600; margin-top: 8px; }
+        .now-calling .waiting-msg { font-size: 48px; font-weight: 700; color: #556677; }
+        .now-calling .waiting-sub { font-size: 20px; color: #445566; margin-top: 8px; }
+
+        .in-progress-section {
+            flex: 0 0 auto; background: #16213e; border-radius: 16px;
+            padding: 20px 28px; border: 1px solid #2a2a4a;
+        }
+        .section-title { font-size: 18px; font-weight: 600; color: #8899aa; text-transform: uppercase; letter-spacing: 2px; margin-bottom: 12px; }
+        .section-title .count { color: #2ecc71; margin-left: 8px; }
+        .progress-list { display: flex; gap: 16px; flex-wrap: wrap; }
+        .progress-item {
+            background: #1a1a3e; border-radius: 12px; padding: 16px 24px;
+            border-left: 4px solid #2ecc71; min-width: 200px; flex: 1; max-width: 280px;
+        }
+        .progress-item .p-token { font-size: 32px; font-weight: 800; color: #2ecc71; }
+        .progress-item .p-name { font-size: 22px; font-weight: 600; margin-top: 4px; }
+        .progress-item .p-service { font-size: 16px; color: #8899aa; }
+
+        /* ── Right: Waiting List ──────────────────────────────── */
+        .right-panel {
+            width: 440px; flex-shrink: 0; background: #16213e; border-radius: 20px;
+            padding: 24px 28px; margin-left: 24px;
+            display: flex; flex-direction: column; overflow: hidden;
+        }
+        .right-panel.hidden { display: none; }
+        .waiting-header {
+            display: flex; justify-content: space-between; align-items: center;
+            margin-bottom: 16px; flex-shrink: 0;
+        }
+        .waiting-header .title { font-size: 20px; font-weight: 700; color: #f39c12; }
+        .waiting-header .count { font-size: 28px; font-weight: 800; color: #f39c12; }
+        .waiting-list { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; }
+        .waiting-list::-webkit-scrollbar { width: 4px; }
+        .waiting-list::-webkit-scrollbar-thumb { background: #2a2a4a; border-radius: 4px; }
+        .waiting-item {
+            display: flex; align-items: center; gap: 16px;
+            padding: 10px 16px; background: #1a1a3e; border-radius: 10px; transition: background 0.3s;
+        }
+        .waiting-item .w-token { font-size: 28px; font-weight: 800; color: #f39c12; min-width: 50px; text-align: center; }
+        .waiting-item .w-info { flex: 1; min-width: 0; }
+        .waiting-item .w-name { font-size: 18px; font-weight: 600; }
+        .waiting-item .w-service { font-size: 14px; color: #8899aa; }
+        .empty-state {
+            flex: 1; display: flex; flex-direction: column; align-items: center;
+            justify-content: center; color: #556677;
+        }
+        .empty-state .icon { font-size: 64px; margin-bottom: 16px; }
+        .empty-state .text { font-size: 24px; font-weight: 600; }
+        .empty-state .sub { font-size: 16px; color: #445566; margin-top: 4px; }
+
+        /* ── Reconnecting overlay ────────────────────────────── */
+        .reconnecting {
+            display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(26,26,46,0.85); z-index: 100;
+            flex-direction: column; align-items: center; justify-content: center; gap: 16px;
+        }
+        .reconnecting.show { display: flex; }
+        .reconnecting .icon { font-size: 48px; }
+        .reconnecting .text { font-size: 24px; font-weight: 600; color: #8899aa; }
+        .reconnecting .countdown { font-size: 18px; color: #556677; }
+        @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+        .reconnecting .icon { animation: blink 1.2s infinite; }
+
+        /* ── Emergency Alert Overlay ──────────────────────────── */
+        .alert-overlay {
+            display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+            z-index: 1500; flex-direction: column; align-items: center;
+            justify-content: center; text-align: center; padding: 40px;
+        }
+        .alert-overlay.show { display: flex; }
+        .alert-overlay.info { background: rgba(30,136,229,0.92); }
+        .alert-overlay.warning { background: rgba(243,156,18,0.92); }
+        .alert-overlay.emergency {
+            background: rgba(192,57,43,0.95);
+            animation: alertPulseRed 1s infinite;
+        }
+        @keyframes alertPulseRed {
+            0% { box-shadow: inset 0 0 200px rgba(255,0,0,0.3); }
+            50% { box-shadow: inset 0 0 400px rgba(255,0,0,0.6); }
+            100% { box-shadow: inset 0 0 200px rgba(255,0,0,0.3); }
+        }
+        .alert-overlay .alert-icon { font-size: 80px; margin-bottom: 16px; }
+        .alert-overlay .alert-title { font-size: 36px; font-weight: 800; margin-bottom: 12px; }
+        .alert-overlay .alert-message { font-size: 28px; max-width: 700px; line-height: 1.4; }
+        .alert-overlay .alert-tap-hint {
+            position: absolute; bottom: 60px; font-size: 16px; opacity: 0.7;
+            color: rgba(255,255,255,0.7);
+        }
+        .alert-dismiss-btn {
+            margin-top: 32px; padding: 14px 40px; border-radius: 12px;
+            border: 2px solid rgba(255,255,255,0.5); background: transparent;
+            color: white; font-size: 18px; font-weight: 600; cursor: pointer;
+        }
+        .alert-dismiss-btn:hover { background: rgba(255,255,255,0.1); }
+
+        /* ── Footer ─────────────────────────────────────────────── */
+        .footer {
+            flex-shrink: 0; text-align: center; padding: 12px;
+            font-size: 14px; color: #445566; border-top: 1px solid #222244;
+        }
+        .kiosk .footer { display: none; }
+
+        /* ── Loading ──────────────────────────────────────────── */
+        .loading {
+            flex: 1; display: flex; flex-direction: column;
+            align-items: center; justify-content: center; color: #556677;
+        }
+        .loading .spinner {
+            width: 60px; height: 60px; border: 6px solid #2a2a4a;
+            border-top-color: #e94560; border-radius: 50%;
+            animation: spin 0.8s linear infinite; margin-bottom: 20px;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        /* ── Auto-scroll animation ─────────────────────────────── */
+        @keyframes scroll-up {
+            0% { transform: translateY(0); }
+            100% { transform: translateY(-50%); }
+        }
+        .scrolling .waiting-list { animation: scroll-up 30s linear infinite; }
+        .scrolling .waiting-list:hover { animation-play-state: paused; }
+
+        @media print {
+            .fs-btn, .footer, .header-right select, .reconnecting,
+            .settings-gear, .settings-overlay, .settings-panel,
+            .alert-overlay { display: none !important; }
+            body { background: white; color: black; }
+            .now-calling { border: 2px solid #333; animation: none; box-shadow: none; }
+            .progress-item { border-left-color: #333; }
+        }
+    </style>
+</head>
+<body>
+    <!-- Fullscreen button -->
+    <button class="fs-btn" id="fullscreenBtn" onclick="toggleFullscreen()">⛶ Fullscreen</button>
+    <!-- Settings gear -->
+    <button class="settings-gear" id="settingsGear" onclick="toggleSettings()">⚙️</button>
+    <!-- TTS Speaking Indicator -->
+    <div class="tts-indicator" id="ttsIndicator"></div>
+
+    <!-- Reconnecting overlay -->
+    <div class="reconnecting" id="reconnectingOverlay">
+        <div class="icon">📡</div>
+        <div class="text">Reconnecting...</div>
+        <div class="countdown" id="retryCountdown"></div>
+    </div>
+
+    <!-- Alert Overlay -->
+    <div class="alert-overlay" id="alertOverlay">
+        <div class="alert-icon" id="alertIcon">🚨</div>
+        <div class="alert-title" id="alertTitle">ALERT</div>
+        <div class="alert-message" id="alertMessage"></div>
+        <button class="alert-dismiss-btn" id="alertDismissBtn" onclick="dismissAlert()">✕ Dismiss</button>
+        <div class="alert-tap-hint" id="alertTapHint">Emergency requires 5 taps to dismiss</div>
+    </div>
+
+    <!-- Settings Overlay -->
+    <div class="settings-overlay" id="settingsOverlay" onclick="toggleSettings()"></div>
+    <div class="settings-panel" id="settingsPanel">
+        <button class="close-settings" onclick="toggleSettings()">✕</button>
+        <h2>⚙️ TV Display Settings</h2>
+
+        <div class="settings-group">
+            <label>Voice Announcements (TTS)</label>
+            <div class="toggle-row">
+                <span class="label">🔈 Mute Announcements</span>
+                <div class="toggle-switch" id="ttsToggle" onclick="toggleSetting('ttsMuted')"></div>
+            </div>
+        </div>
+
+        <div class="settings-group">
+            <label>TTS Language</label>
+            <select class="select-styled" id="ttsLang" onchange="updateSetting('ttsLang', this.value)">
+                <option value="both">English + Hindi (Bilingual)</option>
+                <option value="en">English Only</option>
+                <option value="hi">Hindi Only</option>
+            </select>
+        </div>
+
+        <div class="settings-group">
+            <label>Auto-Rotation Interval</label>
+            <select class="select-styled" id="rotationSpeed" onchange="updateRotationSpeed(this.value)">
+                <option value="15">15 seconds</option>
+                <option value="30" selected>30 seconds</option>
+                <option value="60">60 seconds</option>
+            </select>
+        </div>
+
+        <div class="settings-group">
+            <label>Privacy</label>
+            <div class="toggle-row">
+                <span class="label">👁️ Show Waiting List</span>
+                <div class="toggle-switch on" id="waitingListToggle" onclick="toggleSetting('showWaitingList')"></div>
+            </div>
+        </div>
+
+        <div class="settings-group">
+            <label>Alert Sound</label>
+            <div class="toggle-row">
+                <span class="label">🔔 Alert Beep</span>
+                <div class="toggle-switch on" id="alertSoundToggle" onclick="toggleSetting('alertSound')"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Header -->
+    <div class="header">
+        <div class="header-left">
+            <div>
+                <div class="hospital-name">{{CLINIC_LOGO}} {{CLINIC_NAME}} — {{CLINIC_SPECIALTY}}</div>
+                <div class="hospital-sub">Live Queue Status</div>
+            </div>
+            <span class="tts-badge" id="ttsBadge">🔈 TTS</span>
+        </div>
+        <div class="header-right">
+            <span class="dept-indicator" id="deptIndicator">—</span>
+            <span class="auto-rotate-badge" id="autoRotateBadge">🔄 Auto-Rotate</span>
+            <select class="department-select" id="departmentSelect" onchange="changeDepartment(this.value)">
+                <option value="">Loading...</option>
+            </select>
+            <div class="clock" id="clock">--:--:--</div>
+        </div>
+    </div>
+
+    <!-- Main -->
+    <div class="main" id="mainContent">
+        <div class="loading" id="loadingScreen">
+            <div class="spinner"></div>
+            <div style="font-size: 24px;">Loading queue...</div>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <div class="footer" id="lastUpdated">Loading...</div>
+
+    <script>
+        // ═══════════════════════════════════════════════════════════════
+        // SETUP
+        // ═══════════════════════════════════════════════════════════════
+        const API_BASE = '/api/v1/queue';
+        let refreshInterval = null;
+        let clockInterval = null;
+        let autoRotateInterval = null;
+        let currentDepartment = '';
+        let continuousFailCount = 0;
+        const MAX_FAILS_BEFORE_OVERLAY = 2;
+        let isKiosk = false;
+
+        // Settings
+        let SETTINGS = {
+            ttsMuted: localStorage.getItem('tv_ttsMuted') === 'true',
+            ttsLang: localStorage.getItem('tv_ttsLang') || 'both',
+            rotationSpeed: parseInt(localStorage.getItem('tv_rotationSpeed') || '30'),
+            showWaitingList: localStorage.getItem('tv_showWaitingList') !== 'false',
+            alertSound: localStorage.getItem('tv_alertSound') !== 'false',
+        };
+        const AUTO_ROTATE_SECONDS = SETTINGS.rotationSpeed;
+
+        // TTS state
+        let previousCalledIds = new Set();
+        let speechQueue = [];
+        let isSpeaking = false;
+
+        // Alert state
+        let alertTapCount = 0;
+        let alertDismissTimeout = null;
+
+        // Parse URL params
+        const params = new URLSearchParams(window.location.search);
+        const urlDept = params.get('dept');
+        const urlRefresh = params.get('refresh');
+        const urlKiosk = params.get('kiosk');
+        const REFRESH_SECONDS = urlRefresh ? parseInt(urlRefresh, 10) : 15;
+        let AUTO_ROTATE_DEPARTMENTS = [];
+
+        currentDepartment = urlDept || '';
+        if (urlKiosk === '1') {
+            isKiosk = true;
+            document.body.classList.add('kiosk');
+            document.getElementById('deptIndicator').textContent = currentDepartment;
+            setTimeout(() => {
+                if (document.documentElement.requestFullscreen)
+                    document.documentElement.requestFullscreen().catch(() => {});
+            }, 500);
+        }
+
+        // ═══════════════════════════════════════════════════════════════
+        // SETTINGS UI
+        // ═══════════════════════════════════════════════════════════════
+        function applySettingsUI() {
+            document.getElementById('ttsToggle').classList.toggle('on', !SETTINGS.ttsMuted);
+            document.getElementById('ttsLang').value = SETTINGS.ttsLang;
+            document.getElementById('rotationSpeed').value = SETTINGS.rotationSpeed;
+            document.getElementById('waitingListToggle').classList.toggle('on', SETTINGS.showWaitingList);
+            document.getElementById('alertSoundToggle').classList.toggle('on', SETTINGS.alertSound);
+
+            // TTS badge
+            const badge = document.getElementById('ttsBadge');
+            if (SETTINGS.ttsMuted) {
+                badge.textContent = '🔇 Muted';
+                badge.classList.add('muted');
+            } else {
+                badge.textContent = '🔈 TTS';
+                badge.classList.remove('muted');
+            }
+
+            // Waiting list visibility
+            document.querySelector('.right-panel')?.classList.toggle('hidden', !SETTINGS.showWaitingList);
+        }
+
+        function toggleSettings() {
+            document.getElementById('settingsOverlay').classList.toggle('show');
+            document.getElementById('settingsPanel').classList.toggle('open');
+        }
+
+        function toggleSetting(key) {
+            SETTINGS[key] = !SETTINGS[key];
+            localStorage.setItem('tv_' + key, SETTINGS[key]);
+            applySettingsUI();
+        }
+
+        function updateSetting(key, value) {
+            SETTINGS[key] = value;
+            localStorage.setItem('tv_' + key, value);
+        }
+
+        function updateRotationSpeed(val) {
+            SETTINGS.rotationSpeed = parseInt(val);
+            localStorage.setItem('tv_rotationSpeed', val);
+            // Restart auto-rotation with new speed
+            if (autoRotateInterval) {
+                clearInterval(autoRotateInterval);
+                autoRotateInterval = null;
+            }
+            if (isAutoRotating()) {
+                autoRotateInterval = setInterval(rotateDepartment, SETTINGS.rotationSpeed * 1000);
+            }
+        }
+
+        // ═══════════════════════════════════════════════════════════════
+        // TTS — Voice Announcements
+        // ═══════════════════════════════════════════════════════════════
+        function speakText(text, lang = 'en-US') {
+            if (SETTINGS.ttsMuted) return;
+            if (!window.speechSynthesis) return;
+            const utterance = new SpeechSynthesisUtterance(text);
+            utterance.lang = lang;
+            utterance.rate = 0.9;
+            utterance.volume = 1.0;
+            utterance.pitch = 1.0;
+            speechQueue.push(utterance);
+            processSpeechQueue();
+        }
+
+        function speakBilingual(enText, hiText) {
+            if (SETTINGS.ttsMuted) return;
+            if (SETTINGS.ttsLang === 'en' || SETTINGS.ttsLang === 'both') {
+                speakText(enText, 'en-US');
+            }
+            if (SETTINGS.ttsLang === 'hi' || SETTINGS.ttsLang === 'both') {
+                // Queue Hindi after English
+                const checkAndSpeakHi = setInterval(() => {
+                    if (!isSpeaking && speechQueue.length === 0) {
+                        clearInterval(checkAndSpeakHi);
+                        speakText(hiText, 'hi-IN');
+                    }
+                }, 500);
+            }
+        }
+
+        function processSpeechQueue() {
+            if (isSpeaking || speechQueue.length === 0) return;
+            isSpeaking = true;
+            const utterance = speechQueue.shift();
+            document.getElementById('ttsIndicator').textContent = '🔈 Speaking...';
+            utterance.onend = () => {
+                isSpeaking = false;
+                document.getElementById('ttsIndicator').textContent = '';
+                processSpeechQueue();
+            };
+            utterance.onerror = () => {
+                isSpeaking = false;
+                document.getElementById('ttsIndicator').textContent = '';
+                processSpeechQueue();
+            };
+            window.speechSynthesis.speak(utterance);
+        }
+
+        function announceCalledPatient(entry) {
+            const enMsg = `Token ${entry.token_number}, ${entry.patient_name}, please proceed to ${entry.room || 'your assigned room'}`;
+            const hiMsg = `टोकन नंबर ${entry.token_number}, ${entry.patient_name}, कृपया ${entry.room || 'अपने कमरे'} पर जाएं`;
+            speakBilingual(enMsg, hiMsg);
+        }
+
+        // ═══════════════════════════════════════════════════════════════
+        // ALERT SYSTEM
+        // ═══════════════════════════════════════════════════════════════
+        function showAlert(alert) {
+            const overlay = document.getElementById('alertOverlay');
+            const icon = document.getElementById('alertIcon');
+            const title = document.getElementById('alertTitle');
+            const message = document.getElementById('alertMessage');
+            const dismissBtn = document.getElementById('alertDismissBtn');
+            const tapHint = document.getElementById('alertTapHint');
+
+            // Set severity class
+            overlay.className = 'alert-overlay show ' + alert.severity;
+
+            // Set content
+            const icons = { info: 'ℹ️', warning: '⚠️', emergency: '🚨' };
+            const titles = { info: 'Information', warning: 'Warning', emergency: 'EMERGENCY' };
+            icon.textContent = icons[alert.severity] || '🚨';
+            title.textContent = titles[alert.severity] || 'ALERT';
+            message.textContent = alert.message;
+
+            // Auto-dismiss for info/warning
+            const durations = { info: 10000, warning: 30000, emergency: 0 };
+            const duration = alert.duration_seconds ? alert.duration_seconds * 1000 : (durations[alert.severity] || 15000);
+
+            // Dismiss button visibility
+            dismissBtn.style.display = (alert.severity === 'emergency') ? 'none' : 'block';
+            tapHint.style.display = (alert.severity === 'emergency') ? 'block' : 'none';
+            alertTapCount = 0;
+
+            // Auto-dismiss
+            if (duration > 0) {
+                clearTimeout(alertDismissTimeout);
+                alertDismissTimeout = setTimeout(dismissAlert, duration);
+            }
+
+            // Play alert sound
+            playAlertSound(alert.severity);
+        }
+
+        function dismissAlert() {
+            const overlay = document.getElementById('alertOverlay');
+            const severity = overlay.className.includes('emergency') ? 'emergency' : 'other';
+
+            if (severity === 'emergency') {
+                alertTapCount++;
+                if (alertTapCount < 5) {
+                    document.getElementById('alertTapHint').textContent =
+                        `Tap ${5 - alertTapCount} more times to dismiss`;
+                    return;
+                }
+            }
+
+            overlay.classList.remove('show');
+            alertTapCount = 0;
+            clearTimeout(alertDismissTimeout);
+            document.getElementById('alertTapHint').textContent = 'Emergency requires 5 taps to dismiss';
+        }
+
+        function playAlertSound(severity) {
+            if (!SETTINGS.alertSound) return;
+            try {
+                const ctx = new (window.AudioContext || window.webkitAudioContext)();
+                if (severity === 'emergency') {
+                    // Continuous beep
+                    for (let i = 0; i < 10; i++) {
+                        const osc = ctx.createOscillator();
+                        const gain = ctx.createGain();
+                        osc.connect(gain);
+                        gain.connect(ctx.destination);
+                        osc.frequency.value = i % 2 === 0 ? 800 : 1000;
+                        osc.type = 'square';
+                        gain.gain.value = 0.2;
+                        osc.start(ctx.currentTime + i * 0.3);
+                        osc.stop(ctx.currentTime + i * 0.3 + 0.25);
+                    }
+                } else if (severity === 'warning') {
+                    // Three beeps
+                    [0, 0.3, 0.6].forEach(t => {
+                        const osc = ctx.createOscillator();
+                        const gain = ctx.createGain();
+                        osc.connect(gain);
+                        gain.connect(ctx.destination);
+                        osc.frequency.value = 600;
+                        osc.type = 'sine';
+                        gain.gain.value = 0.3;
+                        osc.start(ctx.currentTime + t);
+                        osc.stop(ctx.currentTime + t + 0.15);
+                    });
+                } else {
+                    // Single short beep
+                    const osc = ctx.createOscillator();
+                    const gain = ctx.createGain();
+                    osc.connect(gain);
+                    gain.connect(ctx.destination);
+                    osc.frequency.value = 500;
+                    osc.type = 'sine';
+                    gain.gain.value = 0.2;
+                    osc.start(ctx.currentTime);
+                    osc.stop(ctx.currentTime + 0.1);
+                }
+            } catch(e) { /* Audio not available */ }
+        }
+
+        async function checkTvAlert() {
+            try {
+                const resp = await fetch(`${API_BASE}/tv-alert`);
+                if (!resp.ok) return;
+                const data = await resp.json();
+                if (data.alert) {
+                    showAlert(data.alert);
+                }
+            } catch(e) { /* Silently fail */ }
+        }
+
+        // ═══════════════════════════════════════════════════════════════
+        // CORE TV DISPLAY
+        // ═══════════════════════════════════════════════════════════════
+        function toggleFullscreen() {
+            if (!document.fullscreenElement)
+                document.documentElement.requestFullscreen().catch(() => {});
+            else
+                document.exitFullscreen().catch(() => {});
+        }
+        document.addEventListener('fullscreenchange', () => {
+            document.getElementById('fullscreenBtn').textContent =
+                document.fullscreenElement ? '⛶ Exit Fullscreen' : '⛶ Fullscreen';
+        });
+
+        function updateClock() {
+            document.getElementById('clock').textContent =
+                new Date().toLocaleTimeString('en-IN', { hour12: false });
+        }
+
+        function isAutoRotating() { return !urlDept; }
+
+        function rotateDepartment() {
+            if (!isAutoRotating()) return;
+            const idx = AUTO_ROTATE_DEPARTMENTS.indexOf(currentDepartment);
+            currentDepartment = AUTO_ROTATE_DEPARTMENTS[(idx + 1) % AUTO_ROTATE_DEPARTMENTS.length];
+            document.getElementById('deptIndicator').textContent = currentDepartment;
+            document.getElementById('departmentSelect').value = currentDepartment;
+            loadDisplay();
+        }
+
+        async function fetchQueue() {
+            try {
+                const resp = await fetch(
+                    `${API_BASE}/dashboard?department=${encodeURIComponent(currentDepartment)}&limit=50`
+                );
+                if (!resp.ok) return null;
+                return resp.json();
+            } catch { return null; }
+        }
+
+        function render(data) {
+            if (!data) return;
+            const entries = data.entries || [];
+            const called = entries.filter(e => e.status === 'CALLED');
+            const inProgress = entries.filter(e => e.status === 'IN_PROGRESS');
+            const waiting = entries.filter(e => e.status === 'WAITING');
+
+            // ── TTS: Detect newly called patients ──
+            const currentCalledIds = new Set(called.map(e => e.id));
+            const newCalled = called.filter(e => !previousCalledIds.has(e.id));
+            if (newCalled.length > 0 && previousCalledIds.size > 0) {
+                // Skip TTS on first load (previousCalledIds is empty)
+                newCalled.forEach(e => announceCalledPatient(e));
+            }
+            previousCalledIds = currentCalledIds;
+
+            const calledEntry = called.length > 0 ? called[0] : null;
+
+            // Build HTML
+            let html = `<div class="left-panel">`;
+            if (calledEntry) {
+                html += `
+                    <div class="now-calling active-call">
+                        <div class="label">🔔 NOW CALLING</div>
+                        <div class="token">${calledEntry.token_number}</div>
+                        <div class="name">${calledEntry.patient_name}</div>
+                        <div class="service">${calledEntry.service_name}</div>
+                        <div class="room">📍 Room: ${calledEntry.room || 'Please proceed'}</div>
+                    </div>`;
+            } else if (inProgress.length > 0) {
+                const p = inProgress[0];
+                html += `
+                    <div class="now-calling" style="border-color:#2ecc71;animation:none;">
+                        <div class="label" style="color:#2ecc71;">🔄 IN PROGRESS</div>
+                        <div class="token" style="font-size:96px;">${p.token_number}</div>
+                        <div class="name">${p.patient_name}</div>
+                        <div class="service">${p.service_name}</div>
+                        <div class="room" style="color:#2ecc71;">📍 ${p.room || 'Test in progress'}</div>
+                    </div>`;
+            } else {
+                html += `
+                    <div class="now-calling" style="border-color:#445566;animation:none;">
+                        <div class="waiting-msg">🩺 Waiting for patients</div>
+                        <div class="waiting-sub">Next patient will appear here</div>
+                    </div>`;
+            }
+
+            // In Progress
+            const extraInProgress = calledEntry ? inProgress : inProgress.slice(0, 4);
+            if (inProgress.length > 0) {
+                html += `
+                    <div class="in-progress-section">
+                        <div class="section-title">In Progress <span class="count">${calledEntry ? inProgress.length : Math.min(inProgress.length, 4)}</span></div>
+                        <div class="progress-list">`;
+                (calledEntry ? inProgress : inProgress.slice(0, 4)).forEach(e => {
+                    html += `
+                        <div class="progress-item">
+                            <div class="p-token">${e.token_number}</div>
+                            <div class="p-name">${e.patient_name}</div>
+                            <div class="p-service">${e.service_name}</div>
+                        </div>`;
+                });
+                html += `</div></div>`;
+            }
+            html += `</div>`; // left-panel close
+
+            // Right panel
+            const waitingHidden = !SETTINGS.showWaitingList ? ' hidden' : '';
+            html += `<div class="right-panel${waitingHidden}">`;
+            html += `
+                <div class="waiting-header">
+                    <div class="title">⏳ Up Next</div>
+                    <div class="count">${waiting.length}</div>
+                </div>`;
+
+            if (waiting.length === 0) {
+                html += `
+                    <div class="empty-state">
+                        <div class="icon">✅</div>
+                        <div class="text">All clear</div>
+                        <div class="sub">No patients waiting</div>
+                    </div>`;
+            } else {
+                const scrollClass = waiting.length > 6 ? 'scrolling' : '';
+                html += `<div class="waiting-list ${scrollClass}">`;
+                const list = waiting.length > 6 ? [...waiting, ...waiting] : waiting;
+                list.forEach(e => {
+                    html += `
+                        <div class="waiting-item">
+                            <div class="w-token">${e.token_number}</div>
+                            <div class="w-info">
+                                <div class="w-name">${e.patient_name}</div>
+                                <div class="w-service">${e.service_name} · ${e.room || 'Waiting'}</div>
+                            </div>
+                        </div>`;
+                });
+                html += `</div>`;
+            }
+            html += `</div>`; // right-panel close
+
+            document.getElementById('mainContent').innerHTML = html;
+            document.getElementById('lastUpdated').textContent =
+                `Updated: ${new Date().toLocaleTimeString('en-IN', { hour12: false })} · ${currentDepartment} · Refresh: ${REFRESH_SECONDS}s`;
+
+            // Re-apply waiting list visibility after render
+            if (document.querySelector('.right-panel')) {
+                document.querySelector('.right-panel').classList.toggle('hidden', !SETTINGS.showWaitingList);
+            }
+        }
+
+        async function loadDisplay() {
+            document.getElementById('mainContent').classList.add('fade');
+            const data = await fetchQueue();
+            if (data) {
+                continuousFailCount = 0;
+                document.getElementById('reconnectingOverlay').classList.remove('show');
+                render(data);
+            } else {
+                continuousFailCount++;
+                if (continuousFailCount >= MAX_FAILS_BEFORE_OVERLAY) {
+                    document.getElementById('reconnectingOverlay').classList.add('show');
+                    let count = REFRESH_SECONDS;
+                    document.getElementById('retryCountdown').textContent = `Retrying in ${count}s...`;
+                    const cd = setInterval(() => {
+                        count--;
+                        document.getElementById('retryCountdown').textContent =
+                            count > 0 ? `Retrying in ${count}s...` : 'Retrying now...';
+                        if (count <= 0) clearInterval(cd);
+                    }, 1000);
+                }
+            }
+            setTimeout(() => {
+                document.getElementById('mainContent').classList.remove('fade');
+            }, 100);
+        }
+
+        function changeDepartment(dept) {
+            currentDepartment = dept;
+            if (isKiosk) document.getElementById('deptIndicator').textContent = dept;
+            document.getElementById('mainContent').innerHTML = `
+                <div class="loading"><div class="spinner"></div><div style="font-size:24px;">Loading ${dept}...</div></div>`;
+            loadDisplay();
+        }
+
+        async function fetchDepartments() {
+            try {
+                const resp = await fetch('/api/v1/clinic/departments?active_only=true');
+                if (!resp.ok) throw new Error('Failed');
+                const data = await resp.json();
+                const depts = data.departments || [];
+                const select = document.getElementById('departmentSelect');
+                select.innerHTML = '';
+                // Use department NAMES (e.g. "Cardiology") — the dashboard filters by name
+                depts.forEach(d => {
+                    const opt = document.createElement('option');
+                    opt.value = d.name;
+                    opt.textContent = d.name;
+                    select.appendChild(opt);
+                });
+                AUTO_ROTATE_DEPARTMENTS = depts.map(d => d.name);
+                if (!currentDepartment && AUTO_ROTATE_DEPARTMENTS.length > 0)
+                    currentDepartment = AUTO_ROTATE_DEPARTMENTS[0];
+                document.getElementById('deptIndicator').textContent = currentDepartment || '—';
+                if (currentDepartment) document.getElementById('departmentSelect').value = currentDepartment;
+            } catch (err) {
+                // Fallback: single department
+                AUTO_ROTATE_DEPARTMENTS = ['Cardiology'];
+                currentDepartment = currentDepartment || 'Cardiology';
+            }
+        }
+
+        async function start() {
+            await fetchDepartments();
+            applySettingsUI();
+
+            if (isAutoRotating()) document.getElementById('autoRotateBadge').classList.add('show');
+            document.getElementById('departmentSelect').value = currentDepartment;
+            document.getElementById('deptIndicator').textContent = currentDepartment;
+
+            updateClock();
+            clockInterval = setInterval(updateClock, 1000);
+            loadDisplay();
+            refreshInterval = setInterval(loadDisplay, REFRESH_SECONDS * 1000);
+
+            if (isAutoRotating()) {
+                autoRotateInterval = setInterval(rotateDepartment, SETTINGS.rotationSpeed * 1000);
+            }
+
+            // Poll for TV alerts on each refresh cycle
+            setInterval(checkTvAlert, REFRESH_SECONDS * 1000);
+            setTimeout(checkTvAlert, 2000);
+        }
+
+        start();
+    </script>
+</body>
+</html>

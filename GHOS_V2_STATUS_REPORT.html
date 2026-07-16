@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🏥 GIL CLINIC — GHOS V2 Status Report</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            background: #0a0e1a;
+            color: #e0e6ed;
+            padding: 16px;
+        }
+        .container { max-width: 900px; margin: 0 auto; }
+
+        .header {
+            text-align: center;
+            padding: 32px 16px;
+            background: linear-gradient(135deg, #1a2332, #2c3e50);
+            border-radius: 20px;
+            margin-bottom: 16px;
+            border: 1px solid rgba(255,255,255,0.06);
+        }
+        .header h1 { font-size: 24px; font-weight: 800; }
+        .header .sub { font-size: 13px; opacity: 0.5; margin-top: 6px; }
+        .header .version { font-size: 11px; opacity: 0.3; margin-top: 10px; }
+
+        .card {
+            background: rgba(255,255,255,0.04);
+            border: 1px solid rgba(255,255,255,0.06);
+            border-radius: 18px;
+            padding: 20px;
+            margin-bottom: 14px;
+        }
+        .card-title {
+            font-size: 15px;
+            font-weight: 700;
+            margin-bottom: 14px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        /* ── Big Number ────────────────────────────── */
+        .big-number {
+            font-size: 48px;
+            font-weight: 800;
+            text-align: center;
+            padding: 8px 0;
+        }
+        .big-number .percent { font-size: 20px; opacity: 0.4; }
+
+        /* ── Progress Bars ─────────────────────────── */
+        .progress-row {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+        .progress-row .label { flex: 0 0 100px; font-size: 12px; font-weight: 600; }
+        .progress-row .bar-wrap {
+            flex: 1;
+            height: 20px;
+            background: rgba(255,255,255,0.04);
+            border-radius: 10px;
+            overflow: hidden;
+        }
+        .progress-row .bar {
+            height: 100%;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            padding-right: 6px;
+            font-size: 10px;
+            font-weight: 700;
+            color: white;
+            min-width: 30px;
+        }
+        .bar.green { background: linear-gradient(90deg, #27ae60, #2ecc71); }
+        .bar.blue { background: linear-gradient(90deg, #2980b9, #3498db); }
+        .bar.purple { background: linear-gradient(90deg, #8e44ad, #9b59b6); }
+
+        .progress-row .pct { flex: 0 0 36px; text-align: right; font-size: 13px; font-weight: 700; }
+
+        /* ── Stats Grid ────────────────────────────── */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr 1fr;
+            gap: 8px;
+        }
+        .stat-box {
+            text-align: center;
+            padding: 14px 6px;
+            background: rgba(255,255,255,0.03);
+            border-radius: 12px;
+        }
+        .stat-box .num { font-size: 26px; font-weight: 800; }
+        .stat-box .lbl { font-size: 10px; opacity: 0.4; margin-top: 3px; }
+
+        /* ── Module List ───────────────────────────── */
+        .module-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 12px 14px;
+            background: rgba(255,255,255,0.02);
+            border-radius: 12px;
+            margin-bottom: 6px;
+            border-left: 3px solid #555;
+        }
+        .module-item .mi-icon { font-size: 20px; flex: 0 0 30px; }
+        .module-item .mi-info { flex: 1; }
+        .module-item .mi-name { font-size: 14px; font-weight: 600; }
+        .module-item .mi-sub { font-size: 11px; opacity: 0.4; }
+        .module-item .mi-bar {
+            flex: 0 0 80px;
+            height: 6px;
+            background: rgba(255,255,255,0.06);
+            border-radius: 3px;
+            overflow: hidden;
+        }
+        .module-item .mi-fill { height: 100%; border-radius: 3px; }
+        .module-item .mi-pct { flex: 0 0 30px; font-size: 12px; font-weight: 700; text-align: right; }
+
+        .module-item.done { border-left-color: #2ecc71; }
+        .module-item.done .mi-name { color: #2ecc71; }
+        .module-item.wip { border-left-color: #f39c12; }
+        .module-item.wip .mi-name { color: #f39c12; }
+        .module-item.pending { border-left-color: #e74c3c; }
+        .module-item.pending .mi-name { color: #e74c3c; }
+
+        /* ── Files Table ───────────────────────────── */
+        .file-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+        .file-table td {
+            padding: 6px 8px;
+            border-bottom: 1px solid rgba(255,255,255,0.04);
+        }
+        .file-table .fname { font-family: monospace; font-size: 12px; }
+        .file-table .fstatus { text-align: center; }
+
+        /* ── Timeline ──────────────────────────────── */
+        .timeline { padding-left: 20px; position: relative; }
+        .timeline::before {
+            content: ''; position: absolute; left: 7px; top: 0; bottom: 0;
+            width: 2px; background: rgba(255,255,255,0.06);
+        }
+        .tl-item { position: relative; padding: 0 0 14px 14px; }
+        .tl-item::before {
+            content: ''; position: absolute; left: -17px; top: 5px;
+            width: 10px; height: 10px; border-radius: 50%;
+        }
+        .tl-item.done::before { background: #2ecc71; }
+        .tl-item.current::before { background: #3498db; box-shadow: 0 0 6px #3498db; }
+        .tl-item.future::before { background: #555; }
+        .tl-item .tl-title { font-size: 13px; font-weight: 600; }
+        .tl-item .tl-desc { font-size: 11px; opacity: 0.4; margin-top: 2px; }
+
+        .footer {
+            text-align: center; padding: 16px;
+            font-size: 11px; opacity: 0.25;
+        }
+        .highlight-box {
+            background: rgba(52,152,219,0.06);
+            border: 1px solid rgba(52,152,219,0.2);
+            border-radius: 14px;
+            padding: 16px;
+            margin-top: 12px;
+        }
+
+        @media (max-width: 480px) {
+            .stats-grid { grid-template-columns: 1fr 1fr; }
+            .progress-row .label { flex: 0 0 70px; font-size: 11px; }
+            .module-item { flex-wrap: wrap; }
+            .module-item .mi-bar { flex: 1 1 100%; margin-top: 4px; }
+            .big-number { font-size: 36px; }
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+
+    <!-- ═══ HEADER ═══ -->
+    <div class="header">
+        <h1>🏥 GIL CLINIC — GHOS V2</h1>
+        <div class="sub">Cardiology Department · Phase 1 — Department Pilot</div>
+        <div class="version">📅 <span id="reportDate"></span></div>
+    </div>
+
+    <!-- ═══ OVERALL PROGRESS ═══ -->
+    <div class="card">
+        <div class="card-title">📊 Overall Progress</div>
+        <div class="big-number">8<span class="percent">%</span></div>
+        <div class="stats-grid">
+            <div class="stat-box"><div class="num" style="color:#2ecc71;">5</div><div class="lbl">✅ Complete</div></div>
+            <div class="stat-box"><div class="num" style="color:#f39c12;">2</div><div class="lbl">⚡ Partial</div></div>
+            <div class="stat-box"><div class="num" style="color:#e74c3c;">17</div><div class="lbl">⏳ Pending</div></div>
+            <div class="stat-box"><div class="num" style="color:#3498db;">24</div><div class="lbl">📦 Total</div></div>
+        </div>
+    </div>
+
+    <!-- ═══ PHASE PROGRESS ═══ -->
+    <div class="card">
+        <div class="card-title">📈 Phase-Wise Completion</div>
+
+        <div class="progress-row">
+            <div class="label">Phase 0</div>
+            <div class="bar-wrap"><div class="bar green" style="width:100%;">100%</div></div>
+            <div class="pct">100%</div>
+        </div>
+        <div class="progress-row">
+            <div class="label">Phase 1</div>
+            <div class="bar-wrap"><div class="bar blue" style="width:8%;">8%</div></div>
+            <div class="pct">8%</div>
+        </div>
+        <div class="progress-row">
+            <div class="label">Phases 2-12</div>
+            <div class="bar-wrap"><div class="bar" style="width:0%;background:#555;">0%</div></div>
+            <div class="pct">0%</div>
+        </div>
+        <div class="progress-row" style="margin-top:10px; padding-top:10px; border-top:1px solid rgba(255,255,255,0.06);">
+            <div class="label" style="font-weight:800;">Total</div>
+            <div class="bar-wrap"><div class="bar purple" style="width:8%;">8%</div></div>
+            <div class="pct">8%</div>
+        </div>
+    </div>
+
+    <!-- ═══ PHASE 1 — 12 MODULES ═══ -->
+    <div class="card">
+        <div class="card-title">🎯 Phase 1 — Module Status (12 Modules)</div>
+
+        <div class="module-item done">
+            <div class="mi-icon">🖥️</div>
+            <div class="mi-info"><div class="mi-name">M1 — Reception Dashboard</div><div class="mi-sub">Search, Register, Queue, Token, Print Slip, Reports, Dept Status</div></div>
+            <div class="mi-bar"><div class="mi-fill" style="width:100%;background:#2ecc71;"></div></div>
+            <div class="mi-pct" style="color:#2ecc71;">100%</div>
+        </div>
+
+        <div class="module-item wip">
+            <div class="mi-icon">🔧</div>
+            <div class="mi-info"><div class="mi-name">M2 — Technician Workspace</div><div class="mi-sub">Call, Start, Complete, Report Ready, Timer, Notes, 5 depts</div></div>
+            <div class="mi-bar"><div class="mi-fill" style="width:40%;background:#f39c12;"></div></div>
+            <div class="mi-pct" style="color:#f39c12;">40%</div>
+        </div>
+
+        <div class="module-item pending">
+            <div class="mi-icon">👨‍⚕️</div>
+            <div class="mi-info"><div class="mi-name">M3 — Doctor Workspace</div><div class="mi-sub">Patient Summary, Reports, Approve/Reject, Notes, Vitals</div></div>
+            <div class="mi-bar"><div class="mi-fill" style="width:0%;background:#e74c3c;"></div></div>
+            <div class="mi-pct" style="color:#e74c3c;">0%</div>
+        </div>
+
+        <div class="module-item pending">
+            <div class="mi-icon">📊</div>
+            <div class="mi-info"><div class="mi-name">M4 — Manager Dashboard</div><div class="mi-sub">KPIs, Dept Load, Staff Performance, CSV/PDF Export</div></div>
+            <div class="mi-bar"><div class="mi-fill" style="width:0%;background:#e74c3c;"></div></div>
+            <div class="mi-pct" style="color:#e74c3c;">0%</div>
+        </div>
+
+        <div class="module-item wip">
+            <div class="mi-icon">📱</div>
+            <div class="mi-info"><div class="mi-name">M5 — Patient PWA</div><div class="mi-sub">QR Login, Live Status, Hindi/English, Offline, Feedback</div></div>
+            <div class="mi-bar"><div class="mi-fill" style="width:25%;background:#f39c12;"></div></div>
+            <div class="mi-pct" style="color:#f39c12;">25%</div>
+        </div>
+
+        <div class="module-item wip">
+            <div class="mi-icon">📺</div>
+            <div class="mi-info"><div class="mi-name">M6 — TV Display</div><div class="mi-sub">Queue Display, Dept Rotation, Voice Calling, Emergency Alerts</div></div>
+            <div class="mi-bar"><div class="mi-fill" style="width:25%;background:#f39c12;"></div></div>
+            <div class="mi-pct" style="color:#f39c12;">25%</div>
+        </div>
+
+        <div class="module-item pending">
+            <div class="mi-icon">⏱️</div>
+            <div class="mi-info"><div class="mi-name">M7 — Patient Timeline</div><div class="mi-sub">Full visual journey: Register → Queue → Called → Complete → Report → Delivered</div></div>
+            <div class="mi-bar"><div class="mi-fill" style="width:0%;background:#e74c3c;"></div></div>
+            <div class="mi-pct" style="color:#e74c3c;">0%</div>
+        </div>
+
+        <div class="module-item pending">
+            <div class="mi-icon">📄</div>
+            <div class="mi-info"><div class="mi-name">M8 — Report Workflow</div><div class="mi-sub">Tech Complete → Doctor Approve → Reception Deliver → Patient Receive</div></div>
+            <div class="mi-bar"><div class="mi-fill" style="width:0%;background:#e74c3c;"></div></div>
+            <div class="mi-pct" style="color:#e74c3c;">0%</div>
+        </div>
+
+        <div class="module-item pending">
+            <div class="mi-icon">⚙️</div>
+            <div class="mi-info"><div class="mi-name">M9 — Settings UI</div><div class="mi-sub">Departments, Services, Doctors, Rooms, Working Hours, Printer, Logo</div></div>
+            <div class="mi-bar"><div class="mi-fill" style="width:10%;background:#e74c3c;"></div></div>
+            <div class="mi-pct" style="color:#e74c3c;">10%</div>
+        </div>
+
+        <div class="module-item pending">
+            <div class="mi-icon">📋</div>
+            <div class="mi-info"><div class="mi-name">M10 — Audit Log Viewer</div><div class="mi-sub">Search, Filter, Export Immutable Audit Trail</div></div>
+            <div class="mi-bar"><div class="mi-fill" style="width:10%;background:#e74c3c;"></div></div>
+            <div class="mi-pct" style="color:#e74c3c;">10%</div>
+        </div>
+
+        <div class="module-item pending">
+            <div class="mi-icon">🔄</div>
+            <div class="mi-info"><div class="mi-name">M11 — Error Recovery</div><div class="mi-sub">Retry, Offline Queue, Crash Recovery, Session Restore</div></div>
+            <div class="mi-bar"><div class="mi-fill" style="width:0%;background:#e74c3c;"></div></div>
+            <div class="mi-pct" style="color:#e74c3c;">0%</div>
+        </div>
+
+        <div class="module-item pending">
+            <div class="mi-icon">🧪</div>
+            <div class="mi-info"><div class="mi-name">M12 — Integration Test</div><div class="mi-sub">100 Real Patients, All Depts, Bug Fix, Freeze, Release v1.0</div></div>
+            <div class="mi-bar"><div class="mi-fill" style="width:0%;background:#e74c3c;"></div></div>
+            <div class="mi-pct" style="color:#e74c3c;">0%</div>
+        </div>
+    </div>
+
+    <!-- ═══ WHAT'S BUILDING ═══ -->
+    <div class="highlight-box">
+        <div style="font-weight:700; color:#3498db; margin-bottom:6px;">🔨 CURRENTLY BUILDING — Module 2: Technician Workspace</div>
+        <div style="font-size:13px; opacity:0.7;">
+            Call patients → Start test → Timer → Complete → Report Ready<br>
+            Departments: ECG, Echo, TMT, Holter, ABPM<br>
+            ⏱ Estimated completion: <strong>2-3 days</strong>
+        </div>
+    </div>
+
+    <!-- ═══ TIMELINE ═══ -->
+    <div class="card">
+        <div class="card-title">🗓️ Project Timeline</div>
+        <div class="timeline">
+            <div class="tl-item done">
+                <div class="tl-title">✅ Phase 0 — Foundation (Complete)</div>
+                <div class="tl-desc">Identity, Patient, Queue, Experience, Clinic — 270+ Python files</div>
+            </div>
+            <div class="tl-item current">
+                <div class="tl-title">🔴 Phase 1 — Department Pilot (Jul-Aug 2026)</div>
+                <div class="tl-desc">12 Modules · Reception ✅ · Technician 🔨 · Target: Aug 2026</div>
+            </div>
+            <div class="tl-item future">
+                <div class="tl-title">⏳ Phase 2-6 (Sep-Dec 2026)</div>
+                <div class="tl-desc">Clinical Reports, Appointments, Communication, Billing, Inventory</div>
+            </div>
+            <div class="tl-item future">
+                <div class="tl-title">⏳ Phase 7-12 (2027)</div>
+                <div class="tl-desc">Laboratory, HR, Finance, Analytics, AI Platform (Last)</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ═══ KEY FACTS ═══ -->
+    <div class="card">
+        <div class="card-title">⚡ Key Technical Facts</div>
+        <div style="display:grid; gap:6px; font-size:13px;">
+            <div>• <strong style="color:#2ecc71;">270+ Python files</strong> already built in Phase 0</div>
+            <div>• <strong style="color:#2ecc71;">6 PWA Templates</strong> — TV Display, Technician, Reception, Doctor, Patient Login, Patient Status</div>
+            <div>• <strong style="color:#2ecc71;">8 Dynamic Services</strong> — ECG, Echo, TMT, Holter, ABPM, OPD, X-Ray, Ultrasound</div>
+            <div>• Architecture: <strong>FastAPI + Clean Architecture + DDD</strong></div>
+            <div>• Database: <strong>SQLite</strong> (PostgreSQL ready)</div>
+            <div>• UI: <strong>PWA (HTML/CSS/JS)</strong> — ❌ No Streamlit</div>
+            <div>• Storage: <strong>JSON backup</strong> with atomic writes + crash recovery</div>
+        </div>
+    </div>
+
+    <div class="footer">
+        GIL CLINIC — Cardiology Department<br>
+        GHOS V2 — Gurjas Hospital Operating System
+    </div>
+</div>
+
+<script>
+    document.getElementById('reportDate').textContent =
+        new Date().toLocaleDateString('en-IN', { year:'numeric', month:'long', day:'numeric' }) +
+        ' at ' + new Date().toLocaleTimeString();
+</script>
+</body>
+</html>

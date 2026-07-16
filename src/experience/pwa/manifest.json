@@ -1,0 +1,26 @@
+{
+  "name": "GIL CLINIC — Patient Dashboard",
+  "short_name": "GIL CLINIC",
+  "description": "Track your tests, queue status, and reports live from GIL CLINIC",
+  "start_url": "/experience/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#667eea",
+  "orientation": "portrait",
+  "categories": ["medical", "health", "utilities"],
+  "icons": [
+    {
+      "src": "/static/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/static/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "screenshots": []
+}

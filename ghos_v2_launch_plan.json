@@ -1,0 +1,104 @@
+{
+  "document_meta": {
+    "title": "GHOS V2 Product Launch Plan — CardioQueue",
+    "total_pages": 4
+  },
+  "art_direction": {
+    "palette_mode": "minimal",
+    "color_harmony": "split_complementary",
+    "background_svg": "noise",
+    "design_rationale": "Authority-driven minimal palette with split-complementary accent. Clean corporate aesthetic for a healthcare system launch plan. Trustworthy, professional, modern."
+  },
+  "pages": [
+    {
+      "page_index": 1,
+      "narrative_role": "Burst",
+      "archetype": "cover_hero",
+      "components": [
+        {
+          "type": "Floating_Meta",
+          "position": "top-left",
+          "items": ["GHOS V2", "LAUNCH PLAN"]
+        },
+        {
+          "type": "Hero_Typography",
+          "weight": "black",
+          "content": "PRODUCT<br>LAUNCH PLAN"
+        },
+        {
+          "type": "Hairline_Divider",
+          "style": "accent"
+        },
+        {
+          "type": "Floating_Meta",
+          "position": "bottom-right",
+          "items": ["CARDIQUEUE", "JULY 2026"]
+        }
+      ]
+    },
+    {
+      "page_index": 2,
+      "narrative_role": "Expand",
+      "archetype": "editorial_flow",
+      "components": [
+        {
+          "type": "Page_Ghost_Number",
+          "number": "01"
+        },
+        {
+          "type": "Stat_Block",
+          "number": "1-2",
+          "unit": "Depts",
+          "label": "INITIAL LIVE DEPARTMENTS"
+        },
+        {
+          "type": "Glass_Canvas",
+          "markdown_content": "## Phased Rollout Strategy\n\n**GHOS V2** is a complete clinic management system with queue management, patient PWA, reporting, inventory, and analytics.\n\nWe launch with **1–2 core departments** (Echo/ECG) in full production, while all other departments display as *Coming Soon — Under Construction*. This enables live testing at small scale — **10–12 patients/day** — with real-time feedback for rapid iteration.\n\nAs each department stabilizes, we activate the next — one at a time — ensuring quality at every step."
+        },
+        {
+          "type": "Process_List",
+          "steps": [
+            {"title": "Phase 1 — Week 1", "description": "Deploy Echo/ECG department live. Register 10+ patients daily. Monitor all transitions."},
+            {"title": "Phase 2 — Week 2+", "description": "Activate General Medicine. Expand patient volume gradually."},
+            {"title": "Phase 3 — Month 2", "description": "Add Orthopedics, Pediatrics, Ophthalmology departments."},
+            {"title": "Phase 4 — Month 3+", "description": "Full hospital-wide rollout with all departments and modules live."}
+          ]
+        }
+      ]
+    },
+    {
+      "page_index": 3,
+      "narrative_role": "Expand",
+      "archetype": "editorial_flow",
+      "components": [
+        {
+          "type": "Page_Ghost_Number",
+          "number": "02"
+        },
+        {
+          "type": "Glass_Canvas",
+          "markdown_content": "## Departments Launch Timeline\n\n| Department | Phase | Status |\n|-----------|-------|--------|\n| Cardiology (Echo/ECG) | Phase 1 — Week 1 | 🟢 Active |\n| General Medicine | Phase 1 — Week 2 | 🟡 Under Construction |\n| Orthopedics | Phase 2 — Month 2 | 🔴 Coming Soon |\n| Pediatrics | Phase 2 — Month 2 | 🔴 Coming Soon |\n| Ophthalmology | Phase 3 — Month 3 | 📅 Planned |\n| Dermatology | Phase 3 — Month 3 | 📅 Planned |\n| All Others | Phase 4 — Month 4+ | 📅 TBD |"
+        },
+        {
+          "type": "Glass_Canvas",
+          "markdown_content": "## Key Features Ready at Launch\n\n- **Queue Management** — Real-time token system with call/start/complete/deliver workflow\n- **Patient PWA** — Status tracking, token slip, reports view, timeline, feedback\n- **Multi-role Dashboards** — Reception, Technician, Doctor, Manager views\n- **Reports & Analytics** — Dashboard with live KPIs and trends\n- **Patient Registration** — Visit management, bulk CSV import\n- **Notes & Report Workflow** — Clinical notes with full status lifecycle"
+        }
+      ]
+    },
+    {
+      "page_index": 4,
+      "narrative_role": "Echo",
+      "archetype": "editorial_flow",
+      "components": [
+        {
+          "type": "Page_Ghost_Number",
+          "number": "03"
+        },
+        {
+          "type": "Glass_Canvas",
+          "markdown_content": "## Live Testing Protocol\n\n| Step | Action |\n|------|--------|\n| 1 | Start with 10–12 patients/day in Echo/ECG only |\n| 2 | Monitor all 6 status transitions: WAITING → DELIVERED |\n| 3 | Track errors, bottlenecks, UX issues daily |\n| 4 | Fix & deploy before adding next department |\n\n## Risk Mitigation\n\n- **Phased rollout** limits blast radius — issues stay contained to active departments only\n- **Under Construction** banners prevent confusion for unavailable features\n- **Small patient volume** (10–12/day) allows controlled, safe testing\n- **Daily monitoring** with immediate hotfix capability\n\n## Next Steps\n\n| Timeline | Action |\n|----------|--------|\n| **Week 1** | Deploy Echo/ECG live, register 10+ patients |\n| **Week 2** | Activate General Medicine department |\n| **Month 2** | Orthopedics & Pediatrics go live |\n| **Ongoing** | Bug fixes, performance tuning, feature additions |"
+        }
+      ]
+    }
+  ]
+}

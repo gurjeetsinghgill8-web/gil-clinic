@@ -1,0 +1,928 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="theme-color" content="#2c3e50">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <title>{{CLINIC_NAME}} — Technician</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            background: #0f1724;
+            min-height: 100vh;
+            color: #e0e6ed;
+        }
+
+        /* ── Header ──────────────────────────────────────────── */
+        .header {
+            background: linear-gradient(135deg, #1a2332 0%, #2c3e50 50%, #3498db 100%);
+            color: white;
+            padding: 14px 20px 18px;
+            position: sticky;
+            top: 0;
+            z-index: 50;
+        }
+        .header .htop {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .header h1 { font-size: 20px; font-weight: 700; }
+        .header .dept-name { font-size: 14px; opacity: 0.85; margin-top: 2px; }
+        .header .staff-name { font-size: 12px; opacity: 0.5; margin-top: 4px; }
+        .header-btn {
+            padding: 6px 14px;
+            border: 1px solid rgba(255,255,255,0.3);
+            border-radius: 8px;
+            background: rgba(255,255,255,0.1);
+            color: white;
+            font-size: 13px;
+            cursor: pointer;
+        }
+
+        /* ── Stats Bar ──────────────────────────────────────── */
+        .stats-bar {
+            display: flex;
+            gap: 8px;
+            margin: -10px 14px 0;
+            position: relative;
+            z-index: 2;
+        }
+        .stat-card {
+            flex: 1;
+            background: rgba(255,255,255,0.08);
+            backdrop-filter: blur(10px);
+            border-radius: 14px;
+            padding: 12px 8px;
+            text-align: center;
+            border: 1px solid rgba(255,255,255,0.05);
+        }
+        .stat-card .num { font-size: 28px; font-weight: 800; }
+        .stat-card .lbl { font-size: 11px; opacity: 0.6; margin-top: 2px; }
+        .stat-card.waiting .num { color: #f39c12; }
+        .stat-card.called .num { color: #3498db; }
+        .stat-card.active .num { color: #2ecc71; }
+
+        .content { padding: 14px; max-width: 800px; margin: 0 auto; }
+
+        /* ── Dept Bar ────────────────────────────────────────── */
+        .dept-bar {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 12px;
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+            padding-bottom: 4px;
+        }
+        .dept-bar::-webkit-scrollbar { height: 0; }
+        .dept-btn {
+            flex-shrink: 0;
+            padding: 10px 18px;
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 12px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            background: rgba(255,255,255,0.05);
+            color: #8899aa;
+            transition: all 0.2s;
+        }
+        .dept-btn:active { transform: scale(0.95); }
+        .dept-btn.active {
+            background: #3498db;
+            color: white;
+            border-color: #3498db;
+            box-shadow: 0 4px 15px rgba(52,152,219,0.3);
+        }
+        .dept-btn .wait-count {
+            display: inline-block;
+            background: rgba(255,255,255,0.15);
+            border-radius: 8px;
+            padding: 0 6px;
+            font-size: 11px;
+            margin-left: 4px;
+        }
+        .dept-btn.active .wait-count { background: rgba(255,255,255,0.2); }
+
+        /* ── Tab Bar ─────────────────────────────────────────── */
+        .tabs {
+            display: flex;
+            gap: 4px;
+            margin-bottom: 12px;
+            background: rgba(255,255,255,0.04);
+            border-radius: 14px;
+            padding: 4px;
+        }
+        .tab-btn {
+            flex: 1;
+            padding: 12px 8px;
+            border: none;
+            border-radius: 10px;
+            background: transparent;
+            font-size: 14px;
+            font-weight: 600;
+            color: #8899aa;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .tab-btn.active {
+            background: #1a2332;
+            color: #e0e6ed;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+        }
+        .tab-btn .badge {
+            display: inline-block;
+            background: #e74c3c;
+            color: white;
+            border-radius: 10px;
+            padding: 0 7px;
+            font-size: 11px;
+            margin-left: 4px;
+        }
+        .tab-btn.active .badge { background: #c0392b; }
+
+        /* ── Queue Card ──────────────────────────────────────── */
+        .queue-card {
+            background: rgba(255,255,255,0.06);
+            border: 1px solid rgba(255,255,255,0.08);
+            border-radius: 18px;
+            padding: 18px 20px;
+            margin-bottom: 10px;
+            transition: all 0.2s;
+            position: relative;
+            overflow: hidden;
+        }
+        .queue-card:active { transform: scale(0.98); }
+        .queue-card::before {
+            content: '';
+            position: absolute;
+            left: 0;
+            top: 0;
+            bottom: 0;
+            width: 4px;
+            border-radius: 18px 0 0 18px;
+        }
+        .queue-card.status-called::before { background: #3498db; }
+        .queue-card.status-progress::before { background: #2ecc71; }
+        .queue-card.status-waiting { border-left: 4px solid #f39c12; }
+        .queue-card.status-called { border-color: #3498db44; background: rgba(52,152,219,0.08); }
+        .queue-card.status-progress { border-color: #2ecc7144; background: rgba(46,204,113,0.08); }
+        .queue-card.status-completed { opacity: 0.5; }
+
+        .card-row1 {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+        }
+        .token-badge {
+            width: 52px;
+            height: 52px;
+            border-radius: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 22px;
+            font-weight: 800;
+            flex-shrink: 0;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+        }
+        .queue-card.status-called .token-badge { background: linear-gradient(135deg, #3498db, #2980b9); }
+        .queue-card.status-progress .token-badge { background: linear-gradient(135deg, #2ecc71, #27ae60); }
+
+        .card-info { flex: 1; min-width: 0; }
+        .patient-name {
+            font-size: 18px;
+            font-weight: 700;
+            cursor: pointer;
+        }
+        .patient-name:active { opacity: 0.7; }
+        .service-name { font-size: 13px; opacity: 0.5; margin-top: 2px; }
+        .room-tag {
+            display: inline-block;
+            font-size: 12px;
+            color: #3498db;
+            background: rgba(52,152,219,0.15);
+            padding: 2px 10px;
+            border-radius: 8px;
+            margin-top: 4px;
+        }
+        .timer-badge {
+            display: inline-block;
+            font-size: 14px;
+            font-weight: 700;
+            color: #2ecc71;
+            background: rgba(46,204,113,0.15);
+            padding: 4px 12px;
+            border-radius: 10px;
+            margin-top: 4px;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .status-pill {
+            display: inline-block;
+            font-size: 12px;
+            font-weight: 600;
+            padding: 3px 12px;
+            border-radius: 10px;
+            margin-top: 4px;
+        }
+        .status-pill.waiting { background: rgba(243,156,18,0.2); color: #f39c12; }
+        .status-pill.called { background: rgba(52,152,219,0.2); color: #3498db; }
+        .status-pill.in-progress { background: rgba(46,204,113,0.2); color: #2ecc71; }
+        .status-pill.completed { background: rgba(149,165,166,0.2); color: #95a5a6; }
+        .status-pill.report-ready { background: rgba(155,89,182,0.2); color: #9b59b6; }
+        .status-pill.delivered { background: rgba(46,204,113,0.2); color: #2ecc71; }
+
+        .card-row2 {
+            margin-top: 12px;
+            display: flex;
+            gap: 8px;
+        }
+        .btn-action {
+            flex: 1;
+            padding: 14px 10px;
+            border: none;
+            border-radius: 12px;
+            font-size: 15px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.15s;
+            text-align: center;
+        }
+        .btn-action:active { transform: scale(0.96); }
+        .btn-action:disabled { opacity: 0.3; cursor: not-allowed; transform: none; }
+
+        .btn-call { background: linear-gradient(135deg, #2ecc71, #27ae60); color: white; }
+        .btn-start { background: linear-gradient(135deg, #3498db, #2980b9); color: white; }
+        .btn-complete { background: linear-gradient(135deg, #9b59b6, #8e44ad); color: white; }
+        .btn-report { background: linear-gradient(135deg, #e67e22, #d35400); color: white; }
+        .btn-deliver { background: linear-gradient(135deg, #1abc9c, #16a085); color: white; }
+        .btn-notes { background: rgba(255,255,255,0.1); color: #8899aa; font-size: 13px; }
+        .btn-alert { background: rgba(231,76,60,0.2); color: #e74c3c; font-size: 13px; }
+        .btn-extra {
+            padding: 10px;
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 10px;
+            background: transparent;
+            color: #8899aa;
+            font-size: 13px;
+            cursor: pointer;
+            text-align: center;
+        }
+        .btn-extra:active { transform: scale(0.95); }
+
+        .extra-actions {
+            display: flex;
+            gap: 6px;
+            margin-top: 8px;
+            flex-wrap: wrap;
+        }
+
+        /* ── Notes inline ────────────────────────────────────── */
+        .notes-box {
+            margin-top: 10px;
+            display: none;
+        }
+        .notes-box.show { display: block; }
+        .notes-box textarea {
+            width: 100%;
+            padding: 10px 14px;
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 10px;
+            background: rgba(0,0,0,0.2);
+            color: #e0e6ed;
+            font-size: 14px;
+            font-family: inherit;
+            resize: vertical;
+            min-height: 60px;
+            outline: none;
+        }
+        .notes-box textarea:focus { border-color: #3498db; }
+        .notes-save {
+            margin-top: 6px;
+            padding: 8px 16px;
+            border: none;
+            border-radius: 8px;
+            background: #3498db;
+            color: white;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+        }
+
+        /* ── Current Patient Highlight ───────────────────────── */
+        .current-patient {
+            background: linear-gradient(135deg, rgba(46,204,113,0.12), rgba(46,204,113,0.04));
+            border: 2px solid #2ecc71;
+            box-shadow: 0 0 30px rgba(46,204,113,0.1);
+        }
+
+        /* ── States ──────────────────────────────────────────── */
+        .empty-state {
+            text-align: center;
+            padding: 40px 20px;
+            opacity: 0.5;
+        }
+        .empty-state .icon { font-size: 48px; margin-bottom: 8px; }
+        .empty-state .text { font-size: 16px; }
+        .loading { text-align: center; padding: 40px; color: #8899aa; }
+        .loading .spinner {
+            width: 36px; height: 36px;
+            border: 3px solid rgba(255,255,255,0.08);
+            border-top-color: #3498db;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            margin: 0 auto 12px;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        .last-updated { text-align: center; font-size: 11px; opacity: 0.3; margin-top: 16px; padding-bottom: 30px; }
+
+        /* ── Toast ───────────────────────────────────────────── */
+        .toast {
+            position: fixed;
+            bottom: 24px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #1a2332;
+            color: #e0e6ed;
+            padding: 14px 24px;
+            border-radius: 14px;
+            font-size: 15px;
+            box-shadow: 0 6px 30px rgba(0,0,0,0.5);
+            z-index: 200;
+            display: none;
+            max-width: 90%;
+            border: 1px solid rgba(255,255,255,0.08);
+        }
+        .toast.show { display: block; animation: fadeInUp 0.3s; }
+        @keyframes fadeInUp {
+            from { opacity: 0; transform: translateX(-50%) translateY(20px); }
+            to { opacity: 1; transform: translateX(-50%) translateY(0); }
+        }
+
+        /* ── Modal ───────────────────────────────────────────── */
+        .modal-overlay {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.7);
+            z-index: 150;
+            display: none;
+            justify-content: center;
+            align-items: flex-end;
+        }
+        .modal-overlay.show { display: flex; }
+        .modal-box {
+            background: #1a2332;
+            border-radius: 20px 20px 0 0;
+            padding: 24px 20px;
+            max-width: 500px;
+            width: 100%;
+            max-height: 80vh;
+            overflow-y: auto;
+            border: 1px solid rgba(255,255,255,0.08);
+            border-bottom: none;
+        }
+        .modal-box .modal-title { font-size: 18px; font-weight: 700; margin-bottom: 16px; }
+        .modal-box .modal-close {
+            width: 100%;
+            padding: 14px;
+            border: none;
+            border-radius: 12px;
+            background: rgba(255,255,255,0.06);
+            color: #8899aa;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            margin-top: 12px;
+        }
+        .modal-box .timeline-item {
+            display: flex;
+            gap: 12px;
+            padding: 8px 0;
+            border-bottom: 1px solid rgba(255,255,255,0.04);
+        }
+        .modal-box .timeline-item .tl-time { color: #8899aa; font-size: 12px; min-width: 70px; }
+        .modal-box .timeline-item .tl-event { font-size: 14px; }
+
+        /* ── Responsive ──────────────────────────────────────── */
+        @media (max-width: 480px) {
+            .card-row2 { flex-direction: column; }
+            .extra-actions { flex-direction: column; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="header">
+    <div class="htop">
+        <div>
+            <h1>🔧 {{CLINIC_NAME}}</h1>
+            <div class="dept-name" id="departmentLabel">Loading...</div>
+            <div class="staff-name" id="staffLabel">👤 Loading...</div>
+        </div>
+        <div>
+            <button class="header-btn" onclick="showAbout()">⏱</button>
+        </div>
+    </div>
+</div>
+
+<div class="stats-bar">
+    <div class="stat-card waiting">
+        <div class="num" id="statWaiting">0</div>
+        <div class="lbl">⏳ Waiting</div>
+    </div>
+    <div class="stat-card called">
+        <div class="num" id="statCalled">0</div>
+        <div class="lbl">📞 Called</div>
+    </div>
+    <div class="stat-card active">
+        <div class="num" id="statActive">0</div>
+        <div class="lbl">🔄 Testing</div>
+    </div>
+</div>
+
+<div class="content">
+
+    <!-- Department Bar -->
+    <div class="dept-bar" id="deptBar"></div>
+
+    <!-- Tab Bar -->
+    <div class="tabs">
+        <button class="tab-btn active" onclick="switchTab('waiting', this)">
+            ⏳ Waiting <span class="badge" id="badgeWaiting">0</span>
+        </button>
+        <button class="tab-btn" onclick="switchTab('active', this)">
+            🔄 Active <span class="badge" id="badgeActive">0</span>
+        </button>
+        <button class="tab-btn" onclick="switchTab('done', this)">
+            ✅ Done
+        </button>
+    </div>
+
+    <!-- Loading -->
+    <div class="loading" id="loadingScreen">
+        <div class="spinner"></div>
+        <div>Loading queue...</div>
+    </div>
+
+    <!-- Queue List -->
+    <div id="queueList"></div>
+
+    <div class="last-updated" id="lastUpdated">Loading...</div>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<!-- Modal -->
+<div class="modal-overlay" id="modalOverlay">
+    <div class="modal-box">
+        <div class="modal-title" id="modalTitle">—</div>
+        <div class="modal-body" id="modalBody"></div>
+        <button class="modal-close" onclick="closeModal()">Close</button>
+    </div>
+</div>
+
+<script>
+    const API_BASE = '/api/v1/queue';
+    const PATIENT_API = '/api/v1/patient';
+    const CLINIC_API = '/api/v1/clinic';
+    let refreshInterval = null;
+    const REFRESH_SECONDS = 5;
+    let currentTab = 'waiting';
+    let currentDept = '';
+    let currentData = { entries: [], stats: { waiting: 0, called: 0, in_progress: 0 } };
+    let timers = {};
+    let timerInterval = null;
+
+    // ─── Staff Name ────────────────────────────────────────────
+    const urlParams = new URLSearchParams(window.location.search);
+    let staffName = urlParams.get('staff') || localStorage.getItem('tech_staff') || '';
+    if (!staffName) {
+        staffName = prompt('Your name:', 'Technician');
+        if (staffName) localStorage.setItem('tech_staff', staffName);
+    }
+    document.getElementById('staffLabel').textContent = '👤 ' + staffName;
+
+    // ─── Toast ──────────────────────────────────────────────
+    function showToast(msg, isError) {
+        const t = document.getElementById('toast');
+        t.textContent = (isError ? '❌ ' : '✅ ') + msg;
+        t.classList.add('show');
+        setTimeout(() => t.classList.remove('show'), 3000);
+    }
+
+    // ─── API ────────────────────────────────────────────────
+    async function apiCall(endpoint, options = {}) {
+        try {
+            const resp = await fetch(`${API_BASE}${endpoint}`, {
+                ...options,
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...(options.headers || {}),
+                },
+            });
+            if (!resp.ok) {
+                const err = await resp.json().catch(() => ({ detail: resp.statusText }));
+                throw new Error(err.detail);
+            }
+            return resp.json();
+        } catch (e) {
+            showToast(e.message, true);
+            return null;
+        }
+    }
+
+    // ─── Timer ──────────────────────────────────────────────
+    function startTimers() {
+        if (timerInterval) return;
+        timerInterval = setInterval(() => {
+            document.querySelectorAll('.timer-badge').forEach(el => {
+                const start = el.dataset.started;
+                if (start) {
+                    const diff = Math.floor((Date.now() - parseInt(start)) / 1000);
+                    const m = Math.floor(diff / 60);
+                    const s = diff % 60;
+                    el.textContent = '⏱ ' + m.toString().padStart(2,'0') + ':' + s.toString().padStart(2,'0');
+                }
+            });
+        }, 1000);
+    }
+
+    // ─── Load Queue ──────────────────────────────────────────
+    async function loadQueue() {
+        const data = await apiCall(
+            `/dashboard?department=${encodeURIComponent(currentDept)}&limit=50`
+        );
+        if (!data) return;
+
+        currentData = data;
+
+        document.getElementById('loadingScreen').style.display = 'none';
+
+        document.getElementById('statWaiting').textContent = data.stats.waiting;
+        document.getElementById('statCalled').textContent = data.stats.called;
+        document.getElementById('statActive').textContent = data.stats.in_progress;
+
+        document.getElementById('badgeWaiting').textContent = data.stats.waiting;
+        document.getElementById('badgeActive').textContent = data.stats.called + data.stats.in_progress;
+
+        renderQueue();
+        document.getElementById('lastUpdated').textContent =
+            'Updated: ' + new Date().toLocaleTimeString();
+    }
+
+    // ─── Render Queue ────────────────────────────────────────
+    function renderQueue() {
+        const container = document.getElementById('queueList');
+        const entries = currentData.entries || [];
+
+        let filtered;
+        if (currentTab === 'waiting') {
+            filtered = entries.filter(e => e.status === 'WAITING');
+        } else if (currentTab === 'active') {
+            filtered = entries.filter(e => e.status === 'CALLED' || e.status === 'IN_PROGRESS');
+        } else {
+            filtered = entries.filter(e =>
+                e.status === 'COMPLETED' || e.status === 'REPORT_READY' || e.status === 'DELIVERED'
+            );
+        }
+
+        if (filtered.length === 0) {
+            container.innerHTML = `<div class="empty-state">
+                <div class="icon">✨</div>
+                <div class="text">No ${currentTab} entries in ${currentDept || 'this department'}</div>
+            </div>`;
+            return;
+        }
+
+        container.innerHTML = filtered.map(e => {
+            const isCurrent = e.status === 'IN_PROGRESS';
+            const statusKey = e.status === 'CALLED' ? 'called' :
+                e.status === 'IN_PROGRESS' ? 'progress' : 'completed';
+            const statusClass = e.status.toLowerCase().replace('_', '-');
+            const startedAt = e.started_at ? new Date(e.started_at).getTime() : null;
+
+            return `
+            <div class="queue-card status-${statusClass} ${isCurrent ? 'current-patient' : ''}"
+                 id="card_${e.id}">
+                <div class="card-row1">
+                    <div class="token-badge">${e.token_number}</div>
+                    <div class="card-info">
+                        <div class="patient-name" onclick="showPatientInfo('${e.patient_id}', '${e.id}')">
+                            ${e.patient_name}
+                        </div>
+                        <div class="service-name">${e.service_name}</div>
+                        <span class="room-tag">📍 ${e.room || 'Room —'}</span>
+                        ${startedAt ? `<span class="timer-badge" data-started="${startedAt}">⏱ 00:00</span>` : ''}
+                        <div class="status-pill ${statusClass}">${e.status_display || e.status}</div>
+                    </div>
+                </div>
+                ${renderActions(e)}
+            </div>`;
+        }).join('');
+
+        // Start timers if any in-progress entries
+        if (filtered.some(e => e.status === 'IN_PROGRESS')) {
+            startTimers();
+        }
+    }
+
+    // ─── Actions ─────────────────────────────────────────────
+    function renderActions(entry) {
+        const eid = entry.id;
+        const notesId = 'notes_' + eid;
+
+        if (entry.status === 'WAITING') {
+            return `
+            <div class="card-row2">
+                <button class="btn-action btn-call" onclick="doAction('${eid}', 'call')">📞 Call</button>
+                <button class="btn-action btn-notes" onclick="toggleNotes('${notesId}')">📝 Notes</button>
+                <button class="btn-action btn-alert" onclick="sendAlert('${eid}', '${entry.patient_name}', '${entry.room}')">🔔 Alert</button>
+            </div>
+            <div class="notes-box" id="${notesId}">
+                <textarea placeholder="Add notes for this test..." id="${notesId}_text"></textarea>
+                <button class="notes-save" onclick="saveNotes('${eid}', '${notesId}')">Save</button>
+            </div>`;
+        }
+        if (entry.status === 'CALLED') {
+            return `
+            <div class="card-row2">
+                <button class="btn-action btn-start" onclick="doAction('${eid}', 'start')">▶ Start Test</button>
+                <button class="btn-action btn-notes" onclick="toggleNotes('${notesId}')">📝 Notes</button>
+            </div>
+            <div class="extra-actions">
+                <button class="btn-extra" onclick="doAction('${eid}', 'recall')">↩ Send Back</button>
+                <button class="btn-extra" onclick="sendAlert('${eid}', '${entry.patient_name}', '${entry.room}')">🔔 Remind</button>
+            </div>
+            <div class="notes-box" id="${notesId}">
+                <textarea placeholder="Add notes for this test..." id="${notesId}_text"></textarea>
+                <button class="notes-save" onclick="saveNotes('${eid}', '${notesId}')">Save</button>
+            </div>`;
+        }
+        if (entry.status === 'IN_PROGRESS') {
+            const rejectBanner = entry.alert_message
+                ? `<div style="background:#fce4ec;color:#c62828;padding:6px 10px;border-radius:8px;font-size:12px;margin-bottom:6px;font-weight:600;">🔄 Doctor rejected: ${entry.alert_message}</div>`
+                : '';
+            return `
+            ${rejectBanner}
+            <div class="card-row2">
+                <button class="btn-action btn-complete" onclick="doAction('${eid}', 'complete')">✅ Complete</button>
+                <button class="btn-action btn-notes" onclick="toggleNotes('${notesId}')">📝 Notes</button>
+            </div>
+            <div class="extra-actions">
+                <button class="btn-extra" onclick="doAction('${eid}', 'cancel')" style="color:#e74c3c;">✕ Cancel Test</button>
+            </div>
+            <div class="notes-box" id="${notesId}">
+                <textarea placeholder="Add notes for this test..." id="${notesId}_text"></textarea>
+                <button class="notes-save" onclick="saveNotes('${eid}', '${notesId}')">Save</button>
+            </div>`;
+        }
+        if (entry.status === 'COMPLETED') {
+            return `
+            <div class="card-row2">
+                <button class="btn-action btn-report" onclick="doAction('${eid}', 'report-ready')">📄 Report Ready</button>
+            </div>
+            <div class="extra-actions">
+                <button class="btn-extra" onclick="doAction('${eid}', 'cancel')" style="color:#e74c3c;">✕ Cancel</button>
+            </div>`;
+        }
+        if (entry.status === 'REPORT_READY') {
+            return `<div style="text-align:center; padding:8px; font-size:13px; opacity:0.6;">📋 Awaiting delivery by reception</div>`;
+        }
+        if (entry.status === 'DELIVERED') {
+            return `<div style="text-align:center; padding:8px; font-size:13px; opacity:0.4;">✅ Delivered</div>`;
+        }
+        return '';
+    }
+
+    // ─── Do Action ───────────────────────────────────────────
+    async function doAction(entryId, action) {
+        const result = await apiCall('/action', {
+            method: 'POST',
+            body: JSON.stringify({
+                entry_id: entryId,
+                action: action,
+                updated_by: staffName,
+            }),
+        });
+        if (result) {
+            showToast(result.message || action + ' successful');
+            await loadQueue();
+
+            // Play a subtle sound effect
+            try {
+                const ctx = new (window.AudioContext || window.webkitAudioContext)();
+                const osc = ctx.createOscillator();
+                const gain = ctx.createGain();
+                osc.connect(gain);
+                gain.connect(ctx.destination);
+                gain.gain.value = 0.08;
+                osc.frequency.value = action === 'complete' ? 880 : 440;
+                osc.start();
+                osc.stop(ctx.currentTime + 0.1);
+            } catch {}
+        }
+    }
+
+    // ─── Notes ───────────────────────────────────────────────
+    function toggleNotes(notesId) {
+        const box = document.getElementById(notesId);
+        if (box) box.classList.toggle('show');
+    }
+
+    function saveNotes(entryId, notesId) {
+        const text = document.getElementById(notesId + '_text').value.trim();
+        if (!text) { showToast('Write something first', true); return; }
+        showToast('📝 Notes saved (local)');
+        document.getElementById(notesId).classList.remove('show');
+    }
+
+    // ─── Send Alert ──────────────────────────────────────────
+    async function sendAlert(entryId, patientName, room) {
+        const message = `Please proceed to ${room}`;
+        const result = await apiCall('/alert', {
+            method: 'POST',
+            body: JSON.stringify({
+                entry_id: entryId,
+                message: message,
+                updated_by: staffName,
+            }),
+        });
+        if (result) {
+            showToast('🔔 Alert sent to ' + patientName);
+        }
+    }
+
+    // ─── Patient Info Modal ──────────────────────────────────
+    async function showPatientInfo(patientId, entryId) {
+        document.getElementById('modalTitle').textContent = '👤 Patient Details';
+
+        try {
+            const resp = await fetch(`${PATIENT_API}/${patientId}`);
+            if (!resp.ok) throw new Error('Not found');
+            const data = await resp.json();
+
+            // Also get timeline
+            let timelineHTML = '';
+            try {
+                const tlResp = await fetch(`${PATIENT_API}/${patientId}/timeline`);
+                if (tlResp.ok) {
+                    const tlData = await tlResp.json();
+                    timelineHTML = `
+                        <div style="margin:12px 0;">
+                            <div style="font-size:13px; opacity:0.5; margin-bottom:8px;">⏱ PATIENT TIMELINE</div>
+                            <div class="timeline-item">
+                                <span class="tl-time">Today</span>
+                                <span class="tl-event">Registered · 🆔 ${data.patient_id}</span>
+                            </div>
+                            <div class="timeline-item">
+                                <span class="tl-time">—</span>
+                                <span class="tl-event">Total visits: ${tlData.total_visits || data.total_visits || 0}</span>
+                            </div>
+                            ${tlData.last_visit_at ? `
+                            <div class="timeline-item">
+                                <span class="tl-time">—</span>
+                                <span class="tl-event">Last visit: ${new Date(tlData.last_visit_at).toLocaleDateString()}</span>
+                            </div>` : ''}
+                        </div>`;
+                }
+            } catch {}
+
+            document.getElementById('modalBody').innerHTML = `
+                <div style="font-size:20px; font-weight:700; margin-bottom:4px;">${data.name}</div>
+                <div style="font-size:14px; opacity:0.5; margin-bottom:12px;">
+                    🆔 ${data.patient_id} · ${data.age}y ${data.gender} · 📞 ${data.phone || '—'}
+                </div>
+                ${timelineHTML}
+                <div style="font-size:13px; opacity:0.5; margin-bottom:8px;">📋 MEDICAL HISTORY</div>
+                ${(data.medical_history && data.medical_history.length > 0)
+                    ? data.medical_history.map((h, i) =>
+                        `<div class="timeline-item">
+                            <span class="tl-time">#${i+1}</span>
+                            <span class="tl-event">${h.condition || h.notes || 'Record'}</span>
+                        </div>`
+                    ).join('')
+                    : '<div style="font-size:13px; opacity:0.3;">No medical history recorded</div>'
+                }
+            `;
+        } catch {
+            document.getElementById('modalBody').innerHTML = '<div style="text-align:center; padding:20px; opacity:0.5;">⚠️ Could not load patient details</div>';
+        }
+
+        document.getElementById('modalOverlay').classList.add('show');
+    }
+
+    // ─── About Modal ─────────────────────────────────────────
+    function showAbout() {
+        document.getElementById('modalTitle').textContent = '⏱ About';
+        document.getElementById('modalBody').innerHTML = `
+            <div style="padding:8px 0;">
+                <p><strong>Staff:</strong> ${staffName}</p>
+                <p><strong>Department:</strong> ${currentDept || '—'}</p>
+                <p><strong>Auto-refresh:</strong> Every ${REFRESH_SECONDS}s</p>
+                <p style="margin-top:12px; opacity:0.5; font-size:12px;">
+                    {{CLINIC_NAME}} — Technician Workspace<br>
+                    Module 2 of Phase 1
+                </p>
+            </div>
+        `;
+        document.getElementById('modalOverlay').classList.add('show');
+    }
+
+    // ─── Close Modal ─────────────────────────────────────────
+    function closeModal() {
+        document.getElementById('modalOverlay').classList.remove('show');
+    }
+    document.getElementById('modalOverlay').addEventListener('click', function(e) {
+        if (e.target === this) closeModal();
+    });
+
+    // ─── Tab ─────────────────────────────────────────────────
+    function switchTab(tab, btn) {
+        currentTab = tab;
+        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        renderQueue();
+    }
+
+    // ─── Department ──────────────────────────────────────────
+    function changeDept(dept, btn) {
+        currentDept = dept;
+        document.getElementById('departmentLabel').textContent = dept;
+        document.querySelectorAll('.dept-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        loadQueue();
+    }
+
+    // ─── Fetch Departments ──────────────────────────────────
+    async function fetchDepartments() {
+        try {
+            const resp = await fetch(`${CLINIC_API}/services?active_only=true`);
+            if (!resp.ok) throw new Error('Failed');
+            const data = await resp.json();
+            const services = data.services || [];
+
+            const deptResp = await fetch(`${CLINIC_API}/departments?active_only=true`);
+            let depts = [];
+            if (deptResp.ok) {
+                const dd = await deptResp.json();
+                depts = dd.departments || [];
+            }
+
+            const deptBar = document.getElementById('deptBar');
+            deptBar.innerHTML = '';
+
+            // Add buttons per service
+            services.forEach(s => {
+                const btn = document.createElement('button');
+                btn.className = 'dept-btn';
+                btn.innerHTML = `${s.display_name || s.code}`;
+                btn.onclick = function() { changeDept(s.code, this); };
+                deptBar.appendChild(btn);
+            });
+
+            // Set initial department
+            if (!currentDept && services.length > 0) {
+                currentDept = services[0].code;
+            }
+
+            // Activate first button
+            const firstBtn = document.querySelector('.dept-btn');
+            if (firstBtn) {
+                firstBtn.classList.add('active');
+            }
+
+            document.getElementById('departmentLabel').textContent = currentDept || '—';
+
+        } catch (err) {
+            console.warn('Failed to load services:', err);
+            currentDept = 'ECG';
+            document.getElementById('departmentLabel').textContent = currentDept;
+            const deptBar = document.getElementById('deptBar');
+            deptBar.innerHTML = `
+                <button class="dept-btn active" onclick="changeDept('ECG', this)">❤️ ECG</button>
+                <button class="dept-btn" onclick="changeDept('Echo', this)">🫀 Echo</button>
+                <button class="dept-btn" onclick="changeDept('TMT', this)">🏃 TMT</button>
+            `;
+        }
+    }
+
+    // ─── Init ───────────────────────────────────────────────
+    async function start() {
+        await fetchDepartments();
+        loadQueue();
+        refreshInterval = setInterval(() => {
+            if (currentTab !== 'done') loadQueue();
+        }, REFRESH_SECONDS * 1000);
+        startTimers();
+    }
+
+    start();
+</script>
+</body>
+</html>

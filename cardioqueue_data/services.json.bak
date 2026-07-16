@@ -1,0 +1,82 @@
+[
+  {
+    "code": "ECG",
+    "display_name": "Electrocardiogram",
+    "department_code": "CARDIO",
+    "room_name": "ECG Room 1",
+    "avg_test_time": 10,
+    "is_active": true,
+    "created_at": "2026-07-14T18:26:38.951666+00:00",
+    "updated_at": "2026-07-14T18:26:38.951666+00:00"
+  },
+  {
+    "code": "Echo",
+    "display_name": "Echocardiogram",
+    "department_code": "CARDIO",
+    "room_name": "Echo Room 1",
+    "avg_test_time": 20,
+    "is_active": true,
+    "created_at": "2026-07-14T18:26:38.951666+00:00",
+    "updated_at": "2026-07-14T18:26:38.951666+00:00"
+  },
+  {
+    "code": "TMT",
+    "display_name": "Treadmill Test",
+    "department_code": "CARDIO",
+    "room_name": "TMT Room 1",
+    "avg_test_time": 30,
+    "is_active": true,
+    "created_at": "2026-07-14T18:26:38.951666+00:00",
+    "updated_at": "2026-07-14T18:26:38.951666+00:00"
+  },
+  {
+    "code": "Holter",
+    "display_name": "Holter Monitor",
+    "department_code": "CARDIO",
+    "room_name": "Holter Room",
+    "avg_test_time": 15,
+    "is_active": true,
+    "created_at": "2026-07-14T18:26:38.951666+00:00",
+    "updated_at": "2026-07-14T18:26:38.951666+00:00"
+  },
+  {
+    "code": "ABPM",
+    "display_name": "Ambulatory BP Monitor",
+    "department_code": "CARDIO",
+    "room_name": "ABPM Room",
+    "avg_test_time": 15,
+    "is_active": true,
+    "created_at": "2026-07-14T18:26:38.951666+00:00",
+    "updated_at": "2026-07-14T18:26:38.951666+00:00"
+  },
+  {
+    "code": "OPD",
+    "display_name": "OPD Consultation",
+    "department_code": "CARDIO",
+    "room_name": "OPD Room",
+    "avg_test_time": 10,
+    "is_active": true,
+    "created_at": "2026-07-14T18:26:38.951666+00:00",
+    "updated_at": "2026-07-14T18:26:38.951666+00:00"
+  },
+  {
+    "code": "X-Ray",
+    "display_name": "X-Ray",
+    "department_code": "CARDIO",
+    "room_name": "X-Ray Room 1",
+    "avg_test_time": 10,
+    "is_active": true,
+    "created_at": "2026-07-14T18:26:38.951666+00:00",
+    "updated_at": "2026-07-14T18:26:38.951666+00:00"
+  },
+  {
+    "code": "Ultrasound",
+    "display_name": "Ultrasound",
+    "department_code": "CARDIO",
+    "room_name": "Ultrasound Room 1",
+    "avg_test_time": 20,
+    "is_active": true,
+    "created_at": "2026-07-14T18:26:38.951666+00:00",
+    "updated_at": "2026-07-14T18:26:38.951666+00:00"
+  }
+]
