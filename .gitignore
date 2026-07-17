@@ -11,8 +11,8 @@ __pycache__/
 dist/
 build/
 
-# Streamlit
-.streamlit/
+# Streamlit local secrets only (not config.toml — that must be pushed)
+.streamlit/secrets.toml
 
 # IDE
 .vscode/

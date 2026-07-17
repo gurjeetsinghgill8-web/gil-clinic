@@ -20,12 +20,23 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy the application
 COPY . .
 
-# Expose Streamlit default port
-EXPOSE 8501
+# Railway injects $PORT — expose it dynamically
+EXPOSE ${PORT:-8501}
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8501')" || exit 1
+# Health check using Railway's dynamic port
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=5 \
+    CMD python -c "import urllib.request, os; urllib.request.urlopen('http://localhost:' + os.environ.get('PORT','8501'))" || exit 1
 
-# Run Streamlit
-CMD ["streamlit", "run", "app.py", "--server.port=8501", "--server.address=0.0.0.0"]
+# Run Streamlit with mobile-network-safe flags:
+#   --server.port=$PORT         → Railway's dynamic port
+#   --server.address=0.0.0.0   → Accept connections from all interfaces
+#   --server.enableCORS=false  → Mobile carrier proxy compatibility
+#   --server.enableWebsocketCompression=false → Fixes Jio/Airtel mobile data issues
+CMD sh -c "streamlit run app.py \
+    --server.port=${PORT:-8501} \
+    --server.address=0.0.0.0 \
+    --server.enableCORS=false \
+    --server.enableXsrfProtection=false \
+    --server.enableWebsocketCompression=false \
+    --server.headless=true \
+    --browser.gatherUsageStats=false"
