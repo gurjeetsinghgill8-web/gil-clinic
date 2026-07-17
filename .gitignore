@@ -32,3 +32,8 @@ nul
 # GHOS (separate project)
 ghos/
 ghos_memory/
+
+# Node / Playwright (browser automation deps — not part of Python app)
+node_modules/
+package-lock.json
+package.json

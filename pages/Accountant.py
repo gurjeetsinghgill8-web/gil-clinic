@@ -9,7 +9,10 @@ from datetime import datetime, date
 from utils.billing import get_bills_for_date, get_today_billing_summary
 from utils.finance import add_expense, get_expenses, get_monthly_summary, EXPENSE_CATEGORIES
 
-st.set_page_config("Accountant", layout="wide")
+try:
+    st.set_page_config("Accountant", layout="wide")
+except Exception:
+    pass
 
 
 def show():

@@ -9,7 +9,10 @@ import datetime
 from utils.lab import (register_sample, update_sample_status, enter_result,
                        get_pending_samples)
 
-st.set_page_config("Lab Technician", layout="wide")
+try:
+    st.set_page_config("Lab Technician", layout="wide")
+except Exception:
+    pass
 
 
 def show():

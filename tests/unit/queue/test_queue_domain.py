@@ -53,8 +53,8 @@ class TestQueueStatus:
         assert not QueueStatus.DELIVERED.can_transition_to(QueueStatus.WAITING)
         assert not QueueStatus.CANCELLED.can_transition_to(QueueStatus.WAITING)
         assert not QueueStatus.NO_SHOW.can_transition_to(QueueStatus.WAITING)
-        # COMPLETED cannot go back to IN_PROGRESS
-        assert not QueueStatus.COMPLETED.can_transition_to(QueueStatus.IN_PROGRESS)
+        # COMPLETED can go back to IN_PROGRESS (for tech correction)
+        assert QueueStatus.COMPLETED.can_transition_to(QueueStatus.IN_PROGRESS)
 
     def test_active_statuses(self):
         """Verify which statuses are considered active."""

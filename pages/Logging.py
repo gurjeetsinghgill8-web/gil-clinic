@@ -1,6 +1,9 @@
 import streamlit as st
 from utils.logging import get_logs
-st.set_page_config('System Logs',layout='wide')
+try:
+    st.set_page_config('System Logs',layout='wide')
+except Exception:
+    pass
 def show():
     st.title('System Logs')
     level=st.selectbox('Filter',['','info','warning','error','debug'])

@@ -7,7 +7,10 @@ from utils.push_notifications import (register_device, send_push_notification,
                                        broadcast_notification, get_notification_log,
                                        NOTIFICATION_CATEGORIES)
 
-st.set_page_config("Push Notifications", layout="wide")
+try:
+    st.set_page_config("Push Notifications", layout="wide")
+except Exception:
+    pass
 
 
 def show():

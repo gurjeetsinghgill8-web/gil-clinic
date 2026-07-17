@@ -5,7 +5,10 @@ AI Dietician Page — Personalized Diet Plan Generator
 import streamlit as st
 from utils.ai_dietician import generate_diet_plan, get_recent_plans
 
-st.set_page_config("AI Dietician", layout="wide")
+try:
+    st.set_page_config("AI Dietician", layout="wide")
+except Exception:
+    pass
 
 
 def show():

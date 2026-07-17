@@ -5,7 +5,10 @@ Email Dashboard — Send Emails, View Log
 import streamlit as st
 from utils.email import send_email, get_email_log
 
-st.set_page_config("Email Dashboard", layout="wide")
+try:
+    st.set_page_config("Email Dashboard", layout="wide")
+except Exception:
+    pass
 
 
 def show():

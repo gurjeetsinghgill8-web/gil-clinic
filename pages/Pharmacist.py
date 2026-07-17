@@ -4,7 +4,10 @@ Pharmacist Dashboard
 import streamlit as st
 from utils.inventory import get_items, get_low_stock_items, get_expiring_batches
 
-st.set_page_config("Pharmacist", layout="wide")
+try:
+    st.set_page_config("Pharmacist", layout="wide")
+except Exception:
+    pass
 
 def show():
     st.title("Pharmacist Portal")

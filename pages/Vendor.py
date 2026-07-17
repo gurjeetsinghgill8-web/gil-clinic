@@ -5,7 +5,10 @@ Vendor Management Page
 import streamlit as st
 from utils.vendor import create_vendor, get_vendors
 
-st.set_page_config("Vendors", layout="wide")
+try:
+    st.set_page_config("Vendors", layout="wide")
+except Exception:
+    pass
 
 
 def show():

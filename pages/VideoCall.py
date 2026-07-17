@@ -5,7 +5,10 @@ Video Call / Telemedicine Page
 import streamlit as st
 from utils.video_call import create_room, start_room, end_room, get_rooms
 
-st.set_page_config("Telemedicine", layout="wide")
+try:
+    st.set_page_config("Telemedicine", layout="wide")
+except Exception:
+    pass
 
 
 def show():

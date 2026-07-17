@@ -10,7 +10,10 @@ from utils.hr import get_staff
 from utils.billing import get_today_billing_summary
 from utils.finance import get_monthly_summary
 
-st.set_page_config("Admin Panel", layout="wide")
+try:
+    st.set_page_config("Admin Panel", layout="wide")
+except Exception:
+    pass
 
 def show():
     st.title("Admin Panel")

@@ -1,6 +1,9 @@
 import streamlit as st
 from utils.sms_upgrade import create_template,get_templates,send_sms_v2,get_sms_log_v2
-st.set_page_config('SMS Manager',layout='wide')
+try:
+    st.set_page_config('SMS Manager',layout='wide')
+except Exception:
+    pass
 def show():
     st.title('SMS Manager')
     t1,t2,t3=st.tabs(['Send SMS','Templates','Delivery Log'])

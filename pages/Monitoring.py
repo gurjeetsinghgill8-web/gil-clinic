@@ -1,6 +1,9 @@
 import streamlit as st
 from utils.monitoring import get_db_size,get_page_count,get_util_count
-st.set_page_config('Monitoring',layout='wide')
+try:
+    st.set_page_config('Monitoring',layout='wide')
+except Exception:
+    pass
 def show():
     st.title('System Monitoring')
     c1,c2,c3,c4=st.columns(4)

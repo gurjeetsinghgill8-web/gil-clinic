@@ -298,3 +298,39 @@ class QueueEntry(BaseEntity):
             f"{self.patient_name} "
             f"[{status_str}]>"
         )
+
+
+# ─── Constant Definitions for Domain Metadata (expected by unit tests) ────
+SERVICE_NAMES = {
+    "ECG": "Electrocardiogram",
+    "Echo": "Echocardiogram",
+    "TMT": "Treadmill Test",
+    "Holter": "Holter Monitoring",
+    "ABPM": "Ambulatory Blood Pressure Monitoring",
+    "OPD": "Outpatient Department",
+    "X-Ray": "X-Ray",
+    "Ultrasound": "Ultrasound",
+}
+
+ROOM_MAPPINGS = {
+    "ECG": "ECG Room",
+    "Echo": "Echo Room",
+    "TMT": "TMT Room",
+    "Holter": "Holter Room",
+    "ABPM": "ABPM Room",
+    "OPD": "OPD Room",
+    "X-Ray": "X-Ray Room",
+    "Ultrasound": "Ultrasound Room",
+}
+
+AVG_TEST_TIME_MINUTES = {
+    "ECG": 10,
+    "Echo": 20,
+    "TMT": 30,
+    "Holter": 15,
+    "ABPM": 15,
+    "OPD": 10,
+    "X-Ray": 10,
+    "Ultrasound": 20,
+}
+

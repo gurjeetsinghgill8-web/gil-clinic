@@ -1,6 +1,9 @@
 import streamlit as st
 from utils.multi_branch import add_branch,get_branches
-st.set_page_config('Multi-Branch',layout='wide')
+try:
+    st.set_page_config('Multi-Branch',layout='wide')
+except Exception:
+    pass
 def show():
     st.title('Branch Management')
     t1,t2=st.tabs(['Branches','Add Branch'])

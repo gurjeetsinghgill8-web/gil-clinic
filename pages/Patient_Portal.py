@@ -10,7 +10,10 @@ from llm_harness import get_harness
 from utils.db import get_patient_by_id, get_patient_by_mobile
 from utils.config import HOSPITAL_NAME, CLINIC_SPECIALTY, CLINIC_LOGO
 
-st.set_page_config("Patient Portal", layout="wide")
+try:
+    st.set_page_config("Patient Portal", layout="wide")
+except Exception:
+    pass
 
 
 def show():

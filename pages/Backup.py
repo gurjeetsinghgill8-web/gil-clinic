@@ -5,7 +5,10 @@ Backup & Recovery Page
 import streamlit as st
 from utils.backup import create_backup, get_backup_history, get_backup_stats
 
-st.set_page_config("Backup", layout="wide")
+try:
+    st.set_page_config("Backup", layout="wide")
+except Exception:
+    pass
 
 
 def show():

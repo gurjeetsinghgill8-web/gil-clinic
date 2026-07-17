@@ -5,7 +5,10 @@ import streamlit as st
 from datetime import datetime, date
 from utils.db import get_patient_by_id, get_patient_by_mobile
 
-st.set_page_config("Patient Timeline", layout="wide")
+try:
+    st.set_page_config("Patient Timeline", layout="wide")
+except Exception:
+    pass
 
 def show():
     st.title("Patient Journey Timeline")

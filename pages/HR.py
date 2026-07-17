@@ -6,7 +6,10 @@ import streamlit as st
 from utils.hr import add_staff, get_staff, mark_attendance, apply_leave
 import datetime
 
-st.set_page_config("HR Dashboard", layout="wide")
+try:
+    st.set_page_config("HR Dashboard", layout="wide")
+except Exception:
+    pass
 
 
 def show():

@@ -1,6 +1,9 @@
 import streamlit as st
 from utils.encryption import encrypt_text,decrypt_text
-st.set_page_config('Encryption',layout='wide')
+try:
+    st.set_page_config('Encryption',layout='wide')
+except Exception:
+    pass
 def show():
     st.title('Encryption Tool')
     st.caption('AES-256-GCM encryption for sensitive patient data')

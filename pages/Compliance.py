@@ -6,7 +6,10 @@ import streamlit as st
 from utils.compliance import (record_consent, get_consent_status,
                                create_data_rights_request, CONSENT_TYPES)
 
-st.set_page_config("Compliance", layout="wide")
+try:
+    st.set_page_config("Compliance", layout="wide")
+except Exception:
+    pass
 
 
 def show():

@@ -4,7 +4,10 @@ Patient Tracking — Department Flow Monitor
 import streamlit as st
 from llm_harness import get_harness
 
-st.set_page_config("Patient Tracking", layout="wide")
+try:
+    st.set_page_config("Patient Tracking", layout="wide")
+except Exception:
+    pass
 
 def show():
     st.title("Patient Tracking")

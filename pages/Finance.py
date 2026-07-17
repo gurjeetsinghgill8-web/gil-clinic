@@ -7,7 +7,10 @@ from utils.finance import add_expense, get_expenses, get_monthly_summary, EXPENS
 from utils.billing import get_today_billing_summary
 import datetime
 
-st.set_page_config("Finance", layout="wide")
+try:
+    st.set_page_config("Finance", layout="wide")
+except Exception:
+    pass
 
 
 def show():

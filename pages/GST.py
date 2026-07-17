@@ -8,7 +8,10 @@ from utils.gst import (generate_gst_invoice, get_gst_invoices, get_gst_summary,
                        get_hsn_for_test, get_gst_rate, calculate_tax)
 from utils.billing import get_today_billing_summary
 
-st.set_page_config("GST Compliance", layout="wide")
+try:
+    st.set_page_config("GST Compliance", layout="wide")
+except Exception:
+    pass
 
 
 def show():

@@ -8,7 +8,10 @@ from utils.vendor import get_vendors
 from utils.inventory import get_items, add_batch
 import datetime
 
-st.set_page_config("Purchase Orders", layout="wide")
+try:
+    st.set_page_config("Purchase Orders", layout="wide")
+except Exception:
+    pass
 
 
 def show():

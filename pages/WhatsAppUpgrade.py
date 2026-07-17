@@ -1,7 +1,10 @@
 import streamlit as st
 from utils.whatsapp_upgrade import send_template, send_text, get_whatsapp_log, get_templates
 
-st.set_page_config("WhatsApp Business", layout="wide")
+try:
+    st.set_page_config("WhatsApp Business", layout="wide")
+except Exception:
+    pass
 
 def show():
     st.title("WhatsApp Business Cloud API")

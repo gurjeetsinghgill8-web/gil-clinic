@@ -5,7 +5,10 @@ Voice Call Page — Call Log, Initiate Calls
 import streamlit as st
 from utils.voice_call import initiate_call, update_call_status, get_call_log
 
-st.set_page_config("Voice Calls", layout="wide")
+try:
+    st.set_page_config("Voice Calls", layout="wide")
+except Exception:
+    pass
 
 
 def show():

@@ -21,6 +21,10 @@ from llm_harness import get_harness
 from utils.config import APP_NAME, HOSPITAL_NAME, CLINIC_SPECIALTY, CLINIC_LOGO, ADMIN_USERNAME, ADMIN_PASS
 from utils.db import get_all_active_users, verify_login
 from utils.notifications import request_notification_permission_script
+from utils.department_status import (
+    DEPARTMENT_STATUS, DEPARTMENT_CATEGORIES, get_status_icon,
+    get_status_badge, UNDER_CONSTRUCTION_SCRIPT
+)
 
 from datetime import datetime
 
@@ -35,13 +39,15 @@ INACTIVITY_TIMEOUT_MINUTES = 30  # Auto-logout after this many idle minutes
 def load_css():
     """Load custom CSS from assets/style.css."""
     try:
-        with open("assets/style.css") as f:
+        with open("assets/style.css", "r", encoding="utf-8") as f:
             st.markdown(f"<style>{f.read()}</style>", unsafe_allow_html=True)
     except FileNotFoundError:
         pass  # CSS is optional
 
 
 load_css()
+# Inject Under Construction popup script
+st.markdown(UNDER_CONSTRUCTION_SCRIPT, unsafe_allow_html=True)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════════════════════
@@ -608,43 +614,124 @@ def show_home():
     except Exception:
         st.info("📊 Awaiting data...")
 
-    # ─── Module Overview ────────────────────────────────────────────────────
+    # ─── Module Overview with Status Indicators ───────────────────────────
     st.markdown("---")
-    col1, col2 = st.columns([3, 2])
+    st.markdown("### 🏥 Department Status")
 
-    with col1:
-        st.markdown(f"""
-        ### 👋 Welcome to CardioQueue
+    st.markdown("""
+    <style>
+    .dept-card-container {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+        gap: 14px;
+        margin-bottom: 20px;
+    }
+    .dept-card {
+        text-decoration: none;
+        color: inherit;
+        border-radius: 14px;
+        padding: 16px;
+        text-align: center;
+        box-shadow: 0 4px 10px rgba(0,0,0,0.04);
+        transition: all 0.28s cubic-bezier(0.4, 0, 0.2, 1);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        border: 2px solid transparent;
+        cursor: pointer;
+    }
+    .dept-card:hover {
+        transform: translateY(-4px);
+        box-shadow: 0 10px 20px rgba(0,0,0,0.08);
+    }
+    .dept-card.live {
+        background: linear-gradient(135deg, #eafaf1 0%, #d5f5e3 100%);
+        border-color: #2ecc7140;
+    }
+    .dept-card.live:hover {
+        border-color: #2ecc71;
+    }
+    .dept-card.live .card-title {
+        color: #1b5e20;
+    }
+    .dept-card.building {
+        background: linear-gradient(135deg, #fdf2f2 0%, #fde8e8 100%);
+        border-color: #f0525230;
+    }
+    .dept-card.building:hover {
+        border-color: #f05252;
+    }
+    .dept-card.building .card-title {
+        color: #9b1c1c;
+    }
+    .card-icon {
+        font-size: 1.75rem;
+        margin-bottom: 6px;
+    }
+    .card-title {
+        font-weight: 700;
+        font-size: 0.85rem;
+        margin-bottom: 6px;
+        font-family: 'Inter', system-ui, sans-serif;
+    }
+    .card-badge {
+        padding: 2px 8px;
+        border-radius: 10px;
+        font-size: 0.65rem;
+        font-weight: 800;
+        color: white;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+    .card-badge.live-badge {
+        background: linear-gradient(135deg, #2ecc71, #27ae60);
+    }
+    .card-badge.building-badge {
+        background: linear-gradient(135deg, #f05252, #e02424);
+    }
+    </style>
+    """, unsafe_allow_html=True)
 
-        A smart queue management system for {CLINIC_SPECIALTY.lower()} departments.
+    # Legend
+    legend_cols = st.columns([1, 1, 4])
+    with legend_cols[0]:
+        st.markdown('<span style="color:#2ecc71;font-weight:700;">🟢 LIVE / Working</span>', unsafe_allow_html=True)
+    with legend_cols[1]:
+        st.markdown('<span style="color:#f05252;font-weight:700;">🔴 Building / Under Construction</span>', unsafe_allow_html=True)
 
-        **Modules:**
-        - 📋 **Reception** — Register patients, print tokens, view status
-        - 📊 **ECG / Echo / TMT / OPD** — Technician dashboards with live queues
-        - 🩺 **Doctor** — Manage reports and delivery
-        - 🔍 **Patient Status** — Self-service check for patients
-        - 📈 **Manager Dashboard** — Full clinic overview
+    st.markdown(
+        '<div style="font-size:0.8rem;color:#636e72;margin-bottom:1.5rem;">'
+        'Click any department card below to navigate directly. Under construction modules show a premium construction popup.</div>',
+        unsafe_allow_html=True
+    )
 
-        **Key Features:**
-        - ✅ Real-time queue management
-        - ✅ Browser notifications on mobile
-        - ✅ Token printing & QR codes
-        - ✅ Zero monthly cost
-        - ✅ PIN-based staff login
-        - ✅ PWA support for mobile
-        """)
-
-    with col2:
-        st.markdown("### 🏥 Department Stats")
-        try:
-            harness = get_harness()
-            stats = harness.get_all_dashboard_stats()
-            for dept, s in stats.items():
-                waiting = s.get("waiting", 0)
-                completed = s.get("completed", 0)
-                st.metric(f"{dept}", f"{waiting} waiting", f"{completed} done")
-        except Exception:
-            st.info("Awaiting data...")
+    for category, depts in DEPARTMENT_CATEGORIES.items():
+        st.markdown(f"#### {category}")
+        
+        cards_html = '<div class="dept-card-container">'
+        for dept_name, (emoji, is_working) in depts.items():
+            dept_key = dept_name.lower().replace(" ", "_").replace("-", "_")
+            if is_working:
+                card_class = "live"
+                badge_class = "live-badge"
+                badge_text = "LIVE"
+                href = f"/?nav={dept_key}"
+            else:
+                card_class = "building"
+                badge_class = "building-badge"
+                badge_text = "Building"
+                href = f"/?under_construction={dept_name}"
+                
+            cards_html += f"""
+            <a href="{href}" target="_self" class="dept-card {card_class}">
+                <div class="card-icon">{emoji}</div>
+                <div class="card-title">{dept_name}</div>
+                <span class="card-badge {badge_class}">{badge_text}</span>
+            </a>
+            """
+        cards_html += '</div>'
+        st.markdown(cards_html, unsafe_allow_html=True)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -655,8 +742,54 @@ def main():
     """Main application entry point."""
     init_session()
 
-    # ─── Detect ?patient=XXX from URL for QR-based auto-load ─────────────
+    # ─── Detect query-parameter navigation or under construction alerts ───
     query_params = st.query_params
+    nav_param = query_params.get("nav", None)
+    if nav_param:
+        route_map = {
+            "reception": "📋 Reception",
+            "ecg": "📊 ECG", "echo": "📊 Echo", "tmt": "📊 TMT",
+            "opd": "🩺 OPD", "x_ray": "🩻 X-Ray", "ultrasound": "📡 Ultrasound",
+            "lab": "🧪 Lab", "pharmacy": "💊 Pharmacy",
+            "doctor": "🩺 Doctor", "nurse": "👩‍⚕️ Nurse Station",
+            "manager": "📈 Manager Dashboard", "admin": "👑 Admin Panel",
+            "patient_status": "📋 Patient Status", "patient_history": "📋 Patient History",
+            "daily_list": "📄 Daily List", "activity_log": "📋 Activity Log",
+            "reports_analytics": "📊 Reports & Analytics",
+            "appointments": "📅 Appointments", "billing": "💳 Billing",
+            "feedback": "⭐ Feedback", "emergency": "🚑 Emergency",
+            "ipd_ward": "🏥 IPD Ward", "inventory": "📦 Inventory",
+            "follow_up": "📅 Follow-up", "password_management": "🔐 Password Management",
+            "purchase_orders": "📋 Purchase Orders", "vendors": "🏢 Vendors",
+            "hr": "👥 HR", "payroll": "💰 Payroll", "finance": "📊 Finance",
+            "ai_triage": "🤖 AI Triage", "ai_follow_up": "🤖 AI Follow-up",
+            "ai_receptionist": "🤖 AI Receptionist", "ai_dietician": "🥗 AI Dietician",
+            "ai_report_explainer": "📄 AI Report Explainer",
+            "ai_prescription": "💊 AI Prescription", "ai_voice_agent": "🎙️ AI Voice Agent",
+            "email": "📧 Email", "sms_manager": "📱 SMS Manager",
+            "whatsapp_business": "📱 WhatsApp Business", "push_notifications": "🔔 Push Notifications",
+            "voice_calls": "📞 Voice Calls", "telemedicine": "🎥 Telemedicine",
+            "backup": "💾 Backup", "rbac": "🔐 RBAC", "compliance": "📋 Compliance",
+            "encryption": "🔒 Encryption", "system_monitoring": "📊 System Monitoring",
+            "system_logs": "📋 System Logs", "multi_branch": "🏢 Multi-Branch",
+            "pharmacist": "💊 Pharmacist", "patient_timeline": "🕐 Patient Timeline",
+            "patient_tracking": "📍 Patient Tracking", "patient_portal": "🏥 Patient Portal",
+            "lab_technician": "🧪 Lab Technician", "accountant": "💰 Accountant",
+            "gst": "🧾 GST", "owner_dashboard": "👑 Owner Dashboard",
+        }
+        target_page = route_map.get(nav_param.lower())
+        if target_page:
+            st.session_state.nav = target_page
+            st.session_state.page = target_page
+            st.query_params.clear()
+            st.rerun()
+
+    under_construction_param = query_params.get("under_construction", None)
+    if under_construction_param:
+        st.query_params.clear()
+        st.markdown(f"<script>setTimeout(function() {{ showUnderConstruction('{under_construction_param}'); }}, 200);</script>", unsafe_allow_html=True)
+
+    # ─── Detect ?patient=XXX from URL for QR-based auto-load ─────────────
     patient_qr = query_params.get("patient", None)
     if isinstance(patient_qr, list):
         patient_qr = patient_qr[0] if patient_qr else None
@@ -690,6 +823,45 @@ def main():
     role = st.session_state.auth_role
     page = page_selector()
     render_sidebar_footer()
+
+    # ─── Under Construction Check ─────────────────────────────────────────
+    page_to_module = {
+        "📋 Reception": "Reception",
+        "📊 ECG": "ECG", "📊 Echo": "Echo", "📊 TMT": "TMT",
+        "🩺 OPD": "OPD", "🩻 X-Ray": "X-Ray", "📡 Ultrasound": "Ultrasound",
+        "🧪 Lab": "Lab", "💊 Pharmacy": "Pharmacy",
+        "🩺 Doctor": "Doctor", "👩‍⚕️ Nurse Station": "Nurse",
+        "📈 Manager Dashboard": "Manager", "👑 Admin Panel": "Admin",
+        "📋 Patient Status": "Patient Status", "📋 Patient History": "Patient History",
+        "📄 Daily List": "Daily List", "📋 Activity Log": "Activity Log",
+        "📊 Reports & Analytics": "Reports & Analytics",
+        "📅 Appointments": "Appointments", "💳 Billing": "Billing",
+        "⭐ Feedback": "Feedback", "🚑 Emergency": "Emergency",
+        "🏥 IPD Ward": "IPD Ward", "📦 Inventory": "Inventory",
+        "📅 Follow-up": "Follow-up", "🔐 Password Management": "Password Management",
+        "📋 Purchase Orders": "Purchase Orders", "🏢 Vendors": "Vendors",
+        "👥 HR": "HR", "💰 Payroll": "Payroll", "📊 Finance": "Finance",
+        "🤖 AI Triage": "AI Triage", "🤖 AI Follow-up": "AI Follow-up",
+        "🤖 AI Receptionist": "AI Receptionist", "🥗 AI Dietician": "AI Dietician",
+        "📄 AI Report Explainer": "AI Report Explainer",
+        "💊 AI Prescription": "AI Prescription", "🎙️ AI Voice Agent": "AI Voice Agent",
+        "📧 Email": "Email", "📱 SMS Manager": "SMS Manager",
+        "📱 WhatsApp Business": "WhatsApp Business", "🔔 Push Notifications": "Push Notifications",
+        "📞 Voice Calls": "Voice Calls", "🎥 Telemedicine": "Telemedicine",
+        "💾 Backup": "Backup", "🔐 RBAC": "RBAC", "📋 Compliance": "Compliance",
+        "🔒 Encryption": "Encryption", "📊 System Monitoring": "System Monitoring",
+        "📋 System Logs": "System Logs", "🏢 Multi-Branch": "Multi-Branch",
+        "💊 Pharmacist": "Pharmacist", "🕐 Patient Timeline": "Patient Timeline",
+        "📍 Patient Tracking": "Patient Tracking", "🏥 Patient Portal": "Patient Portal",
+        "🧪 Lab Technician": "Lab Technician", "💰 Accountant": "Accountant",
+        "🧾 GST": "GST", "👑 Owner Dashboard": "Owner Dashboard",
+    }
+    module_name = page_to_module.get(page, "")
+    if module_name and not DEPARTMENT_STATUS.get(module_name, True):
+        st.session_state.nav = "🏠 Home"
+        st.session_state.page = "🏠 Home"
+        st.query_params["under_construction"] = module_name
+        st.rerun()
 
     # Route to the correct page based on selection
     if page == "🏠 Home":

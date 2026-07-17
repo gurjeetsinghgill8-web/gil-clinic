@@ -5,7 +5,10 @@ AI Report Explainer Page — Medical Report to Simple Language
 import streamlit as st
 from utils.ai_report_explainer import explain_report, explain_test_value, REFERENCE_RANGES
 
-st.set_page_config("AI Report Explainer", layout="wide")
+try:
+    st.set_page_config("AI Report Explainer", layout="wide")
+except Exception:
+    pass
 
 
 def show():

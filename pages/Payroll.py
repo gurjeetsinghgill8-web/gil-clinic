@@ -7,7 +7,10 @@ from utils.payroll import process_payroll, get_payroll_history
 from utils.hr import get_staff
 import datetime
 
-st.set_page_config("Payroll", layout="wide")
+try:
+    st.set_page_config("Payroll", layout="wide")
+except Exception:
+    pass
 
 
 def show():

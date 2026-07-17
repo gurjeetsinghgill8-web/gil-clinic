@@ -41,11 +41,11 @@ class TestIdentityArchitecture:
                 for node in ast.walk(tree):
                     if isinstance(node, ast.Import):
                         for alias in node.names:
-                            if alias.name.startswith(("src.", "application", "infrastructure", "presentation")):
+                            if alias.name.startswith(("src.application", "src.infrastructure", "src.presentation", "application", "infrastructure", "presentation")):
                                 rel_path = os.path.relpath(filepath, domain_dir)
                                 violations.append(f"{rel_path}: imports {alias.name}")
                     elif isinstance(node, ast.ImportFrom):
-                        if node.module and node.module.startswith(("src.", "application", "infrastructure", "presentation")):
+                        if node.module and node.module.startswith(("src.application", "src.infrastructure", "src.presentation", "application", "infrastructure", "presentation")):
                             rel_path = os.path.relpath(filepath, domain_dir)
                             violations.append(f"{rel_path}: from-import {node.module}")
 

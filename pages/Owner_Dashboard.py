@@ -12,7 +12,10 @@ from utils.finance import get_monthly_summary, get_expenses
 from utils.hr import get_staff
 from utils.config import HOSPITAL_NAME, CLINIC_SPECIALTY, CLINIC_LOGO
 
-st.set_page_config("Owner Dashboard", layout="wide")
+try:
+    st.set_page_config("Owner Dashboard", layout="wide")
+except Exception:
+    pass
 
 
 def show():

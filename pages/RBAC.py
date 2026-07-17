@@ -6,7 +6,10 @@ import streamlit as st
 from utils.rbac import (get_all_roles, get_role_permissions, check_permission,
                         ROLES, RESOURCES, PERMISSIONS)
 
-st.set_page_config("RBAC Manager", layout="wide")
+try:
+    st.set_page_config("RBAC Manager", layout="wide")
+except Exception:
+    pass
 
 
 def show():

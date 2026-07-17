@@ -7,7 +7,10 @@ from utils.ai_prescription import (search_medicines, check_interaction,
                                     suggest_medicines, generate_prescription,
                                     get_prescriptions, MEDICINE_DB)
 
-st.set_page_config("AI Prescription", layout="wide")
+try:
+    st.set_page_config("AI Prescription", layout="wide")
+except Exception:
+    pass
 
 
 def show():

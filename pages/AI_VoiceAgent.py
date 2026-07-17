@@ -6,7 +6,10 @@ import streamlit as st
 from utils.ai_voice_agent import (create_session, add_transcript_entry,
                                    end_session, get_sessions, AGENT_TYPES)
 
-st.set_page_config("AI Voice Agent", layout="wide")
+try:
+    st.set_page_config("AI Voice Agent", layout="wide")
+except Exception:
+    pass
 
 
 def show():
