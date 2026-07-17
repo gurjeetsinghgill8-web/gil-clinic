@@ -81,6 +81,9 @@ from src.presentation.patient.routes.patient_routes import (
     router as patient_router,
 )
 
+# -- Staff Dashboard (replaces Streamlit) --
+from src.presentation.staff.routes.staff_routes import router as staff_router
+
 
 # =========================================================================
 # Database Setup
@@ -190,13 +193,25 @@ app.include_router(clinic_router)
 # Patient Engine
 app.include_router(patient_router)
 
+# Staff Dashboard (HTML, session auth)
+app.include_router(staff_router)
+
 # Serve static files from experience/pwa
 pwa_static = Path(__file__).parent / "src" / "experience" / "pwa"
 if pwa_static.exists():
     app.mount(
-        "/static",
+        "/static/pwa",
         StaticFiles(directory=str(pwa_static)),
         name="pwa-static",
+    )
+
+# Serve staff dashboard static files
+_dash_static = Path(__file__).parent / "static"
+if _dash_static.exists():
+    app.mount(
+        "/static",
+        StaticFiles(directory=str(_dash_static)),
+        name="dash-static",
     )
 
 
@@ -207,87 +222,8 @@ if pwa_static.exists():
 
 @app.get("/", include_in_schema=False)
 async def root():
-    """Root redirect — show available dashboards."""
-    cs = get_clinic_settings()
-    return HTMLResponse(f"""
-    <!DOCTYPE html>
-    <html>
-    <head><title>{cs.logo_emoji} {cs.name}</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <style>
-        * {{ margin: 0; padding: 0; box-sizing: border-box; }}
-        body {{
-            font-family: 'Segoe UI', system-ui, sans-serif;
-            background: #f5f7fa;
-            min-height: 100vh;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }}
-        .card {{
-            background: white;
-            border-radius: 20px;
-            padding: 40px 32px;
-            max-width: 420px;
-            width: 90%;
-            box-shadow: 0 10px 40px rgba(0,0,0,0.1);
-        }}
-        h1 {{ font-size: 22px; color: #2c3e50; margin-bottom: 4px; }}
-        .sub {{ color: #888; font-size: 14px; margin-bottom: 24px; }}
-        .btn {{
-            display: block;
-            width: 100%;
-            padding: 14px 20px;
-            border: none;
-            border-radius: 12px;
-            font-size: 16px;
-            font-weight: 600;
-            text-align: center;
-            text-decoration: none;
-            margin-bottom: 10px;
-            transition: all 0.2s;
-        }}
-        .btn:active {{ transform: scale(0.97); }}
-        .btn-primary {{ background: #3498db; color: white; }}
-        .btn-success {{ background: #2ecc71; color: white; }}
-        .btn-warning {{ background: #f39c12; color: white; }}
-        .btn-danger {{ background: #e74c3c; color: white; }}
-        .btn-purple {{ background: #9b59b6; color: white; }}
-        .btn-outline {{
-            background: white;
-            color: #2c3e50;
-            border: 2px solid #e0e0e0;
-        }}
-        .footer {{ margin-top: 20px; font-size: 12px; color: #bbb; text-align: center; }}
-        .section {{ font-size: 11px; color: #999; text-transform: uppercase; margin: 16px 0 8px; letter-spacing: 1px; }}
-    </style>
-    </head>
-    <body>
-    <div class="card">
-        <h1>{cs.logo_emoji} {APP_NAME}</h1>
-        <div class="sub">{cs.specialty} — v{APP_VERSION}</div>
-
-        <div class="section">Staff Dashboards</div>
-        <a href="/api/v1/queue/technician-dashboard?staff=Tech1" class="btn btn-primary">🔧 Technician Dashboard</a>
-        <a href="/api/v1/queue/reception-dashboard" class="btn btn-danger">🏥 Reception Dashboard</a>
-        <a href="/api/v1/queue/doctor-dashboard-page" class="btn btn" style="background:#2c3e50;color:white;">👨‍⚕️ Doctor Dashboard</a>
-        <a href="/api/v1/queue/tv-display" class="btn btn-warning">📺 Live TV Display</a>
-
-        <div class="section">Patient Experience</div>
-        <a href="/experience/" class="btn btn-success">📱 Patient PWA (Login)</a>
-        <a href="/api/v1/queue/patient/demo" class="btn btn-outline">👤 Demo Patient Status</a>
-
-        <div class="section">API</div>
-        <a href="/docs" class="btn btn-purple">📋 API Docs (Swagger)</a>
-
-        <div class="footer">
-            {cs.name} — {cs.specialty}<br>
-            {cs.doctor_name}{(' | ' + cs.phone) if cs.phone else ''}
-        </div>
-    </div>
-    </body>
-    </html>
-    """)
+    """Root redirect → Staff Dashboard."""
+    return RedirectResponse("/staff/")
 
 
 # =========================================================================

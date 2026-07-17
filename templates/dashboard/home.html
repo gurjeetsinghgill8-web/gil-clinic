@@ -1,0 +1,103 @@
+{% extends "dashboard/base.html" %}
+
+{% block title %}Home{% endblock %}
+{% block page_title %}Department Overview{% endblock %}
+
+{% block content %}
+<!-- Stats Strip -->
+<div class="stats-grid">
+  <div class="stat-card" style="border-top-color:#667eea">
+    <div class="stat-value" id="stat-waiting">{{ stats.waiting }}</div>
+    <div class="stat-label">⏳ Waiting</div>
+  </div>
+  <div class="stat-card" style="border-top-color:#f6ad55">
+    <div class="stat-value" id="stat-in-progress">{{ stats.in_progress }}</div>
+    <div class="stat-label">🔄 In Progress</div>
+  </div>
+  <div class="stat-card" style="border-top-color:#68d391">
+    <div class="stat-value" id="stat-completed">{{ stats.completed }}</div>
+    <div class="stat-label">✅ Completed Today</div>
+  </div>
+  <div class="stat-card" style="border-top-color:#fc8181">
+    <div class="stat-value" id="stat-patients">{{ stats.total_patients }}</div>
+    <div class="stat-label">👥 Total Patients</div>
+  </div>
+</div>
+
+<!-- Department Grid -->
+<div class="section-header">
+  <div class="section-title">🏥 Departments</div>
+  <button class="btn btn-outline btn-sm" data-refresh-btn>🔄 Refresh</button>
+</div>
+
+<!-- LIVE Departments -->
+<div class="section-cat">✅ LIVE — Fully Operational</div>
+<div class="dept-grid">
+  <a href="/staff/reception" class="dept-card live">
+    <div class="dept-icon">🏥</div>
+    <div class="dept-name">Reception</div>
+    <div class="dept-badge badge-live">LIVE</div>
+  </a>
+  <a href="/staff/ecg" class="dept-card live">
+    <div class="dept-icon">💓</div>
+    <div class="dept-name">ECG Lab</div>
+    <div class="dept-badge badge-live">LIVE</div>
+  </a>
+  <a href="/staff/echo" class="dept-card live">
+    <div class="dept-icon">🫀</div>
+    <div class="dept-name">Echo Lab</div>
+    <div class="dept-badge badge-live">LIVE</div>
+  </a>
+  <a href="/staff/tmt" class="dept-card live">
+    <div class="dept-icon">🏃</div>
+    <div class="dept-name">TMT</div>
+    <div class="dept-badge badge-live">LIVE</div>
+  </a>
+  <a href="/staff/opd" class="dept-card live">
+    <div class="dept-icon">🩺</div>
+    <div class="dept-name">OPD</div>
+    <div class="dept-badge badge-live">LIVE</div>
+  </a>
+  <a href="/staff/doctor" class="dept-card live">
+    <div class="dept-icon">👨‍⚕️</div>
+    <div class="dept-name">Doctor</div>
+    <div class="dept-badge badge-live">LIVE</div>
+  </a>
+  <a href="/staff/manager" class="dept-card live">
+    <div class="dept-icon">📊</div>
+    <div class="dept-name">Manager</div>
+    <div class="dept-badge badge-live">LIVE</div>
+  </a>
+  <a href="/staff/billing" class="dept-card live">
+    <div class="dept-icon">💰</div>
+    <div class="dept-name">Billing</div>
+    <div class="dept-badge badge-live">LIVE</div>
+  </a>
+  <a href="/staff/patient-status" class="dept-card live">
+    <div class="dept-icon">🔍</div>
+    <div class="dept-name">Patient Status</div>
+    <div class="dept-badge badge-live">LIVE</div>
+  </a>
+  <a href="/staff/tv" class="dept-card live">
+    <div class="dept-icon">📺</div>
+    <div class="dept-name">TV Display</div>
+    <div class="dept-badge badge-live">LIVE</div>
+  </a>
+</div>
+
+<!-- UNDER CONSTRUCTION -->
+<div class="section-cat">🚧 Under Construction — Coming Soon</div>
+<div class="dept-grid">
+  {% for dept in under_construction %}
+  <div class="dept-card building" data-uc="{{ dept.name }}">
+    <div class="dept-icon">{{ dept.icon }}</div>
+    <div class="dept-name">{{ dept.name }}</div>
+    <div class="dept-badge badge-building">BUILDING</div>
+  </div>
+  {% endfor %}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>window.autoRefreshEnabled = true;</script>
+{% endblock %}

@@ -1,0 +1,114 @@
+{% extends "dashboard/base.html" %}
+
+{% block title %}Patient Status{% endblock %}
+{% block page_title %}🔍 Patient Status Check{% endblock %}
+
+{% block content %}
+
+<!-- Search Form -->
+<div class="card" style="max-width:500px;margin:0 auto 24px;">
+  <div class="card-title">Enter Patient Name or Token</div>
+  <form method="GET" action="/staff/patient-status">
+    <div style="display:flex;gap:8px;">
+      <input type="text" name="q" value="{{ query or '' }}"
+        placeholder="Patient name or token number..."
+        style="flex:1;">
+      <button type="submit" class="btn btn-primary">🔍 Search</button>
+    </div>
+  </form>
+</div>
+
+{% if patient_entries %}
+<!-- Patient Status Card -->
+<div style="max-width:600px;margin:0 auto;">
+  <div class="card" style="margin-bottom:16px;">
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;">
+      <div style="width:52px;height:52px;border-radius:50%;background:linear-gradient(135deg,#667eea,#764ba2);
+        display:flex;align-items:center;justify-content:center;font-size:22px;color:white;">
+        {{ patient_entries[0].patient_id[0] | upper }}
+      </div>
+      <div>
+        <div style="font-size:18px;font-weight:700;">{{ patient_entries[0].patient_id }}</div>
+        <div style="font-size:13px;color:#718096;">{{ patient_entries | length }} test(s) today</div>
+      </div>
+    </div>
+
+    <!-- Journey Timeline -->
+    {% for entry in patient_entries %}
+    <div style="display:flex;align-items:flex-start;gap:12px;padding:12px 0;
+      border-bottom:{% if not loop.last %}1px solid #f0f0f0{% endif %};">
+      <!-- Status Icon -->
+      <div style="width:36px;height:36px;border-radius:8px;flex-shrink:0;
+        display:flex;align-items:center;justify-content:center;font-size:18px;
+        background:{% if entry.status == 'COMPLETED' or entry.status == 'REPORT_READY' or entry.status == 'DELIVERED' %}#d1fae5
+        {% elif entry.status == 'IN_PROGRESS' %}#ffedd5
+        {% elif entry.status == 'CALLED' %}#dbeafe
+        {% else %}#f3f4f6{% endif %};">
+        {% if entry.status == 'COMPLETED' or entry.status == 'REPORT_READY' %}✅
+        {% elif entry.status == 'IN_PROGRESS' %}🔄
+        {% elif entry.status == 'CALLED' %}📢
+        {% elif entry.status == 'DELIVERED' %}📦
+        {% else %}⏳{% endif %}
+      </div>
+      <div style="flex:1;">
+        <div style="font-weight:600;font-size:15px;">{{ entry.department }}</div>
+        <div style="margin-top:3px;">
+          <span class="status status-{{ entry.status | lower | replace(' ','_') }}">{{ entry.status }}</span>
+        </div>
+        {% if entry.status == 'WAITING' %}
+        <div style="font-size:12px;color:#718096;margin-top:4px;">
+          Token #{{ entry.token_number }} · Est. wait: ~{{ entry.wait_minutes }} min
+        </div>
+        {% endif %}
+      </div>
+      <div style="font-size:12px;color:#a0aec0;white-space:nowrap;">
+        Token #{{ entry.token_number }}
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+
+  <!-- Status Message -->
+  {% set all_done = patient_entries | selectattr('status', 'in', ['COMPLETED', 'REPORT_READY', 'DELIVERED']) | list %}
+  {% if all_done | length == patient_entries | length %}
+  <div class="alert alert-success">
+    🎉 All tests complete! Please collect your reports from Reception.
+  </div>
+  {% else %}
+  <div class="alert alert-warning">
+    ⏳ {{ patient_entries | length - all_done | length }} test(s) still in progress. Please wait.
+  </div>
+  {% endif %}
+
+  <!-- Auto-refresh note -->
+  <div style="text-align:center;font-size:12px;color:#a0aec0;margin-top:8px;">
+    Page refreshes every 30 seconds automatically
+  </div>
+</div>
+
+{% elif query %}
+<div class="card" style="max-width:500px;margin:0 auto;text-align:center;padding:40px;">
+  <div style="font-size:48px;margin-bottom:12px;">🔍</div>
+  <div style="font-weight:600;margin-bottom:4px;">No patient found</div>
+  <div style="font-size:13px;color:#a0aec0;">Try a different name or token number</div>
+</div>
+{% else %}
+<div class="card" style="max-width:500px;margin:0 auto;text-align:center;padding:40px;">
+  <div style="font-size:48px;margin-bottom:12px;">💓</div>
+  <div style="font-weight:600;color:#2d3748;">GIL Clinic CardioQueue</div>
+  <div style="font-size:14px;color:#a0aec0;margin-top:8px;line-height:1.6;">
+    Enter your name or token number above<br>to check your test status
+  </div>
+</div>
+{% endif %}
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+  // Auto-refresh every 30s for patient status
+  if ('{{ query }}') {
+    setTimeout(() => location.reload(), 30000);
+  }
+</script>
+{% endblock %}

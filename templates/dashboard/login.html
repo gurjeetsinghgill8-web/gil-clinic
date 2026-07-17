@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+  <title>Staff Login — GIL Clinic CardioQueue</title>
+  <meta name="description" content="GIL Clinic Staff Login Portal">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/dashboard/style.css">
+</head>
+<body>
+<div class="login-page">
+  <div class="login-card">
+    <div class="login-logo">🏥</div>
+    <div class="login-title">GIL Clinic</div>
+    <div class="login-sub">CardioQueue Staff Portal — Select your role</div>
+
+    {% if error %}
+    <div class="alert alert-danger">{{ error }}</div>
+    {% endif %}
+
+    <form method="POST" action="/staff/login" id="login-form">
+      <!-- Staff Role Picker -->
+      <div class="form-group">
+        <label>Select Your Role</label>
+        <div class="staff-grid">
+          <div class="staff-btn" data-role="Reception" data-name="Receptionist">
+            <span class="staff-avatar">🏥</span>Reception
+          </div>
+          <div class="staff-btn" data-role="ECG" data-name="ECG Tech">
+            <span class="staff-avatar">💓</span>ECG
+          </div>
+          <div class="staff-btn" data-role="Echo" data-name="Echo Tech">
+            <span class="staff-avatar">🫀</span>Echo
+          </div>
+          <div class="staff-btn" data-role="TMT" data-name="TMT Tech">
+            <span class="staff-avatar">🏃</span>TMT
+          </div>
+          <div class="staff-btn" data-role="Doctor" data-name="Doctor">
+            <span class="staff-avatar">👨‍⚕️</span>Doctor
+          </div>
+          <div class="staff-btn" data-role="Manager" data-name="Manager">
+            <span class="staff-avatar">📊</span>Manager
+          </div>
+        </div>
+        <input type="hidden" name="role" id="role-input" required>
+        <input type="hidden" name="name" id="name-input">
+      </div>
+
+      <!-- PIN -->
+      <div class="form-group">
+        <label>PIN (4-digit)</label>
+        <input
+          type="password"
+          name="pin"
+          id="pin-input"
+          class="pin-input"
+          placeholder="••••"
+          maxlength="4"
+          inputmode="numeric"
+          pattern="[0-9]*"
+          autocomplete="current-password"
+        >
+        <div style="font-size:12px;color:#999;margin-top:4px;">Default: 1234</div>
+      </div>
+
+      <button type="submit" class="btn btn-primary btn-full" style="padding:14px;font-size:16px;border-radius:10px;">
+        🔐 Login
+      </button>
+    </form>
+
+    <div style="border-top:1px solid #eee;margin-top:20px;padding-top:16px;">
+      <a href="/staff/patient-status" style="display:block;text-align:center;color:#667eea;font-size:14px;font-weight:600;text-decoration:none;">
+        🔍 Patient Status Check (No Login)
+      </a>
+    </div>
+  </div>
+</div>
+<script src="/static/dashboard/app.js"></script>
+</body>
+</html>

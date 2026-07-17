@@ -1,0 +1,123 @@
+{% extends "dashboard/base.html" %}
+
+{% block title %}{{ dept_name }} Dashboard{% endblock %}
+{% block page_title %}{{ dept_icon }} {{ dept_name }} Dashboard{% endblock %}
+
+{% block content %}
+
+<!-- Current Patient -->
+{% if current_patient %}
+<div class="current-patient" data-auto-refresh>
+  <div style="font-size:12px;color:#667eea;font-weight:700;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">
+    🔴 CURRENT PATIENT
+  </div>
+  <div class="cp-name">
+    <div class="token" style="display:inline-flex;margin-right:8px;">{{ current_patient.token_number }}</div>
+    {{ current_patient.patient_id }}
+  </div>
+  <div class="cp-meta">{{ dept_name }} · Waiting {{ current_patient.wait_minutes }} min</div>
+  <div class="cp-actions">
+    <button class="btn btn-success"
+      data-action="complete"
+      data-entry-id="{{ current_patient.id }}"
+      data-dept="{{ dept_id }}">
+      ✅ Mark Complete
+    </button>
+    <button class="btn btn-warning"
+      data-action="report_ready"
+      data-entry-id="{{ current_patient.id }}"
+      data-dept="{{ dept_id }}">
+      📄 Report Ready
+    </button>
+    <button class="btn btn-outline"
+      data-action="alert"
+      data-entry-id="{{ current_patient.id }}"
+      data-dept="{{ dept_id }}">
+      🔔 Alert Patient
+    </button>
+  </div>
+</div>
+{% else %}
+<div class="alert alert-success">✅ No patient in progress. Call next from queue below.</div>
+{% endif %}
+
+<!-- Queue -->
+<div class="card" data-auto-refresh>
+  <div class="section-header">
+    <div class="card-title">📋 {{ dept_name }} Queue</div>
+    <button class="btn btn-outline btn-sm" data-refresh-btn>🔄 Refresh</button>
+  </div>
+
+  {% if queue %}
+  <table class="queue-table">
+    <thead>
+      <tr>
+        <th>Token</th>
+        <th>Patient</th>
+        <th>Status</th>
+        <th>Wait</th>
+        <th>Action</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for entry in queue %}
+      <tr>
+        <td><div class="token">{{ entry.token_number }}</div></td>
+        <td><strong>{{ entry.patient_id }}</strong></td>
+        <td>
+          <span class="status status-{{ entry.status | lower | replace(' ', '_') }}">
+            {{ entry.status }}
+          </span>
+        </td>
+        <td style="font-size:12px;color:#718096;">{{ entry.wait_minutes }}m</td>
+        <td>
+          {% if entry.status == 'WAITING' %}
+          <button class="btn btn-primary btn-sm"
+            data-action="call"
+            data-entry-id="{{ entry.id }}"
+            data-dept="{{ dept_id }}">
+            📢 Call
+          </button>
+          {% elif entry.status == 'CALLED' %}
+          <button class="btn btn-success btn-sm"
+            data-action="start"
+            data-entry-id="{{ entry.id }}"
+            data-dept="{{ dept_id }}">
+            ▶ Start
+          </button>
+          {% elif entry.status == 'IN_PROGRESS' %}
+          <button class="btn btn-warning btn-sm"
+            data-action="complete"
+            data-entry-id="{{ entry.id }}"
+            data-dept="{{ dept_id }}">
+            ✅ Done
+          </button>
+          {% elif entry.status == 'COMPLETED' %}
+          <button class="btn btn-outline btn-sm"
+            data-action="report_ready"
+            data-entry-id="{{ entry.id }}"
+            data-dept="{{ dept_id }}">
+            📄 Report
+          </button>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <div style="text-align:center;padding:40px;color:#a0aec0;">
+    <div style="font-size:48px;margin-bottom:12px;">{{ dept_icon }}</div>
+    <div style="font-weight:600;margin-bottom:4px;">Queue is empty</div>
+    <div style="font-size:13px;">No patients waiting in {{ dept_name }}</div>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+  window.STAFF_NAME = '{{ dept_name }} Tech';
+  window.autoRefreshEnabled = true;
+</script>
+{% endblock %}

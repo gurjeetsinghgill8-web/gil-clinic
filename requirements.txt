@@ -1,9 +1,15 @@
-# ─── CardioQueue (Streamlit App) — Production Dependencies ──────────────────
+# ─── CardioQueue (FastAPI App) — Production Dependencies ─────────────────────
 # Install:  pip install -r requirements.txt
-# ────────────────────────────────────────────────────────────────────────────
+# ─────────────────────────────────────────────────────────────────────────────
 
-streamlit>=1.36.0
-streamlit-autorefresh>=1.0.0
+# Web Framework
+fastapi>=0.111.0
+uvicorn[standard]>=0.29.0
+python-multipart>=0.0.9
+jinja2>=3.1.0
+itsdangerous>=2.1.0
+
+# Data
 pandas>=2.0.0
 numpy>=1.24.0
 python-dotenv>=1.0.0
@@ -13,11 +19,6 @@ requests>=2.31.0
 sqlalchemy[asyncio]>=2.0.0
 aiosqlite>=0.19.0
 
-# UI / Charts
-plotly>=5.0.0
-altair>=5.0.0
-tabulate>=0.9.0
-
 # File Export
 openpyxl>=3.0.0
 fpdf2>=2.7.0
@@ -25,6 +26,7 @@ xlsxwriter>=3.0.0
 qrcode[pil]>=7.4.0
 pillow>=10.0.0
 reportlab>=4.0.0
+tabulate>=0.9.0
 
 # Security
 cryptography>=42.0.0

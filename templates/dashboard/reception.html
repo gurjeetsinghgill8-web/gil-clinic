@@ -1,0 +1,85 @@
+{% extends "dashboard/base.html" %}
+
+{% block title %}Reception{% endblock %}
+{% block page_title %}🏥 Reception Dashboard{% endblock %}
+
+{% block content %}
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;" class="reception-grid">
+
+  <!-- LEFT: Register Patient -->
+  <div class="card">
+    <div class="card-title">➕ Register New Patient</div>
+    <form id="create-queue-form">
+      <div class="form-group">
+        <label>Patient Name / ID</label>
+        <input type="text" id="patient_id" placeholder="Enter patient name or ID" required>
+      </div>
+      <div class="form-group">
+        <label>Select Tests</label>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:6px;">
+          {% for svc in services %}
+          <label style="display:flex;align-items:center;gap:8px;font-weight:400;cursor:pointer;
+            background:#f7fafc;padding:10px;border-radius:8px;border:1.5px solid #e2e8f0;">
+            <input type="checkbox" name="service" value="{{ svc.id }}" style="width:auto;accent-color:#667eea;">
+            <span>{{ svc.icon }} {{ svc.name }}</span>
+          </label>
+          {% endfor %}
+        </div>
+      </div>
+      <button type="submit" class="btn btn-primary btn-full" style="padding:12px;">
+        ➕ Register Patient
+      </button>
+    </form>
+  </div>
+
+  <!-- RIGHT: Today's Queue -->
+  <div class="card" style="overflow-x:auto;">
+    <div class="section-header">
+      <div class="card-title">📋 Today's Queue</div>
+      <button class="btn btn-outline btn-sm" data-refresh-btn>🔄</button>
+    </div>
+    {% if queue_entries %}
+    <table class="queue-table">
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Patient</th>
+          <th>Test</th>
+          <th>Status</th>
+          <th>Time</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for entry in queue_entries %}
+        <tr>
+          <td><div class="token">{{ entry.token_number }}</div></td>
+          <td><strong>{{ entry.patient_id }}</strong></td>
+          <td>{{ entry.department }}</td>
+          <td>
+            <span class="status status-{{ entry.status | lower | replace(' ', '_') }}">
+              {{ entry.status }}
+            </span>
+          </td>
+          <td style="font-size:12px;color:#718096;">{{ entry.created_at | format_time }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <div style="text-align:center;padding:32px;color:#a0aec0;">
+      <div style="font-size:36px;margin-bottom:8px;">📋</div>
+      No patients registered yet today
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+<style>
+@media(max-width:768px){
+  .reception-grid { grid-template-columns: 1fr !important; }
+}
+</style>
+{% endblock %}
+{% block extra_js %}
+<script>window.STAFF_NAME = 'Reception'; window.autoRefreshEnabled = true;</script>
+{% endblock %}

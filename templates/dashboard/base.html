@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+  <title>{% block title %}CardioQueue{% endblock %} — GIL Clinic</title>
+  <meta name="description" content="GIL Clinic Staff Dashboard">
+  <meta name="theme-color" content="#667eea">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/dashboard/style.css">
+  {% block extra_css %}{% endblock %}
+</head>
+<body>
+
+<!-- Mobile Overlay -->
+<div id="sidebar-overlay"></div>
+
+<!-- Sidebar -->
+<nav class="sidebar" id="sidebar">
+  <div class="sidebar-header">
+    <div class="sidebar-logo">🏥</div>
+    <div class="sidebar-title">GIL Clinic</div>
+    <div class="sidebar-sub">CardioQueue Staff Portal</div>
+    {% if session_user %}
+    <div class="sidebar-role">{{ session_user.role }}</div>
+    {% endif %}
+  </div>
+
+  <div class="sidebar-nav">
+    <div class="nav-section">Main</div>
+    <a href="/staff/home" class="nav-link {% if active_page=='home' %}active{% endif %}">
+      <span class="icon">🏠</span> Dashboard
+    </a>
+
+    <div class="nav-section">Clinical</div>
+    <a href="/staff/reception" class="nav-link {% if active_page=='reception' %}active{% endif %}">
+      <span class="icon">🏥</span> Reception
+    </a>
+    <a href="/staff/ecg" class="nav-link {% if active_page=='ecg' %}active{% endif %}">
+      <span class="icon">💓</span> ECG Lab
+    </a>
+    <a href="/staff/echo" class="nav-link {% if active_page=='echo' %}active{% endif %}">
+      <span class="icon">🫀</span> Echo Lab
+    </a>
+    <a href="/staff/tmt" class="nav-link {% if active_page=='tmt' %}active{% endif %}">
+      <span class="icon">🏃</span> TMT Lab
+    </a>
+    <a href="/staff/opd" class="nav-link {% if active_page=='opd' %}active{% endif %}">
+      <span class="icon">🩺</span> OPD
+    </a>
+    <a href="/staff/doctor" class="nav-link {% if active_page=='doctor' %}active{% endif %}">
+      <span class="icon">👨‍⚕️</span> Doctor View
+    </a>
+
+    <div class="nav-section">Management</div>
+    <a href="/staff/manager" class="nav-link {% if active_page=='manager' %}active{% endif %}">
+      <span class="icon">📊</span> Manager Overview
+    </a>
+    <a href="/staff/billing" class="nav-link {% if active_page=='billing' %}active{% endif %}">
+      <span class="icon">💰</span> Billing
+    </a>
+    <a href="/staff/tv" class="nav-link {% if active_page=='tv' %}active{% endif %}">
+      <span class="icon">📺</span> TV Display
+    </a>
+
+    <div class="nav-section">Patient</div>
+    <a href="/staff/patient-status" class="nav-link {% if active_page=='patient_status' %}active{% endif %}">
+      <span class="icon">🔍</span> Patient Status
+    </a>
+
+    <div class="nav-section">Coming Soon</div>
+    <a href="#" data-uc="Pharmacy" class="nav-link">
+      <span class="icon">💊</span> Pharmacy
+    </a>
+    <a href="#" data-uc="HR & Payroll" class="nav-link">
+      <span class="icon">👥</span> HR & Payroll
+    </a>
+    <a href="#" data-uc="Inventory" class="nav-link">
+      <span class="icon">📦</span> Inventory
+    </a>
+  </div>
+
+  <div class="sidebar-footer">
+    {% if session_user %}
+    <div style="font-size:12px;color:rgba(255,255,255,0.5);margin-bottom:8px;">
+      {{ session_user.name }} · {{ session_user.role }}
+    </div>
+    {% endif %}
+    <a href="/staff/logout" class="btn-logout">🚪 Logout</a>
+  </div>
+</nav>
+
+<!-- Main -->
+<div class="main">
+  <!-- Topbar -->
+  <div class="topbar">
+    <button class="menu-toggle" id="menu-toggle">☰</button>
+    <div class="topbar-title">{% block page_title %}Dashboard{% endblock %}</div>
+    <div class="topbar-time" id="live-clock"></div>
+  </div>
+
+  <!-- Content -->
+  <div class="content">
+    {% if flash_msg %}
+    <div class="alert alert-{{ flash_type or 'success' }}" id="flash-alert">
+      {{ flash_msg }}
+    </div>
+    {% endif %}
+    {% block content %}{% endblock %}
+  </div>
+</div>
+
+<!-- Progress bar for auto-refresh -->
+<div class="refresh-bar"><div class="refresh-progress"></div></div>
+
+<script src="/static/dashboard/app.js"></script>
+<script>
+// Auto-dismiss flash messages
+const fa = document.getElementById('flash-alert');
+if (fa) setTimeout(() => fa.style.display='none', 4000);
+</script>
+{% block extra_js %}{% endblock %}
+</body>
+</html>
