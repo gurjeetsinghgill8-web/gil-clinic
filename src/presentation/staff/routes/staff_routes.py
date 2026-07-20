@@ -121,7 +121,7 @@ def format_time(value):
         return str(value)
 
 
-templates.env.filters["format_time"] = format_time
+_jinja_env.filters["format_time"] = format_time
 
 
 # ── Session Helpers ────────────────────────────────────────────────────────────
