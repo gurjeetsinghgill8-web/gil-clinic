@@ -1,0 +1,1316 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Smart OPD — {{ settings.doc_name or 'Doctor' }}</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700&display=swap');
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        :root {
+            --bg: #0a0f1e;
+            --card: #111827;
+            --card-hover: #1a2332;
+            --border: rgba(255,255,255,0.08);
+            --text: #e2e8f0;
+            --text-muted: #8892a8;
+            --primary: #3b82f6;
+            --primary-glow: rgba(59,130,246,0.2);
+            --success: #22c55e;
+            --warning: #eab308;
+            --danger: #ef4444;
+            --radius: 12px;
+        }
+        body {
+            font-family: 'Inter', system-ui, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+        }
+        /* ── Layout ── */
+        .app { display: flex; min-height: 100vh; }
+        .sidebar {
+            width: 240px;
+            background: var(--card);
+            border-right: 1px solid var(--border);
+            padding: 20px 0;
+            display: flex;
+            flex-direction: column;
+            position: sticky;
+            top: 0;
+            height: 100vh;
+        }
+        .main { flex: 1; overflow-y: auto; }
+        .content { padding: 24px 32px; max-width: 1200px; }
+
+        /* ── Sidebar ── */
+        .sb-header { padding: 0 20px 16px; border-bottom: 1px solid var(--border); margin-bottom: 8px; }
+        .sb-header h2 { font-size: 16px; font-weight: 600; }
+        .sb-header .role-badge {
+            display: inline-block;
+            background: rgba(59,130,246,0.15);
+            color: #93b4f8;
+            font-size: 11px;
+            padding: 2px 10px;
+            border-radius: 20px;
+            margin-top: 4px;
+        }
+        .sb-header .doctor-name { color: var(--text-muted); font-size: 12px; margin-top: 2px; }
+        .nav-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 20px;
+            color: var(--text-muted);
+            text-decoration: none;
+            font-size: 14px;
+            transition: all 0.15s;
+            cursor: pointer;
+            border: none;
+            background: none;
+            width: 100%;
+            text-align: left;
+        }
+        .nav-item:hover { background: rgba(255,255,255,0.04); color: var(--text); }
+        .nav-item.active { background: rgba(59,130,246,0.12); color: var(--primary); border-right: 2px solid var(--primary); }
+        .nav-item .icon { font-size: 18px; }
+        .sb-footer { margin-top: auto; padding: 16px 20px; border-top: 1px solid var(--border); }
+        .sb-footer a { color: var(--text-muted); text-decoration: none; font-size: 13px; display: flex; align-items: center; gap: 8px; }
+        .sb-footer a:hover { color: var(--danger); }
+
+        /* ── Cards ── */
+        .card {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 20px;
+            margin-bottom: 16px;
+        }
+        .card-title { font-size: 14px; font-weight: 600; color: var(--text-muted); margin-bottom: 12px; text-transform: uppercase; letter-spacing: 0.5px; }
+        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin-bottom: 24px; }
+        .stat-card {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 16px;
+            text-align: center;
+        }
+        .stat-card .value { font-size: 28px; font-weight: 700; }
+        .stat-card .label { font-size: 12px; color: var(--text-muted); margin-top: 4px; }
+
+        /* ── Forms ── */
+        input, textarea, select {
+            background: rgba(255,255,255,0.06);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 10px 14px;
+            color: var(--text);
+            font-size: 14px;
+            font-family: inherit;
+            outline: none;
+            width: 100%;
+            transition: border 0.15s;
+        }
+        input:focus, textarea:focus, select:focus { border-color: var(--primary); }
+        textarea { resize: vertical; min-height: 60px; font-family: inherit; }
+        label { display: block; font-size: 13px; color: var(--text-muted); margin-bottom: 4px; font-weight: 500; }
+        .form-group { margin-bottom: 14px; }
+        .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+        .form-row-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 10px 20px;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 500;
+            border: none;
+            cursor: pointer;
+            transition: all 0.15s;
+            font-family: inherit;
+        }
+        .btn-primary { background: var(--primary); color: #fff; }
+        .btn-primary:hover { filter: brightness(1.1); }
+        .btn-success { background: var(--success); color: #fff; }
+        .btn-warning { background: var(--warning); color: #000; }
+        .btn-danger { background: var(--danger); color: #fff; }
+        .btn-ghost { background: transparent; border: 1px solid var(--border); color: var(--text); }
+        .btn-ghost:hover { background: rgba(255,255,255,0.06); }
+        .btn-sm { padding: 6px 12px; font-size: 12px; }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        /* ── Tabs ── */
+        .tabs { display: flex; gap: 4px; margin-bottom: 24px; border-bottom: 1px solid var(--border); padding-bottom: 0; }
+        .tab {
+            padding: 10px 20px;
+            border: none;
+            background: none;
+            color: var(--text-muted);
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            border-bottom: 2px solid transparent;
+            transition: all 0.15s;
+        }
+        .tab:hover { color: var(--text); }
+        .tab.active { color: var(--primary); border-bottom-color: var(--primary); }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+
+        /* ── Table ── */
+        table { width: 100%; border-collapse: collapse; }
+        th { text-align: left; font-size: 12px; color: var(--text-muted); padding: 8px 12px; border-bottom: 1px solid var(--border); font-weight: 600; }
+        td { padding: 10px 12px; border-bottom: 1px solid rgba(255,255,255,0.04); font-size: 13px; }
+        tr:hover td { background: rgba(255,255,255,0.02); }
+
+        /* ── Autocomplete ── */
+        .autocomplete-wrap { position: relative; }
+        .autocomplete-list {
+            position: absolute;
+            top: 100%; left: 0; right: 0;
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            max-height: 200px;
+            overflow-y: auto;
+            z-index: 100;
+            display: none;
+        }
+        .autocomplete-list.show { display: block; }
+        .autocomplete-item {
+            padding: 8px 14px;
+            font-size: 13px;
+            cursor: pointer;
+            transition: background 0.1s;
+        }
+        .autocomplete-item:hover { background: rgba(59,130,246,0.1); }
+
+        /* ── Badge ── */
+        .badge { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: 500; }
+        .badge-success { background: rgba(34,197,94,0.15); color: #4ade80; }
+        .badge-warning { background: rgba(234,179,8,0.15); color: #facc15; }
+
+        /* ── Toast ── */
+        .toast {
+            position: fixed;
+            bottom: 24px; right: 24px;
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 14px 20px;
+            font-size: 14px;
+            z-index: 1000;
+            display: none;
+            animation: slideIn 0.3s ease;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.4);
+        }
+        .toast.show { display: block; }
+        .toast.success { border-color: var(--success); }
+        .toast.error { border-color: var(--danger); }
+        @keyframes slideIn { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+
+        /* ── Misc ── */
+        .flex { display: flex; align-items: center; gap: 8px; }
+        .flex-between { display: flex; justify-content: space-between; align-items: center; }
+        .gap-sm { gap: 8px; }
+        .gap-md { gap: 16px; }
+        .mt-sm { margin-top: 8px; }
+        .mt-md { margin-top: 16px; }
+        .mb-sm { margin-bottom: 8px; }
+        .text-muted { color: var(--text-muted); }
+        .text-sm { font-size: 12px; }
+        .w-full { width: 100%; }
+        .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+
+        /* Prescription output */
+        .rx-output {
+            background: rgba(255,255,255,0.03);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 16px;
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            line-height: 1.6;
+            white-space: pre-wrap;
+            min-height: 120px;
+        }
+        .investigation-btns { display: flex; flex-wrap: wrap; gap: 6px; }
+        .investigation-btns button {
+            padding: 4px 10px;
+            border-radius: 6px;
+            border: 1px solid var(--border);
+            background: rgba(255,255,255,0.04);
+            color: var(--text);
+            font-size: 12px;
+            cursor: pointer;
+            transition: all 0.1s;
+        }
+        .investigation-btns button:hover { background: rgba(59,130,246,0.15); border-color: var(--primary); }
+        .investigation-btns button.active { background: rgba(59,130,246,0.2); border-color: var(--primary); }
+
+        /* Loading spinner */
+        .spinner { display: inline-block; width: 16px; height: 16px; border: 2px solid var(--border); border-top-color: var(--primary); border-radius: 50%; animation: spin 0.6s linear infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        /* Scrollbar */
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 3px; }
+
+        /* Specialty checkboxes */
+        .spec-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 8px; }
+        .spec-item {
+            display: flex; align-items: center; gap: 8px;
+            padding: 8px 12px;
+            background: rgba(255,255,255,0.03);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.1s;
+        }
+        .spec-item:hover { background: rgba(59,130,246,0.08); }
+        .spec-item input { width: auto; }
+        .spec-item label { margin: 0; cursor: pointer; }
+    </style>
+</head>
+<body>
+<div class="app">
+    <!-- ─── SIDEBAR ─── -->
+    <aside class="sidebar">
+        <div class="sb-header">
+            <h2>{{ settings.clinic_name or 'Smart OPD' }}</h2>
+            <span class="role-badge">
+                {% if role == 'chief' %}👑 Chief
+                {% elif role == 'admin' %}⚙️ Admin
+                {% elif role == 'licensed' %}🔐 Licensed
+                {% else %}👨‍⚕️ Junior{% endif %}
+            </span>
+            <div class="doctor-name">{{ name or settings.doc_name }}</div>
+        </div>
+
+        <button class="nav-item active" data-tab="rx"> <span class="icon">📝</span> New Rx</button>
+        <button class="nav-item" data-tab="roster"> <span class="icon">📋</span> OPD Roster</button>
+        <button class="nav-item" data-tab="batch"> <span class="icon">📸</span> Batch Scan</button>
+        {% if is_chief %}
+        <button class="nav-item" data-tab="upgrade"> <span class="icon">⚕️</span> Specialty Upgrade</button>
+        <button class="nav-item" data-tab="starred"> <span class="icon">⭐</span> Starred</button>
+        {% endif %}
+        <button class="nav-item" data-tab="settings"> <span class="icon">⚙️</span> Settings</button>
+        {% if is_chief %}
+        <button class="nav-item" data-tab="research"> <span class="icon">🔬</span> Research</button>
+        <button class="nav-item" data-tab="cme"> <span class="icon">📚</span> CME</button>
+        {% endif %}
+
+        <div class="sb-footer">
+            <a href="/opd/logout">🚪 Logout</a>
+        </div>
+    </aside>
+
+    <!-- ─── MAIN ─── -->
+    <main class="main">
+        <div class="content">
+            <!-- Stats bar -->
+            <div class="stats-grid">
+                <div class="stat-card"><div class="value">{{ today_count }}</div><div class="label">Today's Patients</div></div>
+                <div class="stat-card"><div class="value">₹{{ today_revenue }}</div><div class="label">Today's Fees</div></div>
+                <div class="stat-card"><div class="value" id="roster-count">0</div><div class="label">Total Records</div></div>
+            </div>
+
+            <!-- ════════════════ TAB: NEW Rx ════════════════ -->
+            <div class="tab-content active" id="tab-rx">
+                <div class="flex-between mb-sm">
+                    <h2>📝 New Prescription</h2>
+                    <div class="flex gap-sm">
+                        <button class="btn btn-ghost btn-sm" onclick="clearRxForm()">🔄 New Patient</button>
+                        <button class="btn btn-ghost btn-sm" onclick="toggleSearch()">🔍 Search Old</button>
+                    </div>
+                </div>
+
+                <!-- Patient Search (hidden by default) -->
+                <div id="search-section" style="display:none;" class="card mb-sm">
+                    <div class="card-title">Search Existing Patient</div>
+                    <div class="autocomplete-wrap">
+                        <input type="text" id="patient-search" placeholder="Type name or phone..." oninput="debouncedSearch()">
+                        <div class="autocomplete-list" id="search-results"></div>
+                    </div>
+                    <div id="selected-patient" style="display:none; margin-top:8px;">
+                        <div class="flex-between">
+                            <span id="selected-patient-info"></span>
+                            <button class="btn btn-sm btn-ghost" onclick="clearSelected()">✕ Clear</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Main Form -->
+                <div class="card">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Patient Name *</label>
+                            <input type="text" id="pt-name" placeholder="Full name" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Phone</label>
+                            <input type="text" id="pt-phone" placeholder="10 digit">
+                        </div>
+                    </div>
+                    <div class="form-row-3">
+                        <div class="form-group">
+                            <label>Age / Gender</label>
+                            <div class="flex gap-sm">
+                                <input type="text" id="pt-age" placeholder="Age" style="width:60px;">
+                                <select id="pt-gender" style="width:100px;">
+                                    <option value="Male">Male</option>
+                                    <option value="Female">Female</option>
+                                    <option value="Other">Other</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label>Fee (₹)</label>
+                            <input type="text" id="pt-fee" placeholder="0" value="0">
+                        </div>
+                        <div class="form-group">
+                            <label>Follow-up?</label>
+                            <div class="flex gap-sm" style="padding-top:6px;">
+                                <label><input type="checkbox" id="is-followup"> Yes</label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Vitals (BP / Pulse / Sugar / Weight / SpO2 / Temp)</label>
+                            <input type="text" id="pt-vitals" placeholder="e.g. 130/80, 72/min, F-110, 68kg, 98%, 98.4°F">
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Complaints / Clinical Notes</label>
+                        <textarea id="pt-complaints" rows="3" placeholder="Describe complaints..."></textarea>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Quick Investigations</label>
+                        <div class="investigation-btns" id="inv-btns">
+                            <button onclick="toggleInv(this)">CBC</button>
+                            <button onclick="toggleInv(this)">ECG</button>
+                            <button onclick="toggleInv(this)">X-Ray</button>
+                            <button onclick="toggleInv(this)">USG</button>
+                            <button onclick="toggleInv(this)">Lipid Profile</button>
+                            <button onclick="toggleInv(this)">Thyroid</button>
+                            <button onclick="toggleInv(this)">Blood Sugar</button>
+                            <button onclick="toggleInv(this)">HbA1c</button>
+                            <button onclick="toggleInv(this)">Echo</button>
+                            <button onclick="toggleInv(this)">TMT</button>
+                            <button onclick="toggleInv(this)">LFT</button>
+                            <button onclick="toggleInv(this)">KFT</button>
+                            <button onclick="toggleInv(this)">Urine</button>
+                            <button onclick="toggleInv(this)">Vitamin D</button>
+                            <button onclick="toggleInv(this)">Vitamin B12</button>
+                            <button onclick="toggleInv(this)">CRP</button>
+                            <button onclick="toggleInv(this)">ESR</button>
+                            <button onclick="toggleInv(this)">Hb</button>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Selected Investigations</label>
+                        <input type="text" id="pt-investigations" placeholder="Selected tests appear here..." readonly>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Medicine Text (AI ke liye)</label>
+                            <div class="autocomplete-wrap">
+                                <textarea id="pt-medicines" rows="4" placeholder="Type medicines or leave blank for AI to generate..."></textarea>
+                                <div class="autocomplete-list" id="drug-suggestions"></div>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label>Templates</label>
+                            <select id="template-select" onchange="applyTemplate()">
+                                <option value="">— Select Template —</option>
+                            </select>
+                            <button class="btn btn-ghost btn-sm mt-sm" onclick="saveAsTemplate()">💾 Save as Template</button>
+                        </div>
+                    </div>
+
+                    <div class="flex gap-md mt-sm">
+                        <button class="btn btn-primary" onclick="generateRx()">🤖 AI Generate Prescription</button>
+                        <button class="btn btn-success" onclick="saveRx()">💾 Save</button>
+                        <button class="btn btn-ghost" onclick="previewPdf()">📄 PDF Preview</button>
+                    </div>
+                    <div class="mt-sm text-muted text-sm" id="rx-status"></div>
+                </div>
+
+                <!-- AI Output -->
+                <div class="card" id="rx-output-section" style="display:none;">
+                    <div class="flex-between mb-sm">
+                        <div class="card-title" style="margin:0;">🤖 AI Prescription Output</div>
+                        <div class="flex gap-sm">
+                            <button class="btn btn-sm btn-ghost" onclick="copyRx()">📋 Copy</button>
+                            <button class="btn btn-sm btn-success" onclick="saveRx()">💾 Save</button>
+                            <button class="btn btn-sm btn-primary" onclick="previewPdf()">📄 PDF</button>
+                        </div>
+                    </div>
+                    <textarea id="rx-output" rows="12" style="font-family:monospace;font-size:13px;"></textarea>
+                </div>
+            </div>
+
+            <!-- ════════════════ TAB: OPD ROSTER ════════════════ -->
+            <div class="tab-content" id="tab-roster">
+                <div class="flex-between mb-sm">
+                    <h2>📋 OPD Roster</h2>
+                    <div class="flex gap-sm">
+                        <button class="btn btn-sm btn-ghost active" onclick="loadRoster('today')" id="filter-today">Today</button>
+                        <button class="btn btn-sm btn-ghost" onclick="loadRoster('yesterday')" id="filter-yesterday">Yesterday</button>
+                        <button class="btn btn-sm btn-ghost" onclick="loadRoster('last5')" id="filter-last5">Last 5 Days</button>
+                        <button class="btn btn-sm btn-ghost" onclick="loadRoster('all')" id="filter-all">All</button>
+                    </div>
+                </div>
+                <div class="card">
+                    <div class="flex-between mb-sm">
+                        <span>Total: <strong id="roster-total">0</strong> | Fees: ₹<strong id="roster-fees">0</strong></span>
+                    </div>
+                    <div style="overflow-x:auto;">
+                        <table>
+                            <thead>
+                                <tr><th>Date</th><th>Patient</th><th>Phone</th><th>Vitals</th><th>Diagnosis</th><th>Fee</th><th>Actions</th></tr>
+                            </thead>
+                            <tbody id="roster-body"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ════════════════ TAB: BATCH SCAN ════════════════ -->
+            <div class="tab-content" id="tab-batch">
+                <h2 class="mb-sm">📸 Batch Scan</h2>
+                <div class="card">
+                    <div class="card-title">Upload Prescription Images</div>
+                    <div class="form-group">
+                        <input type="file" id="scan-files" accept="image/*" multiple onchange="previewScans()">
+                    </div>
+                    <div id="scan-previews" class="flex flex-wrap gap-sm" style="margin-bottom:12px;"></div>
+                    <div id="scan-queue-status" class="text-muted text-sm mb-sm"></div>
+                    <button class="btn btn-primary" onclick="processAllScans()">🤖 AI Read All</button>
+                </div>
+                <div class="card">
+                    <div class="card-title">Pending Scans</div>
+                    <div id="pending-scans"></div>
+                </div>
+            </div>
+
+            <!-- ════════════════ TAB: SPECIALTY UPGRADE ════════════════ -->
+            <div class="tab-content" id="tab-upgrade">
+                <h2 class="mb-sm">⚕️ Specialty Upgrade</h2>
+                <div class="card">
+                    <div class="card-title">Compare GP Rx with Specialist Opinions</div>
+                    <div class="form-group">
+                        <label>Patient Name</label>
+                        <input type="text" id="up-pt-name" placeholder="Patient name">
+                    </div>
+                    <div class="form-group">
+                        <label>Vitals</label>
+                        <input type="text" id="up-vitals" placeholder="BP / Pulse / Sugar">
+                    </div>
+                    <div class="form-group">
+                        <label>Current Prescription</label>
+                        <textarea id="up-rx" rows="4" placeholder="Paste the current prescription..."></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label>Select Specialties (1-3)</label>
+                        <div class="spec-grid">
+                            <div class="spec-item"><input type="checkbox" class="spec-cb" value="❤️ Cardiology"><label>❤️ Cardiology</label></div>
+                            <div class="spec-item"><input type="checkbox" class="spec-cb" value="🦴 Orthopedics"><label>🦴 Orthopedics</label></div>
+                            <div class="spec-item"><input type="checkbox" class="spec-cb" value="🫁 Pulmonology"><label>🫁 Pulmonology</label></div>
+                            <div class="spec-item"><input type="checkbox" class="spec-cb" value="👶 Pediatrics"><label>👶 Pediatrics</label></div>
+                            <div class="spec-item"><input type="checkbox" class="spec-cb" value="🩸 Diabetology"><label>🩸 Diabetology</label></div>
+                            <div class="spec-item"><input type="checkbox" class="spec-cb" value="🧠 Neurology"><label>🧠 Neurology</label></div>
+                            <div class="spec-item"><input type="checkbox" class="spec-cb" value="👩‍⚕️ Gynecology"><label>👩‍⚕️ Gynecology</label></div>
+                        </div>
+                    </div>
+                    <button class="btn btn-primary" onclick="runUpgrade()">⚕️ Get Specialist Opinions</button>
+                    <div id="upgrade-results" class="mt-md"></div>
+                </div>
+            </div>
+
+            <!-- ════════════════ TAB: STARRED ════════════════ -->
+            <div class="tab-content" id="tab-starred">
+                <h2 class="mb-sm">⭐ Starred Comparisons</h2>
+                <div class="card">
+                    <div id="starred-list"></div>
+                </div>
+            </div>
+
+            <!-- ════════════════ TAB: SETTINGS ════════════════ -->
+            <div class="tab-content" id="tab-settings">
+                <h2 class="mb-sm">⚙️ Doctor / Clinic Settings</h2>
+                <div class="card">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Clinic Name</label>
+                            <input type="text" id="set-clinic-name" value="{{ settings.clinic_name or '' }}">
+                        </div>
+                        <div class="form-group">
+                            <label>Doctor Name</label>
+                            <input type="text" id="set-doc-name" value="{{ settings.doc_name or '' }}">
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Degree (e.g. MBBS, MD)</label>
+                            <input type="text" id="set-degree" value="{{ settings.doc_degree or '' }}">
+                        </div>
+                        <div class="form-group">
+                            <label>Subtitle / Specialty</label>
+                            <input type="text" id="set-subtitle" value="{{ settings.doc_subtitle or '' }}">
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Registration No.</label>
+                            <input type="text" id="set-reg" value="{{ settings.doc_reg_no or '' }}">
+                        </div>
+                        <div class="form-group">
+                            <label>Extra Qualifications</label>
+                            <input type="text" id="set-extra" value="{{ settings.doc_extra_quals or '' }}">
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Email</label>
+                            <input type="email" id="set-email" value="{{ settings.doc_email or '' }}">
+                        </div>
+                        <div class="form-group">
+                            <label>Phone</label>
+                            <input type="text" id="set-phone" value="{{ settings.doc_phone or '' }}">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>Clinic Address</label>
+                        <textarea id="set-address" rows="2">{{ settings.clinic_address or '' }}</textarea>
+                    </div>
+                    <div class="form-group">
+                        <label>Groq API Key (for AI features)</label>
+                        <input type="password" id="set-groq-key" value="{{ settings.groq_api_key or '' }}" placeholder="gsk_...">
+                    </div>
+                    <button class="btn btn-primary" onclick="saveSettings()">💾 Save Settings</button>
+                    <span id="settings-status" class="text-muted text-sm" style="margin-left:12px;"></span>
+                </div>
+            </div>
+
+            <!-- ════════════════ TAB: RESEARCH ════════════════ -->
+            <div class="tab-content" id="tab-research">
+                <h2 class="mb-sm">🔬 Practice Research</h2>
+                <div class="card">
+                    <div class="card-title">Ask AI about your practice data</div>
+                    <div class="flex gap-sm mb-sm">
+                        <button class="btn btn-sm btn-ghost" onclick="setResearchQ('What is the most common diagnosis in my practice?')">📊 Disease Distribution</button>
+                        <button class="btn btn-sm btn-ghost" onclick="setResearchQ('What are the top 10 most prescribed medications?')">💊 Top Drugs</button>
+                        <button class="btn btn-sm btn-ghost" onclick="setResearchQ('What is my revenue breakdown by diagnosis?')">💰 Revenue</button>
+                    </div>
+                    <textarea id="research-q" rows="2" placeholder="Ask a research question about your patient data..."></textarea>
+                    <button class="btn btn-primary mt-sm" onclick="runResearch()">🔬 Analyze</button>
+                    <div id="research-result" class="mt-md rx-output" style="display:none;"></div>
+                </div>
+            </div>
+
+            <!-- ════════════════ TAB: CME ════════════════ -->
+            <div class="tab-content" id="tab-cme">
+                <h2 class="mb-sm">📚 CME Study Material</h2>
+                <div class="card">
+                    <div class="card-title">Generate CME Content</div>
+                    <input type="text" id="cme-topic" placeholder="e.g. Hypertension Management, Diabetes Guidelines...">
+                    <button class="btn btn-primary mt-sm" onclick="generateCME()">📚 Generate CME</button>
+                    <div id="cme-content" class="mt-md rx-output" style="display:none;"></div>
+                    <button class="btn btn-ghost mt-sm" id="cme-pdf-btn" style="display:none;" onclick="downloadCmePdf()">📄 Download PDF</button>
+                </div>
+            </div>
+
+        </div>
+    </main>
+</div>
+
+<!-- ─── Toast ─── -->
+<div class="toast" id="toast"></div>
+
+<script>
+// ════════════════════════════════════════════════════════════════
+// TAB SWITCHING
+// ════════════════════════════════════════════════════════════════
+document.querySelectorAll('.nav-item[data-tab]').forEach(btn => {
+    btn.addEventListener('click', () => {
+        document.querySelectorAll('.nav-item').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+        document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
+        // Load data on tab switch
+        if (btn.dataset.tab === 'roster') loadRoster('today');
+        if (btn.dataset.tab === 'starred') loadStarred();
+        if (btn.dataset.tab === 'batch') loadPendingScans();
+    });
+});
+
+// ════════════════════════════════════════════════════════════════
+// TOAST
+// ════════════════════════════════════════════════════════════════
+function showToast(msg, type='success') {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.className = 'toast show ' + type;
+    setTimeout(() => t.classList.remove('show'), 3000);
+}
+
+// ════════════════════════════════════════════════════════════════
+// PATIENT SEARCH
+// ════════════════════════════════════════════════════════════════
+let searchTimeout;
+
+function toggleSearch() {
+    const s = document.getElementById('search-section');
+    s.style.display = s.style.display === 'none' ? 'block' : 'none';
+    if (s.style.display === 'block') document.getElementById('patient-search').focus();
+}
+
+function debouncedSearch() {
+    clearTimeout(searchTimeout);
+    searchTimeout = setTimeout(doSearch, 300);
+}
+
+function doSearch() {
+    const q = document.getElementById('patient-search').value.trim();
+    const list = document.getElementById('search-results');
+    if (q.length < 2) { list.classList.remove('show'); return; }
+
+    fetch('/opd/api/search?q=' + encodeURIComponent(q))
+        .then(r => r.json())
+        .then(data => {
+            list.innerHTML = '';
+            if (data.length === 0) {
+                list.innerHTML = '<div class="autocomplete-item text-muted">No results</div>';
+            } else {
+                data.forEach(p => {
+                    const div = document.createElement('div');
+                    div.className = 'autocomplete-item';
+                    div.textContent = p.source === 'queue'
+                        ? `🆔 ${p.patient_name} (${p.phone}) [${p.patient_id}]`
+                        : `${p.patient_name} (${p.phone}) — ${p.date || ''}`;
+                    div.onclick = () => selectPatient(p);
+                    list.appendChild(div);
+                });
+            }
+            list.classList.add('show');
+        });
+}
+
+function selectPatient(p) {
+    document.getElementById('patient-search').value = p.patient_name;
+    document.getElementById('pt-name').value = p.patient_name;
+    document.getElementById('pt-phone').value = p.phone || '';
+    if (p.age) document.getElementById('pt-age').value = p.age;
+    if (p.gender) document.getElementById('pt-gender').value = p.gender;
+    if (p.vitals) document.getElementById('pt-vitals').value = p.vitals;
+    if (p.complaints) document.getElementById('pt-complaints').value = p.complaints;
+    if (p.medicines) document.getElementById('pt-medicines').value = p.medicines;
+    if (p.diagnosis) document.getElementById('rx-output').value = p.diagnosis;
+
+    document.getElementById('selected-patient').style.display = 'flex';
+    document.getElementById('selected-patient-info').textContent = `✅ ${p.patient_name} (${p.phone}) — loaded`;
+    document.getElementById('search-results').classList.remove('show');
+    document.getElementById('rx-output-section').style.display = p.diagnosis ? 'block' : 'none';
+}
+
+function clearSelected() {
+    document.getElementById('selected-patient').style.display = 'none';
+    document.getElementById('patient-search').value = '';
+    document.getElementById('search-results').classList.remove('show');
+}
+
+function clearRxForm() {
+    ['pt-name','pt-phone','pt-age','pt-vitals','pt-complaints','pt-medicines','pt-investigations'].forEach(id => {
+        document.getElementById(id).value = '';
+    });
+    document.getElementById('pt-fee').value = '0';
+    document.getElementById('pt-gender').value = 'Male';
+    document.getElementById('is-followup').checked = false;
+    document.getElementById('rx-output').value = '';
+    document.getElementById('rx-output-section').style.display = 'none';
+    document.getElementById('rx-status').textContent = '';
+    clearSelected();
+}
+
+// Quick investigations toggle
+const selectedInvs = new Set();
+function toggleInv(btn) {
+    btn.classList.toggle('active');
+    const val = btn.textContent.trim();
+    if (selectedInvs.has(val)) selectedInvs.delete(val);
+    else selectedInvs.add(val);
+    document.getElementById('pt-investigations').value = Array.from(selectedInvs).join(', ');
+}
+
+// Drug autocomplete
+document.getElementById('pt-medicines').addEventListener('input', function() {
+    const val = this.value.trim();
+    const lastLine = val.split('\n').pop().trim();
+    if (lastLine.length < 2) {
+        document.getElementById('drug-suggestions').classList.remove('show');
+        return;
+    }
+    fetch('/opd/api/drugs?q=' + encodeURIComponent(lastLine))
+        .then(r => r.json())
+        .then(data => {
+            const list = document.getElementById('drug-suggestions');
+            list.innerHTML = '';
+            if (data.length === 0) { list.classList.remove('show'); return; }
+            data.forEach(d => {
+                const div = document.createElement('div');
+                div.className = 'autocomplete-item';
+                div.textContent = d;
+                div.onclick = () => {
+                    const lines = this.value.split('\n');
+                    lines[lines.length - 1] = d;
+                    this.value = lines.join('\n');
+                    list.classList.remove('show');
+                };
+                list.appendChild(div);
+            });
+            list.classList.add('show');
+        });
+});
+
+// ════════════════════════════════════════════════════════════════
+// AI GENERATE PRESCRIPTION
+// ════════════════════════════════════════════════════════════════
+function generateRx() {
+    const data = {
+        patient_name: document.getElementById('pt-name').value.trim(),
+        vitals: document.getElementById('pt-vitals').value.trim(),
+        complaints: document.getElementById('pt-complaints').value.trim(),
+    };
+    if (!data.patient_name) { showToast('Patient name required', 'error'); return; }
+
+    document.getElementById('rx-status').innerHTML = '<span class="spinner"></span> Generating prescription...';
+
+    fetch('/opd/api/generate-rx', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(data),
+    })
+    .then(r => r.json())
+    .then(res => {
+        if (res.ok) {
+            document.getElementById('rx-output').value = res.prescription;
+            document.getElementById('rx-output-section').style.display = 'block';
+            document.getElementById('rx-status').textContent = '✅ AI Prescription generated';
+            showToast('Prescription generated!');
+        } else {
+            document.getElementById('rx-status').textContent = '❌ ' + (res.error || 'Generation failed');
+            showToast(res.error || 'Generation failed', 'error');
+        }
+    })
+    .catch(e => {
+        document.getElementById('rx-status').textContent = '❌ Error: ' + e;
+        showToast('Network error', 'error');
+    });
+}
+
+// ════════════════════════════════════════════════════════════════
+// SAVE PRESCRIPTION
+// ════════════════════════════════════════════════════════════════
+function saveRx() {
+    const data = {
+        patient_name: document.getElementById('pt-name').value.trim(),
+        phone: document.getElementById('pt-phone').value.trim(),
+        vitals: document.getElementById('pt-vitals').value.trim(),
+        fee: document.getElementById('pt-fee').value.trim() || '0',
+        complaints: document.getElementById('pt-complaints').value.trim(),
+        medicines: document.getElementById('pt-medicines').value.trim(),
+        investigations: document.getElementById('pt-investigations').value.trim(),
+        diagnosis: document.getElementById('rx-output').value.trim(),
+        ai_generated: document.getElementById('rx-output-section').style.display !== 'none',
+    };
+    if (!data.patient_name) { showToast('Patient name required', 'error'); return; }
+
+    document.getElementById('rx-status').textContent = 'Saving...';
+
+    fetch('/opd/api/save-rx', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(data),
+    })
+    .then(r => r.json())
+    .then(res => {
+        if (res.ok) {
+            showToast('✅ Prescription saved!');
+            document.getElementById('rx-status').textContent = '✅ Saved successfully';
+            document.getElementById('today-count-display').textContent = parseInt(document.getElementById('today-count-display').textContent || '0') + 1;
+        } else {
+            showToast('❌ ' + (res.error || 'Save failed'), 'error');
+            document.getElementById('rx-status').textContent = '❌ ' + (res.error || 'Save failed');
+        }
+    })
+    .catch(e => {
+        showToast('Error saving', 'error');
+        document.getElementById('rx-status').textContent = '❌ Error: ' + e;
+    });
+}
+
+// ════════════════════════════════════════════════════════════════
+// PDF PREVIEW
+// ════════════════════════════════════════════════════════════════
+function previewPdf() {
+    const data = {
+        patient_name: document.getElementById('pt-name').value.trim() || 'Patient',
+        vitals: document.getElementById('pt-vitals').value.trim(),
+        prescription: document.getElementById('rx-output').value.trim() || document.getElementById('pt-medicines').value.trim(),
+        investigations: document.getElementById('pt-investigations').value.trim(),
+    };
+    if (!data.prescription) { showToast('Generate or enter prescription first', 'error'); return; }
+
+    fetch('/opd/api/pdf-rx', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(data),
+    })
+    .then(r => r.blob())
+    .then(blob => {
+        window.open(URL.createObjectURL(blob), '_blank');
+        showToast('📄 PDF opened in new tab');
+    })
+    .catch(e => showToast('PDF error: ' + e, 'error'));
+}
+
+function copyRx() {
+    const text = document.getElementById('rx-output').value;
+    navigator.clipboard.writeText(text).then(() => showToast('📋 Copied!')).catch(() => {});
+}
+
+// ════════════════════════════════════════════════════════════════
+// TEMPLATES
+// ════════════════════════════════════════════════════════════════
+function applyTemplate() {
+    const sel = document.getElementById('template-select');
+    const content = sel.value && sel.options[sel.selectedIndex]?.dataset?.content;
+    if (content) {
+        document.getElementById('pt-medicines').value = content;
+        showToast('Template applied');
+    }
+}
+
+function saveAsTemplate() {
+    const name = prompt('Template name:');
+    if (!name) return;
+    const content = document.getElementById('pt-medicines').value.trim();
+    if (!content) { showToast('No content to save', 'error'); return; }
+
+    fetch('/opd/api/templates', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({category: 'Rx', name, content}),
+    })
+    .then(r => r.json())
+    .then(res => {
+        if (res.ok) { showToast('✅ Template saved!'); loadTemplates(); }
+        else showToast(res.error || 'Save failed', 'error');
+    });
+}
+
+function loadTemplates() {
+    fetch('/opd/api/templates')
+        .then(r => r.json())
+        .then(data => {
+            const sel = document.getElementById('template-select');
+            sel.innerHTML = '<option value="">— Select Template —</option>';
+            if (data.Rx) {
+                Object.entries(data.Rx).forEach(([name, content]) => {
+                    const opt = document.createElement('option');
+                    opt.value = name;
+                    opt.textContent = '📄 ' + name;
+                    opt.dataset.content = content;
+                    sel.appendChild(opt);
+                });
+            }
+        });
+}
+
+// ════════════════════════════════════════════════════════════════
+// ROSTER
+// ════════════════════════════════════════════════════════════════
+let rosterData = [];
+
+function loadRoster(filter) {
+    document.querySelectorAll('[id^="filter-"]').forEach(b => b.classList.remove('active'));
+    document.getElementById('filter-' + filter).classList.add('active');
+
+    fetch('/opd/api/roster?filter=' + filter)
+        .then(r => r.json())
+        .then(data => {
+            rosterData = data.patients || [];
+            document.getElementById('roster-total').textContent = data.total || 0;
+            document.getElementById('roster-fees').textContent = data.total_fee || 0;
+            document.getElementById('roster-count').textContent = data.total || 0;
+
+            const tbody = document.getElementById('roster-body');
+            tbody.innerHTML = '';
+            rosterData.forEach(p => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td>${p.date || ''}</td>
+                    <td><strong>${p.patient_name}</strong></td>
+                    <td>${p.phone || ''}</td>
+                    <td class="text-muted">${p.vitals || ''}</td>
+                    <td class="text-muted">${(p.diagnosis || p.complaints || '').substring(0, 60)}</td>
+                    <td>₹${p.fee || '0'}</td>
+                    <td>
+                        <button class="btn btn-sm btn-ghost" onclick="reprintPdf('${encodeURIComponent(p.patient_name)}', '${encodeURIComponent(p.vitals || '')}', '${encodeURIComponent(p.medicines || p.diagnosis || '')}')">📄 PDF</button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        });
+}
+
+function reprintPdf(name, vitals, rx) {
+    fetch('/opd/api/pdf-rx', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+            patient_name: decodeURIComponent(name),
+            vitals: decodeURIComponent(vitals),
+            prescription: decodeURIComponent(rx),
+        }),
+    })
+    .then(r => r.blob())
+    .then(blob => window.open(URL.createObjectURL(blob), '_blank'));
+}
+
+// ════════════════════════════════════════════════════════════════
+// BATCH SCAN
+// ════════════════════════════════════════════════════════════════
+const scannedImages = [];
+
+function previewScans() {
+    const files = document.getElementById('scan-files').files;
+    const previews = document.getElementById('scan-previews');
+    previews.innerHTML = '';
+    scannedImages.length = 0;
+
+    for (let f of files) {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            scannedImages.push(e.target.result);
+            const img = document.createElement('img');
+            img.src = e.target.result;
+            img.style.width = '100px';
+            img.style.height = '100px';
+            img.style.objectFit = 'cover';
+            img.style.borderRadius = '8px';
+            img.style.border = '1px solid var(--border)';
+            previews.appendChild(img);
+        };
+        reader.readAsDataURL(f);
+    }
+    document.getElementById('scan-queue-status').textContent = `${files.length} image(s) ready`;
+}
+
+function processAllScans() {
+    if (scannedImages.length === 0) { showToast('Upload images first', 'error'); return; }
+
+    let processed = 0;
+    document.getElementById('scan-queue-status').textContent = '⏳ Processing...';
+
+    scannedImages.forEach((imgBase64, idx) => {
+        // Remove data:image/...;base64, prefix
+        const b64 = imgBase64.split(',')[1] || imgBase64;
+
+        // Save scan
+        fetch('/opd/api/scan', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({image: b64}),
+        })
+        .then(r => r.json())
+        .then(res => {
+            if (res.ok) {
+                // AI read
+                return fetch('/opd/api/scan-ai', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({image: b64}),
+                });
+            }
+        })
+        .then(r => r ? r.json() : null)
+        .then(aiRes => {
+            if (aiRes && aiRes.ok && aiRes.parsed) {
+                // Auto-approve with AI data
+                fetch('/opd/api/scan-approve', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        id: 0,  // Will be matched by pending scans
+                        patient_name: aiRes.parsed.patient_name || '',
+                        phone: aiRes.parsed.phone || '',
+                        vitals: aiRes.parsed.vitals || '',
+                        complaints: aiRes.parsed.complaints || '',
+                        medicines: aiRes.parsed.medicines || '',
+                        investigations: aiRes.parsed.investigations || '',
+                    }),
+                }).catch(() => {});
+            }
+            processed++;
+            document.getElementById('scan-queue-status').textContent = `✅ ${processed}/${scannedImages.length} processed`;
+            if (processed === scannedImages.length) {
+                showToast('All scans processed!');
+                loadPendingScans();
+            }
+        })
+        .catch(() => {
+            processed++;
+            document.getElementById('scan-queue-status').textContent = `⚠️ ${processed}/${scannedImages.length} (with errors)`;
+        });
+    });
+}
+
+function loadPendingScans() {
+    fetch('/opd/api/scans')
+        .then(r => r.json())
+        .then(data => {
+            const div = document.getElementById('pending-scans');
+            if (!data || data.length === 0) {
+                div.innerHTML = '<div class="text-muted">No pending scans</div>';
+                return;
+            }
+            div.innerHTML = data.map(s => `
+                <div class="card" style="margin-bottom:8px;">
+                    <div class="flex-between">
+                        <span><strong>${s.patient_name || 'Unknown'}</strong> (${s.phone || '—'})</span>
+                        <span class="badge badge-warning">${s.status}</span>
+                    </div>
+                    <div class="text-sm text-muted">${s.uploaded_at || ''}</div>
+                </div>
+            `).join('');
+        });
+}
+
+// ════════════════════════════════════════════════════════════════
+// SPECIALTY UPGRADE
+// ════════════════════════════════════════════════════════════════
+function runUpgrade() {
+    const specialties = Array.from(document.querySelectorAll('.spec-cb:checked')).map(cb => cb.value);
+    if (specialties.length === 0) { showToast('Select at least 1 specialty', 'error'); return; }
+
+    const data = {
+        patient_name: document.getElementById('up-pt-name').value.trim(),
+        vitals: document.getElementById('up-vitals').value.trim(),
+        prescription: document.getElementById('up-rx').value.trim(),
+        specialties,
+    };
+    if (!data.patient_name) { showToast('Patient name required', 'error'); return; }
+    if (!data.prescription) { showToast('Prescription required', 'error'); return; }
+
+    document.getElementById('upgrade-results').innerHTML = '<span class="spinner"></span> Getting specialist opinions...';
+
+    fetch('/opd/api/upgrade', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(data),
+    })
+    .then(r => r.json())
+    .then(res => {
+        if (res.ok && res.results) {
+            const html = res.results.map(r => `
+                <div class="card">
+                    <h3>${r.specialty}</h3>
+                    <div class="rx-output">${r.content}</div>
+                    ${r.id ? `<button class="btn btn-sm btn-warning mt-sm" onclick="starUpgrade(${r.id})">⭐ Star this</button>` : ''}
+                </div>
+            `).join('');
+            document.getElementById('upgrade-results').innerHTML = html;
+            showToast('Specialist opinions ready!');
+        } else {
+            document.getElementById('upgrade-results').innerHTML = '<div class="text-muted">Failed: ' + (res.error || 'Unknown') + '</div>';
+        }
+    });
+}
+
+function starUpgrade(id) {
+    const note = prompt('Add a note (optional):');
+    fetch('/opd/api/star', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({id, note: note || ''}),
+    })
+    .then(r => r.json())
+    .then(res => {
+        if (res.ok) showToast('⭐ Starred!');
+        else showToast('Error', 'error');
+    });
+}
+
+// ════════════════════════════════════════════════════════════════
+// STARRED
+// ════════════════════════════════════════════════════════════════
+function loadStarred() {
+    fetch('/opd/api/starred')
+        .then(r => r.json())
+        .then(data => {
+            const div = document.getElementById('starred-list');
+            if (!data || data.length === 0) {
+                div.innerHTML = '<div class="text-muted">No starred cases yet</div>';
+                return;
+            }
+            div.innerHTML = data.map(s => `
+                <div class="card">
+                    <div class="flex-between">
+                        <h3>⭐ ${s.patient_name} — ${s.specialty}</h3>
+                        <span class="text-muted text-sm">${s.date || ''}</span>
+                    </div>
+                    <div class="text-sm"><strong>Vitals:</strong> ${s.vitals || '—'}</div>
+                    <div class="grid-2 mt-sm">
+                        <div>
+                            <div class="text-sm text-muted mb-sm">GP Prescription:</div>
+                            <div class="rx-output" style="font-size:11px;">${s.original_rx || ''}</div>
+                        </div>
+                        <div>
+                            <div class="text-sm text-muted mb-sm">Specialist Rx (${s.specialty}):</div>
+                            <div class="rx-output" style="font-size:11px;">${s.upgraded_rx || ''}</div>
+                        </div>
+                    </div>
+                    ${s.star_note ? `<div class="text-sm mt-sm">📝 ${s.star_note}</div>` : ''}
+                    <button class="btn btn-sm btn-ghost mt-sm" onclick="printStarredPdf('${s.patient_name}', '${encodeURIComponent(s.upgraded_rx || '')}')">📄 PDF</button>
+                </div>
+            `).join('');
+        });
+}
+
+function printStarredPdf(name, rx) {
+    fetch('/opd/api/pdf-rx', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+            patient_name: name,
+            prescription: decodeURIComponent(rx),
+            specialty_label: 'Specialty Consult',
+        }),
+    })
+    .then(r => r.blob())
+    .then(blob => window.open(URL.createObjectURL(blob), '_blank'));
+}
+
+// ════════════════════════════════════════════════════════════════
+// SETTINGS
+// ════════════════════════════════════════════════════════════════
+function saveSettings() {
+    const data = {
+        clinic_name: document.getElementById('set-clinic-name').value.trim(),
+        doc_name: document.getElementById('set-doc-name').value.trim(),
+        doc_degree: document.getElementById('set-degree').value.trim(),
+        doc_subtitle: document.getElementById('set-subtitle').value.trim(),
+        doc_reg_no: document.getElementById('set-reg').value.trim(),
+        doc_extra_quals: document.getElementById('set-extra').value.trim(),
+        doc_email: document.getElementById('set-email').value.trim(),
+        doc_phone: document.getElementById('set-phone').value.trim(),
+        clinic_address: document.getElementById('set-address').value.trim(),
+        groq_api_key: document.getElementById('set-groq-key').value.trim(),
+    };
+
+    document.getElementById('settings-status').textContent = 'Saving...';
+
+    fetch('/opd/api/settings', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(data),
+    })
+    .then(r => r.json())
+    .then(res => {
+        if (res.ok) {
+            showToast('✅ Settings saved!');
+            document.getElementById('settings-status').textContent = '✅ Saved';
+        } else {
+            document.getElementById('settings-status').textContent = '❌ ' + (res.error || 'Failed');
+        }
+    });
+}
+
+// ════════════════════════════════════════════════════════════════
+// RESEARCH
+// ════════════════════════════════════════════════════════════════
+function setResearchQ(q) {
+    document.getElementById('research-q').value = q;
+}
+
+function runResearch() {
+    const q = document.getElementById('research-q').value.trim();
+    if (!q) { showToast('Enter a question', 'error'); return; }
+
+    document.getElementById('research-result').style.display = 'block';
+    document.getElementById('research-result').textContent = '⏳ Analyzing...';
+
+    fetch('/opd/api/drug-review', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+            vitals: 'Research analysis',
+            prescription: `Research question: ${q}\n\nPatient data: ${JSON.stringify(rosterData.slice(0, 50))}`,
+        }),
+    })
+    .then(r => r.json())
+    .then(res => {
+        document.getElementById('research-result').textContent = res.review || 'No analysis generated';
+    });
+}
+
+// ════════════════════════════════════════════════════════════════
+// CME
+// ════════════════════════════════════════════════════════════════
+let cmeContent = '';
+
+function generateCME() {
+    const topic = document.getElementById('cme-topic').value.trim();
+    if (!topic) { showToast('Enter a topic', 'error'); return; }
+
+    document.getElementById('cme-content').style.display = 'block';
+    document.getElementById('cme-content').textContent = '⏳ Generating CME...';
+    document.getElementById('cme-pdf-btn').style.display = 'none';
+
+    fetch('/opd/api/cme', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({topic}),
+    })
+    .then(r => r.json())
+    .then(res => {
+        if (res.ok) {
+            cmeContent = res.content;
+            document.getElementById('cme-content').textContent = res.content;
+            document.getElementById('cme-pdf-btn').style.display = 'inline-flex';
+            showToast('✅ CME generated!');
+        } else {
+            document.getElementById('cme-content').textContent = '❌ ' + (res.error || 'Failed');
+        }
+    });
+}
+
+function downloadCmePdf() {
+    const topic = document.getElementById('cme-topic').value.trim();
+    fetch('/opd/api/pdf-cme', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({topic, content: cmeContent}),
+    })
+    .then(r => r.blob())
+    .then(blob => window.open(URL.createObjectURL(blob), '_blank'));
+}
+
+// ════════════════════════════════════════════════════════════════
+// INIT
+// ════════════════════════════════════════════════════════════════
+loadTemplates();
+loadRoster('today');
+</script>
+</body>
+</html>

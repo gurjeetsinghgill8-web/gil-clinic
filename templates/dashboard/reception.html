@@ -9,13 +9,32 @@
   <!-- LEFT: Register Patient -->
   <div class="card">
     <div class="card-title">➕ Register New Patient</div>
-    <form id="create-queue-form">
+    <div id="register-alert" style="display:none;margin-bottom:12px;padding:10px;border-radius:8px;font-weight:500;"></div>
+    <form id="register-form">
       <div class="form-group">
-        <label>Patient Name / ID</label>
-        <input type="text" id="patient_id" placeholder="Enter patient name or ID" required>
+        <label>Patient Name *</label>
+        <input type="text" id="patient_name" placeholder="Full name" required>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+        <div class="form-group">
+          <label>Phone *</label>
+          <input type="tel" id="patient_phone" placeholder="10-digit phone" pattern="[0-9]{10,}" required>
+        </div>
+        <div class="form-group">
+          <label>Age</label>
+          <input type="number" id="patient_age" value="30" min="1" max="150">
+        </div>
       </div>
       <div class="form-group">
-        <label>Select Tests</label>
+        <label>Gender</label>
+        <select id="patient_gender" style="width:100%;padding:10px;border-radius:8px;border:1.5px solid #e2e8f0;">
+          <option value="Male">Male</option>
+          <option value="Female">Female</option>
+          <option value="Other">Other</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Select Tests *</label>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:6px;">
           {% for svc in services %}
           <label style="display:flex;align-items:center;gap:8px;font-weight:400;cursor:pointer;
@@ -53,8 +72,8 @@
         {% for entry in queue_entries %}
         <tr>
           <td><div class="token">{{ entry.token_number }}</div></td>
-          <td><strong>{{ entry.patient_id }}</strong></td>
-          <td>{{ entry.department }}</td>
+          <td><strong>{{ entry.patient_name or entry.patient_id }}</strong></td>
+          <td>{{ entry.service_code or entry.department }}</td>
           <td>
             <span class="status status-{{ entry.status | lower | replace(' ', '_') }}">
               {{ entry.status }}
@@ -79,6 +98,53 @@
   .reception-grid { grid-template-columns: 1fr !important; }
 }
 </style>
+
+<script>
+const regForm = document.getElementById('register-form');
+const alertEl = document.getElementById('register-alert');
+regForm.addEventListener('submit', async function(e) {
+  e.preventDefault();
+  const btn = this.querySelector('[type=submit]');
+  btn.disabled = true;
+  btn.textContent = '⏳ Registering...';
+
+  const data = {
+    name: document.getElementById('patient_name').value.trim(),
+    phone: document.getElementById('patient_phone').value.trim(),
+    age: parseInt(document.getElementById('patient_age').value) || 30,
+    gender: document.getElementById('patient_gender').value,
+    services: Array.from(document.querySelectorAll('input[name=service]:checked')).map(c => c.value),
+  };
+
+  if (!data.services.length) {
+    showToast('Please select at least one test', 'warning');
+    btn.disabled = false;
+    btn.textContent = '➕ Register Patient';
+    return;
+  }
+
+  try {
+    const resp = await fetch('/staff/api/register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data)
+    });
+    const result = await resp.json();
+    if (result.ok) {
+      showToast('✅ ' + result.message, 'success');
+      this.reset();
+      document.querySelectorAll('input[name=service]:checked').forEach(c => c.checked = false);
+      setTimeout(() => window.location.reload(), 1500);
+    } else {
+      showToast('❌ ' + (result.error || 'Registration failed'), 'danger');
+    }
+  } catch(err) {
+    showToast('Network error. Please retry.', 'danger');
+  }
+  btn.disabled = false;
+  btn.textContent = '➕ Register Patient';
+});
+</script>
 {% endblock %}
 {% block extra_js %}
 <script>window.STAFF_NAME = 'Reception'; window.autoRefreshEnabled = true;</script>

@@ -84,6 +84,9 @@ from src.presentation.patient.routes.patient_routes import (
 # -- Staff Dashboard (replaces Streamlit) --
 from src.presentation.staff.routes.staff_routes import router as staff_router
 
+# -- Smart OPD --
+from src.presentation.opd.routes.opd_routes import router as opd_router
+
 
 # =========================================================================
 # Database Setup
@@ -128,6 +131,16 @@ from src.infrastructure.identity.models import (  # noqa: F401
     PermissionModel,
     OtpCodeModel,
     OutboxModel,
+)
+# OPD models — creates all 7 tables on startup
+from src.infrastructure.opd.models.opd_models import (  # noqa: F401
+    OpdPrescriptionModel,
+    DrugHistoryModel,
+    TemplateModel,
+    LicenseModel,
+    SettingsModel,
+    SpecialtyUpgradeModel,
+    PendingScanModel,
 )
 
 
@@ -195,6 +208,9 @@ app.include_router(patient_router)
 
 # Staff Dashboard (HTML, session auth)
 app.include_router(staff_router)
+
+# Smart OPD (HTML + API, session auth)
+app.include_router(opd_router)
 
 # Serve static files from experience/pwa
 pwa_static = Path(__file__).parent / "src" / "experience" / "pwa"

@@ -21,12 +21,14 @@ Serves the complete staff dashboard:
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
+import sqlalchemy as sa
 from fastapi import APIRouter, Cookie, Form, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from itsdangerous import BadSignature, SignatureExpired, URLSafeTimedSerializer
@@ -388,3 +390,277 @@ async def patient_status(request: Request, q: str = Query("")):
         request=request, active_page="patient_status", session_user=sess,
         patient_entries=patient_entries, query=query,
     ))
+
+
+# ── Staff API — Patient Registration (bypasses identity auth) ────────────────
+
+@router.post("/api/register", include_in_schema=False)
+async def staff_register_patient(request: Request):
+    """Register a new patient and create queue entries — single endpoint.
+
+    Uses staff session for auth (no identity token needed).
+    Bypasses complex domain layer — inserts directly via SQLAlchemy models.
+    """
+    sess = get_session(request)
+    if not sess:
+        return {"ok": False, "error": "Not logged in"}
+
+    try:
+        body = await request.json()
+    except Exception:
+        return {"ok": False, "error": "Invalid JSON body"}
+
+    name = (body.get("name") or "").strip()
+    phone = (body.get("phone") or "").strip()
+    age = body.get("age", 30)
+    gender = body.get("gender", "Male")
+    services = body.get("services", [])
+
+    if not name:
+        return {"ok": False, "error": "Patient name is required"}
+    if not phone or len(phone) < 10:
+        return {"ok": False, "error": "Valid phone number (10+ digits) is required"}
+    if not services:
+        return {"ok": False, "error": "Select at least one test/service"}
+
+    try:
+        from src.infrastructure.patient.models.patient_model import PatientModel
+        from src.infrastructure.queue.models.queue_entry_model import QueueEntryModel
+        from src.shared.domain.base_entity import uuid7
+
+        now = datetime.now(timezone.utc)
+        date_prefix = now.strftime("%Y%m%d")
+        phone_hash = hashlib.sha256(phone.encode()).hexdigest()
+
+        async with async_session_factory() as session:
+            # Check duplicate phone
+            existing_phone = await session.execute(
+                sa.select(PatientModel).where(PatientModel.phone_hash == phone_hash)
+            )
+            dup = existing_phone.scalar_one_or_none()
+            if dup:
+                patient_id = dup.patient_id
+                patient_uuid = str(dup.id)
+                patient_name = dup.name
+                # ── Patient exists — just create queue entries ──
+                visit_id = f"VIS-{date_prefix}-{uuid7().hex[:6]}"
+                entries_created = []
+                for idx, code in enumerate(services):
+                    token = await _next_token(session, code, date_prefix)
+                    q = QueueEntryModel(
+                        id=uuid7(),
+                        visit_id=visit_id,
+                        patient_id=patient_id,
+                        patient_uuid=patient_uuid,
+                        patient_name=patient_name,
+                        service_code=code.upper(),
+                        token_number=token,
+                        department="Cardiology",
+                        room="",
+                        status="WAITING",
+                        priority=0,
+                        display_order=0,
+                        created_by="reception",
+                        updated_by="reception",
+                        version=1,
+                        created_at=now,
+                        updated_at=now,
+                    )
+                    session.add(q)
+                    entries_created.append({"service": code, "token": token})
+                await session.commit()
+                return {"ok": True, "patient_id": patient_id, "entries": entries_created,
+                        "message": f"{patient_name} — new test(s) added"}
+
+            # ── New patient — create patient + queue entries ──
+            # Find next patient sequence number
+            seq_result = await session.execute(
+                sa.select(sa.func.count(PatientModel.id)).where(
+                    PatientModel.patient_id.like(f"CQ-{date_prefix}-%")
+                )
+            )
+            seq = (seq_result.scalar() or 0) + 1
+            patient_id = f"CQ-{date_prefix}-{seq:03d}"
+            patient_uuid_obj = uuid7()
+
+            patient = PatientModel(
+                id=patient_uuid_obj,
+                patient_id=patient_id,
+                name=name,
+                age=age,
+                gender=gender,
+                date_of_birth=f"{now.year - age}-01-01",
+                phone=phone,
+                phone_hash=phone_hash,
+                address="",
+                status="active",
+                total_visits=0,
+                version=1,
+                created_at=now,
+                updated_at=now,
+            )
+            session.add(patient)
+
+            # Create queue entries for each service
+            visit_id = f"VIS-{date_prefix}-{uuid7().hex[:6]}"
+            entries_created = []
+            for code in services:
+                token = await _next_token(session, code, date_prefix)
+                q = QueueEntryModel(
+                    id=uuid7(),
+                    visit_id=visit_id,
+                    patient_id=patient_id,
+                    patient_uuid=str(patient_uuid_obj),
+                    patient_name=name,
+                    service_code=code.upper(),
+                    token_number=token,
+                    department="Cardiology",
+                    room="",
+                    status="WAITING",
+                    priority=0,
+                    display_order=0,
+                    created_by="reception",
+                    updated_by="reception",
+                    version=1,
+                    created_at=now,
+                    updated_at=now,
+                )
+                session.add(q)
+                entries_created.append({"service": code, "token": token})
+
+            await session.commit()
+            return {"ok": True, "patient_id": patient_id, "entries": entries_created,
+                    "message": f"{name} registered! Patient ID: {patient_id}"}
+
+    except Exception as exc:
+        return {"ok": False, "error": str(exc)}
+
+
+async def _next_token(session, service_code: str, date_prefix: str) -> int:
+    """Get next token number for a service today."""
+    from src.infrastructure.queue.models.queue_entry_model import QueueEntryModel
+    result = await session.execute(
+        sa.select(sa.func.coalesce(sa.func.max(QueueEntryModel.token_number), 0)).where(
+            sa.and_(
+                QueueEntryModel.service_code == service_code.upper(),
+                QueueEntryModel.visit_id.like(f"VIS-{date_prefix}-%"),
+            )
+        )
+    )
+    return (result.scalar() or 0) + 1
+
+
+# ── Seed Data (one-time test data for Railway) ─────────────────────────────────
+
+
+@router.get("/seed", include_in_schema=False)
+async def seed_test_data(request: Request):
+    """Seed sample patients + queue entries for demo/testing."""
+    try:
+        from src.infrastructure.patient.models.patient_model import PatientModel
+        from src.infrastructure.queue.models.queue_entry_model import QueueEntryModel
+        from src.shared.domain.base_entity import uuid7
+
+        now = datetime.now(timezone.utc)
+        date_prefix = now.strftime("%Y%m%d")
+
+        sample_patients = [
+            {"name": "Amar Singh",     "age": 45, "gender": "Male",   "phone": "9876543210", "service": "ECG",  "status": "WAITING"},
+            {"name": "Baldev Kaur",    "age": 52, "gender": "Female", "phone": "9876543211", "service": "Echo", "status": "COMPLETED"},
+            {"name": "Charanjit Singh","age": 38, "gender": "Male",   "phone": "9876543212", "service": "TMT",  "status": "IN_PROGRESS"},
+            {"name": "Davinder Kaur",  "age": 60, "gender": "Female", "phone": "9876543213", "service": "OPD",  "status": "WAITING"},
+            {"name": "Ekamjot Singh",  "age": 28, "gender": "Male",   "phone": "9876543214", "service": "ECG",  "status": "CALLED"},
+            {"name": "Gurpreet Kaur",  "age": 35, "gender": "Female", "phone": "9876543215", "service": "Echo", "status": "WAITING"},
+        ]
+
+        async with async_session_factory() as session:
+            created_patients = 0
+            created_entries = 0
+
+            for i, p in enumerate(sample_patients):
+                # Generate patient_id: CQ-YYYYMMDD-NNN
+                patient_id = f"CQ-{date_prefix}-{i+1:03d}"
+                phone_hash = hashlib.sha256(p["phone"].encode()).hexdigest()
+
+                # Check if patient already exists
+                existing = await session.execute(
+                    sa.select(PatientModel).where(
+                        PatientModel.patient_id == patient_id
+                    )
+                )
+                if existing.scalar_one_or_none():
+                    continue
+
+                # Create patient
+                patient = PatientModel(
+                    id=uuid7(),
+                    patient_id=patient_id,
+                    name=p["name"],
+                    age=p["age"],
+                    gender=p["gender"],
+                    date_of_birth=f"{now.year - p['age']}-01-01",
+                    phone=p["phone"],
+                    phone_hash=phone_hash,
+                    address=f"#{i+1}, Sample Street, Amritsar",
+                    status="active",
+                    total_visits=0,
+                    version=1,
+                    created_at=now,
+                    updated_at=now,
+                )
+                session.add(patient)
+
+                # Create visit_id: VIS-YYYYMMDD-ffffff
+                visit_id = f"VIS-{date_prefix}-{i+1:06d}"
+
+                # Create queue entry
+                token = i + 1
+                status = p["status"]
+                q = QueueEntryModel(
+                    id=uuid7(),
+                    visit_id=visit_id,
+                    patient_id=patient_id,
+                    patient_uuid=str(patient.id),
+                    patient_name=p["name"],
+                    service_code=p["service"],
+                    token_number=token,
+                    department="Cardiology",
+                    room="",
+                    status=status,
+                    priority=0,
+                    display_order=0 if status in ("WAITING", "CALLED", "IN_PROGRESS") else 99,
+                    created_by="seed",
+                    updated_by="seed",
+                    version=1,
+                    created_at=now,
+                    updated_at=now,
+                )
+
+                # Set timestamps based on status
+                if status == "IN_PROGRESS":
+                    q.called_at = now
+                    q.started_at = now
+                elif status == "CALLED":
+                    q.called_at = now
+                elif status == "COMPLETED":
+                    q.called_at = now
+                    q.started_at = now
+                    q.completed_at = now
+
+                session.add(q)
+                created_entries += 1
+                created_patients += 1
+
+            await session.commit()
+
+        return HTMLResponse(content=f"""<html><body style="font-family:sans-serif;padding:40px">
+<h2>✅ Seed Data Created</h2>
+<p>Patients: {created_patients}</p>
+<p>Queue Entries: {created_entries}</p>
+<p><a href="/staff/home">Go to Dashboard →</a></p>
+</body></html>""")
+    except Exception as exc:
+        return HTMLResponse(content=f"""<html><body style="font-family:sans-serif;padding:40px">
+<h2>❌ Seed Failed</h2>
+<pre>{exc}</pre>
+</body></html>""", status_code=500)

@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Smart OPD — Doctor Login</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:opsz@14..32&display=swap');
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Inter', system-ui, sans-serif;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: linear-gradient(135deg, #0a1628 0%, #1a2a4a 50%, #0d1f3c 100%);
+        }
+        .card {
+            background: rgba(255,255,255,0.05);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 24px;
+            padding: 48px 40px;
+            width: 400px;
+            max-width: 90vw;
+            text-align: center;
+        }
+        .logo { font-size: 48px; margin-bottom: 8px; }
+        h1 { color: #fff; font-size: 22px; font-weight: 600; margin-bottom: 4px; }
+        .sub { color: rgba(255,255,255,0.5); font-size: 14px; margin-bottom: 32px; }
+        form { display: flex; flex-direction: column; gap: 16px; }
+        input {
+            background: rgba(255,255,255,0.08);
+            border: 1px solid rgba(255,255,255,0.15);
+            border-radius: 12px;
+            padding: 14px 18px;
+            color: #fff;
+            font-size: 18px;
+            text-align: center;
+            letter-spacing: 8px;
+            font-weight: 600;
+            outline: none;
+            transition: all 0.2s;
+        }
+        input:focus { border-color: #3b82f6; background: rgba(59,130,246,0.1); box-shadow: 0 0 20px rgba(59,130,246,0.2); }
+        input::placeholder { letter-spacing: 0; color: rgba(255,255,255,0.3); }
+        button {
+            background: linear-gradient(135deg, #3b82f6, #2563eb);
+            border: none;
+            border-radius: 12px;
+            padding: 14px;
+            color: #fff;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        button:hover { transform: translateY(-1px); box-shadow: 0 8px 25px rgba(59,130,246,0.3); }
+        .error {
+            background: rgba(239,68,68,0.15);
+            border: 1px solid rgba(239,68,68,0.3);
+            border-radius: 10px;
+            padding: 12px;
+            color: #fca5a5;
+            font-size: 14px;
+            margin-bottom: 8px;
+        }
+        .pins { margin-top: 24px; display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
+        .pin-badge {
+            background: rgba(255,255,255,0.06);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 8px;
+            padding: 6px 12px;
+            color: rgba(255,255,255,0.4);
+            font-size: 12px;
+        }
+        .pin-badge strong { color: rgba(255,255,255,0.7); }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <div class="logo">🩺</div>
+        <h1>Smart OPD</h1>
+        <p class="sub">Enter your PIN to continue</p>
+
+        {% if error %}
+        <div class="error">{{ error }}</div>
+        {% endif %}
+
+        <form method="POST" action="/opd/login">
+            <input type="password" name="pin" placeholder="Enter PIN" maxlength="10" inputmode="numeric" autofocus required>
+            <button type="submit">🔓 Unlock</button>
+        </form>
+
+        <div class="pins">
+            <span class="pin-badge">👑 Chief: <strong>5554</strong></span>
+            <span class="pin-badge">👨‍⚕️ Junior: <strong>1234</strong></span>
+            <span class="pin-badge">⚙️ Admin: <strong>1010</strong></span>
+        </div>
+    </div>
+</body>
+</html>

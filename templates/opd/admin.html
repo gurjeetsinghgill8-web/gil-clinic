@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Smart OPD — Admin Portal</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700&display=swap');
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        :root {
+            --bg: #0a0f1e; --card: #111827; --border: rgba(255,255,255,0.08);
+            --text: #e2e8f0; --text-muted: #8892a8; --primary: #3b82f6;
+            --success: #22c55e; --danger: #ef4444; --radius: 12px;
+        }
+        body {
+            font-family: 'Inter', system-ui, sans-serif;
+            background: var(--bg); color: var(--text);
+            padding: 24px;
+            max-width: 1000px;
+            margin: 0 auto;
+        }
+        .header { text-align: center; margin-bottom: 32px; }
+        .header h1 { font-size: 24px; }
+        .header .sub { color: var(--text-muted); font-size: 14px; }
+        .tabs { display: flex; gap: 4px; margin-bottom: 24px; border-bottom: 1px solid var(--border); }
+        .tab {
+            padding: 10px 20px; border: none; background: none;
+            color: var(--text-muted); font-size: 14px; font-weight: 500;
+            cursor: pointer; border-bottom: 2px solid transparent; transition: all 0.15s;
+        }
+        .tab:hover { color: var(--text); }
+        .tab.active { color: var(--primary); border-bottom-color: var(--primary); }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+        .card {
+            background: var(--card); border: 1px solid var(--border);
+            border-radius: var(--radius); padding: 20px; margin-bottom: 16px;
+        }
+        .card-title { font-size: 14px; font-weight: 600; color: var(--text-muted); margin-bottom: 12px; }
+        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin-bottom: 20px; }
+        .stat-card { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; text-align: center; }
+        .stat-card .value { font-size: 28px; font-weight: 700; }
+        .stat-card .label { font-size: 12px; color: var(--text-muted); margin-top: 4px; }
+        input, textarea, select {
+            background: rgba(255,255,255,0.06); border: 1px solid var(--border);
+            border-radius: 8px; padding: 10px 14px; color: var(--text);
+            font-size: 14px; font-family: inherit; outline: none; width: 100%;
+        }
+        input:focus, textarea:focus { border-color: var(--primary); }
+        label { display: block; font-size: 13px; color: var(--text-muted); margin-bottom: 4px; font-weight: 500; }
+        .form-group { margin-bottom: 12px; }
+        .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+        .btn {
+            padding: 10px 20px; border-radius: 8px; font-size: 14px; font-weight: 500;
+            border: none; cursor: pointer; transition: all 0.15s; font-family: inherit;
+        }
+        .btn-primary { background: var(--primary); color: #fff; }
+        .btn-success { background: var(--success); color: #fff; }
+        .btn-danger { background: var(--danger); color: #fff; }
+        .btn-ghost { background: transparent; border: 1px solid var(--border); color: var(--text); }
+        .btn-sm { padding: 6px 12px; font-size: 12px; }
+        .mt-sm { margin-top: 8px; }
+        .mb-sm { margin-bottom: 8px; }
+        .flex { display: flex; align-items: center; gap: 8px; }
+        .flex-between { display: flex; justify-content: space-between; align-items: center; }
+        .text-muted { color: var(--text-muted); }
+        .text-sm { font-size: 12px; }
+        table { width: 100%; border-collapse: collapse; }
+        th { text-align: left; font-size: 12px; color: var(--text-muted); padding: 8px 12px; border-bottom: 1px solid var(--border); font-weight: 600; }
+        td { padding: 10px 12px; border-bottom: 1px solid rgba(255,255,255,0.04); font-size: 13px; }
+        .badge { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 11px; }
+        .badge-success { background: rgba(34,197,94,0.15); color: #4ade80; }
+        .badge-danger { background: rgba(239,68,68,0.15); color: #f87171; }
+        .toast {
+            position: fixed; bottom: 24px; right: 24px;
+            background: var(--card); border: 1px solid var(--border);
+            border-radius: var(--radius); padding: 14px 20px; font-size: 14px;
+            z-index: 1000; display: none; animation: slideIn 0.3s ease;
+        }
+        .toast.show { display: block; }
+        .toast.success { border-color: var(--success); }
+        .toast.error { border-color: var(--danger); }
+        @keyframes slideIn { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+    </style>
+</head>
+<body>
+<div class="header">
+    <h1>⚙️ Smart OPD Admin Portal</h1>
+    <div class="sub">Manage API keys, Licenses, System Stats</div>
+    <a href="/opd/dashboard" class="text-muted text-sm" style="color:var(--text-muted);">← Back to Dashboard</a>
+</div>
+
+<div class="tabs">
+    <button class="tab active" data-tab="stats">📊 System</button>
+    <button class="tab" data-tab="licenses">📋 Licenses</button>
+    <button class="tab" data-tab="api">🔑 API Keys</button>
+</div>
+
+<!-- ─── TAB: STATS ─── -->
+<div class="tab-content active" id="tab-stats">
+    <div class="stats-grid" id="admin-stats">
+        <div class="stat-card"><div class="value">—</div><div class="label">Prescriptions</div></div>
+        <div class="stat-card"><div class="value">—</div><div class="label">Queue Patients</div></div>
+        <div class="stat-card"><div class="value">—</div><div class="label">Licenses</div></div>
+    </div>
+</div>
+
+<!-- ─── TAB: LICENSES ─── -->
+<div class="tab-content" id="tab-licenses">
+    <div class="card">
+        <div class="card-title">Create New License</div>
+        <div class="form-row">
+            <div class="form-group"><label>Doctor ID *</label><input type="text" id="lic-id" placeholder="e.g. dr_ravi"></div>
+            <div class="form-group"><label>Doctor Name *</label><input type="text" id="lic-name" placeholder="Dr. Ravi Kumar"></div>
+        </div>
+        <div class="form-row">
+            <div class="form-group"><label>PIN *</label><input type="text" id="lic-pin" placeholder="4-digit PIN"></div>
+            <div class="form-group"><label>Specialty</label><input type="text" id="lic-spec" placeholder="Cardiology"></div>
+        </div>
+        <div class="form-row">
+            <div class="form-group"><label>Email</label><input type="email" id="lic-email" placeholder="doctor@clinic.com"></div>
+            <div class="form-group"><label>Phone</label><input type="text" id="lic-phone" placeholder="9876543210"></div>
+        </div>
+        <div class="form-row">
+            <div class="form-group"><label>Clinic Name</label><input type="text" id="lic-clinic" placeholder="Heart Care Clinic"></div>
+            <div class="form-group"><label>Expiry Date</label><input type="date" id="lic-expiry" value="2030-12-31"></div>
+        </div>
+        <div class="form-group"><label>Notes</label><textarea id="lic-notes" rows="2"></textarea></div>
+        <button class="btn btn-primary" onclick="createLicense()">➕ Create License</button>
+    </div>
+
+    <div class="card">
+        <div class="card-title">All Licenses</div>
+        <div style="overflow-x:auto;">
+            <table>
+                <thead><tr><th>Doctor</th><th>ID</th><th>PIN</th><th>Expiry</th><th>Status</th><th>Actions</th></tr></thead>
+                <tbody id="licenses-body"></tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- ─── TAB: API KEYS ─── -->
+<div class="tab-content" id="tab-api">
+    <div class="card">
+        <div class="card-title">System Configuration</div>
+        <div class="form-group">
+            <label>Groq API Key</label>
+            <input type="password" id="admin-groq-key" placeholder="gsk_...">
+        </div>
+        <div class="form-group">
+            <label>Supabase URL</label>
+            <input type="text" id="admin-supabase-url" placeholder="https://xyz.supabase.co">
+        </div>
+        <div class="form-group">
+            <label>Supabase Key</label>
+            <input type="password" id="admin-supabase-key" placeholder="eyJ...">
+        </div>
+        <button class="btn btn-primary" onclick="saveAdminSettings()">💾 Save System Config</button>
+    </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ─── Tabs ───
+document.querySelectorAll('.tab[data-tab]').forEach(btn => {
+    btn.addEventListener('click', () => {
+        document.querySelectorAll('.tab').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+        document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
+        if (btn.dataset.tab === 'stats') loadAdminStats();
+        if (btn.dataset.tab === 'licenses') loadLicenses();
+    });
+});
+
+function showToast(msg, type='success') {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.className = 'toast show ' + type;
+    setTimeout(() => t.classList.remove('show'), 3000);
+}
+
+// ─── Stats ───
+function loadAdminStats() {
+    fetch('/opd/api/admin/stats')
+        .then(r => r.json())
+        .then(data => {
+            document.querySelector('#admin-stats .stat-card:nth-child(1) .value').textContent = data.total_prescriptions || '0';
+            document.querySelector('#admin-stats .stat-card:nth-child(2) .value').textContent = data.total_queue_patients || '0';
+            document.querySelector('#admin-stats .stat-card:nth-child(3) .value').textContent = data.total_licenses || '0';
+        });
+}
+
+// ─── Licenses ───
+function loadLicenses() {
+    fetch('/opd/api/licenses')
+        .then(r => r.json())
+        .then(data => {
+            const tbody = document.getElementById('licenses-body');
+            tbody.innerHTML = '';
+            if (!data || data.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="6" class="text-muted">No licenses yet</td></tr>';
+                return;
+            }
+            data.forEach(l => {
+                const tr = document.createElement('tr');
+                const isExpired = l.expiry_date && l.expiry_date < new Date().toISOString().slice(0,10);
+                tr.innerHTML = `
+                    <td><strong>${l.doctor_name}</strong><br><span class="text-muted text-sm">${l.specialty || ''}</span></td>
+                    <td class="text-sm">${l.doctor_id}</td>
+                    <td class="text-sm">${l.pin}</td>
+                    <td class="text-sm">${l.expiry_date || '—'}</td>
+                    <td>${isExpired
+                        ? '<span class="badge badge-danger">Expired</span>'
+                        : '<span class="badge badge-success">Active</span>'}</td>
+                    <td><button class="btn btn-sm btn-danger" onclick="deleteLicense(${l.id})">🗑️</button></td>
+                `;
+                tbody.appendChild(tr);
+            });
+        });
+}
+
+function createLicense() {
+    const data = {
+        doctor_id: document.getElementById('lic-id').value.trim(),
+        doctor_name: document.getElementById('lic-name').value.trim(),
+        pin: document.getElementById('lic-pin').value.trim(),
+        specialty: document.getElementById('lic-spec').value.trim(),
+        doctor_email: document.getElementById('lic-email').value.trim(),
+        doctor_phone: document.getElementById('lic-phone').value.trim(),
+        clinic_name: document.getElementById('lic-clinic').value.trim(),
+        expiry_date: document.getElementById('lic-expiry').value,
+        notes: document.getElementById('lic-notes').value.trim() || '',
+    };
+    if (!data.doctor_id || !data.doctor_name || !data.pin) {
+        showToast('Doctor ID, Name, and PIN required', 'error'); return;
+    }
+
+    fetch('/opd/api/license', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(data),
+    })
+    .then(r => r.json())
+    .then(res => {
+        if (res.ok) { showToast('✅ License created!'); loadLicenses(); loadAdminStats(); }
+        else showToast('❌ ' + res.error, 'error');
+    });
+}
+
+function deleteLicense(id) {
+    if (!confirm('Delete this license?')) return;
+    fetch('/opd/api/license?id=' + id, {method: 'DELETE'})
+        .then(r => r.json())
+        .then(res => {
+            if (res.ok) { showToast('✅ License deleted'); loadLicenses(); loadAdminStats(); }
+            else showToast('❌ ' + res.error, 'error');
+        });
+}
+
+// ─── Admin Settings ───
+function saveAdminSettings() {
+    // Save Groq key to chief's settings
+    const key = document.getElementById('admin-groq-key').value.trim();
+    if (!key) { showToast('Enter API key', 'error'); return; }
+
+    fetch('/opd/api/settings', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({groq_api_key: key}),
+    })
+    .then(r => r.json())
+    .then(res => {
+        if (res.ok) showToast('✅ API Key saved!');
+        else showToast('❌ ' + res.error, 'error');
+    });
+}
+
+// ─── Init ───
+loadAdminStats();
+</script>
+</body>
+</html>

@@ -24,7 +24,7 @@
       ✅ Mark Complete
     </button>
     <button class="btn btn-warning"
-      data-action="report_ready"
+      data-action="report-ready"
       data-entry-id="{{ current_patient.id }}"
       data-dept="{{ dept_id }}">
       📄 Report Ready
@@ -94,7 +94,7 @@
           </button>
           {% elif entry.status == 'COMPLETED' %}
           <button class="btn btn-outline btn-sm"
-            data-action="report_ready"
+            data-action="report-ready"
             data-entry-id="{{ entry.id }}"
             data-dept="{{ dept_id }}">
             📄 Report
