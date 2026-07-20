@@ -32,6 +32,14 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from itsdangerous import BadSignature, SignatureExpired, URLSafeTimedSerializer
 
+# ── Queue DB access (used by _get_queue helper) ──────────────────────────────
+from src.application.queue.use_cases.list_queue_use_case import ListQueueUseCase
+from src.infrastructure.persistence.queue.repositories.queue_repository import (
+    SqlAlchemyQueueRepository,
+)
+from src.application.common.command import Command
+from src.shared.infrastructure.database import async_session_factory
+
 # ── Templates ─────────────────────────────────────────────────────────────────
 _TEMPLATES_DIR = Path(__file__).parents[4] / "templates"
 templates = Jinja2Templates(directory=str(_TEMPLATES_DIR))
@@ -136,28 +144,58 @@ def require_session(request: Request) -> dict:
     return sess
 
 
-# ── Queue helpers — call existing queue API internally ────────────────────────
+# ── Queue helpers — fetch queue data via direct DB session ─────────────────────
 async def _get_queue(request: Request, department: str | None = None,
                       status_filter: str | None = None) -> list[dict]:
-    """Fetch queue from the internal queue API."""
+    """Fetch queue entries directly via async session + repository.
+
+    Uses async_session_factory directly instead of FastAPI Depends,
+    so it can be called from any route handler.
+
+    NOTE: The clinic only has a "Cardiology" department in the data model.
+    The DEPT_CONFIG IDs (ECG, Echo, TMT, OPD) are service_codes, not actual
+    department names. When a department is passed, it is treated as a
+    service_code filter instead.
+    """
     try:
-        from src.presentation.queue.dependencies.queue_dependencies import get_list_queue_use_case
-        from src.application.common.command import Command
-        use_case = get_list_queue_use_case(request)
-        cmd = Command(data={"department": department, "status": status_filter})
-        result = await use_case.run(cmd)
-        if result.is_fail:
-            return []
-        entries = result.data.get("entries", [])
-        # Add wait_minutes helper
-        now = datetime.now(timezone.utc)
-        for e in entries:
-            try:
-                created = datetime.fromisoformat(str(e.get("created_at", "")).replace("Z", "+00:00"))
-                e["wait_minutes"] = int((now - created).total_seconds() / 60)
-            except Exception:
-                e["wait_minutes"] = 0
-        return entries
+        async with async_session_factory() as session:
+            repo = SqlAlchemyQueueRepository(session)
+            use_case = ListQueueUseCase(queue_repo=repo)
+
+            # DEPT_CONFIG IDs (ECG, Echo, TMT, OPD) are service_codes, not
+            # actual departments. All entries have department="Cardiology".
+            # So we omit the department filter (use case defaults to
+            # "Cardiology" → all entries), then filter by service_code if a
+            # specific department view was requested.
+            service_code_filter = None
+            if department:
+                service_code_filter = department
+
+            cmd_data = {"status": status_filter}
+            cmd = Command(data=cmd_data)
+            result = await use_case.run(cmd)
+            if result.is_fail:
+                return []
+            entries = result.data.get("entries", [])
+
+            # Filter by service_code if department was specified
+            if service_code_filter:
+                entries = [
+                    e for e in entries
+                    if e.get("service_code", "").upper() == service_code_filter.upper()
+                ]
+
+            # Add wait_minutes helper
+            now = datetime.now(timezone.utc)
+            for e in entries:
+                try:
+                    created = datetime.fromisoformat(
+                        str(e.get("created_at", "")).replace("Z", "+00:00")
+                    )
+                    e["wait_minutes"] = int((now - created).total_seconds() / 60)
+                except Exception:
+                    e["wait_minutes"] = 0
+            return entries
     except Exception:
         return []
 
