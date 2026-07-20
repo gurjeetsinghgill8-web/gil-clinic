@@ -42,9 +42,9 @@ from src.shared.infrastructure.database import async_session_factory
 
 # ── Templates ─────────────────────────────────────────────────────────────────
 _TEMPLATES_DIR = Path(__file__).parents[4] / "templates"
-# Disable Jinja2 cache (avoids LRUCache bug on some Python versions)
+# Use a plain dict for Jinja2 cache instead of LRUCache (compat fix)
 templates = Jinja2Templates(directory=str(_TEMPLATES_DIR))
-templates.env.cache = None  # type: ignore[assignment]
+templates.env.cache = {}  # type: ignore[assignment]
 
 # ── Session ───────────────────────────────────────────────────────────────────
 SECRET_KEY = os.getenv("SECRET_KEY", "gil-clinic-secret-2024-change-in-prod")
