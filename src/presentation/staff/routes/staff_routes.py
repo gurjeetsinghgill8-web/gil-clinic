@@ -29,8 +29,19 @@ from typing import Optional
 
 from fastapi import APIRouter, Cookie, Form, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
-from fastapi.templating import Jinja2Templates
 from itsdangerous import BadSignature, SignatureExpired, URLSafeTimedSerializer
+
+# ── Jinja2 template engine (direct, bypasses Starlette's wrapper) ────────────
+import jinja2
+_TEMPLATES_DIR = Path(__file__).parents[4] / "templates"
+_jinja_loader = jinja2.FileSystemLoader(str(_TEMPLATES_DIR))
+_jinja_env = jinja2.Environment(loader=_jinja_loader, auto_reload=True)
+_jinja_env.cache = {}  # plain dict cache (avoids LRUCache bug)
+
+def _render(name: str, **context) -> str:
+    """Render a Jinja2 template and return HTML string."""
+    template = _jinja_env.get_template(name)
+    return template.render(**context)
 
 # ── Queue DB access (used by _get_queue helper) ──────────────────────────────
 from src.application.queue.use_cases.list_queue_use_case import ListQueueUseCase
@@ -39,12 +50,6 @@ from src.infrastructure.persistence.queue.repositories.queue_repository import (
 )
 from src.application.common.command import Command
 from src.shared.infrastructure.database import async_session_factory
-
-# ── Templates ─────────────────────────────────────────────────────────────────
-_TEMPLATES_DIR = Path(__file__).parents[4] / "templates"
-# Use a plain dict for Jinja2 cache instead of LRUCache (compat fix)
-templates = Jinja2Templates(directory=str(_TEMPLATES_DIR))
-templates.env.cache = {}  # type: ignore[assignment]
 
 # ── Session ───────────────────────────────────────────────────────────────────
 SECRET_KEY = os.getenv("SECRET_KEY", "gil-clinic-secret-2024-change-in-prod")
@@ -234,7 +239,7 @@ async def login_page(request: Request):
     sess = get_session(request)
     if sess:
         return RedirectResponse("/staff/home")
-    return templates.TemplateResponse("dashboard/login.html", {"request": request})
+    return HTMLResponse(content=_render("dashboard/login.html", request=request))
 
 
 @router.post("/login", include_in_schema=False)
@@ -246,10 +251,7 @@ async def login_submit(
 ):
     expected_pin = STAFF_PINS.get(role)
     if not expected_pin or pin.strip() != expected_pin:
-        return templates.TemplateResponse("dashboard/login.html", {
-            "request": request,
-            "error": "❌ Wrong PIN. Please try again."
-        })
+        return HTMLResponse(content=_render("dashboard/login.html", request=request, error="❌ Wrong PIN. Please try again."))
 
     token = create_session(role=role, name=name or role)
     resp = RedirectResponse("/staff/home", status_code=303)
@@ -277,13 +279,10 @@ async def home(request: Request):
     if not sess:
         return RedirectResponse("/staff/login")
     stats = await _get_stats(request)
-    return templates.TemplateResponse("dashboard/home.html", {
-        "request": request,
-        "active_page": "home",
-        "session_user": sess,
-        "stats": stats,
-        "under_construction": UNDER_CONSTRUCTION,
-    })
+    return HTMLResponse(content=_render("dashboard/home.html",
+        request=request, active_page="home", session_user=sess,
+        stats=stats, under_construction=UNDER_CONSTRUCTION,
+    ))
 
 
 # ── Reception ──────────────────────────────────────────────────────────────────
@@ -294,13 +293,10 @@ async def reception(request: Request):
     if not sess:
         return RedirectResponse("/staff/login")
     queue_entries = await _get_queue(request)
-    return templates.TemplateResponse("dashboard/reception.html", {
-        "request": request,
-        "active_page": "reception",
-        "session_user": sess,
-        "queue_entries": queue_entries,
-        "services": SERVICES,
-    })
+    return HTMLResponse(content=_render("dashboard/reception.html",
+        request=request, active_page="reception", session_user=sess,
+        queue_entries=queue_entries, services=SERVICES,
+    ))
 
 
 # ── Department Technician Dashboards ──────────────────────────────────────────
@@ -313,16 +309,11 @@ async def _dept_page(request: Request, dept_key: str, active_page: str):
     all_entries = await _get_queue(request, department=cfg["id"])
     current = next((e for e in all_entries if e.get("status") == "IN_PROGRESS"), None)
     queue = [e for e in all_entries if e.get("status") != "DELIVERED"]
-    return templates.TemplateResponse("dashboard/department.html", {
-        "request": request,
-        "active_page": active_page,
-        "session_user": sess,
-        "dept_id": cfg["id"],
-        "dept_name": cfg["name"],
-        "dept_icon": cfg["icon"],
-        "current_patient": current,
-        "queue": queue,
-    })
+    return HTMLResponse(content=_render("dashboard/department.html",
+        request=request, active_page=active_page, session_user=sess,
+        dept_id=cfg["id"], dept_name=cfg["name"], dept_icon=cfg["icon"],
+        current_patient=current, queue=queue,
+    ))
 
 
 @router.get("/ecg",  include_in_schema=False)
@@ -365,11 +356,9 @@ async def billing(request: Request):
     sess = get_session(request)
     if not sess:
         return RedirectResponse("/staff/login")
-    return templates.TemplateResponse("dashboard/base.html", {
-        "request": request,
-        "active_page": "billing",
-        "session_user": sess,
-    })
+    return HTMLResponse(content=_render("dashboard/base.html",
+        request=request, active_page="billing", session_user=sess,
+    ))
 
 
 # ── TV Display ────────────────────────────────────────────────────────────────
@@ -395,10 +384,7 @@ async def patient_status(request: Request, q: str = Query("")):
             or query == str(e.get("token_number", ""))
         ]
 
-    return templates.TemplateResponse("dashboard/patient_status.html", {
-        "request": request,
-        "active_page": "patient_status",
-        "session_user": sess,
-        "patient_entries": patient_entries,
-        "query": query,
-    })
+    return HTMLResponse(content=_render("dashboard/patient_status.html",
+        request=request, active_page="patient_status", session_user=sess,
+        patient_entries=patient_entries, query=query,
+    ))
