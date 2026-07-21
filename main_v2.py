@@ -19,11 +19,6 @@ import sys
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from dotenv import load_dotenv
-
-# Load .env file if it exists (fallback for Railway env vars)
-load_dotenv()
-
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, RedirectResponse
@@ -166,9 +161,6 @@ async def lifespan(app: FastAPI):
     # Store sync session factory in app state (used by JSON backend fallback)
     app.state.db_session = SessionLocal
 
-    # Debug: check GROQ_API_KEY
-    _gk = os.environ.get("GROQ_API_KEY", "")
-    print(f"[GHOS] GROQ_API_KEY loaded: {'YES' if _gk else 'NO'} (len={len(_gk)})")
     print(f"[GHOS] {APP_NAME} v{APP_VERSION} ready")
     yield
     print("[GHOS] Shutdown complete")
@@ -248,23 +240,6 @@ if _dash_static.exists():
 async def root():
     """Root redirect → Staff Dashboard."""
     return RedirectResponse("/staff/")
-
-
-@app.get("/debug-env", include_in_schema=False)
-async def debug_env():
-    """Check ALL environment variables."""
-    groq_key = os.environ.get("GROQ_API_KEY", "")
-    has_key = bool(groq_key)
-    all_vars = dict(os.environ)
-    # Filter out Railway internal vars for clarity
-    user_vars = {k:v for k,v in all_vars.items() if not k.startswith("RAILWAY")}
-    return {
-        "GROQ_API_KEY_set": has_key,
-        "GROQ_API_KEY_length": len(groq_key),
-        "GROQ_API_KEY_preview": groq_key[:8] + "..." if has_key else "NOT SET",
-        "user_env_vars": user_vars,
-        "all_env_count": len(all_vars),
-    }
 
 
 # =========================================================================

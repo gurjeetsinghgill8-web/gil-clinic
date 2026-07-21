@@ -17,6 +17,7 @@ build/
 
 # Secrets
 pwa/secret.txt
+secret.txt
 
 # OS
 .DS_Store
