@@ -154,10 +154,15 @@ from src.infrastructure.staff.models.staff_user_model import StaffUserModel  # n
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Startup / shutdown lifecycle."""
-    # Startup: create tables if using SQLite
+    # Startup: create tables (both SQLite and PostgreSQL)
     if _DB_URL.startswith("sqlite"):
         Base.metadata.create_all(bind=engine)
         print(f"[GHOS] Database: {_DB_URL} (tables created)")
+    else:
+        # PostgreSQL — use async engine to create tables
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
+        print(f"[GHOS] Database: PostgreSQL (tables created)")
 
     # Store sync session factory in app state
     # Store sync session factory in app state (used by JSON backend fallback)
