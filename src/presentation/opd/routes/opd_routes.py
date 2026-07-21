@@ -456,7 +456,11 @@ async def api_queue_patients(request: Request):
             for q_entry, p_entry in rows:
                 wait_mins = 0
                 if q_entry.created_at:
-                    delta = datetime.datetime.now(datetime.timezone.utc) - q_entry.created_at
+                    now_naive = datetime.datetime.now()
+                    created = q_entry.created_at
+                    if created.tzinfo is not None:
+                        created = created.replace(tzinfo=None)
+                    delta = now_naive - created
                     wait_mins = int(delta.total_seconds() / 60)
                 patients.append({
                     "patient_id": q_entry.patient_id,
