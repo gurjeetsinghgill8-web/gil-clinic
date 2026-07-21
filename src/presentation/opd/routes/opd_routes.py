@@ -345,7 +345,8 @@ async def api_save_settings(request: Request):
 
             for key in ["clinic_name", "doc_name", "doc_subtitle", "doc_degree",
                          "doc_reg_no", "doc_email", "doc_phone", "clinic_address",
-                         "doc_extra_quals", "groq_api_key"]:
+                         "doc_extra_quals", "groq_api_key",
+                         "wa_reception", "wa_manager", "wa_doctor"]:
                 if key in body:
                     setattr(s, key, str(body[key]))
 

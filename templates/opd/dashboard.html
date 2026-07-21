@@ -458,11 +458,19 @@
                 <div class="card" id="rx-output-section" style="display:none;">
                     <div class="flex-between mb-sm">
                         <div class="card-title" style="margin:0;">🤖 AI Prescription Output</div>
-                        <div class="flex gap-sm">
+                        <div class="flex gap-sm" style="flex-wrap:wrap;">
                             <button class="btn btn-sm btn-ghost" onclick="copyRx()">📋 Copy</button>
                             <button class="btn btn-sm btn-success" onclick="saveRx()">💾 Save</button>
                             <button class="btn btn-sm btn-primary" onclick="previewPdf()">📄 PDF</button>
-                            <button class="btn btn-sm btn-ghost" onclick="shareWhatsApp()">📱 WhatsApp</button>
+                            <span style="position:relative;display:inline-block;">
+                                <button class="btn btn-sm btn-ghost" onclick="toggleWhatsAppMenu()" style="background:rgba(37,211,102,0.12);border-color:#25D366;">📱 WhatsApp ▾</button>
+                                <div id="wa-menu" style="display:none;position:absolute;top:100%;right:0;background:var(--card);border:1px solid var(--border);border-radius:8px;z-index:200;min-width:180px;box-shadow:0 8px 30px rgba(0,0,0,0.15);margin-top:4px;">
+                                    <button class="btn btn-sm btn-ghost" onclick="shareWhatsApp('patient')" style="display:flex;width:100%;border-radius:0;border-bottom:1px solid var(--border);padding:10px 14px;">👤 Send to Patient</button>
+                                    <button class="btn btn-sm btn-ghost" onclick="shareWhatsApp('reception')" style="display:flex;width:100%;border-radius:0;border-bottom:1px solid var(--border);padding:10px 14px;">🏥 Send to Reception</button>
+                                    <button class="btn btn-sm btn-ghost" onclick="shareWhatsApp('doctor')" style="display:flex;width:100%;border-radius:0;border-bottom:1px solid var(--border);padding:10px 14px;">👨‍⚕️ Send to Doctor</button>
+                                    <button class="btn btn-sm btn-ghost" onclick="shareWhatsApp('manager')" style="display:flex;width:100%;border-radius:0;padding:10px 14px;">👔 Send to Manager</button>
+                                </div>
+                            </span>
                         </div>
                     </div>
                     <textarea id="rx-output" rows="12" style="font-family:monospace;font-size:13px;"></textarea>
@@ -646,6 +654,25 @@
                         <label>Groq API Key (for AI features)</label>
                         <input type="password" id="set-groq-key" value="{{ settings.groq_api_key or '' }}" placeholder="gsk_...">
                     </div>
+
+                    <!-- ── WhatsApp Jugaad Numbers ── -->
+                    <div class="card-title" style="margin-top:20px;">📱 WhatsApp Jugaad — One-Click Share Numbers</div>
+                    <div class="form-row-3">
+                        <div class="form-group">
+                            <label>Reception WhatsApp</label>
+                            <input type="text" id="set-wa-reception" value="{{ settings.wa_reception or '' }}" placeholder="91XXXXXXXXXX">
+                        </div>
+                        <div class="form-group">
+                            <label>Manager WhatsApp</label>
+                            <input type="text" id="set-wa-manager" value="{{ settings.wa_manager or '' }}" placeholder="91XXXXXXXXXX">
+                        </div>
+                        <div class="form-group">
+                            <label>Doctor WhatsApp</label>
+                            <input type="text" id="set-wa-doctor" value="{{ settings.wa_doctor or '' }}" placeholder="91XXXXXXXXXX">
+                        </div>
+                    </div>
+                    <div class="text-sm text-muted mb-sm">Numbers with country code (no +). Used by WhatsApp share buttons.</div>
+
                     <button class="btn btn-primary" onclick="saveSettings()">💾 Save Settings</button>
                     <span id="settings-status" class="text-muted text-sm" style="margin-left:12px;"></span>
                 </div>
@@ -854,15 +881,92 @@ function stopRecording() {
 }
 
 // ════════════════════════════════════════════════════════════════
-// WHATSAPP SHARE
+// WHATSAPP JUGAAD — One-click share to Patient / Reception / Doctor / Manager
 // ════════════════════════════════════════════════════════════════
-function shareWhatsApp() {
+let waMenuOpen = false;
+function toggleWhatsAppMenu() {
+    waMenuOpen = !waMenuOpen;
+    document.getElementById('wa-menu').style.display = waMenuOpen ? 'block' : 'none';
+}
+// Close menu on outside click
+document.addEventListener('click', function(e) {
+    if (waMenuOpen && !e.target.closest('#wa-menu') && !e.target.closest('[onclick*="toggleWhatsAppMenu"]')) {
+        waMenuOpen = false;
+        document.getElementById('wa-menu').style.display = 'none';
+    }
+});
+
+function shareWhatsApp(role) {
     const name = document.getElementById('pt-name').value.trim();
     const rx = document.getElementById('rx-output').value.trim() || document.getElementById('pt-medicines').value.trim();
-    if (!name || !rx) { showToast('Patient name and prescription required', 'error'); return; }
-    const msg = `📋 *Prescription for ${name}*\n\n${rx.substring(0, 3000)}\n\n— GIL CLINIC`;
-    window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank');
-    showToast('📱 WhatsApp opened');
+    const phone = document.getElementById('pt-phone').value.trim();
+    const age = document.getElementById('pt-age').value.trim();
+    const gender = document.getElementById('pt-gender').value;
+    const vitals = document.getElementById('pt-vitals').value.trim();
+    const complaints = document.getElementById('pt-complaints').value.trim();
+    const diagnosis = document.getElementById('rx-output').value.trim();
+
+    if (!name) { showToast('Patient name required', 'error'); return; }
+
+    let number = '';
+    let msg = '';
+
+    // Get saved WhatsApp numbers from settings fields
+    const waReception = document.getElementById('set-wa-reception')?.value.trim() || '';
+    const waManager = document.getElementById('set-wa-manager')?.value.trim() || '';
+    const waDoctor = document.getElementById('set-wa-doctor')?.value.trim() || '';
+
+    switch(role) {
+        case 'patient':
+            number = phone;
+            msg = `📋 *Prescription for ${name}*\n` +
+                (age ? `👤 ${age}/${gender}\n` : '') +
+                (vitals ? `🩺 Vitals: ${vitals}\n` : '') +
+                (complaints ? `💬 ${complaints}\n` : '') +
+                `\n*Diagnosis:* ${diagnosis || 'N/A'}\n` +
+                `*Medicines:*\n${rx.substring(0, 2000)}\n\n— GIL CLINIC`;
+            break;
+        case 'reception':
+            number = waReception;
+            msg = `🏥 *New OPD Patient*\n\n👤 *${name}*` +
+                (phone ? `\n📞 ${phone}` : '') +
+                (age ? `\n👤 ${age}/${gender}` : '') +
+                (vitals ? `\n🩺 ${vitals}` : '') +
+                (complaints ? `\n💬 ${complaints}` : '') +
+                `\n💰 Fee: ₹${document.getElementById('pt-fee').value || '0'}\n\n📋 ${diagnosis || 'Check-up'}`;
+            break;
+        case 'doctor':
+            number = waDoctor;
+            msg = `👨‍⚕️ *Referral / Consultation*\n\n👤 *${name}*` +
+                (phone ? `\n📞 ${phone}` : '') +
+                (age ? `\n👤 ${age}/${gender}` : '') +
+                (vitals ? `\n🩺 ${vitals}` : '') +
+                (complaints ? `\n💬 ${complaints}` : '') +
+                `\n\n*My Prescription:*\n${rx.substring(0, 1500)}`;
+            break;
+        case 'manager':
+            number = waManager;
+            msg = `👔 *Daily OPD Update*\n\n👤 *${name}*` +
+                (phone ? `\n📞 ${phone}` : '') +
+                `\n💰 Fee: ₹${document.getElementById('pt-fee').value || '0'}` +
+                `\n📋 ${diagnosis || 'Check-up'}` +
+                `\n\n— GIL CLINIC`;
+            break;
+    }
+
+    if (!number) {
+        if (role === 'reception') { showToast('Set Reception WhatsApp number in Settings', 'error'); return; }
+        if (role === 'manager') { showToast('Set Manager WhatsApp number in Settings', 'error'); return; }
+        if (role === 'doctor') { showToast('Set Doctor WhatsApp number in Settings', 'error'); return; }
+        if (role === 'patient') { showToast('Patient phone number not entered', 'error'); return; }
+    }
+
+    number = number.replace(/[^0-9]/g, '');
+    const url = number ? `https://wa.me/${number}?text=${encodeURIComponent(msg)}` : `https://wa.me/?text=${encodeURIComponent(msg)}`;
+    window.open(url, '_blank');
+    showToast(`📱 WhatsApp opened for ${role}`);
+    waMenuOpen = false;
+    document.getElementById('wa-menu').style.display = 'none';
 }
 
 // ════════════════════════════════════════════════════════════════
@@ -1535,6 +1639,9 @@ function saveSettings() {
         doc_phone: document.getElementById('set-phone').value.trim(),
         clinic_address: document.getElementById('set-address').value.trim(),
         groq_api_key: document.getElementById('set-groq-key').value.trim(),
+        wa_reception: document.getElementById('set-wa-reception').value.trim(),
+        wa_manager: document.getElementById('set-wa-manager').value.trim(),
+        wa_doctor: document.getElementById('set-wa-doctor').value.trim(),
     };
 
     document.getElementById('settings-status').textContent = 'Saving...';

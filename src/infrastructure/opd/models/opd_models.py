@@ -163,6 +163,11 @@ class SettingsModel(Base):
     doc_extra_quals: Mapped[str] = mapped_column(Text, nullable=False, default="")
     groq_api_key: Mapped[str] = mapped_column(String(200), nullable=False, default="")
 
+    # WhatsApp Jugaad — role-based numbers for one-click sharing
+    wa_reception: Mapped[str] = mapped_column(String(20), nullable=False, default="")
+    wa_manager: Mapped[str] = mapped_column(String(20), nullable=False, default="")
+    wa_doctor: Mapped[str] = mapped_column(String(20), nullable=False, default="")
+
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
     )
