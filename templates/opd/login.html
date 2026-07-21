@@ -13,28 +13,29 @@
             display: flex;
             align-items: center;
             justify-content: center;
-            background: linear-gradient(135deg, #0a1628 0%, #1a2a4a 50%, #0d1f3c 100%);
+            background: linear-gradient(135deg, #e8f4fd 0%, #d0e8f7 50%, #e8f4fd 100%);
         }
         .card {
-            background: rgba(255,255,255,0.05);
+            background: rgba(255,255,255,0.85);
             backdrop-filter: blur(20px);
-            border: 1px solid rgba(255,255,255,0.1);
+            border: 1px solid rgba(0,0,0,0.08);
             border-radius: 24px;
             padding: 48px 40px;
             width: 400px;
             max-width: 90vw;
             text-align: center;
+            box-shadow: 0 20px 60px rgba(59,130,246,0.15);
         }
         .logo { font-size: 48px; margin-bottom: 8px; }
-        h1 { color: #fff; font-size: 22px; font-weight: 600; margin-bottom: 4px; }
-        .sub { color: rgba(255,255,255,0.5); font-size: 14px; margin-bottom: 32px; }
+        h1 { color: #1e293b; font-size: 22px; font-weight: 600; margin-bottom: 4px; }
+        .sub { color: #64748b; font-size: 14px; margin-bottom: 32px; }
         form { display: flex; flex-direction: column; gap: 16px; }
         input {
-            background: rgba(255,255,255,0.08);
-            border: 1px solid rgba(255,255,255,0.15);
+            background: #f1f5f9;
+            border: 1px solid #e2e8f0;
             border-radius: 12px;
             padding: 14px 18px;
-            color: #fff;
+            color: #1e293b;
             font-size: 18px;
             text-align: center;
             letter-spacing: 8px;
@@ -42,8 +43,8 @@
             outline: none;
             transition: all 0.2s;
         }
-        input:focus { border-color: #3b82f6; background: rgba(59,130,246,0.1); box-shadow: 0 0 20px rgba(59,130,246,0.2); }
-        input::placeholder { letter-spacing: 0; color: rgba(255,255,255,0.3); }
+        input:focus { border-color: #3b82f6; background: #fff; box-shadow: 0 0 20px rgba(59,130,246,0.15); }
+        input::placeholder { letter-spacing: 0; color: #94a3b8; }
         button {
             background: linear-gradient(135deg, #3b82f6, #2563eb);
             border: none;
@@ -57,24 +58,24 @@
         }
         button:hover { transform: translateY(-1px); box-shadow: 0 8px 25px rgba(59,130,246,0.3); }
         .error {
-            background: rgba(239,68,68,0.15);
-            border: 1px solid rgba(239,68,68,0.3);
+            background: rgba(239,68,68,0.1);
+            border: 1px solid rgba(239,68,68,0.2);
             border-radius: 10px;
             padding: 12px;
-            color: #fca5a5;
+            color: #dc2626;
             font-size: 14px;
             margin-bottom: 8px;
         }
         .pins { margin-top: 24px; display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
         .pin-badge {
-            background: rgba(255,255,255,0.06);
-            border: 1px solid rgba(255,255,255,0.1);
+            background: #f1f5f9;
+            border: 1px solid #e2e8f0;
             border-radius: 8px;
             padding: 6px 12px;
-            color: rgba(255,255,255,0.4);
+            color: #64748b;
             font-size: 12px;
         }
-        .pin-badge strong { color: rgba(255,255,255,0.7); }
+        .pin-badge strong { color: #1e293b; }
     </style>
 </head>
 <body>
