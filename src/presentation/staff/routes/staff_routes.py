@@ -98,7 +98,7 @@ UNDER_CONSTRUCTION = [
     {"name": "GST / Finance", "icon": "💼"},
     {"name": "Multi-Branch",  "icon": "🏢"},
     {"name": "AI Dietician",  "icon": "🥗"},
-    {"name": "AI Prescription","icon": "📝"},
+    {"name": "WhatsApp Alerts","icon": "💬"},
     {"name": "WhatsApp Alerts","icon": "💬"},
     {"name": "Video Consult", "icon": "📹"},
     {"name": "IPD Ward",      "icon": "🛏️"},
