@@ -94,6 +94,7 @@
     <button class="tab active" data-tab="stats">📊 System</button>
     <button class="tab" data-tab="licenses">📋 Licenses</button>
     <button class="tab" data-tab="api">🔑 API Keys</button>
+    <button class="tab" data-tab="import">📥 Bulk Import</button>
 </div>
 
 <!-- ─── TAB: STATS ─── -->
@@ -137,6 +138,28 @@
                 <tbody id="licenses-body"></tbody>
             </table>
         </div>
+    </div>
+</div>
+
+<!-- ─── TAB: BULK IMPORT ─── -->
+<div class="tab-content" id="tab-import">
+    <div class="card">
+        <div class="card-title">Bulk Import Patients</div>
+        <div class="form-group">
+            <label>Upload CSV or JSON File</label>
+            <input type="file" id="import-file" accept=".csv,.json" onchange="previewImport()">
+        </div>
+        <div class="text-muted text-sm mb-sm">
+            CSV format: name, age, gender, phone, address<br>
+            JSON format: [{"name":"...", "age":"...", "gender":"...", "phone":"...", "address":"..."}]
+        </div>
+        <div id="import-preview" class="mb-sm"></div>
+        <button class="btn btn-primary" onclick="runImport()" id="import-btn" disabled>📥 Import Patients</button>
+        <div id="import-status" class="mt-sm text-muted text-sm"></div>
+    </div>
+    <div class="card">
+        <div class="card-title">Template</div>
+        <button class="btn btn-sm btn-ghost" onclick="downloadImportTemplate()">📄 Download CSV Template</button>
     </div>
 </div>
 
@@ -276,6 +299,97 @@ function saveAdminSettings() {
         if (res.ok) showToast('✅ API Key saved!');
         else showToast('❌ ' + res.error, 'error');
     });
+}
+
+// ─── Bulk Import ───
+let importData = [];
+
+function previewImport() {
+    const file = document.getElementById('import-file').files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        const content = e.target.result;
+        const preview = document.getElementById('import-preview');
+        const btn = document.getElementById('import-btn');
+        try {
+            if (file.name.endsWith('.json')) {
+                importData = JSON.parse(content);
+            } else {
+                // CSV parse
+                const lines = content.split('\n').filter(l => l.trim());
+                const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
+                importData = lines.slice(1).map(line => {
+                    const vals = line.split(',').map(v => v.trim());
+                    const obj = {};
+                    headers.forEach((h, i) => obj[h] = vals[i] || '');
+                    return obj;
+                });
+            }
+            if (importData.length === 0) {
+                preview.innerHTML = '<div class="text-muted">No records found</div>';
+                btn.disabled = true;
+                return;
+            }
+            preview.innerHTML = `<div class="text-sm">✅ <strong>${importData.length}</strong> records ready to import</div>
+                <div style="max-height:200px;overflow-y:auto;margin-top:8px;font-size:12px;color:var(--text-muted);">
+                    ${importData.slice(0, 10).map(p =>
+                        `<div>• ${p.name || '?'} | ${p.age || '?'} | ${p.gender || '?'} | ${p.phone || '?'}</div>`
+                    ).join('')}
+                    ${importData.length > 10 ? `<div>... and ${importData.length - 10} more</div>` : ''}
+                </div>`;
+            btn.disabled = false;
+        } catch (err) {
+            preview.innerHTML = '<div class="text-danger">❌ Parse error: ' + err.message + '</div>';
+            btn.disabled = true;
+        }
+    };
+    reader.readAsText(file);
+}
+
+function runImport() {
+    if (importData.length === 0) { showToast('No data to import', 'error'); return; }
+    const btn = document.getElementById('import-btn');
+    btn.disabled = true;
+    btn.textContent = '⏳ Importing...';
+    document.getElementById('import-status').textContent = '';
+
+    fetch('/opd/api/bulk-import', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({patients: importData}),
+    })
+    .then(r => r.json())
+    .then(res => {
+        if (res.ok) {
+            document.getElementById('import-status').innerHTML =
+                `✅ Imported: <strong>${res.imported}</strong> | ` +
+                `Skipped (duplicates): <strong>${res.duplicates}</strong> | ` +
+                `Errors: <strong>${res.errors || 0}</strong>`;
+            showToast(`✅ ${res.imported} patients imported!`);
+        } else {
+            document.getElementById('import-status').textContent = '❌ ' + (res.error || 'Import failed');
+        }
+        btn.disabled = false;
+        btn.textContent = '📥 Import Patients';
+    })
+    .catch(e => {
+        document.getElementById('import-status').textContent = '❌ Error: ' + e;
+        btn.disabled = false;
+        btn.textContent = '📥 Import Patients';
+    });
+}
+
+function downloadImportTemplate() {
+    const csv = 'name,age,gender,phone,address\nAmar Singh,45,Male,9876543210,123 Main Street\nSunita Devi,32,Female,9876543211,456 Park Road\nRajesh Kumar,60,Male,9876543212,789 Lake View\n';
+    const blob = new Blob([csv], {type: 'text/csv'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'patient_import_template.csv';
+    a.click();
+    URL.revokeObjectURL(url);
+    showToast('📄 Template downloaded');
 }
 
 // ─── Init ───

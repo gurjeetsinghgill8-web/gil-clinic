@@ -387,7 +387,10 @@
                     </div>
 
                     <div class="form-group">
-                        <label>Complaints / Clinical Notes</label>
+                        <label>Complaints / Clinical Notes
+                            <button id="voice-btn" class="btn btn-sm btn-ghost" onclick="toggleRecording()" title="Record audio complaints" style="padding:2px 8px;font-size:14px;margin-left:8px;vertical-align:middle;">🎙️ Record</button>
+                            <span id="voice-status" class="text-sm text-muted" style="font-size:11px;margin-left:4px;"></span>
+                        </label>
                         <textarea id="pt-complaints" rows="3" placeholder="Describe complaints..."></textarea>
                     </div>
 
@@ -442,6 +445,12 @@
                         <button class="btn btn-success" onclick="saveRx()">💾 Save</button>
                         <button class="btn btn-ghost" onclick="previewPdf()">📄 PDF Preview</button>
                     </div>
+                    <div class="flex gap-md mt-sm">
+                        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px;">
+                            <input type="checkbox" id="ai-suggest-drugs" style="width:auto;">
+                            🤖 Allow AI to suggest drug changes? <span class="text-muted" style="font-size:11px;">(Default: AI assists only)</span>
+                        </label>
+                    </div>
                     <div class="mt-sm text-muted text-sm" id="rx-status"></div>
                 </div>
 
@@ -453,6 +462,7 @@
                             <button class="btn btn-sm btn-ghost" onclick="copyRx()">📋 Copy</button>
                             <button class="btn btn-sm btn-success" onclick="saveRx()">💾 Save</button>
                             <button class="btn btn-sm btn-primary" onclick="previewPdf()">📄 PDF</button>
+                            <button class="btn btn-sm btn-ghost" onclick="shareWhatsApp()">📱 WhatsApp</button>
                         </div>
                     </div>
                     <textarea id="rx-output" rows="12" style="font-family:monospace;font-size:13px;"></textarea>
@@ -541,7 +551,11 @@
                         <textarea id="up-rx" rows="4" placeholder="Paste the current prescription..."></textarea>
                     </div>
                     <div class="form-group">
-                        <label>Select Specialties (1-3)</label>
+                        <label>Select Specialties (up to 4)</label>
+                        <div class="flex gap-sm mb-sm">
+                            <button class="btn btn-sm btn-ghost" onclick="selectAllSpecs()">✅ Select All</button>
+                            <button class="btn btn-sm btn-ghost" onclick="clearAllSpecs()">❌ Clear All</button>
+                        </div>
                         <div class="spec-grid">
                             <div class="spec-item"><input type="checkbox" class="spec-cb" value="❤️ Cardiology"><label>❤️ Cardiology</label></div>
                             <div class="spec-item"><input type="checkbox" class="spec-cb" value="🦴 Orthopedics"><label>🦴 Orthopedics</label></div>
@@ -550,7 +564,22 @@
                             <div class="spec-item"><input type="checkbox" class="spec-cb" value="🩸 Diabetology"><label>🩸 Diabetology</label></div>
                             <div class="spec-item"><input type="checkbox" class="spec-cb" value="🧠 Neurology"><label>🧠 Neurology</label></div>
                             <div class="spec-item"><input type="checkbox" class="spec-cb" value="👩‍⚕️ Gynecology"><label>👩‍⚕️ Gynecology</label></div>
+                            <div class="spec-item"><input type="checkbox" class="spec-cb" value="👁️ Ophthalmology"><label>👁️ Ophthalmology</label></div>
+                            <div class="spec-item"><input type="checkbox" class="spec-cb" value="👂 ENT"><label>👂 ENT</label></div>
+                            <div class="spec-item"><input type="checkbox" class="spec-cb" value="🩺 Gastroenterology"><label>🩺 Gastroenterology</label></div>
+                            <div class="spec-item"><input type="checkbox" class="spec-cb" value="🧬 Dermatology"><label>🧬 Dermatology</label></div>
+                            <div class="spec-item"><input type="checkbox" class="spec-cb" value="🧪 Endocrinology"><label>🧪 Endocrinology</label></div>
+                            <div class="spec-item"><input type="checkbox" class="spec-cb" value="🫀 Rheumatology"><label>🫀 Rheumatology</label></div>
+                            <div class="spec-item"><input type="checkbox" class="spec-cb" value="🧠 Psychiatry"><label>🧠 Psychiatry</label></div>
+                            <div class="spec-item"><input type="checkbox" class="spec-cb" value="🩺 Urology"><label>🩺 Urology</label></div>
+                            <div class="spec-item"><input type="checkbox" class="spec-cb" value="🩺 Nephrology"><label>🩺 Nephrology</label></div>
+                            <div class="spec-item"><input type="checkbox" class="spec-cb" value="🩺 Oncology"><label>🩺 Oncology</label></div>
+                            <div class="spec-item"><input type="checkbox" class="spec-cb" value="🩺 General Surgery"><label>🩺 General Surgery</label></div>
                         </div>
+                    </div>
+                    <div class="form-group">
+                        <label>Or type a custom specialty (optional)</label>
+                        <input type="text" id="up-custom" placeholder="e.g. Sports Medicine, Palliative Care">
                     </div>
                     <button class="btn btn-primary" onclick="runUpgrade()">⚕️ Get Specialist Opinions</button>
                     <div id="upgrade-results" class="mt-md"></div>
@@ -752,6 +781,91 @@ function selectPatient(p) {
 }
 
 // ════════════════════════════════════════════════════════════════
+// VOICE SCRIBE — audio recording & transcription
+// ════════════════════════════════════════════════════════════════
+let mediaRecorder = null;
+let audioChunks = [];
+let isRecording = false;
+
+function toggleRecording() {
+    if (isRecording) {
+        stopRecording();
+    } else {
+        startRecording();
+    }
+}
+
+function startRecording() {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        showToast('Recording not supported in this browser', 'error');
+        return;
+    }
+    audioChunks = [];
+    navigator.mediaDevices.getUserMedia({ audio: true })
+        .then(stream => {
+            mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
+            mediaRecorder.ondataavailable = e => { if (e.data.size > 0) audioChunks.push(e.data); };
+            mediaRecorder.onstop = () => {
+                stream.getTracks().forEach(t => t.stop());
+                const blob = new Blob(audioChunks, { type: 'audio/webm' });
+                document.getElementById('voice-status').textContent = '⏳ Transcribing...';
+                document.getElementById('voice-btn').textContent = '⏳';
+                const formData = new FormData();
+                formData.append('audio', blob, 'recording.webm');
+                fetch('/opd/api/transcribe', { method: 'POST', body: formData })
+                    .then(r => r.json())
+                    .then(res => {
+                        if (res.ok && res.text) {
+                            const existing = document.getElementById('pt-complaints').value;
+                            document.getElementById('pt-complaints').value = existing
+                                ? existing + '\n[Voice]: ' + res.text
+                                : res.text;
+                            showToast('🎤 Transcribed!');
+                        } else {
+                            showToast('Transcription failed', 'error');
+                        }
+                        document.getElementById('voice-status').textContent = '';
+                        document.getElementById('voice-btn').textContent = '🎙️';
+                    })
+                    .catch(() => {
+                        showToast('Transcription error', 'error');
+                        document.getElementById('voice-status').textContent = '';
+                        document.getElementById('voice-btn').textContent = '🎙️';
+                    });
+            };
+            mediaRecorder.start();
+            isRecording = true;
+            document.getElementById('voice-btn').textContent = '🔴';
+            document.getElementById('voice-btn').style.color = '#ef4444';
+            document.getElementById('voice-status').textContent = '🔴 Recording...';
+            showToast('🎤 Recording... tap again to stop');
+        })
+        .catch(e => {
+            showToast('Microphone access denied', 'error');
+        });
+}
+
+function stopRecording() {
+    if (mediaRecorder && isRecording) {
+        mediaRecorder.stop();
+        isRecording = false;
+        document.getElementById('voice-btn').style.color = '';
+    }
+}
+
+// ════════════════════════════════════════════════════════════════
+// WHATSAPP SHARE
+// ════════════════════════════════════════════════════════════════
+function shareWhatsApp() {
+    const name = document.getElementById('pt-name').value.trim();
+    const rx = document.getElementById('rx-output').value.trim() || document.getElementById('pt-medicines').value.trim();
+    if (!name || !rx) { showToast('Patient name and prescription required', 'error'); return; }
+    const msg = `📋 *Prescription for ${name}*\n\n${rx.substring(0, 3000)}\n\n— GIL CLINIC`;
+    window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank');
+    showToast('📱 WhatsApp opened');
+}
+
+// ════════════════════════════════════════════════════════════════
 // PATIENT SELECTION — track current patient context
 // ════════════════════════════════════════════════════════════════
 let _currentPatientId = '';
@@ -770,6 +884,7 @@ function clearRxForm() {
     document.getElementById('pt-fee').value = '0';
     document.getElementById('pt-gender').value = 'Male';
     document.getElementById('is-followup').checked = false;
+    document.getElementById('ai-suggest-drugs').checked = false;
     document.getElementById('rx-output').value = '';
     document.getElementById('rx-output-section').style.display = 'none';
     document.getElementById('rx-status').textContent = '';
@@ -825,6 +940,8 @@ function generateRx() {
         vitals: document.getElementById('pt-vitals').value.trim(),
         complaints: document.getElementById('pt-complaints').value.trim(),
         past_context: '',
+        doctor_medicines: document.getElementById('pt-medicines').value.trim(),
+        allow_suggest_drugs: document.getElementById('ai-suggest-drugs').checked,
     };
     if (!data.patient_name) { showToast('Patient name required', 'error'); return; }
 
@@ -841,7 +958,8 @@ function generateRx() {
         data.past_context = parts.join(', ');
     }
 
-    document.getElementById('rx-status').innerHTML = '<span class="spinner"></span> Generating prescription with AI...';
+    const modeLabel = data.allow_suggest_drugs ? 'Suggest mode' : 'Assistant mode';
+    document.getElementById('rx-status').innerHTML = `<span class="spinner"></span> Generating with AI (${modeLabel})...`;
 
     fetch('/opd/api/generate-rx', {
         method: 'POST',
@@ -853,7 +971,8 @@ function generateRx() {
         if (res.ok) {
             document.getElementById('rx-output').value = res.prescription;
             document.getElementById('rx-output-section').style.display = 'block';
-            document.getElementById('rx-status').textContent = '✅ AI Prescription generated';
+            const modeText = res.mode === 'suggest' ? '💡 AI Suggestions (review before using)' : '✅ AI Assistant output';
+            document.getElementById('rx-status').textContent = modeText;
             showToast('Prescription generated!');
         } else {
             document.getElementById('rx-status').textContent = '❌ ' + (res.error || 'Generation failed');
@@ -1114,10 +1233,43 @@ function loadPatientHistory(patientId, patientName) {
                 }
             }
 
-            // Past prescriptions
+            // Past prescriptions — compare vitals for progress banner
             if (res.past_rx && res.past_rx.length) {
                 const last = res.past_rx[0];
                 info.push(`Last Rx: ${last.date || ''}`);
+
+                // Progress banner: compare previous vitals with current
+                const currentVitals = document.getElementById('pt-vitals').value;
+                if (last.vitals && currentVitals && last.vitals !== currentVitals) {
+                    // Simple BP comparison
+                    const prevBP = last.vitals.match(/(\d+)\s*\/\s*(\d+)/);
+                    const currBP = currentVitals.match(/(\d+)\s*\/\s*(\d+)/);
+                    if (prevBP && currBP) {
+                        const prevS = parseInt(prevBP[1]), prevD = parseInt(prevBP[2]);
+                        const currS = parseInt(currBP[1]), currD = parseInt(currBP[2]);
+                        if (currS < prevS && currD < prevD) {
+                            info.push('🟢 BP improved');
+                        } else if (currS > prevS + 10 || currD > prevD + 10) {
+                            info.push('🔴 BP worsened');
+                        } else {
+                            info.push('⚪ BP stable');
+                        }
+                    }
+                    // Sugar comparison
+                    const prevSugar = last.vitals.match(/F[-\s]?(\d+)|PP[-\s]?(\d+)|R[-\s]?(\d+)|(\d+)\s*mg\/dl/i);
+                    const currSugar = currentVitals.match(/F[-\s]?(\d+)|PP[-\s]?(\d+)|R[-\s]?(\d+)|(\d+)\s*mg\/dl/i);
+                    if (prevSugar && currSugar) {
+                        const pv = parseInt(prevSugar[1] || prevSugar[2] || prevSugar[3] || prevSugar[4]);
+                        const cv = parseInt(currSugar[1] || currSugar[2] || currSugar[3] || currSugar[4]);
+                        if (pv && cv) {
+                            if (cv < pv - 20) info.push('🟢 Sugar improved');
+                            else if (cv > pv + 20) info.push('🔴 Sugar worsened');
+                            else info.push('⚪ Sugar stable');
+                        }
+                    }
+                }
+
+                // Set vitals if empty
                 if (last.vitals && !document.getElementById('pt-vitals').value) {
                     document.getElementById('pt-vitals').value = last.vitals;
                 }
@@ -1256,43 +1408,53 @@ function loadPendingScans() {
 // ════════════════════════════════════════════════════════════════
 // SPECIALTY UPGRADE
 // ════════════════════════════════════════════════════════════════
-function runUpgrade() {
-    const specialties = Array.from(document.querySelectorAll('.spec-cb:checked')).map(cb => cb.value);
-    if (specialties.length === 0) { showToast('Select at least 1 specialty', 'error'); return; }
+	function selectAllSpecs() {
+	    document.querySelectorAll('.spec-cb').forEach(cb => cb.checked = true);
+	}
 
-    const data = {
-        patient_name: document.getElementById('up-pt-name').value.trim(),
-        vitals: document.getElementById('up-vitals').value.trim(),
-        prescription: document.getElementById('up-rx').value.trim(),
-        specialties,
-    };
-    if (!data.patient_name) { showToast('Patient name required', 'error'); return; }
-    if (!data.prescription) { showToast('Prescription required', 'error'); return; }
+	function clearAllSpecs() {
+	    document.querySelectorAll('.spec-cb').forEach(cb => cb.checked = false);
+	}
 
-    document.getElementById('upgrade-results').innerHTML = '<span class="spinner"></span> Getting specialist opinions...';
+	function runUpgrade() {
+	    const specialties = Array.from(document.querySelectorAll('.spec-cb:checked')).map(cb => cb.value);
+	    const custom = document.getElementById('up-custom').value.trim();
+	    if (custom) specialties.push(custom);
+	    if (specialties.length === 0) { showToast('Select at least 1 specialty or type custom', 'error'); return; }
 
-    fetch('/opd/api/upgrade', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify(data),
-    })
-    .then(r => r.json())
-    .then(res => {
-        if (res.ok && res.results) {
-            const html = res.results.map(r => `
-                <div class="card">
-                    <h3>${r.specialty}</h3>
-                    <div class="rx-output">${r.content}</div>
-                    ${r.id ? `<button class="btn btn-sm btn-warning mt-sm" onclick="starUpgrade(${r.id})">⭐ Star this</button>` : ''}
-                </div>
-            `).join('');
-            document.getElementById('upgrade-results').innerHTML = html;
-            showToast('Specialist opinions ready!');
-        } else {
-            document.getElementById('upgrade-results').innerHTML = '<div class="text-muted">Failed: ' + (res.error || 'Unknown') + '</div>';
-        }
-    });
-}
+	    const data = {
+	        patient_name: document.getElementById('up-pt-name').value.trim(),
+	        vitals: document.getElementById('up-vitals').value.trim(),
+	        prescription: document.getElementById('up-rx').value.trim(),
+	        specialties,
+	    };
+	    if (!data.patient_name) { showToast('Patient name required', 'error'); return; }
+	    if (!data.prescription) { showToast('Prescription required', 'error'); return; }
+
+	    document.getElementById('upgrade-results').innerHTML = '<span class="spinner"></span> Getting specialist opinions...';
+
+	    fetch('/opd/api/upgrade', {
+	        method: 'POST',
+	        headers: {'Content-Type': 'application/json'},
+	        body: JSON.stringify(data),
+	    })
+	    .then(r => r.json())
+	    .then(res => {
+	        if (res.ok && res.results) {
+	            const html = res.results.map(r => `
+	                <div class="card">
+	                    <h3>${r.specialty}</h3>
+	                    <div class="rx-output">${r.content}</div>
+	                    ${r.id ? `<button class="btn btn-sm btn-warning mt-sm" onclick="starUpgrade(${r.id})">⭐ Star this</button>` : ''}
+	                </div>
+	            `).join('');
+	            document.getElementById('upgrade-results').innerHTML = html;
+	            showToast('Specialist opinions ready!');
+	        } else {
+	            document.getElementById('upgrade-results').innerHTML = '<div class="text-muted">Failed: ' + (res.error || 'Unknown') + '</div>';
+	        }
+	    });
+	}
 
 function starUpgrade(id) {
     const note = prompt('Add a note (optional):');

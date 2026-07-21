@@ -292,3 +292,167 @@ def make_cme_pdf(topic: str, content: str) -> bytes:
     if isinstance(result, bytes):
         return result
     return result.encode("latin-1")
+
+
+def make_diet_pdf(
+    patient_name: str,
+    age: str = "",
+    gender: str = "",
+    weight: str = "",
+    height: str = "",
+    bmi: str = "",
+    conditions: str = "",
+    goal: str = "",
+    diet_type: str = "",
+    target_calories: str = "",
+    diet_plan: str = "",
+    clinic_name: str = "My Clinic",
+    doc_name: str = "Doctor",
+) -> bytes:
+    """
+    Generate a professional Diet Plan PDF with clinic letterhead.
+
+    Args:
+        patient_name: Patient name
+        age: Patient age
+        gender: Patient gender
+        weight: Weight in kg
+        height: Height in cm
+        bmi: BMI value
+        conditions: Medical conditions
+        goal: Diet goal
+        diet_type: Diet preference
+        target_calories: Calorie target
+        diet_plan: Full diet plan text (AI generated)
+        clinic_name: Clinic name for header
+        doc_name: Doctor name for header
+
+    Returns:
+        PDF bytes
+    """
+    pdf = FPDF()
+    pdf.add_page()
+
+    # ── Letterhead ──────────────────────────────────────────────
+    pdf.set_fill_color(0, 100, 50)
+    pdf.rect(0, 0, 210, 40, "F")
+    pdf.set_xy(10, 5)
+    pdf.set_font("Helvetica", "B", 18)
+    pdf.set_text_color(255, 255, 255)
+    pdf.cell(190, 10, safe_str("🥗 Personalized Diet Plan"), align="C")
+    pdf.set_xy(10, 17)
+    pdf.set_font("Helvetica", "", 10)
+    pdf.set_text_color(200, 255, 220)
+    pdf.cell(190, 6, safe_str(clinic_name), align="C")
+    pdf.set_xy(10, 24)
+    pdf.set_font("Helvetica", "I", 9)
+    pdf.cell(190, 6, f"Prepared by: {safe_str(doc_name)}", align="C")
+    pdf.set_xy(10, 31)
+    pdf.set_font("Helvetica", "I", 8)
+    pdf.cell(190, 5, f"Date: {datetime.datetime.now().strftime('%d-%b-%Y')}", align="C")
+
+    y_pos = 46
+
+    # ── Patient Info Box ────────────────────────────────────────
+    pdf.set_fill_color(240, 255, 240)
+    pdf.set_draw_color(0, 150, 80)
+    pdf.rect(10, y_pos, 190, 30, "DF")
+    pdf.set_xy(14, y_pos + 3)
+    pdf.set_font("Helvetica", "B", 10)
+    pdf.set_text_color(0, 80, 40)
+    pdf.cell(90, 5, f"Patient: {safe_str(patient_name)}", ln=False)
+
+    pdf.set_xy(110, y_pos + 3)
+    pdf.set_font("Helvetica", "", 9)
+    pdf.set_text_color(30, 80, 40)
+    info_parts = []
+    if age: info_parts.append(f"Age: {age}")
+    if gender: info_parts.append(f"Gender: {gender}")
+    pdf.cell(86, 5, " | ".join(info_parts), ln=False, align="R")
+
+    pdf.set_xy(14, y_pos + 11)
+    pdf.set_font("Helvetica", "", 9)
+    details = []
+    if weight: details.append(f"Wt: {weight}kg")
+    if height: details.append(f"Ht: {height}cm")
+    if bmi: details.append(f"BMI: {bmi}")
+    if conditions: details.append(f"Conditions: {conditions}")
+    if target_calories: details.append(f"Target: {target_calories} kcal")
+    pdf.multi_cell(182, 5, " | ".join(details))
+
+    y_pos += 36
+
+    # ── Plan Info ───────────────────────────────────────────────
+    if goal or diet_type:
+        pdf.set_xy(10, y_pos)
+        pdf.set_font("Helvetica", "I", 9)
+        pdf.set_text_color(80, 80, 80)
+        plan_info = []
+        if goal: plan_info.append(f"Goal: {goal}")
+        if diet_type: plan_info.append(f"Diet: {diet_type}")
+        pdf.cell(190, 5, " | ".join(plan_info), align="C")
+        y_pos += 8
+
+    # ── Divider ─────────────────────────────────────────────────
+    pdf.set_draw_color(0, 150, 80)
+    pdf.set_line_width(0.5)
+    pdf.line(10, y_pos, 200, y_pos)
+    y_pos += 4
+
+    # ── Diet Plan Content ───────────────────────────────────────
+    if diet_plan:
+        lines = diet_plan.split("\n")
+        pdf.set_text_color(30, 30, 30)
+        for line in lines:
+            line = line.strip()
+            if not line:
+                y_pos += 2
+                continue
+
+            # Page overflow check
+            if y_pos > 265:
+                pdf.add_page()
+                y_pos = 10
+
+            # Section headers (lines with emoji or ALL CAPS or ending with :)
+            is_header = (
+                any(line.startswith(e) for e in ["🥗", "GOAL", "DIET", "DAILY", "PROTEIN",
+                                                  "EARLY", "BREAKFAST", "LUNCH", "DINNER",
+                                                  "SNACK", "WATER", "FOODS", "LIFESTYLE",
+                                                  "INDIAN", "WEEK", "MEAL", "RECIPE"])
+                or line.endswith(":")
+                or line.isupper()
+            )
+            is_subheader = line.startswith("  ") and (":" in line or "-" in line)
+
+            if is_header:
+                pdf.set_font("Helvetica", "B", 10)
+                pdf.set_fill_color(235, 250, 240)
+                if y_pos > 10:
+                    y_pos += 2
+                pdf.set_xy(10, y_pos)
+                pdf.cell(190, 6, safe_str(line), fill=True)
+                y_pos += 7
+            elif is_subheader:
+                pdf.set_font("Helvetica", "B", 9)
+                pdf.set_xy(14, y_pos)
+                pdf.multi_cell(182, 4.5, safe_str(line))
+                y_pos = pdf.get_y() + 1
+            else:
+                pdf.set_font("Helvetica", "", 9)
+                pdf.set_xy(14, y_pos)
+                pdf.multi_cell(182, 4.5, safe_str(line))
+                y_pos = pdf.get_y() + 1
+
+    # ── Footer ──────────────────────────────────────────────────
+    pdf.set_y(-15)
+    pdf.set_font("Helvetica", "I", 7)
+    pdf.set_text_color(150, 150, 150)
+    pdf.cell(0, 10, "This diet plan is AI-generated and should be reviewed by a qualified dietitian.", align="C")
+
+    result = pdf.output(dest="S")
+    if isinstance(result, bytearray):
+        return bytes(result)
+    if isinstance(result, bytes):
+        return result
+    return result.encode("latin-1")

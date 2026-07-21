@@ -100,6 +100,19 @@
       </div>
 
       <div class="form-group">
+        <label>Daily Calorie Target (kcal) <span class="text-muted" style="font-weight:400;">— Leave empty for AI to auto-calculate</span></label>
+        <input type="number" id="d-calories" placeholder="e.g. 1800" class="form-input" min="800" max="5000" step="50">
+        <div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:6px;">
+          <button class="tag-btn" onclick="setCalories(1200)">1200 kcal</button>
+          <button class="tag-btn" onclick="setCalories(1500)">1500 kcal</button>
+          <button class="tag-btn" onclick="setCalories(1800)">1800 kcal</button>
+          <button class="tag-btn" onclick="setCalories(2000)">2000 kcal</button>
+          <button class="tag-btn" onclick="setCalories(2500)">2500 kcal</button>
+          <button class="tag-btn" onclick="setCalories('')">❌ Auto</button>
+        </div>
+      </div>
+
+      <div class="form-group">
         <label>Dietary Restrictions</label>
         <input type="text" id="d-restrictions" placeholder="e.g. No spicy food, Low salt" class="form-input">
       </div>
@@ -119,9 +132,11 @@
           <span style="font-size:12px;">Uses Groq AI to create personalized Indian diet plans</span>
         </div>
       </div>
-      <div style="display:flex;gap:8px;margin-top:10px;">
+      <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;">
         <button class="btn btn-ghost btn-sm" onclick="copyDietPlan()">📋 Copy</button>
         <button class="btn btn-ghost btn-sm" onclick="printDietPlan()">🖨️ Print</button>
+        <button class="btn btn-ghost btn-sm" onclick="downloadDietPdf()">📄 Download PDF</button>
+        <button class="btn btn-ghost btn-sm" onclick="shareDietWhatsApp()">📱 WhatsApp</button>
       </div>
     </div>
   </div>
@@ -185,6 +200,10 @@ function calcBMI() {
 document.getElementById('d-weight').addEventListener('input', calcBMI);
 document.getElementById('d-height').addEventListener('input', calcBMI);
 
+function setCalories(val) {
+  document.getElementById('d-calories').value = val;
+}
+
 function generateDietPlan() {
   const data = {
     name: document.getElementById('d-name').value.trim(),
@@ -198,6 +217,7 @@ function generateDietPlan() {
     diet_type: document.getElementById('d-diet-type').value,
     meals_per_day: document.getElementById('d-meals').value,
     restrictions: document.getElementById('d-restrictions').value.trim(),
+    target_calories: document.getElementById('d-calories').value.trim(),
   };
 
   if (!data.name) { alert('Patient name is required'); return; }
@@ -249,6 +269,45 @@ function printDietPlan() {
   win.document.write(`<pre style="font-family:monospace;font-size:14px;padding:20px;line-height:1.6;">${text}</pre>`);
   win.document.close();
   win.print();
+}
+
+function downloadDietPdf() {
+  const input = document.getElementById('d-output');
+  const text = input.textContent || input.innerText;
+  if (!text || text.includes('Fill patient details')) { alert('Generate a diet plan first'); return; }
+
+  const data = {
+    patient_name: document.getElementById('d-name').value.trim() || 'Patient',
+    age: document.getElementById('d-age').value,
+    gender: document.getElementById('d-gender').value,
+    weight: document.getElementById('d-weight').value,
+    height: document.getElementById('d-height').value,
+    bmi: (document.getElementById('d-bmi-display').textContent || '').replace('📊 BMI: ', ''),
+    conditions: document.getElementById('d-conditions').value.trim(),
+    goal: document.getElementById('d-goal').value,
+    diet_type: document.getElementById('d-diet-type').value,
+    target_calories: document.getElementById('d-calories').value.trim(),
+    diet_plan: text,
+  };
+
+  fetch('/staff/api/diet-pdf', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify(data),
+  })
+  .then(r => r.blob())
+  .then(blob => {
+    window.open(URL.createObjectURL(blob), '_blank');
+  })
+  .catch(e => alert('PDF error: ' + e));
+}
+
+function shareDietWhatsApp() {
+  const text = document.getElementById('d-output').textContent;
+  if (!text || text.includes('Fill patient details')) { alert('Generate a diet plan first'); return; }
+  const name = document.getElementById('d-name').value.trim() || 'Patient';
+  const msg = `🥗 *Diet Plan for ${name}*\n\n${text.substring(0, 3000)}\n\n— GIL CLINIC`;
+  window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank');
 }
 </script>
 {% endblock %}

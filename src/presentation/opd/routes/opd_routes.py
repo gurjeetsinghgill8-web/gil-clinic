@@ -89,7 +89,10 @@ from src.infrastructure.queue.models.queue_entry_model import QueueEntryModel
 
 # ── AI Engine ────────────────────────────────────────────────────────────────
 from src.ai_engine.groq_client import call_groq, call_groq_vision, parse_ai_json
-from src.ai_engine.prompts import gp_prompt, specialty_prompt, drug_review_prompt, cme_prompt
+from src.ai_engine.prompts import (
+    gp_prompt_assistant, gp_prompt_suggest,
+    specialty_prompt, drug_review_prompt, cme_prompt,
+)
 
 # ── PDF Generator ────────────────────────────────────────────────────────────
 from src.utils.pdf_generator import make_rx_pdf, make_cme_pdf
@@ -692,20 +695,35 @@ async def api_generate_rx(request: Request):
     vitals = body.get("vitals", "")
     complaints = body.get("complaints", "")
     past_context = body.get("past_context", "")
+    doctor_medicines = body.get("doctor_medicines", "")
+    allow_suggest_drugs = body.get("allow_suggest_drugs", False)
 
     if not patient_name:
         return {"ok": False, "error": "Patient name required"}
 
     settings = await _get_settings(doctor_id)
 
-    # Build prompt
-    prompt = gp_prompt(
-        patient_name=patient_name,
-        vitals=vitals,
-        notes=complaints,
-        doc_name=settings.get("doc_name", "Doctor"),
-        past_context=past_context,
-    )
+    # Choose prompt mode based on whether AI should suggest drugs
+    if allow_suggest_drugs:
+        prompt = gp_prompt_suggest(
+            patient_name=patient_name,
+            vitals=vitals,
+            notes=complaints,
+            doc_name=settings.get("doc_name", "Doctor"),
+            doc_degree=settings.get("doc_degree", ""),
+            past_context=past_context,
+        )
+    else:
+        prompt = gp_prompt_assistant(
+            patient_name=patient_name,
+            vitals=vitals,
+            notes=complaints,
+            doc_name=settings.get("doc_name", "Doctor"),
+            doc_degree=settings.get("doc_degree", ""),
+            doc_hospital=settings.get("clinic_name", ""),
+            past_context=past_context,
+            doctor_medicines=doctor_medicines,
+        )
 
     # Call Groq
     groq_key = settings.get("groq_api_key") or os.getenv("GROQ_API_KEY", "")
@@ -718,7 +736,7 @@ async def api_generate_rx(request: Request):
     if not result:
         return {"ok": False, "error": "AI Generation failed. Check API key."}
 
-    return {"ok": True, "prescription": result}
+    return {"ok": True, "prescription": result, "mode": "suggest" if allow_suggest_drugs else "assistant"}
 
 
 @router.post("/api/drug-review", include_in_schema=False)
@@ -744,6 +762,36 @@ async def api_drug_review(request: Request):
     prompt = drug_review_prompt(vitals=vitals, prescription=prescription)
     result = call_groq([prompt], temp=0.3)
     return {"ok": bool(result), "review": result or "Failed to generate."}
+
+
+@router.post("/api/transcribe", include_in_schema=False)
+async def api_transcribe(request: Request):
+    """Transcribe audio complaints using Groq Whisper API."""
+    sess = _require_opd_session(request)
+    doctor_id = sess["doctor_id"]
+
+    settings = await _get_settings(doctor_id)
+    groq_key = settings.get("groq_api_key") or os.getenv("GROQ_API_KEY", "")
+    if not groq_key:
+        return {"ok": False, "error": "Groq API key not configured."}
+    os.environ["GROQ_API_KEY"] = groq_key
+
+    try:
+        form = await request.form()
+        audio_file = form.get("audio")
+        if not audio_file:
+            return {"ok": False, "error": "No audio file"}
+        audio_bytes = await audio_file.read()
+        filename = audio_file.filename or "audio.webm"
+
+        from src.ai_engine.groq_client import call_whisper
+        text = call_whisper(audio_bytes, filename)
+        if text:
+            return {"ok": True, "text": text}
+        return {"ok": False, "error": "Transcription failed"}
+    except Exception as e:
+        logger.error("Transcribe error: %s", e)
+        return {"ok": False, "error": str(e)}
 
 
 @router.post("/api/cme", include_in_schema=False)
@@ -1007,13 +1055,24 @@ async def api_delete_template(request: Request, name: str = Query(...)):
 # ═══════════════════════════════════════════════════════════════════════════════
 
 SPECIALTIES = {
-    "❤️ Cardiology":      {"persona": "Cardiologist (DM Cardiology)", "guidelines": "ACC/AHA 2024, ESC 2023, CSI", "focus": "HTN, HF, IHD, arrhythmias"},
-    "🦴 Orthopedics":     {"persona": "Orthopedic Surgeon (MS Ortho)", "guidelines": "AAOS, NICE Musculoskeletal, IOA", "focus": "joint pain, OA, back pain"},
-    "🫁 Pulmonology":     {"persona": "Pulmonologist (DM Pulmonology)", "guidelines": "GOLD 2024, GINA 2024, RNTCP", "focus": "asthma, COPD, TB"},
-    "👶 Pediatrics":      {"persona": "Pediatrician (MD Pediatrics)", "guidelines": "IAP 2024, WHO Child Growth", "focus": "fever, infections, growth"},
-    "🩸 Diabetology":     {"persona": "Diabetologist (DM Endocrinology)", "guidelines": "ADA 2024, RSSDI, AACE", "focus": "DM1/2, insulin, HbA1c"},
-    "🧠 Neurology":       {"persona": "Neurologist (DM Neurology)", "guidelines": "AAN, ESO Stroke, IAN", "focus": "headache, epilepsy, stroke"},
-    "👩‍⚕️ Gynecology":    {"persona": "Gynecologist (MS OBG)", "guidelines": "FOGSI, RCOG, WHO", "focus": "PCOD, menstrual, pregnancy"},
+    "❤️ Cardiology":          {"persona": "Cardiologist (DM Cardiology)", "guidelines": "ACC/AHA 2024, ESC 2023, CSI", "focus": "HTN, HF, IHD, arrhythmias"},
+    "🦴 Orthopedics":         {"persona": "Orthopedic Surgeon (MS Ortho)", "guidelines": "AAOS, NICE Musculoskeletal, IOA", "focus": "joint pain, OA, back pain"},
+    "🫁 Pulmonology":         {"persona": "Pulmonologist (DM Pulmonology)", "guidelines": "GOLD 2024, GINA 2024, RNTCP", "focus": "asthma, COPD, TB"},
+    "👶 Pediatrics":          {"persona": "Pediatrician (MD Pediatrics)", "guidelines": "IAP 2024, WHO Child Growth", "focus": "fever, infections, growth"},
+    "🩸 Diabetology":         {"persona": "Diabetologist (DM Endocrinology)", "guidelines": "ADA 2024, RSSDI, AACE", "focus": "DM1/2, insulin, HbA1c"},
+    "🧠 Neurology":           {"persona": "Neurologist (DM Neurology)", "guidelines": "AAN, ESO Stroke, IAN", "focus": "headache, epilepsy, stroke"},
+    "👩‍⚕️ Gynecology":        {"persona": "Gynecologist (MS OBG)", "guidelines": "FOGSI, RCOG, WHO", "focus": "PCOD, menstrual, pregnancy"},
+    "👁️ Ophthalmology":      {"persona": "Ophthalmologist (MS Ophthalmology)", "guidelines": "AAO, ICO, AIOS", "focus": "cataract, glaucoma, refraction, retinopathy"},
+    "👂 ENT":                 {"persona": "ENT Surgeon (MS ENT)", "guidelines": "AAO-HNS, IACO, AOI", "focus": "hearing loss, sinusitis, tonsillitis, vertigo"},
+    "🩺 Gastroenterology":    {"persona": "Gastroenterologist (DM Gastro)", "guidelines": "ACG, AGA, ISG, INASL", "focus": "GERD, IBS, hepatitis, liver disease"},
+    "🧬 Dermatology":         {"persona": "Dermatologist (MD Derm)", "guidelines": "IADVL, AAD, BAD", "focus": "acne, eczema, psoriasis, skin infections"},
+    "🧪 Endocrinology":       {"persona": "Endocrinologist (DM Endo)", "guidelines": "AACE, ENDO, RSSDI, ISE", "focus": "thyroid, PCOD, osteoporosis, pituitary"},
+    "🫀 Rheumatology":        {"persona": "Rheumatologist (DM Rheumatology)", "guidelines": "ACR, EULAR, IRA", "focus": "RA, lupus, gout, vasculitis, fibromyalgia"},
+    "🧠 Psychiatry":          {"persona": "Psychiatrist (MD Psychiatry)", "guidelines": "APA, IPS, WHO mhGAP", "focus": "depression, anxiety, insomnia, OCD"},
+    "🩺 Urology":             {"persona": "Urologist (MS Urology / MCh)", "guidelines": "AUA, EAU, USI", "focus": "BPH, renal stones, UTI, incontinence"},
+    "🩺 Nephrology":          {"persona": "Nephrologist (DM Nephrology)", "guidelines": "KDIGO, ISN, RSI", "focus": "CKD, dialysis, hypertension, electrolyte"},
+    "🩺 Oncology":            {"persona": "Medical Oncologist (DM Oncology)", "guidelines": "NCCN, ASCO, ICMR, ISMPO", "focus": "cancer screening, chemotherapy, palliation"},
+    "🩺 General Surgery":     {"persona": "General Surgeon (MS Surgery)", "guidelines": "ASCRS, AMASI, IAGES", "focus": "hernia, appendicitis, gallstones, fistula"},
 }
 
 
@@ -1315,6 +1374,76 @@ async def api_scan_ai_read(request: Request):
         "raw": result,
         "parsed": parsed,
     }
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# API: BULK IMPORT
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@router.post("/api/bulk-import", include_in_schema=False)
+async def api_bulk_import(request: Request):
+    """Bulk import patients from JSON array. Detects duplicates by phone."""
+    sess = _require_opd_session(request)
+    if sess.get("role") != "admin":
+        return {"ok": False, "error": "Admin only"}
+
+    try:
+        body = await request.json()
+    except Exception:
+        return {"ok": False, "error": "Invalid JSON"}
+
+    patients = body.get("patients", [])
+    if not patients or not isinstance(patients, list):
+        return {"ok": False, "error": "patients array required"}
+
+    imported = 0
+    duplicates = 0
+    errors = 0
+
+    try:
+        async with async_session_factory() as session:
+            for p in patients:
+                name = str(p.get("name", "")).strip()
+                phone = str(p.get("phone", "")).strip()
+                if not name:
+                    errors += 1
+                    continue
+
+                # Check duplicate by phone
+                if phone:
+                    existing = await session.execute(
+                        sa.select(OpdPrescriptionModel).where(
+                            OpdPrescriptionModel.phone == phone,
+                            OpdPrescriptionModel.patient_name.ilike(f"%{name[:10]}%"),
+                        ).limit(1)
+                    )
+                    if existing.scalar_one_or_none():
+                        duplicates += 1
+                        continue
+
+                now_str = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d %H:%M")
+                rx = OpdPrescriptionModel(
+                    patient_name=name,
+                    phone=phone,
+                    age=str(p.get("age", "")),
+                    gender=str(p.get("gender", "")),
+                    complaints=str(p.get("complaints", "")),
+                    vitals=str(p.get("vitals", "")),
+                    diagnosis=str(p.get("diagnosis", "")),
+                    medicines=str(p.get("medicines", "")),
+                    address=str(p.get("address", "")),
+                    doctor_id=sess["doctor_id"],
+                    created_at=now_str,
+                )
+                session.add(rx)
+                imported += 1
+
+            await session.commit()
+    except Exception as e:
+        logger.error("Bulk import error: %s", e)
+        return {"ok": False, "error": str(e)}
+
+    return {"ok": True, "imported": imported, "duplicates": duplicates, "errors": errors}
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

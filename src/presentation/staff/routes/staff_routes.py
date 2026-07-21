@@ -31,7 +31,7 @@ from typing import Optional
 
 import sqlalchemy as sa
 from fastapi import APIRouter, Cookie, Form, HTTPException, Query, Request
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from itsdangerous import BadSignature, SignatureExpired, URLSafeTimedSerializer
 
 # ── Jinja2 template engine (direct, bypasses Starlette's wrapper) ────────────
@@ -759,6 +759,7 @@ async def api_diet_plan(request: Request):
         diet_type=body.get("diet_type", "Regular"),
         meals_per_day=body.get("meals_per_day", "3 main + 2 snacks"),
         restrictions=body.get("restrictions", ""),
+        target_calories=body.get("target_calories", ""),
     )
 
     groq_key = os.getenv("GROQ_API_KEY", "")
@@ -772,6 +773,45 @@ async def api_diet_plan(request: Request):
         return {"ok": False, "error": "AI generation failed. Check API key."}
 
     return {"ok": True, "diet_plan": result}
+
+
+@router.post("/api/diet-pdf", include_in_schema=False)
+async def api_diet_pdf(request: Request):
+    """Generate diet plan PDF."""
+    sess = get_session(request)
+    if not sess:
+        return {"ok": False, "error": "Not logged in"}
+
+    try:
+        body = await request.json()
+    except Exception:
+        return {"ok": False, "error": "Invalid JSON"}
+
+    from src.utils.pdf_generator import make_diet_pdf
+
+    pdf_bytes = make_diet_pdf(
+        patient_name=body.get("patient_name", "Patient"),
+        age=body.get("age", ""),
+        gender=body.get("gender", ""),
+        weight=body.get("weight", ""),
+        height=body.get("height", ""),
+        bmi=body.get("bmi", ""),
+        conditions=body.get("conditions", ""),
+        goal=body.get("goal", ""),
+        diet_type=body.get("diet_type", ""),
+        target_calories=body.get("target_calories", ""),
+        diet_plan=body.get("diet_plan", ""),
+        clinic_name=body.get("clinic_name", "GIL CLINIC"),
+        doc_name=body.get("doc_name", "Doctor"),
+    )
+
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": f'inline; filename="DietPlan_{body.get("patient_name", "Patient")}.pdf"',
+        },
+    )
 
 
 def _bmi_category(bmi: float) -> str:

@@ -13,18 +13,81 @@ _REQUIRED_RX_SECTIONS: List[str] = ["Diagnosis", "Drugs", "Advice", "Follow-up"]
 
 
 # ════════════════════════════════════════════════════════════════════════════
-# GP PRESCRIPTION PROMPT
+# GP PRESCRIPTION PROMPT — TWO MODES
 # ════════════════════════════════════════════════════════════════════════════
 
-def gp_prompt(patient_name: str, vitals: str, notes: str, doc_name: str,
-              past_context: str = "", progress_context: str = "") -> str:
+def gp_prompt_assistant(patient_name: str, vitals: str, notes: str,
+                         doc_name: str, doc_degree: str = "", doc_hospital: str = "",
+                         past_context: str = "", progress_context: str = "",
+                         doctor_medicines: str = "") -> str:
     """
-    System prompt for GP prescription generation.
-    Includes Indian clinical context, drug naming conventions, and optional follow-up context.
+    AI ASSISTANT MODE (default) — AI does NOT generate drugs/treatment.
+    The doctor has already prescribed or will prescribe medicines.
+    AI only helps with: Diagnosis refinement, Investigations, Advice, Follow-up.
+    If AI wants to suggest drug changes, it must prefix with '💡 SUGGESTION:'.
     """
-    return f"""You are an experienced Indian General Practitioner AI assistant working with Dr. {doc_name}.
+    doc_info = f"Dr. {doc_name}"
+    if doc_degree:
+        doc_info += f" ({doc_degree})"
+    if doc_hospital:
+        doc_info += f" — {doc_hospital}"
 
-Generate a structured clinical prescription in plain text (no markdown, no asterisks) for:
+    meds_section = ""
+    if doctor_medicines:
+        meds_section = f"\n\nDOCTOR'S PRESCRIBED MEDICINES (do NOT change these):\n{doctor_medicines}"
+
+    return f"""You are an experienced AI Clinical Assistant working with {doc_info}.
+
+Your role is to HELP the doctor, NOT replace their clinical judgment.
+The doctor has already examined the patient and prescribed or will prescribe medicines.
+Do NOT generate a new drug list — the doctor's treatment is final.
+
+PATIENT INFORMATION:
+Patient: {patient_name}
+Vitals: {vitals or 'Not provided'}
+Clinical Notes: {notes or 'Not provided'}
+{past_context}
+{progress_context}
+{meds_section}
+
+YOUR TASK — Provide ONLY these sections (plain text, no markdown):
+
+1. Diagnosis: Suggest possible diagnoses based on the clinical notes. If unclear, list differentials.
+2. Investigations: Recommend relevant tests (CBC, LFT, KFT, ECG, X-ray, USG, etc.) with reasoning.
+3. Advice: Suggest lifestyle modifications, diet tips, exercise, patient education (Hindi-English mix OK).
+4. Follow-up: Recommend follow-up timeline and what to monitor.
+5. 🩺 Drug Review (optional — ONLY if doctor's medicines are listed above):
+   - Check for interactions, dose appropriateness, missing standard therapies
+   - If you see an issue, say "💡 SUGGESTION:" and explain WHY
+   - Otherwise say "✅ Current medications appear appropriate"
+
+CRITICAL RULES:
+- NEVER generate a new drug list from scratch
+- NEVER rewrite the doctor's prescription
+- If suggesting a drug change, ALWAYS prefix with "💡 SUGGESTION:" and explain the clinical rationale
+- Focus on being helpful, not prescriptive
+
+OUTPUT FORMAT:
+Diagnosis:
+Investigations:
+Advice:
+Follow-up:
+🩺 Drug Review:"""
+
+
+def gp_prompt_suggest(patient_name: str, vitals: str, notes: str,
+                       doc_name: str, doc_degree: str = "", doc_hospital: str = "",
+                       past_context: str = "", progress_context: str = "") -> str:
+    """
+    AI SUGGEST MODE (opt-in) — AI CAN suggest drugs/treatment.
+    Still must present as suggestions, clearly marked.
+    """
+    doc_info = f"Dr. {doc_name}"
+    if doc_degree:
+        doc_info += f" ({doc_degree})"
+
+    return f"""You are an experienced Indian General Practitioner AI assistant working with {doc_info}.
+The doctor has asked you to SUGGEST a complete treatment plan for review.
 
 Patient: {patient_name}
 Vitals: {vitals or 'Not provided'}
@@ -32,19 +95,21 @@ Clinical Notes: {notes or 'Not provided'}
 {past_context}
 {progress_context}
 
-IMPORTANT RULES (Indian OPD context):
+IMPORTANT: You are making SUGGESTIONS only. Every drug recommendation must be clearly prefixed with "💡 SUGGESTION:" so the doctor can easily review, accept, or reject.
+
+RULES (Indian OPD context):
 1. Use INN/generic drug names first, brand names in brackets where relevant.
-2. Indian standard dosages: Tab. Amlodipine 5mg (not 2.5mg), Tab. Metformin 500mg BD (not XR unless specified).
-3. Specify form (Tab./Cap./Syp./Inj.), frequency (OD/BD/TDS/QID), duration, and food timing.
-4. Mention brand alternatives common in India: e.g., Telma (Telmisartan), Glycomet (Metformin), Atorva (Atorvastatin).
-5. Suggest relevant Indian OPD investigations (blood tests, X-ray, ECG, USG).
-6. Clear follow-up timeline (3 days, 1 week, 2 weeks).
-7. Add lifestyle/diet advice in simple Hindi-English mix if appropriate.
+2. Indian standard dosages: Tab. Amlodipine 5mg, Tab. Metformin 500mg BD.
+3. Specify form (Tab./Cap./Syp./Inj.), frequency (OD/BD/TDS/QID), duration, food timing.
+4. Mention brand alternatives common in India: e.g., Telma (Telmisartan), Glycomet (Metformin).
+5. Suggest relevant Indian OPD investigations.
+6. Clear follow-up timeline.
+7. Add lifestyle/diet advice.
 8. Flag red-flag symptoms requiring urgent referral.
 
-OUTPUT FORMAT (exact headings, no markdown):
+OUTPUT FORMAT (every drug line starts with 💡 SUGGESTION:):
 Diagnosis:
-Drugs:
+💡 SUGGESTION — Drugs:
 Advice:
 Follow-up:"""
 
@@ -261,6 +326,7 @@ def diet_plan_prompt(
     diet_type: str,
     meals_per_day: str,
     restrictions: str,
+    target_calories: str = "",
 ) -> str:
     """
     Generate a personalized Indian diet plan using AI.
@@ -284,13 +350,15 @@ PATIENT PROFILE:
 - Meals per day: {meals_per_day or '3 main + 2 snacks'}
 - Dietary Restrictions: {restrictions or 'None'}
 
-IMPORTANT GUIDELINES (Indian context):
+    IMPORTANT GUIDELINES (Indian context):
 1. Use INDIAN foods and recipes — rice, roti, dal, sabzi, curd, sprouts, poha, upma, idli, dosa, khichdi, etc.
 2. Include regional options (North Indian, South Indian, Bengali, Gujarati, Punjabi)
 3. Recommend specific portion sizes in Indian measures (katori, bowl, spoon, piece)
 4. Specify cooking methods (steam, sauté, grill, avoid deep fry)
 5. Give practical Indian meal timing (7-8am breakfast, 12-1pm lunch, 4pm snack, 7-8pm dinner)
 6. Condition-specific adjustments: diabetic → low glycemic, low carb; hypertension → low sodium; CKD → low protein, low potassium; heart disease → low fat, low cholesterol; PCOD → low glycemic, anti-inflammatory; thyroid → iodine balance; anemia → iron-rich; GERD → avoid spicy, small frequent meals
+
+    {"TARGET CALORIES: " + target_calories + " kcal/day — Design the meal plan to meet this target." if target_calories else "Calculate the appropriate daily calorie target based on BMR (Mifflin-St Jeor), activity level, weight goals, and medical conditions."}
 
 OUTPUT FORMAT (plain text, no markdown):
 
