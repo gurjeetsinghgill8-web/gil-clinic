@@ -92,7 +92,7 @@ from src.presentation.opd.routes.opd_routes import router as opd_router
 # Database Setup
 # =========================================================================
 
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
 
 from src.shared.infrastructure.database import Base
@@ -159,8 +159,9 @@ async def lifespan(app: FastAPI):
         Base.metadata.create_all(bind=engine)
         print(f"[GHOS] Database: {_DB_URL} (tables created)")
     else:
-        # PostgreSQL — use async engine to create tables
+        # PostgreSQL — create schemas first, then tables
         async with engine.begin() as conn:
+            await conn.execute(text("CREATE SCHEMA IF NOT EXISTS identity"))
             await conn.run_sync(Base.metadata.create_all)
         print(f"[GHOS] Database: PostgreSQL (tables created)")
 
