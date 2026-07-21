@@ -127,8 +127,12 @@ _jinja_env.filters["format_time"] = format_time
 
 
 # ── Session Helpers ────────────────────────────────────────────────────────────
-def create_session(role: str, name: str) -> str:
-    payload = {"role": role, "name": name, "ts": datetime.now(timezone.utc).isoformat()}
+def create_session(role: str, name: str, user_id: str = "", assigned_opds: str = "") -> str:
+    payload = {
+        "role": role, "name": name,
+        "user_id": user_id, "assigned_opds": assigned_opds,
+        "ts": datetime.now(timezone.utc).isoformat(),
+    }
     return _signer.dumps(payload)
 
 
@@ -271,6 +275,127 @@ async def logout(request: Request):
     resp = RedirectResponse("/staff/login")
     resp.delete_cookie(SESSION_COOKIE)
     return resp
+
+
+# ── Phone + Password Login (for receptionists, doctors) ─────────────────────
+
+@router.post("/phone-login", include_in_schema=False)
+async def phone_login_submit(
+    request: Request,
+    phone: str = Form(""),
+    password: str = Form(""),
+):
+    phone = phone.strip()
+    if not phone or not password:
+        return HTMLResponse(content=_render("dashboard/login.html", request=request, error="❌ Phone and password required."))
+
+    try:
+        from src.infrastructure.staff.models.staff_user_model import StaffUserModel
+        async with async_session_factory() as session:
+            row = await session.execute(
+                sa.select(StaffUserModel).where(
+                    StaffUserModel.phone == phone,
+                    StaffUserModel.is_active == True,
+                )
+            )
+            user = row.scalar_one_or_none()
+
+            if not user or not user.password_hash:
+                return HTMLResponse(content=_render("dashboard/login.html", request=request, error="❌ Invalid phone or password."))
+
+            # Verify password
+            import hashlib
+            input_hash = hashlib.sha256(password.encode()).hexdigest()
+            if input_hash != user.password_hash:
+                return HTMLResponse(content=_render("dashboard/login.html", request=request, error="❌ Wrong password."))
+
+            token = create_session(
+                role=user.role.capitalize(),
+                name=user.name,
+                user_id=user.id,
+                assigned_opds=user.assigned_opds,
+            )
+            resp = RedirectResponse("/staff/home", status_code=303)
+            resp.set_cookie(
+                SESSION_COOKIE, token,
+                max_age=SESSION_MAX_AGE,
+                httponly=True,
+                samesite="lax",
+            )
+            return resp
+    except Exception as exc:
+        return HTMLResponse(content=_render("dashboard/login.html", request=request, error=f"❌ Login error: {exc}"))
+
+
+# ── Seed Default Staff Users (one-time setup) ──────────────────────────────
+
+@router.get("/seed-staff", include_in_schema=False)
+async def seed_staff_users(request: Request):
+    """Create default staff users for testing."""
+    try:
+        from src.infrastructure.staff.models.staff_user_model import StaffUserModel
+        import hashlib
+
+        defaults = [
+            {
+                "name": "Admin User",
+                "phone": "9999999999",
+                "password": "admin123",
+                "pin": "1010",
+                "role": "admin",
+                "assigned_opds": '["ECG","Echo","TMT","OPD","X-Ray","Lab"]',
+            },
+            {
+                "name": "Receptionist Bablu",
+                "phone": "9876543210",
+                "password": "reception123",
+                "pin": "",
+                "role": "receptionist",
+                "assigned_opds": '["ECG","Echo","TMT","OPD","X-Ray","Lab"]',
+            },
+            {
+                "name": "Dr. Singh (Cardio)",
+                "phone": "9876543211",
+                "password": "doctor123",
+                "pin": "5554",
+                "role": "doctor",
+                "assigned_opds": '["OPD"]',
+            },
+        ]
+
+        async with async_session_factory() as session:
+            created = 0
+            for u in defaults:
+                existing = await session.execute(
+                    sa.select(StaffUserModel).where(StaffUserModel.phone == u["phone"])
+                )
+                if existing.scalar_one_or_none():
+                    continue
+                user = StaffUserModel(
+                    name=u["name"],
+                    phone=u["phone"],
+                    password_hash=hashlib.sha256(u["password"].encode()).hexdigest() if u["password"] else "",
+                    pin=u["pin"],
+                    role=u["role"],
+                    assigned_opds=u["assigned_opds"],
+                    is_active=True,
+                )
+                session.add(user)
+                created += 1
+            await session.commit()
+
+        return HTMLResponse(content=f"""<html><body style="font-family:sans-serif;padding:40px">
+<h2>✅ Staff Users Seeded</h2>
+<p>Created: {created} users</p>
+<ul>
+<li><b>Admin</b> — 9999999999 / admin123 (full access)</li>
+<li><b>Receptionist</b> — 9876543210 / reception123 (all OPDs)</li>
+<li><b>Dr. Singh</b> — PIN 5554 (OPD only)</li>
+</ul>
+<p><a href="/staff/login">Go to Login →</a></p>
+</body></html>""")
+    except Exception as exc:
+        return HTMLResponse(content=f"<html><body><h2>❌ Error</h2><pre>{exc}</pre></body></html>", status_code=500)
 
 
 # ── Home ────────────────────────────────────────────────────────────────────────

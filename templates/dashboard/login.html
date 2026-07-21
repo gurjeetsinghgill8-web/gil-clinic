@@ -8,67 +8,87 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/static/dashboard/style.css">
+  <style>
+    .login-tabs { display:flex; gap:4px; margin-bottom:20px; background:#f1f5f9; border-radius:10px; padding:4px; }
+    .login-tab { flex:1; padding:10px; text-align:center; border:none; background:none; border-radius:8px; font-weight:600; font-size:14px; cursor:pointer; color:#64748b; transition:all 0.15s; }
+    .login-tab.active { background:#fff; color:#1e293b; box-shadow:0 1px 3px rgba(0,0,0,0.1); }
+    .login-panel { display:none; }
+    .login-panel.active { display:block; }
+    .phone-input { font-size:18px; letter-spacing:2px; }
+  </style>
 </head>
 <body>
 <div class="login-page">
   <div class="login-card">
     <div class="login-logo">🏥</div>
     <div class="login-title">GIL Clinic</div>
-    <div class="login-sub">CardioQueue Staff Portal — Select your role</div>
+    <div class="login-sub">CardioQueue Staff Portal</div>
 
     {% if error %}
     <div class="alert alert-danger">{{ error }}</div>
     {% endif %}
 
-    <form method="POST" action="/staff/login" id="login-form">
-      <!-- Staff Role Picker -->
-      <div class="form-group">
-        <label>Select Your Role</label>
-        <div class="staff-grid">
-          <div class="staff-btn" data-role="Reception" data-name="Receptionist">
-            <span class="staff-avatar">🏥</span>Reception
+    <!-- Login Tabs -->
+    <div class="login-tabs">
+      <button class="login-tab active" data-panel="pin-panel">🔐 Staff PIN</button>
+      <button class="login-tab" data-panel="phone-panel">📱 Phone Login</button>
+    </div>
+
+    <!-- TAB 1: PIN Login (existing) -->
+    <div class="login-panel active" id="pin-panel">
+      <form method="POST" action="/staff/login" id="pin-login-form">
+        <div class="form-group">
+          <label>Select Your Role</label>
+          <div class="staff-grid">
+            <div class="staff-btn" data-role="Reception" data-name="Receptionist">
+              <span class="staff-avatar">🏥</span>Reception
+            </div>
+            <div class="staff-btn" data-role="ECG" data-name="ECG Tech">
+              <span class="staff-avatar">💓</span>ECG
+            </div>
+            <div class="staff-btn" data-role="Echo" data-name="Echo Tech">
+              <span class="staff-avatar">🫀</span>Echo
+            </div>
+            <div class="staff-btn" data-role="TMT" data-name="TMT Tech">
+              <span class="staff-avatar">🏃</span>TMT
+            </div>
+            <div class="staff-btn" data-role="Doctor" data-name="Doctor">
+              <span class="staff-avatar">👨‍⚕️</span>Doctor
+            </div>
+            <div class="staff-btn" data-role="Manager" data-name="Manager">
+              <span class="staff-avatar">📊</span>Manager
+            </div>
           </div>
-          <div class="staff-btn" data-role="ECG" data-name="ECG Tech">
-            <span class="staff-avatar">💓</span>ECG
-          </div>
-          <div class="staff-btn" data-role="Echo" data-name="Echo Tech">
-            <span class="staff-avatar">🫀</span>Echo
-          </div>
-          <div class="staff-btn" data-role="TMT" data-name="TMT Tech">
-            <span class="staff-avatar">🏃</span>TMT
-          </div>
-          <div class="staff-btn" data-role="Doctor" data-name="Doctor">
-            <span class="staff-avatar">👨‍⚕️</span>Doctor
-          </div>
-          <div class="staff-btn" data-role="Manager" data-name="Manager">
-            <span class="staff-avatar">📊</span>Manager
-          </div>
+          <input type="hidden" name="role" id="role-input" required>
+          <input type="hidden" name="name" id="name-input">
         </div>
-        <input type="hidden" name="role" id="role-input" required>
-        <input type="hidden" name="name" id="name-input">
-      </div>
+        <div class="form-group">
+          <label>PIN (4-digit)</label>
+          <input type="password" name="pin" class="pin-input" placeholder="••••" maxlength="4" inputmode="numeric" pattern="[0-9]*" autocomplete="current-password">
+          <div style="font-size:12px;color:#999;margin-top:4px;">Default: 1234</div>
+        </div>
+        <button type="submit" class="btn btn-primary btn-full" style="padding:14px;font-size:16px;border-radius:10px;">🔐 Login</button>
+      </form>
+    </div>
 
-      <!-- PIN -->
-      <div class="form-group">
-        <label>PIN (4-digit)</label>
-        <input
-          type="password"
-          name="pin"
-          id="pin-input"
-          class="pin-input"
-          placeholder="••••"
-          maxlength="4"
-          inputmode="numeric"
-          pattern="[0-9]*"
-          autocomplete="current-password"
-        >
-        <div style="font-size:12px;color:#999;margin-top:4px;">Default: 1234</div>
+    <!-- TAB 2: Phone Login (new — for receptionists) -->
+    <div class="login-panel" id="phone-panel">
+      <form method="POST" action="/staff/phone-login" id="phone-login-form">
+        <div class="form-group">
+          <label>Phone Number</label>
+          <input type="tel" name="phone" class="phone-input" placeholder="Enter your registered phone" inputmode="numeric" autocomplete="tel">
+        </div>
+        <div class="form-group">
+          <label>Password</label>
+          <input type="password" name="password" placeholder="Enter your password" autocomplete="current-password">
+          <div style="font-size:12px;color:#999;margin-top:4px;">Receptionists: Use phone + password to login</div>
+        </div>
+        <button type="submit" class="btn btn-primary btn-full" style="padding:14px;font-size:16px;border-radius:10px;">📱 Login with Phone</button>
+      </form>
+      <div style="text-align:center;margin-top:12px;font-size:12px;color:#94a3b8;">
+        First time? Ask admin to create your account.
       </div>
-
-      <button type="submit" class="btn btn-primary btn-full" style="padding:14px;font-size:16px;border-radius:10px;">
-        🔐 Login
-      </button>
-    </form>
+    </div>
 
     <div style="border-top:1px solid #eee;margin-top:20px;padding-top:16px;">
       <a href="/staff/patient-status" style="display:block;text-align:center;color:#667eea;font-size:14px;font-weight:600;text-decoration:none;">
@@ -77,6 +97,26 @@
     </div>
   </div>
 </div>
+<script>
+// Tab switching
+document.querySelectorAll('.login-tab').forEach(tab => {
+  tab.addEventListener('click', function() {
+    document.querySelectorAll('.login-tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.login-panel').forEach(p => p.classList.remove('active'));
+    this.classList.add('active');
+    document.getElementById(this.dataset.panel).classList.add('active');
+  });
+});
+// Staff role selection (same as before)
+document.querySelectorAll('.staff-btn').forEach(btn => {
+  btn.addEventListener('click', function() {
+    document.querySelectorAll('.staff-btn').forEach(b => b.classList.remove('active'));
+    this.classList.add('active');
+    document.getElementById('role-input').value = this.dataset.role;
+    document.getElementById('name-input').value = this.dataset.name;
+  });
+});
+</script>
 <script src="/static/dashboard/app.js"></script>
 </body>
 </html>
