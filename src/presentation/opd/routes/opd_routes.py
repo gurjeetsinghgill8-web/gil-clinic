@@ -85,6 +85,7 @@ from src.infrastructure.opd.models.opd_models import (
 
 # ── Patient Model (queue system) ─────────────────────────────────────────────
 from src.infrastructure.patient.models.patient_model import PatientModel
+from src.infrastructure.queue.models.queue_entry_model import QueueEntryModel
 
 # ── AI Engine ────────────────────────────────────────────────────────────────
 from src.ai_engine.groq_client import call_groq, call_groq_vision, parse_ai_json
@@ -427,6 +428,109 @@ async def api_search_patients(request: Request, q: str = Query("")):
     return results[:20]
 
 
+@router.get("/api/queue-patients", include_in_schema=False)
+async def api_queue_patients(request: Request):
+    """Get waiting OPD patients for the doctor to pick from queue."""
+    sess = _require_opd_session(request)
+    try:
+        async with async_session_factory() as session:
+            today = datetime.datetime.now(datetime.timezone.utc).strftime("%Y%m%d")
+            rows = await session.execute(
+                sa.select(
+                    QueueEntryModel, PatientModel
+                )
+                .select_from(QueueEntryModel)
+                .outerjoin(
+                    PatientModel,
+                    QueueEntryModel.patient_uuid == sa.cast(PatientModel.id, sa.String)
+                )
+                .where(
+                    QueueEntryModel.service_code == "OPD",
+                    QueueEntryModel.status == "WAITING",
+                    QueueEntryModel.visit_id.like(f"VIS-{today}-%"),
+                )
+                .order_by(QueueEntryModel.token_number.asc())
+                .limit(30)
+            )
+            patients = []
+            for q_entry, p_entry in rows:
+                wait_mins = 0
+                if q_entry.created_at:
+                    delta = datetime.datetime.now(datetime.timezone.utc) - q_entry.created_at
+                    wait_mins = int(delta.total_seconds() / 60)
+                patients.append({
+                    "patient_id": q_entry.patient_id,
+                    "patient_uuid": q_entry.patient_uuid,
+                    "patient_name": q_entry.patient_name,
+                    "token_number": q_entry.token_number,
+                    "visit_id": q_entry.visit_id,
+                    "complaints": q_entry.notes or "",
+                    "age": p_entry.age if p_entry else "",
+                    "gender": p_entry.gender if p_entry else "",
+                    "phone": p_entry.phone if p_entry else "",
+                    "wait_minutes": wait_mins,
+                    "created_at": q_entry.created_at.strftime("%H:%M") if q_entry.created_at else "",
+                    "total_visits": p_entry.total_visits if p_entry else 0,
+                })
+            return {"ok": True, "patients": patients}
+    except Exception as e:
+        logger.error("Queue patients error: %s", e)
+        return {"ok": False, "patients": [], "error": str(e)}
+
+
+@router.get("/api/patient-history", include_in_schema=False)
+async def api_patient_history(request: Request, patient_id: str = Query(""), patient_name: str = Query("")):
+    """Get patient visit history — past prescriptions and registration info."""
+    sess = _require_opd_session(request)
+    doctor_id = sess["doctor_id"]
+    try:
+        async with async_session_factory() as session:
+            result = {}
+            # Get patient from registration
+            if patient_id:
+                p_row = await session.execute(
+                    sa.select(PatientModel).where(PatientModel.patient_id == patient_id)
+                )
+                p = p_row.scalar_one_or_none()
+                if p:
+                    result["patient"] = {
+                        "age": p.age, "gender": p.gender, "phone": p.phone,
+                        "total_visits": p.total_visits or 0,
+                        "last_visit_at": p.last_visit_at.strftime("%Y-%m-%d %H:%M") if p.last_visit_at else "",
+                        "medical_history": p.medical_history or [],
+                    }
+            # Get past prescriptions
+            like_pattern = f"%{patient_name or ''}%"
+            rx_rows = await session.execute(
+                sa.select(OpdPrescriptionModel)
+                .where(
+                    OpdPrescriptionModel.doctor_id == doctor_id,
+                    sa.or_(
+                        OpdPrescriptionModel.patient_name.ilike(like_pattern),
+                        OpdPrescriptionModel.patient_id == patient_id,
+                    ) if patient_id else OpdPrescriptionModel.patient_name.ilike(like_pattern),
+                )
+                .order_by(OpdPrescriptionModel.created_at.desc())
+                .limit(5)
+            )
+            result["past_rx"] = [
+                {
+                    "date": r.created_at.strftime("%Y-%m-%d") if r.created_at else "",
+                    "complaints": r.complaints,
+                    "diagnosis": r.diagnosis,
+                    "medicines": r.medicines,
+                    "vitals": r.vitals,
+                    "advice": r.advice,
+                    "investigations": r.investigations,
+                }
+                for r in rx_rows.scalars()
+            ]
+            return {"ok": True, **result}
+    except Exception as e:
+        logger.error("Patient history error: %s", e)
+        return {"ok": False, "error": str(e)}
+
+
 @router.get("/api/roster", include_in_schema=False)
 async def api_roster(request: Request, filter: str = Query("today")):
     sess = _require_opd_session(request)
@@ -688,6 +792,8 @@ async def api_save_rx(request: Request):
     investigations = body.get("investigations", "")
     advice = body.get("advice", "")
     follow_up = body.get("follow_up", "")
+    patient_id = body.get("patient_id", "")
+    visit_id = body.get("visit_id", "")
 
     if not patient_name:
         return {"ok": False, "error": "Patient name required"}
@@ -695,6 +801,8 @@ async def api_save_rx(request: Request):
     try:
         async with async_session_factory() as session:
             rx = OpdPrescriptionModel(
+                patient_id=patient_id or None,
+                visit_id=visit_id or None,
                 patient_name=patient_name,
                 phone=phone,
                 doctor_id=doctor_id,
@@ -713,6 +821,18 @@ async def api_save_rx(request: Request):
 
             # Auto-learn drug names
             await _learn_drugs(medicines, doctor_id)
+
+            # Update queue entry status if visit_id provided
+            if visit_id:
+                try:
+                    await session.execute(
+                        sa.update(QueueEntryModel)
+                        .where(QueueEntryModel.visit_id == visit_id)
+                        .values(status="COMPLETED", updated_at=datetime.datetime.now(datetime.timezone.utc))
+                    )
+                    await session.commit()
+                except Exception:
+                    pass
 
             return {"ok": True, "id": str(rx.id)}
     except Exception as e:

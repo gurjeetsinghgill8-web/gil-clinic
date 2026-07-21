@@ -290,6 +290,7 @@
         </div>
 
         <button class="nav-item active" data-tab="rx"> <span class="icon">📝</span> New Rx</button>
+        <button class="nav-item" data-tab="queue"> <span class="icon">🚶</span> Queue <span id="queue-badge" style="background:#ef4444;color:#fff;font-size:10px;padding:1px 6px;border-radius:10px;margin-left:4px;">0</span></button>
         <button class="nav-item" data-tab="roster"> <span class="icon">📋</span> OPD Roster</button>
         <button class="nav-item" data-tab="batch"> <span class="icon">📸</span> Batch Scan</button>
         {% if is_chief %}
@@ -455,6 +456,26 @@
                         </div>
                     </div>
                     <textarea id="rx-output" rows="12" style="font-family:monospace;font-size:13px;"></textarea>
+                </div>
+            </div>
+
+            <!-- ════════════════ TAB: QUEUE ════════════════ -->
+            <div class="tab-content" id="tab-queue">
+                <div class="flex-between mb-sm">
+                    <h2>🚶 OPD Waiting Queue</h2>
+                    <button class="btn btn-sm btn-ghost" onclick="loadQueuePatients()">🔄 Refresh</button>
+                </div>
+                <div class="card">
+                    <div style="overflow-x:auto;">
+                        <table>
+                            <thead>
+                                <tr><th>#</th><th>Token</th><th>Patient</th><th>Age/Gender</th><th>Complaints</th><th>Wait</th><th>Visits</th><th>Action</th></tr>
+                            </thead>
+                            <tbody id="queue-body">
+                                <tr><td colspan="8" style="text-align:center;color:var(--text-muted);padding:32px;">Loading queue...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             </div>
 
@@ -715,12 +736,26 @@ function selectPatient(p) {
     if (p.complaints) document.getElementById('pt-complaints').value = p.complaints;
     if (p.medicines) document.getElementById('pt-medicines').value = p.medicines;
     if (p.diagnosis) document.getElementById('rx-output').value = p.diagnosis;
+    _currentPatientId = p.patient_id || '';
+    _currentVisitId = p.visit_id || '';
 
     document.getElementById('selected-patient').style.display = 'flex';
-    document.getElementById('selected-patient-info').textContent = `✅ ${p.patient_name} (${p.phone}) — loaded`;
+    let info = `✅ ${p.patient_name}`;
+    if (p.phone) info += ` (${p.phone})`;
+    if (p.total_visits) info += ` — Visit #${p.total_visits}`;
+    document.getElementById('selected-patient-info').textContent = info;
     document.getElementById('search-results').classList.remove('show');
     document.getElementById('rx-output-section').style.display = p.diagnosis ? 'block' : 'none';
+
+    // Load past history
+    loadPatientHistory(p.patient_id || '', p.patient_name);
 }
+
+// ════════════════════════════════════════════════════════════════
+// PATIENT SELECTION — track current patient context
+// ════════════════════════════════════════════════════════════════
+let _currentPatientId = '';
+let _currentVisitId = '';
 
 function clearSelected() {
     document.getElementById('selected-patient').style.display = 'none';
@@ -789,10 +824,24 @@ function generateRx() {
         patient_name: document.getElementById('pt-name').value.trim(),
         vitals: document.getElementById('pt-vitals').value.trim(),
         complaints: document.getElementById('pt-complaints').value.trim(),
+        past_context: '',
     };
     if (!data.patient_name) { showToast('Patient name required', 'error'); return; }
 
-    document.getElementById('rx-status').innerHTML = '<span class="spinner"></span> Generating prescription...';
+    // Build past context from available info
+    const age = document.getElementById('pt-age').value;
+    const gender = document.getElementById('pt-gender').value;
+    const pastDiagnosis = document.getElementById('rx-output').value.trim();
+    if (age || gender || _currentPatientId) {
+        const parts = [];
+        if (age) parts.push(`Age: ${age}`);
+        if (gender) parts.push(`Gender: ${gender}`);
+        if (pastDiagnosis) parts.push(`Past Dx: ${pastDiagnosis.substring(0, 200)}`);
+        if (_currentPatientId) parts.push(`Patient ID: ${_currentPatientId}`);
+        data.past_context = parts.join(', ');
+    }
+
+    document.getElementById('rx-status').innerHTML = '<span class="spinner"></span> Generating prescription with AI...';
 
     fetch('/opd/api/generate-rx', {
         method: 'POST',
@@ -824,6 +873,8 @@ function saveRx() {
     const data = {
         patient_name: document.getElementById('pt-name').value.trim(),
         phone: document.getElementById('pt-phone').value.trim(),
+        age: document.getElementById('pt-age').value.trim(),
+        gender: document.getElementById('pt-gender').value,
         vitals: document.getElementById('pt-vitals').value.trim(),
         fee: document.getElementById('pt-fee').value.trim() || '0',
         complaints: document.getElementById('pt-complaints').value.trim(),
@@ -831,6 +882,8 @@ function saveRx() {
         investigations: document.getElementById('pt-investigations').value.trim(),
         diagnosis: document.getElementById('rx-output').value.trim(),
         ai_generated: document.getElementById('rx-output-section').style.display !== 'none',
+        patient_id: _currentPatientId,
+        visit_id: _currentVisitId,
     };
     if (!data.patient_name) { showToast('Patient name required', 'error'); return; }
 
@@ -971,6 +1024,110 @@ function loadRoster(filter) {
                 tbody.appendChild(tr);
             });
         });
+}
+
+// ════════════════════════════════════════════════════════════════
+// QUEUE — waiting OPD patients
+// ════════════════════════════════════════════════════════════════
+function loadQueuePatients() {
+    const tbody = document.getElementById('queue-body');
+    tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:24px;">Loading...</td></tr>';
+
+    fetch('/opd/api/queue-patients')
+        .then(r => r.json())
+        .then(res => {
+            const patients = res.patients || [];
+            document.getElementById('queue-badge').textContent = patients.length;
+
+            tbody.innerHTML = '';
+            if (!patients.length) {
+                tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--text-muted);padding:32px;">✅ No patients waiting in OPD queue</td></tr>';
+                return;
+            }
+
+            patients.forEach(p => {
+                const tr = document.createElement('tr');
+                tr.style.cursor = 'pointer';
+                tr.innerHTML = `
+                    <td style="color:var(--text-muted);font-size:12px;">${p.created_at || ''}</td>
+                    <td><strong>#${p.token_number}</strong></td>
+                    <td><strong>${p.patient_name}</strong></td>
+                    <td class="text-muted">${p.age || '?'} / ${p.gender || '?'}</td>
+                    <td class="text-muted">${(p.complaints || '').substring(0, 40)}</td>
+                    <td style="color:${p.wait_minutes > 30 ? 'var(--warning)' : 'var(--text-muted)'}">${p.wait_minutes}m</td>
+                    <td style="text-align:center;">${p.total_visits || 0}</td>
+                    <td><button class="btn btn-sm btn-primary" onclick="selectQueuePatient('${p.patient_id}', '${p.patient_uuid}', '${p.visit_id}', '${encodeURIComponent(p.patient_name)}', '${p.age}', '${p.gender}', '${p.phone || ''}', '${encodeURIComponent(p.complaints || '')}')">📝 Consult</button></td>
+                `;
+                tbody.appendChild(tr);
+            });
+        })
+        .catch(e => {
+            tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--danger);padding:24px;">Error loading queue</td></tr>';
+        });
+}
+
+function selectQueuePatient(patientId, patientUuid, visitId, name, age, gender, phone, complaints) {
+    // Switch to New Rx tab
+    document.querySelectorAll('.nav-item').forEach(b => b.classList.remove('active'));
+    document.querySelector('[data-tab="rx"]').classList.add('active');
+    document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+    document.getElementById('tab-rx').classList.add('active');
+
+    // Set patient info
+    _currentPatientId = patientId;
+    _currentVisitId = visitId;
+    document.getElementById('pt-name').value = decodeURIComponent(name);
+    document.getElementById('pt-phone').value = phone;
+    document.getElementById('pt-age').value = age;
+    document.getElementById('pt-gender').value = gender || 'Male';
+    document.getElementById('pt-complaints').value = decodeURIComponent(complaints);
+
+    document.getElementById('selected-patient').style.display = 'flex';
+    document.getElementById('selected-patient-info').textContent = `✅ ${decodeURIComponent(name)} — from queue (Token #)`;
+
+    // Load past history
+    loadPatientHistory(patientId, decodeURIComponent(name));
+
+    showToast('Patient loaded from queue!', 'success');
+}
+
+// ════════════════════════════════════════════════════════════════
+// PATIENT HISTORY
+// ════════════════════════════════════════════════════════════════
+function loadPatientHistory(patientId, patientName) {
+    let url = '/opd/api/patient-history?patient_name=' + encodeURIComponent(patientName);
+    if (patientId) url += '&patient_id=' + encodeURIComponent(patientId);
+
+    fetch(url)
+        .then(r => r.json())
+        .then(res => {
+            if (!res.ok) return;
+            const info = [];
+
+            // Patient info
+            if (res.patient) {
+                const p = res.patient;
+                if (p.total_visits) info.push(`Visit #${p.total_visits}`);
+                if (p.last_visit_at) info.push(`Last: ${p.last_visit_at}`);
+                if (p.medical_history && p.medical_history.length) {
+                    info.push(`History: ${p.medical_history.join(', ').substring(0, 100)}`);
+                }
+            }
+
+            // Past prescriptions
+            if (res.past_rx && res.past_rx.length) {
+                const last = res.past_rx[0];
+                info.push(`Last Rx: ${last.date || ''}`);
+                if (last.vitals && !document.getElementById('pt-vitals').value) {
+                    document.getElementById('pt-vitals').value = last.vitals;
+                }
+            }
+
+            if (info.length) {
+                document.getElementById('rx-status').textContent = '📋 ' + info.join(' | ');
+            }
+        })
+        .catch(e => {});
 }
 
 function reprintPdf(name, vitals, rx) {

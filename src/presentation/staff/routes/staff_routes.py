@@ -384,7 +384,24 @@ async def patient_status(request: Request, q: str = Query("")):
             e for e in all_entries
             if query.lower() in str(e.get("patient_id", "")).lower()
             or query == str(e.get("token_number", ""))
+            or query.lower() in str(e.get("patient_name", "")).lower()
         ]
+        # Also search by phone in PatientModel
+        if not patient_entries and len(query) >= 10:
+            try:
+                from src.infrastructure.patient.models.patient_model import PatientModel
+                async with async_session_factory() as session:
+                    row = await session.execute(
+                        sa.select(PatientModel).where(PatientModel.phone.contains(query))
+                    )
+                    p = row.scalar_one_or_none()
+                    if p:
+                        patient_entries = [
+                            e for e in all_entries
+                            if e.get("patient_id") == p.patient_id
+                        ]
+            except Exception:
+                pass
 
     return HTMLResponse(content=_render("dashboard/patient_status.html",
         request=request, active_page="patient_status", session_user=sess,
@@ -415,10 +432,12 @@ async def staff_register_patient(request: Request):
     age = body.get("age", 30)
     gender = body.get("gender", "Male")
     services = body.get("services", [])
+    complaints = (body.get("complaints") or "").strip()
+    visit_type = body.get("visit_type", "New Visit")
 
     if not name:
         return {"ok": False, "error": "Patient name is required"}
-    if not phone or len(phone) < 10:
+    if phone and len(phone) < 10:
         return {"ok": False, "error": "Valid phone number (10+ digits) is required"}
     if not services:
         return {"ok": False, "error": "Select at least one test/service"}
@@ -430,19 +449,24 @@ async def staff_register_patient(request: Request):
 
         now = datetime.now(timezone.utc)
         date_prefix = now.strftime("%Y%m%d")
-        phone_hash = hashlib.sha256(phone.encode()).hexdigest()
+        phone_hash = hashlib.sha256(phone.encode()).hexdigest() if phone else ""
 
         async with async_session_factory() as session:
-            # Check duplicate phone
-            existing_phone = await session.execute(
-                sa.select(PatientModel).where(PatientModel.phone_hash == phone_hash)
-            )
-            dup = existing_phone.scalar_one_or_none()
-            if dup:
-                patient_id = dup.patient_id
-                patient_uuid = str(dup.id)
-                patient_name = dup.name
-                # ── Patient exists — just create queue entries ──
+            existing_patient = None
+            if phone:
+                existing = await session.execute(
+                    sa.select(PatientModel).where(PatientModel.phone_hash == phone_hash)
+                )
+                existing_patient = existing.scalar_one_or_none()
+
+            if existing_patient:
+                patient_id = existing_patient.patient_id
+                patient_uuid = str(existing_patient.id)
+                patient_name = existing_patient.name
+                # ── Update visit tracking ──
+                existing_patient.total_visits = (existing_patient.total_visits or 0) + 1
+                existing_patient.last_visit_at = now
+                # ── Create queue entries ──
                 visit_id = f"VIS-{date_prefix}-{uuid7().hex[:6]}"
                 entries_created = []
                 for idx, code in enumerate(services):
@@ -460,6 +484,7 @@ async def staff_register_patient(request: Request):
                         status="WAITING",
                         priority=0,
                         display_order=0,
+                        notes=complaints,
                         created_by="reception",
                         updated_by="reception",
                         version=1,
@@ -469,11 +494,10 @@ async def staff_register_patient(request: Request):
                     session.add(q)
                     entries_created.append({"service": code, "token": token})
                 await session.commit()
-                return {"ok": True, "patient_id": patient_id, "entries": entries_created,
+                return {"ok": True, "patient_id": patient_id, "visit_id": visit_id, "entries": entries_created,
                         "message": f"{patient_name} — new test(s) added"}
 
             # ── New patient — create patient + queue entries ──
-            # Find next patient sequence number
             seq_result = await session.execute(
                 sa.select(sa.func.count(PatientModel.id)).where(
                     PatientModel.patient_id.like(f"CQ-{date_prefix}-%")
@@ -494,7 +518,9 @@ async def staff_register_patient(request: Request):
                 phone_hash=phone_hash,
                 address="",
                 status="active",
-                total_visits=0,
+                total_visits=1,
+                last_visit_at=now,
+                reception_inquiry=complaints,
                 version=1,
                 created_at=now,
                 updated_at=now,
@@ -519,6 +545,7 @@ async def staff_register_patient(request: Request):
                     status="WAITING",
                     priority=0,
                     display_order=0,
+                    notes=complaints,
                     created_by="reception",
                     updated_by="reception",
                     version=1,
@@ -529,7 +556,7 @@ async def staff_register_patient(request: Request):
                 entries_created.append({"service": code, "token": token})
 
             await session.commit()
-            return {"ok": True, "patient_id": patient_id, "entries": entries_created,
+            return {"ok": True, "patient_id": patient_id, "visit_id": visit_id, "entries": entries_created,
                     "message": f"{name} registered! Patient ID: {patient_id}"}
 
     except Exception as exc:

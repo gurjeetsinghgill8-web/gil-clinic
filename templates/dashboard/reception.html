@@ -17,8 +17,8 @@
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
         <div class="form-group">
-          <label>Phone *</label>
-          <input type="tel" id="patient_phone" placeholder="10-digit phone" pattern="[0-9]{10,}" required>
+          <label>Phone</label>
+          <input type="tel" id="patient_phone" placeholder="Optional phone number">
         </div>
         <div class="form-group">
           <label>Age</label>
@@ -31,6 +31,18 @@
           <option value="Male">Male</option>
           <option value="Female">Female</option>
           <option value="Other">Other</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Reason for Visit / Complaints</label>
+        <textarea id="patient_complaints" placeholder="e.g. Chest pain for 3 days, fever, cough..." rows="2" style="resize:vertical;"></textarea>
+      </div>
+      <div class="form-group">
+        <label>Visit Type</label>
+        <select id="visit_type" style="width:100%;padding:10px;border-radius:8px;border:1.5px solid #e2e8f0;">
+          <option value="New Visit">🆕 New Visit</option>
+          <option value="Follow-up">🔄 Follow-up</option>
+          <option value="Emergency">🚨 Emergency</option>
         </select>
       </div>
       <div class="form-group">
@@ -113,6 +125,8 @@ regForm.addEventListener('submit', async function(e) {
     phone: document.getElementById('patient_phone').value.trim(),
     age: parseInt(document.getElementById('patient_age').value) || 30,
     gender: document.getElementById('patient_gender').value,
+    complaints: document.getElementById('patient_complaints').value.trim(),
+    visit_type: document.getElementById('visit_type').value,
     services: Array.from(document.querySelectorAll('input[name=service]:checked')).map(c => c.value),
   };
 
