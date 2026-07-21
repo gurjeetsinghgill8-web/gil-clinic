@@ -242,6 +242,18 @@ async def root():
     return RedirectResponse("/staff/")
 
 
+@app.get("/debug-env", include_in_schema=False)
+async def debug_env():
+    """Check GROQ_API_KEY environment variable."""
+    groq_key = os.getenv("GROQ_API_KEY", "")
+    has_key = bool(groq_key)
+    return {
+        "GROQ_API_KEY_set": has_key,
+        "GROQ_API_KEY_length": len(groq_key),
+        "GROQ_API_KEY_preview": groq_key[:6] + "..." if has_key else "NOT SET",
+    }
+
+
 # =========================================================================
 # Main
 # =========================================================================
