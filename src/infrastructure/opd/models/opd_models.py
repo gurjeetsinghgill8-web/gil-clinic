@@ -33,7 +33,7 @@ class OpdPrescriptionModel(Base):
         UUID(as_uuid=True), primary_key=True, default=uuid7
     )
     # Link to queue system's patient_id (e.g. "CQ-20260720-001")
-    patient_id: Mapped[str | None] = mapped_column(String(30), nullable=True, index=True)
+    patient_id: Mapped[str] = mapped_column(String(30), nullable=False, index=True)
     patient_name: Mapped[str] = mapped_column(String(200), nullable=False, default="")
     phone: Mapped[str] = mapped_column(String(20), nullable=False, default="")
     visit_id: Mapped[str] = mapped_column(String(50), nullable=True, index=True)

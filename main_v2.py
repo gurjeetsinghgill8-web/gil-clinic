@@ -162,7 +162,10 @@ async def lifespan(app: FastAPI):
         # PostgreSQL — create schemas first, then tables
         async with engine.begin() as conn:
             await conn.execute(text("CREATE SCHEMA IF NOT EXISTS identity"))
+            # Drop all tables first to ensure schema matches models
+            await conn.run_sync(Base.metadata.drop_all)
             await conn.run_sync(Base.metadata.create_all)
+        print(f"[GHOS] Database: PostgreSQL (tables created)")
         print(f"[GHOS] Database: PostgreSQL (tables created)")
 
     # Store sync session factory in app state
