@@ -19,6 +19,11 @@ import sys
 from contextlib import asynccontextmanager
 from pathlib import Path
 
+from dotenv import load_dotenv
+
+# Load .env file if it exists (fallback for Railway env vars)
+load_dotenv()
+
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, RedirectResponse
@@ -161,6 +166,9 @@ async def lifespan(app: FastAPI):
     # Store sync session factory in app state (used by JSON backend fallback)
     app.state.db_session = SessionLocal
 
+    # Debug: check GROQ_API_KEY
+    _gk = os.environ.get("GROQ_API_KEY", "")
+    print(f"[GHOS] GROQ_API_KEY loaded: {'YES' if _gk else 'NO'} (len={len(_gk)})")
     print(f"[GHOS] {APP_NAME} v{APP_VERSION} ready")
     yield
     print("[GHOS] Shutdown complete")
