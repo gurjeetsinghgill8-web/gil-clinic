@@ -286,7 +286,7 @@
                 {% elif role == 'licensed' %}🔐 Licensed
                 {% else %}👨‍⚕️ Junior{% endif %}
             </span>
-            <div class="doctor-name">{{ name or settings.doc_name }}</div>
+            <div class="doctor-name">{{ doc_name or settings.doc_name }}</div>
         </div>
 
         <button class="nav-item active" data-tab="rx"> <span class="icon">📝</span> New Rx</button>
