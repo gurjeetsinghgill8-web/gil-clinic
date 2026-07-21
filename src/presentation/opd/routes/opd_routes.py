@@ -856,7 +856,7 @@ async def api_save_rx(request: Request):
             # Generate patient_id for direct OPD registrations
             if not patient_id:
                 today_str = datetime.datetime.now().strftime("%Y%m%d")
-                short_id = str(uuid.uuid4()).hex[:6].upper()
+                short_id = uuid.uuid4().hex[:6].upper()
                 patient_id = f"OPD-{today_str}-{short_id}"
 
             rx = OpdPrescriptionModel(
