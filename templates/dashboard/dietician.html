@@ -1,0 +1,254 @@
+{% extends "dashboard/base.html" %}
+
+{% block title %}AI Dietician{% endblock %}
+{% block page_title %}🥗 AI Dietician{% endblock %}
+
+{% block content %}
+<div class="card" style="max-width:900px;margin:0 auto;">
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;">
+    <!-- LEFT: Form -->
+    <div>
+      <div class="card-title">Patient Details</div>
+
+      <div class="form-group">
+        <label>Patient Name *</label>
+        <input type="text" id="d-name" placeholder="Full name" class="form-input">
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+        <div class="form-group">
+          <label>Age</label>
+          <input type="number" id="d-age" placeholder="Years" class="form-input">
+        </div>
+        <div class="form-group">
+          <label>Gender</label>
+          <select id="d-gender" class="form-input">
+            <option value="Male">Male</option>
+            <option value="Female">Female</option>
+            <option value="Other">Other</option>
+          </select>
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+        <div class="form-group">
+          <label>Weight (kg)</label>
+          <input type="number" step="0.1" id="d-weight" placeholder="e.g. 70" class="form-input">
+        </div>
+        <div class="form-group">
+          <label>Height (cm)</label>
+          <input type="number" step="0.1" id="d-height" placeholder="e.g. 170" class="form-input">
+        </div>
+      </div>
+      <div id="d-bmi-display" class="text-muted text-sm" style="margin-bottom:12px;display:none;"></div>
+
+      <div class="form-group">
+        <label>Medical Conditions (comma separated)</label>
+        <input type="text" id="d-conditions" placeholder="e.g. Diabetes, Hypertension, PCOD" class="form-input">
+        <div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:6px;">
+          <button class="tag-btn" onclick="tagCondition('Diabetes')">Diabetes</button>
+          <button class="tag-btn" onclick="tagCondition('Hypertension')">Hypertension</button>
+          <button class="tag-btn" onclick="tagCondition('PCOD')">PCOD</button>
+          <button class="tag-btn" onclick="tagCondition('Thyroid')">Thyroid</button>
+          <button class="tag-btn" onclick="tagCondition('Heart Disease')">Heart Disease</button>
+          <button class="tag-btn" onclick="tagCondition('CKD')">CKD</button>
+          <button class="tag-btn" onclick="tagCondition('Anemia')">Anemia</button>
+          <button class="tag-btn" onclick="tagCondition('GERD')">GERD</button>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label>Allergies / Intolerances</label>
+        <input type="text" id="d-allergies" placeholder="e.g. Nuts, Gluten, Lactose" class="form-input">
+      </div>
+
+      <div class="form-group">
+        <label>Diet Goal</label>
+        <select id="d-goal" class="form-input">
+          <option value="General health">General Health / Maintenance</option>
+          <option value="Weight loss">Weight Loss</option>
+          <option value="Weight gain">Weight Gain</option>
+          <option value="Diabetes management">Diabetes Management</option>
+          <option value="Blood pressure control">Blood Pressure Control</option>
+          <option value="Heart health">Heart Health</option>
+          <option value="PCOS management">PCOD/PCOS Management</option>
+          <option value="Muscle building">Muscle Building</option>
+          <option value="Pregnancy nutrition">Pregnancy Nutrition</option>
+        </select>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+        <div class="form-group">
+          <label>Diet Type</label>
+          <select id="d-diet-type" class="form-input">
+            <option value="Regular">Regular (All foods)</option>
+            <option value="Vegetarian">Vegetarian</option>
+            <option value="Vegan">Vegan</option>
+            <option value="Eggetarian">Eggetarian</option>
+            <option value="Jain">Jain</option>
+            <option value="Keto">Keto / Low Carb</option>
+            <option value="Gluten-free">Gluten-free</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Meals per Day</label>
+          <select id="d-meals" class="form-input">
+            <option value="3 main + 2 snacks">3 meals + 2 snacks</option>
+            <option value="3 main">3 meals only</option>
+            <option value="6 small">6 small meals</option>
+            <option value="5 small">5 small meals</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label>Dietary Restrictions</label>
+        <input type="text" id="d-restrictions" placeholder="e.g. No spicy food, Low salt" class="form-input">
+      </div>
+
+      <button class="btn btn-primary" onclick="generateDietPlan()" id="d-generate-btn" style="width:100%;">
+        🥗 Generate AI Diet Plan
+      </button>
+      <div id="d-status" class="text-sm text-muted" style="margin-top:8px;"></div>
+    </div>
+
+    <!-- RIGHT: Output -->
+    <div>
+      <div class="card-title">AI Diet Plan</div>
+      <div id="d-output" class="rx-output" style="min-height:400px;max-height:600px;overflow-y:auto;font-size:13px;line-height:1.7;white-space:pre-wrap;">
+        <div class="text-muted" style="text-align:center;padding:40px 0;">
+          🥗 Fill patient details and click Generate<br>
+          <span style="font-size:12px;">Uses Groq AI to create personalized Indian diet plans</span>
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;margin-top:10px;">
+        <button class="btn btn-ghost btn-sm" onclick="copyDietPlan()">📋 Copy</button>
+        <button class="btn btn-ghost btn-sm" onclick="printDietPlan()">🖨️ Print</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<style>
+.card { background: var(--card,#111827); border: 1px solid var(--border,rgba(255,255,255,0.08)); border-radius: 12px; padding: 20px; }
+.card-title { font-size: 14px; font-weight: 600; color: var(--text-muted,#8892a8); margin-bottom: 16px; }
+.form-group { margin-bottom: 12px; }
+.form-group label { display: block; font-size: 12px; color: var(--text-muted,#8892a8); margin-bottom: 4px; font-weight: 500; }
+.form-input {
+  background: rgba(255,255,255,0.06); border: 1px solid var(--border,rgba(255,255,255,0.08));
+  border-radius: 8px; padding: 9px 12px; color: var(--text,#e2e8f0); font-size: 13px;
+  font-family: inherit; outline: none; width: 100%; box-sizing: border-box;
+}
+.form-input:focus { border-color: #3b82f6; }
+select.form-input { cursor: pointer; }
+.rx-output {
+  background: rgba(255,255,255,0.03); border: 1px solid var(--border,rgba(255,255,255,0.08));
+  border-radius: 8px; padding: 16px; font-family: 'Courier New', monospace;
+}
+.btn { display: inline-flex; align-items: center; gap: 6px; padding: 10px 20px; border-radius: 8px; font-size: 14px; font-weight: 500; border: none; cursor: pointer; transition: all 0.15s; font-family: inherit; }
+.btn-primary { background: #3b82f6; color: #fff; }
+.btn-primary:hover { filter: brightness(1.1); }
+.btn-ghost { background: transparent; border: 1px solid var(--border,rgba(255,255,255,0.08)); color: var(--text,#e2e8f0); }
+.btn-sm { padding: 6px 14px; font-size: 12px; }
+.text-muted { color: var(--text-muted,#8892a8); }
+.text-sm { font-size: 12px; }
+.tag-btn {
+  padding: 3px 10px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.1);
+  background: rgba(255,255,255,0.04); color: var(--text-muted,#8892a8);
+  font-size: 11px; cursor: pointer; transition: all 0.1s; font-family: inherit;
+}
+.tag-btn:hover { background: rgba(59,130,246,0.15); border-color: #3b82f6; color: #93b4f8; }
+</style>
+
+<script>
+function tagCondition(condition) {
+  const inp = document.getElementById('d-conditions');
+  const existing = inp.value.split(',').map(s => s.trim()).filter(Boolean);
+  if (!existing.includes(condition)) {
+    existing.push(condition);
+    inp.value = existing.join(', ');
+  }
+}
+
+// Auto-calculate BMI
+function calcBMI() {
+  const w = parseFloat(document.getElementById('d-weight').value);
+  const h = parseFloat(document.getElementById('d-height').value);
+  const display = document.getElementById('d-bmi-display');
+  if (w > 0 && h > 0) {
+    const bmi = w / ((h/100) ** 2);
+    let cat = bmi < 18.5 ? 'Underweight' : bmi < 25 ? 'Normal' : bmi < 30 ? 'Overweight' : 'Obese';
+    display.textContent = `📊 BMI: ${bmi.toFixed(1)} (${cat})`;
+    display.style.display = 'block';
+  } else {
+    display.style.display = 'none';
+  }
+}
+document.getElementById('d-weight').addEventListener('input', calcBMI);
+document.getElementById('d-height').addEventListener('input', calcBMI);
+
+function generateDietPlan() {
+  const data = {
+    name: document.getElementById('d-name').value.trim(),
+    age: document.getElementById('d-age').value,
+    gender: document.getElementById('d-gender').value,
+    weight: document.getElementById('d-weight').value,
+    height: document.getElementById('d-height').value,
+    conditions: document.getElementById('d-conditions').value.trim(),
+    allergies: document.getElementById('d-allergies').value.trim(),
+    goal: document.getElementById('d-goal').value,
+    diet_type: document.getElementById('d-diet-type').value,
+    meals_per_day: document.getElementById('d-meals').value,
+    restrictions: document.getElementById('d-restrictions').value.trim(),
+  };
+
+  if (!data.name) { alert('Patient name is required'); return; }
+
+  const btn = document.getElementById('d-generate-btn');
+  const status = document.getElementById('d-status');
+  const output = document.getElementById('d-output');
+
+  btn.disabled = true;
+  btn.textContent = '⏳ Generating...';
+  status.textContent = 'AI is creating a personalized diet plan...';
+  output.textContent = '⏳\n\nAnalyzing patient profile...\nCalculating nutritional requirements...\nCreating personalized meal plan...';
+
+  fetch('/staff/api/diet-plan', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify(data),
+  })
+  .then(r => r.json())
+  .then(res => {
+    btn.disabled = false;
+    btn.textContent = '🥗 Generate AI Diet Plan';
+    if (res.ok) {
+      output.textContent = res.diet_plan;
+      status.textContent = '✅ Diet plan generated!';
+    } else {
+      output.textContent = '❌ Error: ' + (res.error || 'Generation failed');
+      status.textContent = '❌ ' + (res.error || 'Failed');
+    }
+  })
+  .catch(e => {
+    btn.disabled = false;
+    btn.textContent = '🥗 Generate AI Diet Plan';
+    output.textContent = '❌ Network error: ' + e;
+    status.textContent = '❌ Error connecting to server';
+  });
+}
+
+function copyDietPlan() {
+  const text = document.getElementById('d-output').textContent;
+  navigator.clipboard.writeText(text).then(() => {
+    alert('📋 Copied to clipboard!');
+  }).catch(() => {});
+}
+
+function printDietPlan() {
+  const text = document.getElementById('d-output').textContent;
+  const win = window.open('', '_blank');
+  win.document.write(`<pre style="font-family:monospace;font-size:14px;padding:20px;line-height:1.6;">${text}</pre>`);
+  win.document.close();
+  win.print();
+}
+</script>
+{% endblock %}

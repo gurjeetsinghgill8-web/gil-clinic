@@ -242,3 +242,82 @@ def validate_rx(text: str) -> Tuple[bool, List[str]]:
     except Exception as e:
         logger.error("validate_rx error: %s", e)
         return False, list(_REQUIRED_RX_SECTIONS)
+
+
+# ════════════════════════════════════════════════════════════════
+# AI DIETICIAN PROMPTS
+# ════════════════════════════════════════════════════════════════
+
+def diet_plan_prompt(
+    patient_name: str,
+    age: str,
+    gender: str,
+    weight: str,
+    height: str,
+    bmi: str,
+    conditions: str,
+    allergies: str,
+    goal: str,
+    diet_type: str,
+    meals_per_day: str,
+    restrictions: str,
+) -> str:
+    """
+    Generate a personalized Indian diet plan using AI.
+    Includes regional food preferences, common Indian conditions, and practical meal plans.
+    """
+    return f"""You are a Senior Clinical Dietitian and Nutritionist (MSc Nutrition, Certified Diabetes Educator) with 15+ years experience in Indian clinical nutrition.
+
+Create a DETAILED, PERSONALIZED diet plan for:
+
+PATIENT PROFILE:
+- Name: {patient_name}
+- Age: {age} years
+- Gender: {gender}
+- Weight: {weight} kg
+- Height: {height} cm
+- BMI: {bmi}
+- Medical Conditions: {conditions or 'None reported'}
+- Allergies/Intolerances: {allergies or 'None'}
+- Goal: {goal or 'General health'}
+- Diet Preference: {diet_type or 'Regular'}
+- Meals per day: {meals_per_day or '3 main + 2 snacks'}
+- Dietary Restrictions: {restrictions or 'None'}
+
+IMPORTANT GUIDELINES (Indian context):
+1. Use INDIAN foods and recipes — rice, roti, dal, sabzi, curd, sprouts, poha, upma, idli, dosa, khichdi, etc.
+2. Include regional options (North Indian, South Indian, Bengali, Gujarati, Punjabi)
+3. Recommend specific portion sizes in Indian measures (katori, bowl, spoon, piece)
+4. Specify cooking methods (steam, sauté, grill, avoid deep fry)
+5. Give practical Indian meal timing (7-8am breakfast, 12-1pm lunch, 4pm snack, 7-8pm dinner)
+6. Condition-specific adjustments: diabetic → low glycemic, low carb; hypertension → low sodium; CKD → low protein, low potassium; heart disease → low fat, low cholesterol; PCOD → low glycemic, anti-inflammatory; thyroid → iodine balance; anemia → iron-rich; GERD → avoid spicy, small frequent meals
+
+OUTPUT FORMAT (plain text, no markdown):
+
+🥗 {patient_name}'s Personalized Diet Plan
+
+GOAL: {goal or 'General Health'}
+DIET TYPE: {diet_type or 'Regular'}
+DAILY CALORIES: ~[calculated] kcal
+PROTEIN: ~[g]g | CARBS: ~[g]g | FATS: ~[g]g
+
+DAILY MEAL PLAN:
+Early Morning (6-7 AM): [Details]
+Breakfast (8-9 AM): [Details]
+Mid-Morning Snack (11 AM): [Details]
+Lunch (1-2 PM): [Details]
+Evening Snack (4-5 PM): [Details]
+Dinner (7-8 PM): [Details]
+
+WATER INTAKE: [recommendation]
+
+FOODS TO EAT (Include): [list]
+FOODS TO AVOID (Exclude): [list]
+
+LIFESTYLE TIPS: [3-4 practical tips]
+
+INDIAN SWAP OPTIONS: [e.g., white rice to brown rice, sugar to jaggery]
+
+WEEK 1 SAMPLE MENU: [Simple 1-week plan with daily variations]
+
+Follow-up in 2 weeks to review progress and adjust."""

@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import os
 from datetime import datetime, timezone
 from pathlib import Path
@@ -97,7 +98,6 @@ UNDER_CONSTRUCTION = [
     {"name": "Inventory",     "icon": "📦"},
     {"name": "GST / Finance", "icon": "💼"},
     {"name": "Multi-Branch",  "icon": "🏢"},
-    {"name": "AI Dietician",  "icon": "🥗"},
     {"name": "WhatsApp Alerts","icon": "💬"},
     {"name": "WhatsApp Alerts","icon": "💬"},
     {"name": "Video Consult", "icon": "📹"},
@@ -548,6 +548,85 @@ async def _next_token(session, service_code: str, date_prefix: str) -> int:
         )
     )
     return (result.scalar() or 0) + 1
+
+
+# ── AI Dietician ─────────────────────────────────────────────────────────────
+
+from src.ai_engine.groq_client import call_groq
+from src.ai_engine.prompts import diet_plan_prompt
+
+
+@router.get("/dietician", include_in_schema=False)
+async def dietician_page(request: Request):
+    sess = get_session(request)
+    if not sess:
+        return RedirectResponse("/staff/login")
+    return HTMLResponse(content=_render("dashboard/dietician.html",
+        request=request, active_page="dietician", session_user=sess,
+    ))
+
+
+@router.post("/api/diet-plan", include_in_schema=False)
+async def api_diet_plan(request: Request):
+    sess = get_session(request)
+    if not sess:
+        return {"ok": False, "error": "Not logged in"}
+
+    try:
+        body = await request.json()
+    except Exception:
+        return {"ok": False, "error": "Invalid JSON"}
+
+    name = body.get("name", "").strip()
+    if not name:
+        return {"ok": False, "error": "Patient name required"}
+
+    # Calculate BMI
+    weight_str = body.get("weight", "0")
+    height_str = body.get("height", "0")
+    bmi = ""
+    try:
+        w = float(weight_str)
+        h = float(height_str)
+        if w > 0 and h > 0:
+            bmi_val = w / ((h / 100) ** 2)
+            bmi = f"{bmi_val:.1f} ({_bmi_category(bmi_val)})"
+    except Exception:
+        pass
+
+    prompt = diet_plan_prompt(
+        patient_name=name,
+        age=body.get("age", ""),
+        gender=body.get("gender", "Male"),
+        weight=weight_str,
+        height=height_str,
+        bmi=bmi,
+        conditions=body.get("conditions", ""),
+        allergies=body.get("allergies", ""),
+        goal=body.get("goal", "General health"),
+        diet_type=body.get("diet_type", "Regular"),
+        meals_per_day=body.get("meals_per_day", "3 main + 2 snacks"),
+        restrictions=body.get("restrictions", ""),
+    )
+
+    groq_key = os.getenv("GROQ_API_KEY", "")
+    if not groq_key:
+        return {"ok": False, "error": "GROQ_API_KEY not set in environment"}
+
+    os.environ["GROQ_API_KEY"] = groq_key
+    result = call_groq([prompt], temp=0.3)
+
+    if not result:
+        return {"ok": False, "error": "AI generation failed. Check API key."}
+
+    return {"ok": True, "diet_plan": result}
+
+
+def _bmi_category(bmi: float) -> str:
+    if bmi < 18.5: return "Underweight"
+    if bmi < 25: return "Normal"
+    if bmi < 30: return "Overweight"
+    return "Obese"
 
 
 # ── Seed Data (one-time test data for Railway) ─────────────────────────────────
