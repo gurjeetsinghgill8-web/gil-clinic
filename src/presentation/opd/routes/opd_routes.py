@@ -36,6 +36,7 @@ import json
 import logging
 import os
 import re
+import uuid
 from pathlib import Path
 from typing import Optional
 
@@ -850,24 +851,30 @@ async def api_save_rx(request: Request):
     if not patient_name:
         return {"ok": False, "error": "Patient name required"}
 
-    try:
-        async with async_session_factory() as session:
-            rx = OpdPrescriptionModel(
-                patient_id=patient_id or None,
-                visit_id=visit_id or None,
-                patient_name=patient_name,
-                phone=phone,
-                doctor_id=doctor_id,
-                vitals=vitals,
-                complaints=complaints,
-                diagnosis=diagnosis,
-                medicines=medicines,
-                investigations=investigations,
-                advice=advice,
-                follow_up=follow_up,
-                fee=fee,
-                ai_generated=body.get("ai_generated", False),
-            )
+	    try:
+	        async with async_session_factory() as session:
+	            # Generate patient_id for direct OPD registrations
+	            if not patient_id:
+	                today_str = datetime.datetime.now().strftime("%Y%m%d")
+	                short_id = str(uuid.uuid4()).hex[:6].upper()
+	                patient_id = f"OPD-{today_str}-{short_id}"
+
+	            rx = OpdPrescriptionModel(
+	                patient_id=patient_id,
+	                visit_id=visit_id or None,
+	                patient_name=patient_name,
+	                phone=phone,
+	                doctor_id=doctor_id,
+	                vitals=vitals,
+	                complaints=complaints,
+	                diagnosis=diagnosis,
+	                medicines=medicines,
+	                investigations=investigations,
+	                advice=advice,
+	                follow_up=follow_up,
+	                fee=fee,
+	                ai_generated=body.get("ai_generated", False),
+	            )
             session.add(rx)
             await session.commit()
 
