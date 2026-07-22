@@ -423,12 +423,28 @@ async def api_search_patients(request: Request, q: str = Query("")):
                     key = f"{row.name}_{row.phone}"
                     if key not in seen:
                         seen.add(key)
+                        # Fetch latest queue entry for complaints & visit_id
+                        latest_q = await session.execute(
+                            sa.select(QueueEntryModel)
+                            .where(
+                                sa.or_(
+                                    QueueEntryModel.patient_id == row.patient_id,
+                                    QueueEntryModel.patient_uuid == str(row.id),
+                                )
+                            )
+                            .order_by(QueueEntryModel.created_at.desc())
+                            .limit(1)
+                        )
+                        q_entry = latest_q.scalar_one_or_none()
                         results.append({
                             "patient_name": row.name,
                             "phone": row.phone,
                             "patient_id": row.patient_id,
+                            "patient_uuid": str(row.id),
                             "age": row.age,
                             "gender": row.gender,
+                            "complaints": q_entry.notes if q_entry else (row.reception_inquiry or ""),
+                            "visit_id": q_entry.visit_id if q_entry else "",
                             "source": "queue",
                         })
     except Exception as e:

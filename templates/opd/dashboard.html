@@ -793,7 +793,7 @@ function selectPatient(p) {
     if (p.complaints) document.getElementById('pt-complaints').value = p.complaints;
     if (p.medicines) document.getElementById('pt-medicines').value = p.medicines;
     if (p.diagnosis) document.getElementById('rx-output').value = p.diagnosis;
-    _currentPatientId = p.patient_id || '';
+    _currentPatientId = p.patient_id || p.patient_uuid || '';
     _currentVisitId = p.visit_id || '';
 
     document.getElementById('selected-patient').style.display = 'flex';
