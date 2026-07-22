@@ -292,6 +292,7 @@ async def _get_settings(doctor_id: str) -> dict:
         "doc_subtitle": "MBBS", "doc_degree": "", "doc_reg_no": "",
         "doc_email": "", "doc_phone": "", "clinic_address": "",
         "doc_extra_quals": "", "groq_api_key": "",
+        "wa_reception": "", "wa_manager": "", "wa_doctor": "",
     }
     try:
         async with async_session_factory() as session:
@@ -311,6 +312,9 @@ async def _get_settings(doctor_id: str) -> dict:
                     "clinic_address": s.clinic_address,
                     "doc_extra_quals": s.doc_extra_quals,
                     "groq_api_key": s.groq_api_key,
+                    "wa_reception": s.wa_reception or "",
+                    "wa_manager": s.wa_manager or "",
+                    "wa_doctor": s.wa_doctor or "",
                 }
     except Exception:
         pass

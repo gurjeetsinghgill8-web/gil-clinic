@@ -725,6 +725,7 @@ document.querySelectorAll('.nav-item[data-tab]').forEach(btn => {
         document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
         // Load data on tab switch
         if (btn.dataset.tab === 'roster') loadRoster('today');
+        if (btn.dataset.tab === 'queue') loadQueuePatients();
         if (btn.dataset.tab === 'starred') loadStarred();
         if (btn.dataset.tab === 'batch') loadPendingScans();
     });
@@ -1737,6 +1738,7 @@ function downloadCmePdf() {
 // ════════════════════════════════════════════════════════════════
 loadTemplates();
 loadRoster('today');
+loadQueuePatients();
 </script>
 </body>
 </html>
