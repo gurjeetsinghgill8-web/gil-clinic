@@ -1497,7 +1497,7 @@ function loadRoster(filter) {
                     <td class="text-muted">${(p.diagnosis || p.complaints || '').substring(0, 60)}</td>
                     <td>₹${p.fee || '0'}</td>
                     <td>
-                        <button class="btn btn-sm btn-ghost" onclick="reprintPdf('${encodeURIComponent(p.patient_name)}', '${encodeURIComponent(p.vitals || '')}', '${encodeURIComponent(p.medicines || p.diagnosis || '')}')">📄 PDF</button>
+                        <button class="btn btn-sm btn-ghost" onclick="reprintPdf('${encodeURIComponent(p.patient_name)}', '${encodeURIComponent(p.vitals || '')}', '${encodeURIComponent((p.diagnosis || '') + (p.medicines ? '\n\n' + p.medicines : ''))}')">📄 PDF</button>
                     </td>
                 `;
                 tbody.appendChild(tr);
