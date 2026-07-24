@@ -336,8 +336,8 @@
         <button class="nav-item" data-tab="queue"> <span class="icon">🚶</span> Queue <span id="queue-badge" style="background:#ef4444;color:#fff;font-size:10px;padding:1px 6px;border-radius:10px;margin-left:4px;">0</span></button>
         <button class="nav-item" data-tab="roster"> <span class="icon">📋</span> OPD Roster</button>
         <button class="nav-item" data-tab="batch"> <span class="icon">📸</span> Batch Scan</button>
-        {% if is_chief %}
         <button class="nav-item" data-tab="upgrade"> <span class="icon">⚕️</span> Specialty Upgrade</button>
+        {% if is_chief %}
         <button class="nav-item" data-tab="starred"> <span class="icon">⭐</span> Starred</button>
         {% endif %}
         <button class="nav-item" data-tab="settings"> <span class="icon">⚙️</span> Settings</button>
@@ -539,6 +539,7 @@
                             <button class="btn btn-sm btn-ghost" onclick="copyRx()">📋 Copy</button>
                             <button class="btn btn-sm btn-success" onclick="saveRx()">💾 Save</button>
                             <button class="btn btn-sm btn-primary" onclick="previewPdf()">📄 PDF</button>
+                            <button class="btn btn-sm btn-ghost" onclick="sendToSpecialtyConsult()" style="background:rgba(139,92,246,0.12);border-color:#8b5cf6;color:#7c3aed;font-weight:600;" title="Get specialist opinion on this prescription">⚕️ Specialty Consult</button>
                             <span style="position:relative;display:inline-block;">
                                 <button class="btn btn-sm btn-ghost" onclick="toggleWhatsAppMenu()" style="background:rgba(37,211,102,0.12);border-color:#25D366;">📱 WhatsApp ▾</button>
                                 <div id="wa-menu" style="display:none;position:absolute;top:100%;right:0;background:var(--card);border:1px solid var(--border);border-radius:8px;z-index:200;min-width:180px;box-shadow:0 8px 30px rgba(0,0,0,0.15);margin-top:4px;">
@@ -1388,6 +1389,35 @@ function previewPdf() {
 function copyRx() {
     const text = document.getElementById('rx-output').value;
     navigator.clipboard.writeText(text).then(() => showToast('📋 Copied!')).catch(() => {});
+}
+
+function sendToSpecialtyConsult() {
+    // Auto-fill the Specialty Upgrade form with current patient data
+    const name = document.getElementById('pt-name').value.trim();
+    const vitals = document.getElementById('pt-vitals').value.trim();
+    const rx = document.getElementById('rx-output').value.trim();
+
+    if (!name) { showToast('Patient name required', 'error'); return; }
+    if (!rx) { showToast('No prescription to consult on', 'error'); return; }
+
+    // Fill the upgrade form
+    document.getElementById('up-pt-name').value = name;
+    document.getElementById('up-vitals').value = vitals;
+    document.getElementById('up-rx').value = rx;
+
+    // Switch to Specialty Upgrade tab
+    const tabs = document.querySelectorAll('.tab-content');
+    tabs.forEach(t => t.classList.remove('active'));
+    document.getElementById('tab-upgrade').classList.add('active');
+
+    // Highlight the nav item
+    document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+    document.querySelector('[data-tab="upgrade"]').classList.add('active');
+
+    // Scroll to top
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+
+    showToast('⚕️ Prescription loaded — select specialties to consult');
 }
 
 // ════════════════════════════════════════════════════════════════
