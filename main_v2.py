@@ -164,7 +164,9 @@ async def lifespan(app: FastAPI):
             await conn.execute(text("CREATE SCHEMA IF NOT EXISTS identity"))
             await conn.run_sync(Base.metadata.create_all)
         print(f"[GHOS] Database: PostgreSQL (tables created)")
-        print(f"[GHOS] Database: PostgreSQL (tables created)")
+
+        # ── Auto-migration: add missing columns to existing tables ──
+        await _migrate_missing_columns()
 
     # Store sync session factory in app state
     # Store sync session factory in app state (used by JSON backend fallback)
@@ -173,6 +175,51 @@ async def lifespan(app: FastAPI):
     print(f"[GHOS] {APP_NAME} v{APP_VERSION} ready")
     yield
     print("[GHOS] Shutdown complete")
+
+
+async def _migrate_missing_columns():
+    """Add any missing columns to existing tables (safe idempotent migration).
+    
+    Checks each column against the table and adds it if missing.
+    This handles cases where the model was updated but the production DB
+    already has the table from a previous create_all.
+    """
+    from sqlalchemy import inspect as sa_inspect
+
+    migrations = [
+        # (table_name, column_name, column_type_sql, default_sql)
+        ("opd_settings", "wa_reception", "VARCHAR(20)", "' '"),
+        ("opd_settings", "wa_manager", "VARCHAR(20)", "' '"),
+        ("opd_settings", "wa_doctor", "VARCHAR(20)", "' '"),
+        ("opd_settings", "wa_dietitian", "VARCHAR(20)", "' '"),
+        ("opd_settings", "doc_extra_quals", "TEXT", "' '"),
+    ]
+
+    try:
+        async with engine.begin() as conn:
+            # Get existing columns for each table
+            for table_name, col_name, col_type, default_val in migrations:
+                try:
+                    # Check if column exists
+                    check_sql = text(
+                        f"SELECT column_name FROM information_schema.columns "
+                        f"WHERE table_name = :tbl AND column_name = :col"
+                    )
+                    result = await conn.execute(check_sql, {"tbl": table_name, "col": col_name})
+                    exists = result.fetchone() is not None
+
+                    if not exists:
+                        alter_sql = text(
+                            f"ALTER TABLE {table_name} ADD COLUMN {col_name} {col_type} DEFAULT {default_val}"
+                        )
+                        await conn.execute(alter_sql)
+                        print(f"[GHOS] Migration: Added column {table_name}.{col_name}")
+                except Exception as e:
+                    print(f"[GHOS] Migration warning ({table_name}.{col_name}): {e}")
+
+        print("[GHOS] Auto-migration check complete")
+    except Exception as e:
+        print(f"[GHOS] Auto-migration error (non-fatal): {e}")
 
 
 # =========================================================================
