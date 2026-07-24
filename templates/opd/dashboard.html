@@ -1304,14 +1304,30 @@ function selectQueuePatient(patientId, patientUuid, visitId, name, age, gender, 
     // Set patient info
     _currentPatientId = patientId;
     _currentVisitId = visitId;
-    document.getElementById('pt-name').value = decodeURIComponent(name);
+    const decodedName = decodeURIComponent(name);
+    const decodedComplaints = decodeURIComponent(complaints);
+    document.getElementById('pt-name').value = decodedName;
     document.getElementById('pt-phone').value = phone;
     document.getElementById('pt-age').value = age;
     document.getElementById('pt-gender').value = gender || 'Male';
-    document.getElementById('pt-complaints').value = decodeURIComponent(complaints);
+    document.getElementById('pt-complaints').value = decodedComplaints;
+
+    // Also fill Specialty Upgrade fields automatically
+    const upPtName = document.getElementById('up-pt-name');
+    const upVitals = document.getElementById('up-vitals');
+    const upRx = document.getElementById('up-rx');
+    if (upPtName) upPtName.value = decodedName;
+    if (upVitals) {
+        const vitalsField = document.getElementById('pt-vitals');
+        if (vitalsField) upVitals.value = vitalsField.value;
+    }
+    if (upRx) {
+        const rxField = document.getElementById('rx-output');
+        if (rxField && rxField.value) upRx.value = rxField.value;
+    }
 
     document.getElementById('selected-patient').style.display = 'flex';
-    document.getElementById('selected-patient-info').textContent = `✅ ${decodeURIComponent(name)} — from queue (Token #)`;
+    document.getElementById('selected-patient-info').textContent = `✅ ${decodedName} — from queue (Token #)`;
 
     // Load past history
     loadPatientHistory(patientId, decodeURIComponent(name));

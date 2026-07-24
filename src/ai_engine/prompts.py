@@ -50,29 +50,31 @@ Clinical Notes: {notes or 'Not provided'}
 {progress_context}
 {meds_section}
 
-YOUR TASK — Provide ONLY these sections (plain text, no markdown):
-
-1. Diagnosis: Suggest possible diagnoses based on the clinical notes. If unclear, list differentials.
-2. Investigations: Recommend relevant tests (CBC, LFT, KFT, ECG, X-ray, USG, etc.) with reasoning.
-3. Advice: Suggest lifestyle modifications, diet tips, exercise, patient education (Hindi-English mix OK).
-4. Follow-up: Recommend follow-up timeline and what to monitor.
-5. 🩺 Drug Review (optional — ONLY if doctor's medicines are listed above):
-   - Check for interactions, dose appropriateness, missing standard therapies
-   - If you see an issue, say "💡 SUGGESTION:" and explain WHY
-   - Otherwise say "✅ Current medications appear appropriate"
-
-CRITICAL RULES:
-- NEVER generate a new drug list from scratch
-- NEVER rewrite the doctor's prescription
-- If suggesting a drug change, ALWAYS prefix with "💡 SUGGESTION:" and explain the clinical rationale
-- Focus on being helpful, not prescriptive
-
-OUTPUT FORMAT:
-Diagnosis:
-Investigations:
-Advice:
-Follow-up:
-🩺 Drug Review:"""
+	YOUR TASK — Provide ONLY these sections (plain text, no markdown):
+	
+	1. Diagnosis: List diagnoses as numbered items (1. Diagnosis Name, 2. Diagnosis Name, etc.). Do NOT write a paragraph/story. Each diagnosis on its own line with a number.
+	2. Investigations: Recommend relevant tests (CBC, LFT, KFT, ECG, X-ray, USG, etc.) with reasoning.
+	3. Treatment: List treatment/management plan as numbered items (1. Drug/Intervention, 2. Drug/Intervention). Include drug names, doses, frequency, duration.
+	4. Advice: Suggest lifestyle modifications, diet tips, exercise, patient education (Hindi-English mix OK).
+	5. Follow-up: Recommend follow-up timeline and what to monitor.
+	6. 🩺 Drug Review (optional — ONLY if doctor's medicines are listed above):
+	   - Check for interactions, dose appropriateness, missing standard therapies
+	   - If you see an issue, say "💡 SUGGESTION:" and explain WHY
+	   - Otherwise say "✅ Current medications appear appropriate"
+	
+	CRITICAL RULES:
+	- NEVER generate a new drug list from scratch
+	- NEVER rewrite the doctor's prescription
+	- If suggesting a drug change, ALWAYS prefix with "💡 SUGGESTION:" and explain the clinical rationale
+	- Focus on being helpful, not prescriptive
+	
+	OUTPUT FORMAT:
+	Diagnosis:
+	Treatment:
+	Investigations:
+	Advice:
+	Follow-up:
+	🩺 Drug Review:"""
 
 
 def gp_prompt_suggest(patient_name: str, vitals: str, notes: str,
@@ -107,11 +109,11 @@ RULES (Indian OPD context):
 7. Add lifestyle/diet advice.
 8. Flag red-flag symptoms requiring urgent referral.
 
-OUTPUT FORMAT (every drug line starts with 💡 SUGGESTION:):
-Diagnosis:
-💡 SUGGESTION — Drugs:
-Advice:
-Follow-up:"""
+	OUTPUT FORMAT (every drug line starts with 💡 SUGGESTION:):
+	Diagnosis: (numbered list — 1. Dx1, 2. Dx2, etc.)
+	💡 SUGGESTION — Treatment: (numbered list with drug names, doses, frequency, duration)
+	Advice:
+	Follow-up:"""
 
 
 # ════════════════════════════════════════════════════════════════════════════

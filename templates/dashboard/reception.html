@@ -46,12 +46,12 @@
         </select>
       </div>
       <div class="form-group">
-        <label>Select Tests *</label>
+        <label>Select Tests * <span id="test-count" style="font-weight:400;font-size:12px;color:#718096;">(none selected)</span></label>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:6px;">
           {% for svc in services %}
           <label style="display:flex;align-items:center;gap:8px;font-weight:400;cursor:pointer;
-            background:#f7fafc;padding:10px;border-radius:8px;border:1.5px solid #e2e8f0;">
-            <input type="checkbox" name="service" value="{{ svc.id }}" style="width:auto;accent-color:#667eea;">
+            background:#f7fafc;padding:10px;border-radius:8px;border:1.5px solid #e2e8f0;transition:all 0.15s;">
+            <input type="checkbox" name="service" value="{{ svc.id }}" style="width:18px;height:18px;accent-color:#667eea;cursor:pointer;">
             <span>{{ svc.icon }} {{ svc.name }}</span>
           </label>
           {% endfor %}
@@ -112,6 +112,25 @@
 </style>
 
 <script>
+// Highlight selected test labels + show count
+function updateTestCount() {
+  const checked = document.querySelectorAll('input[name=service]:checked').length;
+  document.getElementById('test-count').textContent = checked > 0 ? `(${checked} selected ✅)` : '(none selected)';
+}
+document.querySelectorAll('input[name=service]').forEach(cb => {
+  cb.addEventListener('change', function() {
+    const label = this.closest('label');
+    if (this.checked) {
+      label.style.background = 'rgba(37,211,102,0.12)';
+      label.style.borderColor = '#25D366';
+    } else {
+      label.style.background = '#f7fafc';
+      label.style.borderColor = '#e2e8f0';
+    }
+    updateTestCount();
+  });
+});
+
 const regForm = document.getElementById('register-form');
 const alertEl = document.getElementById('register-alert');
 regForm.addEventListener('submit', async function(e) {
