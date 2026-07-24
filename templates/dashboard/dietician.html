@@ -199,8 +199,8 @@
     <!-- Output -->
     <div class="card">
       <div class="card-title">AI Diet Plan</div>
-      <div id="d-output" class="rx-output" style="min-height:400px;max-height:600px;overflow-y:auto;font-size:13px;line-height:1.7;white-space:pre-wrap;">
-        <div class="text-muted" style="text-align:center;padding:40px 0;">
+      <div id="d-output" class="rx-output" style="min-height:400px;max-height:600px;overflow-y:auto;font-size:13px;line-height:1.7;white-space:pre-wrap;color:#e2e8f0;">
+        <div class="text-muted" style="text-align:center;padding:40px 0;color:#8892a8;">
           🥗 Fill patient details and click Generate<br>
           <span style="font-size:12px;">Uses Groq AI — IFCT/NIN/ICMR compliant diet plans</span>
         </div>
@@ -243,6 +243,7 @@ textarea.form-input { font-family: inherit; }
 .rx-output {
   background: rgba(255,255,255,0.03); border: 1px solid var(--border,rgba(255,255,255,0.08));
   border-radius: 8px; padding: 16px; font-family: 'Courier New', monospace;
+  color: var(--text, #e2e8f0);
 }
 .btn { display: inline-flex; align-items: center; gap: 6px; padding: 10px 20px; border-radius: 8px; font-size: 14px; font-weight: 500; border: none; cursor: pointer; transition: all 0.15s; font-family: inherit; }
 .btn-primary { background: #3b82f6; color: #fff; }
@@ -453,7 +454,8 @@ function generateDietPlan() {
   btn.disabled = true;
   btn.textContent = '⏳ Generating...';
   status.textContent = 'AI is creating a clinical diet plan...';
-  output.textContent = '⏳\n\nAnalyzing patient profile...\nCalculating nutritional requirements (IFCT/NIN/ICMR)...\nCreating personalized clinical meal plan...';
+      output.textContent = '⏳\n\nAnalyzing patient profile...\nCalculating nutritional requirements (IFCT/NIN/ICMR)...\nCreating personalized clinical meal plan...';
+      output.style.color = '#e2e8f0';
 
   fetch('/staff/api/diet-plan', {
     method: 'POST',
@@ -469,14 +471,16 @@ function generateDietPlan() {
       status.textContent = '✅ Diet plan generated!';
     } else {
       output.textContent = '❌ Error: ' + (res.error || 'Generation failed');
+      output.style.color = '#e2e8f0';
       status.textContent = '❌ ' + (res.error || 'Failed');
     }
   })
   .catch(e => {
     btn.disabled = false;
     btn.textContent = '🥗 Generate AI Diet Plan';
-    output.textContent = '❌ Network error: ' + e;
-    status.textContent = '❌ Error connecting to server';
+      output.textContent = '❌ Network error: ' + e;
+      output.style.color = '#e2e8f0';
+      status.textContent = '❌ Error connecting to server';
   });
 }
 
