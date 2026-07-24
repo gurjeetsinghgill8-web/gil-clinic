@@ -423,11 +423,44 @@
                         <input type="text" id="pt-investigations" placeholder="Selected tests appear here..." readonly>
                     </div>
 
+                    <div class="card" style="margin-bottom:12px;padding:12px;background:var(--card-bg);border:1px solid var(--border);">
+                        <div class="flex-between mb-sm">
+                            <label style="font-weight:600;font-size:14px;">💊 Add Medicine</label>
+                            <button class="btn btn-sm btn-primary" onclick="addMedicineRow()">+ Add</button>
+                        </div>
+                        <div id="medicines-container">
+                            <div class="med-row" data-index="0" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:6px;">
+                                <input type="text" class="med-name" placeholder="Drug name" style="flex:2;min-width:140px;padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;">
+                                <input type="text" class="med-dose" placeholder="Dose (e.g. 500mg)" style="width:100px;padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;">
+                                <select class="med-freq" style="width:90px;padding:6px 8px;border:1px solid var(--border);border-radius:6px;font-size:13px;">
+                                    <option value="OD">OD (once daily)</option>
+                                    <option value="BD" selected>BD (twice daily)</option>
+                                    <option value="TDS">TDS (thrice daily)</option>
+                                    <option value="QID">QID (four times)</option>
+                                    <option value="HS">HS (night)</option>
+                                    <option value="STAT">STAT (single dose)</option>
+                                </select>
+                                <select class="med-food" style="width:120px;padding:6px 8px;border:1px solid var(--border);border-radius:6px;font-size:13px;">
+                                    <option value="">— Timing —</option>
+                                    <option value="before food" selected>Before food</option>
+                                    <option value="after food">After food</option>
+                                    <option value="with food">With food</option>
+                                    <option value="empty stomach">Empty stomach</option>
+                                </select>
+                                <input type="text" class="med-duration" placeholder="Duration" style="width:100px;padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;">
+                                <button class="btn btn-sm btn-ghost" onclick="removeMedicineRow(this)" style="color:var(--danger);padding:4px 8px;">✕</button>
+                            </div>
+                        </div>
+                        <div class="flex-between mt-sm">
+                            <button class="btn btn-sm btn-ghost" onclick="buildMedicinesText()">📋 Generate Medicine Text</button>
+                            <span class="text-sm text-muted" id="med-count">1 medicine(s)</span>
+                        </div>
+                    </div>
                     <div class="form-row">
                         <div class="form-group">
-                            <label>Medicine Text (AI ke liye)</label>
+                            <label>Medicine Text (AI ke liye / Manual)</label>
                             <div class="autocomplete-wrap">
-                                <textarea id="pt-medicines" rows="4" placeholder="Type medicines or leave blank for AI to generate..."></textarea>
+                                <textarea id="pt-medicines" rows="3" placeholder="Medicines will appear here when you click 'Generate Medicine Text'..."></textarea>
                                 <div class="autocomplete-list" id="drug-suggestions"></div>
                             </div>
                         </div>
@@ -546,6 +579,12 @@
                 <h2 class="mb-sm">⚕️ Specialty Upgrade</h2>
                 <div class="card">
                     <div class="card-title">Compare GP Rx with Specialist Opinions</div>
+                    <div class="flex gap-sm mb-sm" style="flex-wrap:wrap;">
+                        <button class="btn btn-sm btn-primary" onclick="loadUpgradeQueuePatients()">🔄 Load from Queue</button>
+                        <button class="btn btn-sm btn-ghost" onclick="loadRosterPatientsForUpgrade()">📋 Load from Roster</button>
+                        <span class="text-sm text-muted" id="up-queue-info" style="align-self:center;"></span>
+                    </div>
+                    <div id="up-queue-list" style="display:none;margin-bottom:12px;max-height:200px;overflow-y:auto;border:1px solid var(--border);border-radius:8px;padding:8px;"></div>
                     <div class="form-group">
                         <label>Patient Name</label>
                         <input type="text" id="up-pt-name" placeholder="Patient name">
@@ -591,6 +630,11 @@
                     </div>
                     <button class="btn btn-primary" onclick="runUpgrade()">⚕️ Get Specialist Opinions</button>
                     <div id="upgrade-results" class="mt-md"></div>
+                </div>
+                <!-- Roster patients for upgrade (hidden, populated by JS) -->
+                <div id="up-roster-section" style="display:none;" class="card mt-sm">
+                    <div class="card-title">📋 Select Previous Patient for Upgrade</div>
+                    <div style="max-height:250px;overflow-y:auto;" id="up-roster-list"></div>
                 </div>
             </div>
 
@@ -1581,6 +1625,81 @@ function loadPendingScans() {
 	    });
 	}
 
+// ════════════════════════════════════════════════════════════════
+// SPECIALTY UPGRADE — queue & roster patient selection
+// ════════════════════════════════════════════════════════════════
+let _upgradePatients = [];
+
+function loadUpgradeQueuePatients() {
+    fetch('/opd/api/queue-patients')
+        .then(r => r.json())
+        .then(res => {
+            const list = document.getElementById('up-queue-list');
+            const info = document.getElementById('up-queue-info');
+            if (!res.ok || !res.patients || res.patients.length === 0) {
+                list.style.display = 'none';
+                info.textContent = '⚠️ No patients in queue';
+                return;
+            }
+            _upgradePatients = res.patients;
+            list.style.display = 'block';
+            info.textContent = `👥 ${res.patients.length} patient(s) in queue`;
+            list.innerHTML = res.patients.map(p => `
+                <div class="flex-between" style="padding:6px 8px;border-bottom:1px solid var(--border);cursor:pointer;"
+                     onclick="selectUpgradePatient('${encodeURIComponent(p.patient_name)}', '${encodeURIComponent(p.complaints || '')}', '${p.age || ''}', '${p.gender || ''}')">
+                    <span><strong>${p.patient_name}</strong> <span class="text-muted text-sm">#${p.token_number}</span></span>
+                    <span class="text-sm text-muted">${p.age || '?'} / ${p.gender || '?'} | ${p.complaints ? p.complaints.substring(0,30) : '—'}</span>
+                </div>
+            `).join('');
+        })
+        .catch(() => {
+            document.getElementById('up-queue-info').textContent = '❌ Error loading queue';
+        });
+}
+
+function selectUpgradePatient(name, complaints, age, gender) {
+    document.getElementById('up-pt-name').value = decodeURIComponent(name);
+    document.getElementById('up-queue-list').style.display = 'none';
+    document.getElementById('up-queue-info').textContent = `✅ ${decodeURIComponent(name)} selected from queue`;
+    showToast('Patient loaded from queue!', 'success');
+}
+
+function loadRosterPatientsForUpgrade() {
+    const section = document.getElementById('up-roster-section');
+    const list = document.getElementById('up-roster-list');
+    section.style.display = (section.style.display === 'none') ? 'block' : 'none';
+    if (section.style.display === 'none') return;
+
+    list.innerHTML = '<span class="spinner"></span> Loading roster...';
+    fetch('/opd/api/roster?filter=today')
+        .then(r => r.json())
+        .then(data => {
+            const patients = Array.isArray(data) ? data : (data.patients || []);
+            if (!patients || patients.length === 0) {
+                list.innerHTML = '<div class="text-muted">No roster patients today</div>';
+                return;
+            }
+            list.innerHTML = patients.map(p => `
+                <div class="flex-between" style="padding:6px 8px;border-bottom:1px solid var(--border);cursor:pointer;"
+                     onclick="selectRosterUpgradePatient('${encodeURIComponent(p.patient_name)}', '${encodeURIComponent(p.vitals || '')}', '${encodeURIComponent(p.medicines || p.diagnosis || '')}')">
+                    <span><strong>${p.patient_name}</strong></span>
+                    <span class="text-sm text-muted">${p.vitals ? p.vitals.substring(0, 30) : '—'}</span>
+                </div>
+            `).join('');
+        })
+        .catch(() => {
+            list.innerHTML = '<div class="text-muted">Error loading roster</div>';
+        });
+}
+
+function selectRosterUpgradePatient(name, vitals, rx) {
+    document.getElementById('up-pt-name').value = decodeURIComponent(name);
+    document.getElementById('up-vitals').value = decodeURIComponent(vitals);
+    document.getElementById('up-rx').value = decodeURIComponent(rx);
+    document.getElementById('up-roster-section').style.display = 'none';
+    showToast('Roster patient loaded!', 'success');
+}
+
 function starUpgrade(id) {
     const note = prompt('Add a note (optional):');
     fetch('/opd/api/star', {
@@ -1752,6 +1871,80 @@ function downloadCmePdf() {
     })
     .then(r => r.blob())
     .then(blob => window.open(URL.createObjectURL(blob), '_blank'));
+}
+
+// ════════════════════════════════════════════════════════════════
+// MEDICINE ROW MANAGEMENT — structured input with OD/BD/TDS + before/after food
+// ════════════════════════════════════════════════════════════════
+let medRowCounter = 1;
+
+function addMedicineRow() {
+    const container = document.getElementById('medicines-container');
+    const idx = medRowCounter++;
+    const row = document.createElement('div');
+    row.className = 'med-row';
+    row.style.cssText = 'display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:6px;';
+    row.dataset.index = idx;
+    row.innerHTML = `
+        <input type="text" class="med-name" placeholder="Drug name" style="flex:2;min-width:140px;padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;">
+        <input type="text" class="med-dose" placeholder="Dose (e.g. 500mg)" style="width:100px;padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;">
+        <select class="med-freq" style="width:90px;padding:6px 8px;border:1px solid var(--border);border-radius:6px;font-size:13px;">
+            <option value="OD">OD (once daily)</option>
+            <option value="BD" selected>BD (twice daily)</option>
+            <option value="TDS">TDS (thrice daily)</option>
+            <option value="QID">QID (four times)</option>
+            <option value="HS">HS (night)</option>
+            <option value="STAT">STAT (single dose)</option>
+        </select>
+        <select class="med-food" style="width:120px;padding:6px 8px;border:1px solid var(--border);border-radius:6px;font-size:13px;">
+            <option value="">— Timing —</option>
+            <option value="before food" selected>Before food</option>
+            <option value="after food">After food</option>
+            <option value="with food">With food</option>
+            <option value="empty stomach">Empty stomach</option>
+        </select>
+        <input type="text" class="med-duration" placeholder="Duration" style="width:100px;padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;">
+        <button class="btn btn-sm btn-ghost" onclick="removeMedicineRow(this)" style="color:var(--danger);padding:4px 8px;">✕</button>
+    `;
+    container.appendChild(row);
+    updateMedCount();
+}
+
+function removeMedicineRow(btn) {
+    const row = btn.closest('.med-row');
+    if (document.querySelectorAll('.med-row').length <= 1) {
+        showToast('At least one medicine row required', 'error');
+        return;
+    }
+    row.remove();
+    updateMedCount();
+}
+
+function updateMedCount() {
+    const count = document.querySelectorAll('.med-row').length;
+    document.getElementById('med-count').textContent = count + ' medicine(s)';
+}
+
+function buildMedicinesText() {
+    const rows = document.querySelectorAll('.med-row');
+    const lines = [];
+    rows.forEach(row => {
+        const name = row.querySelector('.med-name').value.trim();
+        const dose = row.querySelector('.med-dose').value.trim();
+        const freq = row.querySelector('.med-freq').value;
+        const food = row.querySelector('.med-food').value;
+        const duration = row.querySelector('.med-duration').value.trim();
+        if (!name) return;
+        let line = name;
+        if (dose) line += ' ' + dose;
+        line += ' ' + freq;
+        if (food) line += ' ' + food;
+        if (duration) line += ' x ' + duration;
+        lines.push(line);
+    });
+    const textarea = document.getElementById('pt-medicines');
+    textarea.value = lines.join('\n');
+    showToast('✅ Medicine text generated!');
 }
 
 // ════════════════════════════════════════════════════════════════

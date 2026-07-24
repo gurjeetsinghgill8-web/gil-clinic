@@ -52,29 +52,25 @@ Clinical Notes: {notes or 'Not provided'}
 
 	YOUR TASK — Provide ONLY these sections (plain text, no markdown):
 	
-	1. Diagnosis: List diagnoses as numbered items (1. Diagnosis Name, 2. Diagnosis Name, etc.). Do NOT write a paragraph/story. Each diagnosis on its own line with a number.
-	2. Investigations: Recommend relevant tests (CBC, LFT, KFT, ECG, X-ray, USG, etc.) with reasoning.
-	3. Treatment: List treatment/management plan as numbered items (1. Drug/Intervention, 2. Drug/Intervention). Include drug names, doses, frequency, duration.
-	4. Advice: Suggest lifestyle modifications, diet tips, exercise, patient education (Hindi-English mix OK).
-	5. Follow-up: Recommend follow-up timeline and what to monitor.
-	6. 🩺 Drug Review (optional — ONLY if doctor's medicines are listed above):
-	   - Check for interactions, dose appropriateness, missing standard therapies
-	   - If you see an issue, say "💡 SUGGESTION:" and explain WHY
-	   - Otherwise say "✅ Current medications appear appropriate"
+	1. Diagnosis: List diagnoses as numbered items ONLY (1. Diabetes Mellitus 2. Hypertension 3. ...). CRITICAL: Do NOT write a story or paragraph. Each diagnosis on its own line with a number. Example: "1. Diabetes Mellitus\n2. Hypertension" — NOT "Patient has diabetes and hypertension..."
+	2. Investigations: CRITICAL — List tests as comma-separated values ONLY. Do NOT write sentences or paragraphs. Example: "CBC, MP, Widal, RBS, Urine RM". Do NOT say "CBC is recommended to check for infection" or any reasoning. ONLY test names.
+	3. Treatment: List treatment/management plan as numbered items (1. Drug name + dose + frequency + duration per line). Example: "1. Tab Metformin 500mg BD after food x 1 month\n2. Tab Amlodipine 5mg OD morning x 1 month"
+	4. Advice: Suggest lifestyle modifications, diet tips, exercise, patient education (Hindi-English mix OK). Keep short and practical.
+	5. Follow-up: Recommend follow-up timeline and what to monitor. Short.
 	
 	CRITICAL RULES:
 	- NEVER generate a new drug list from scratch
 	- NEVER rewrite the doctor's prescription
-	- If suggesting a drug change, ALWAYS prefix with "💡 SUGGESTION:" and explain the clinical rationale
-	- Focus on being helpful, not prescriptive
+	- NEVER include "Drug Review" or "Check Interactions" section — DO NOT output this section
+	- NEVER add any extra text, commentary, or explanations
+	- Investigations MUST be ONLY test names separated by commas - no sentences
 	
-	OUTPUT FORMAT:
+	OUTPUT FORMAT (exactly this, no extra sections):
 	Diagnosis:
 	Treatment:
 	Investigations:
 	Advice:
-	Follow-up:
-	🩺 Drug Review:"""
+	Follow-up:"""
 
 
 def gp_prompt_suggest(patient_name: str, vitals: str, notes: str,
@@ -108,6 +104,11 @@ RULES (Indian OPD context):
 6. Clear follow-up timeline.
 7. Add lifestyle/diet advice.
 8. Flag red-flag symptoms requiring urgent referral.
+
+	CRITICAL RULES:
+	- Investigations: ONLY list test names as comma-separated. NO sentences. Example: "CBC, MP, Widal"
+	- NEVER include "Drug Review" or "Check Interactions" section
+	- NEVER add extra commentary
 
 	OUTPUT FORMAT (every drug line starts with 💡 SUGGESTION:):
 	Diagnosis: (numbered list — 1. Dx1, 2. Dx2, etc.)
