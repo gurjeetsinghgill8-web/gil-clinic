@@ -70,6 +70,7 @@ STAFF_PINS: dict[str, str] = {
     "Doctor":     os.getenv("PIN_DOCTOR",     "5678"),
     "Manager":    os.getenv("PIN_MANAGER",    "9999"),
     "Admin":      os.getenv("PIN_ADMIN",      "0000"),
+    "Dietitian":  os.getenv("PIN_DIETITIAN",  "1234"),
 }
 
 # Department config — maps role → queue department ID
@@ -79,6 +80,7 @@ DEPT_CONFIG = {
     "TMT":   {"id": "TMT",        "name": "TMT",        "icon": "🏃"},
     "OPD":   {"id": "OPD",        "name": "OPD",        "icon": "🩺"},
     "XRay":  {"id": "X-Ray",      "name": "X-Ray",      "icon": "🦴"},
+    "Dietitian": {"id": "Dietitian", "name": "Dietitian", "icon": "🥗"},
 }
 
 # Services available at reception
@@ -89,6 +91,7 @@ SERVICES = [
     {"id": "OPD",      "name": "OPD",      "icon": "🩺"},
     {"id": "X-Ray",    "name": "X-Ray",    "icon": "🦴"},
     {"id": "Lab",      "name": "Lab Test", "icon": "🧪"},
+    {"id": "Dietitian","name": "Dietitian","icon": "🥗"},
 ]
 
 # Under construction departments
@@ -455,6 +458,9 @@ async def tmt(request: Request):  return await _dept_page(request, "TMT",  "tmt"
 @router.get("/opd",  include_in_schema=False)
 async def opd(request: Request):  return await _dept_page(request, "OPD",  "opd")
 
+@router.get("/dietitian", include_in_schema=False)
+async def dietitian(request: Request): return await _dept_page(request, "Dietitian", "dietician")
+
 
 # ── Doctor ─────────────────────────────────────────────────────────────────────
 
@@ -713,8 +719,10 @@ async def dietician_page(request: Request):
     sess = get_session(request)
     if not sess:
         return RedirectResponse("/staff/login")
+    queue_entries = await _get_queue(request, department="Dietitian")
     return HTMLResponse(content=_render("dashboard/dietician.html",
         request=request, active_page="dietician", session_user=sess,
+        queue_entries=queue_entries,
     ))
 
 
@@ -802,7 +810,8 @@ async def api_diet_pdf(request: Request):
         target_calories=body.get("target_calories", ""),
         diet_plan=body.get("diet_plan", ""),
         clinic_name=body.get("clinic_name", "GIL CLINIC"),
-        doc_name=body.get("doc_name", "Doctor"),
+        doc_name=body.get("doc_name", "Dietitian"),
+        phone=body.get("phone", ""),
     )
 
     return Response(
@@ -819,6 +828,73 @@ def _bmi_category(bmi: float) -> str:
     if bmi < 25: return "Normal"
     if bmi < 30: return "Overweight"
     return "Obese"
+
+
+@router.get("/api/dietitian-queue", include_in_schema=False)
+async def api_dietitian_queue(request: Request):
+    """Return waiting Dietitian queue patients for frontend auto-load."""
+    sess = get_session(request)
+    if not sess:
+        return {"ok": False, "error": "Not logged in"}
+    entries = await _get_queue(request, department="Dietitian")
+    # Enrich with patient details (age, gender, phone) from PatientModel
+    enriched = []
+    phone_map = {}
+    try:
+        from src.infrastructure.patient.models.patient_model import PatientModel
+        async with async_session_factory() as session:
+            for e in entries:
+                pid = e.get("patient_id", "")
+                if pid:
+                    row = await session.execute(
+                        sa.select(PatientModel).where(PatientModel.patient_id == pid)
+                    )
+                    p = row.scalar_one_or_none()
+                    if p:
+                        phone_map[pid] = {"phone": p.phone or "", "age": p.age or "",
+                                          "gender": p.gender or ""}
+            for e in entries:
+                pid = e.get("patient_id", "")
+                info = phone_map.get(pid, {})
+                e["phone"] = info.get("phone", "")
+                if not e.get("age"):
+                    e["age"] = info.get("age", "")
+                if not e.get("gender"):
+                    e["gender"] = info.get("gender", "")
+                enriched.append(e)
+    except Exception:
+        enriched = entries
+    return {"ok": True, "entries": enriched}
+
+
+@router.get("/api/dietitian-settings", include_in_schema=False)
+async def api_dietitian_settings(request: Request):
+    """Return WhatsApp settings for Dietitian page (reads from OPD settings)."""
+    sess = get_session(request)
+    if not sess:
+        return {"ok": False, "error": "Not logged in"}
+    try:
+        from src.infrastructure.opd.models.opd_models import SettingsModel
+        async with async_session_factory() as session:
+            # Get the first available settings (or by doctor_id if set)
+            row = await session.execute(
+                sa.select(SettingsModel).where(SettingsModel.doctor_id == "chief")
+            )
+            s = row.scalar_one_or_none()
+            if not s:
+                # Try any settings record
+                row = await session.execute(sa.select(SettingsModel).limit(1))
+                s = row.scalar_one_or_none()
+            if s:
+                return {
+                    "wa_reception": s.wa_reception or "",
+                    "wa_manager": s.wa_manager or "",
+                    "wa_doctor": s.wa_doctor or "",
+                    "wa_dietitian": s.wa_dietitian or "",
+                }
+    except Exception:
+        pass
+    return {"wa_reception": "", "wa_manager": "", "wa_doctor": "", "wa_dietitian": ""}
 
 
 # ── Seed Data (one-time test data for Railway) ─────────────────────────────────

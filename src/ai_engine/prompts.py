@@ -329,12 +329,20 @@ def diet_plan_prompt(
     target_calories: str = "",
 ) -> str:
     """
-    Generate a personalized Indian diet plan using AI.
-    Includes regional food preferences, common Indian conditions, and practical meal plans.
+    Generate a professional clinical diet plan following international standards.
+    Uses IFCT/NIN/ICMR food composition database values.
+    Includes per-food protein grams, fiber grams, and daily macro targets.
     """
-    return f"""You are a Senior Clinical Dietitian and Nutritionist (MSc Nutrition, Certified Diabetes Educator) with 15+ years experience in Indian clinical nutrition.
+    # Determine protein requirement based on CKD status
+    has_ckd = "ckd" in conditions.lower() or "kidney" in conditions.lower() or "renal" in conditions.lower()
+    protein_factor = "0.6-0.8" if has_ckd else "1.2-1.5"
 
-Create a DETAILED, PERSONALIZED diet plan for:
+    # Fiber target by gender
+    fiber_target = "25-30g (women) / 30-38g (men)" if gender == "Female" else "30-38g (women) / 25-30g (men)"
+
+    return f"""You are a Senior Clinical Dietitian (MSc Nutrition, Certified Diabetes Educator, ISM certified) with 15+ years experience in Indian clinical nutrition. You follow IFCT (Indian Food Composition Tables), NIN (National Institute of Nutrition) and ICMR (Indian Council of Medical Research) guidelines strictly.
+
+Create a DETAILED, PERSONALIZED clinical diet plan for:
 
 PATIENT PROFILE:
 - Name: {patient_name}
@@ -350,42 +358,106 @@ PATIENT PROFILE:
 - Meals per day: {meals_per_day or '3 main + 2 snacks'}
 - Dietary Restrictions: {restrictions or 'None'}
 
-    IMPORTANT GUIDELINES (Indian context):
-1. Use INDIAN foods and recipes — rice, roti, dal, sabzi, curd, sprouts, poha, upma, idli, dosa, khichdi, etc.
-2. Include regional options (North Indian, South Indian, Bengali, Gujarati, Punjabi)
-3. Recommend specific portion sizes in Indian measures (katori, bowl, spoon, piece)
-4. Specify cooking methods (steam, sauté, grill, avoid deep fry)
-5. Give practical Indian meal timing (7-8am breakfast, 12-1pm lunch, 4pm snack, 7-8pm dinner)
-6. Condition-specific adjustments: diabetic → low glycemic, low carb; hypertension → low sodium; CKD → low protein, low potassium; heart disease → low fat, low cholesterol; PCOD → low glycemic, anti-inflammatory; thyroid → iodine balance; anemia → iron-rich; GERD → avoid spicy, small frequent meals
+CRITICAL NUTRITION TARGETS (must calculate from weight):
+- PROTEIN: {weight} kg × {protein_factor} g/kg = {protein_factor.replace('-', '–')} g/day
+  {'→ CKD patient: Low protein (0.6-0.8 g/kg) to protect kidneys' if has_ckd else '→ NON-CKD patient: Normal-high protein (1.2-1.5 g/kg) for maintenance/repair'}
+- FIBER: {fiber_target} per NIN/ICMR guidelines
+- Use Mifflin-St Jeor equation for BMR, apply activity factor 1.2 (sedentary) to 1.5 (active)
 
-    {"TARGET CALORIES: " + target_calories + " kcal/day — Design the meal plan to meet this target." if target_calories else "Calculate the appropriate daily calorie target based on BMR (Mifflin-St Jeor), activity level, weight goals, and medical conditions."}
+IMPORTANT GUIDELINES (IFCT/NIN/ICMR compliant):
+1. Use ONLY Indian foods from IFCT database — rice, roti (whole wheat), dal (toor, moong, masoor, chana), sabzi (seasonal), curd/dahi, sprouts, poha, upma, idli, dosa, khichdi, millets (ragi, jowar, bajra), etc.
+2. EVERY food item MUST include its PROTEIN content (g) and FIBER content (g) based on IFCT/NIN values
+3. Portion sizes in Indian measures: 1 katori = ~150ml, 1 bowl = ~200ml, 1 roti = 30g, 1 spoon = 10g, 1 piece = 25g
+4. Condition-specific: diabetic → low GI foods (jowar, ragi, brown rice); hypertension → low sodium (<1500mg), potassium-rich; CKD → low K+, low P, low protein; heart disease → low saturated fat, high MUFA; PCOD → low GI, anti-inflammatory; anemia → iron + vitamin C; GERD → small frequent meals, avoid spicy
+5. Each meal MUST show: Food item | Amount | Protein (g) | Fiber (g) | Calories (kcal)
+6. At the end show DAILY NUTRITION SUMMARY with totals and % of target met
 
-OUTPUT FORMAT (plain text, no markdown):
+{"TARGET CALORIES: " + target_calories + " kcal/day — Design the meal plan to meet this target precisely." if target_calories else "Calculate the appropriate daily calorie target based on BMR (Mifflin-St Jeor), activity level, weight goals, and medical conditions."}
 
-🥗 {patient_name}'s Personalized Diet Plan
+OUTPUT FORMAT — Use EXACTLY this format (plain text, no markdown, no asterisks for bold):
 
-GOAL: {goal or 'General Health'}
-DIET TYPE: {diet_type or 'Regular'}
-DAILY CALORIES: ~[calculated] kcal
-PROTEIN: ~[g]g | CARBS: ~[g]g | FATS: ~[g]g
+CLINICAL DIETARY PRESCRIPTION
+GIL CLINIC — Dietitian Department
+
+PATIENT: {patient_name}  |  AGE: {age}  |  GENDER: {gender}
+WEIGHT: {weight} kg  |  HEIGHT: {height} cm  |  BMI: {bmi}
+CONDITIONS: {conditions or 'None'}
+DIET TYPE: {diet_type or 'Regular'}  |  GOAL: {goal or 'General Health'}
+
+PRESCRIBED NUTRITION TARGETS:
+CALORIES:     [XX] kcal/day
+PROTEIN:      [XX] g/day  ([X.X] g/kg body weight)
+CARBOHYDRATES: [XX] g/day
+FAT:          [XX] g/day
+FIBER:        [XX] g/day
+WATER:        [X-X] litres/day
 
 DAILY MEAL PLAN:
-Early Morning (6-7 AM): [Details]
-Breakfast (8-9 AM): [Details]
-Mid-Morning Snack (11 AM): [Details]
-Lunch (1-2 PM): [Details]
-Evening Snack (4-5 PM): [Details]
-Dinner (7-8 PM): [Details]
 
-WATER INTAKE: [recommendation]
+Early Morning (6-7 AM):
+  • [Food item] — [amount]
+    → Protein: [X]g | Fiber: [X]g | Calories: [XX] kcal
+  • [Food item] — [amount]
+    → Protein: [X]g | Fiber: [X]g | Calories: [XX] kcal
 
-FOODS TO EAT (Include): [list]
-FOODS TO AVOID (Exclude): [list]
+Breakfast (8-9 AM):
+  • [Food item] — [amount]
+    → Protein: [X]g | Fiber: [X]g | Calories: [XX] kcal
+  • [Food item] — [amount]
+    → Protein: [X]g | Fiber: [X]g | Calories: [XX] kcal
 
-LIFESTYLE TIPS: [3-4 practical tips]
+Mid-Morning Snack (11 AM):
+  • [Food item] — [amount]
+    → Protein: [X]g | Fiber: [X]g | Calories: [XX] kcal
 
-INDIAN SWAP OPTIONS: [e.g., white rice to brown rice, sugar to jaggery]
+Lunch (1-2 PM):
+  • [Food item] — [amount]
+    → Protein: [X]g | Fiber: [X]g | Calories: [XX] kcal
+  • [Food item] — [amount]
+    → Protein: [X]g | Fiber: [X]g | Calories: [XX] kcal
 
-WEEK 1 SAMPLE MENU: [Simple 1-week plan with daily variations]
+Evening Snack (4-5 PM):
+  • [Food item] — [amount]
+    → Protein: [X]g | Fiber: [X]g | Calories: [XX] kcal
 
-Follow-up in 2 weeks to review progress and adjust."""
+Dinner (7-8 PM):
+  • [Food item] — [amount]
+    → Protein: [X]g | Fiber: [X]g | Calories: [XX] kcal
+
+DAILY NUTRITION SUMMARY:
+TOTAL PROTEIN: [XX]g  (Met: [XX]% of target)
+TOTAL FIBER:   [XX]g  (Met: [XX]% of target)
+TOTAL CALORIES: [XX] kcal (Met: [XX]% of target)
+
+PROTEIN SOURCES BREAKDOWN:
+  - [Food item 1]: [X]g protein
+  - [Food item 2]: [X]g protein
+  - [Food item 3]: [X]g protein
+
+FIBER SOURCES BREAKDOWN:
+  - [Food item 1]: [X]g fiber
+  - [Food item 2]: [X]g fiber
+  - [Food item 3]: [X]g fiber
+
+FOODS TO INCLUDE (per IFCT/NIN):
+[List with reasons]
+
+FOODS TO LIMIT / AVOID:
+[List with reasons]
+
+LIFESTYLE & DIETARY TIPS:
+[3-4 practical, actionable tips]
+
+INDIAN HEALTHY SWAPS:
+[e.g., White rice → Brown rice / Quinoa; Sugar → Jaggery / Dates; Refined flour → Multigrain atta; Fried snacks → Roasted makhana]
+
+WEEK 1 SAMPLE MENU:
+Day 1: [Brief menu variation]
+Day 2: [Brief menu variation]
+Day 3: [Brief menu variation]
+Day 4: [Brief menu variation]
+Day 5: [Brief menu variation]
+Day 6: [Brief menu variation]
+Day 7: [Brief menu variation]
+
+Follow-up in 2 weeks to review progress. Adjust protein/fiber based on tolerance and lab values."""

@@ -670,6 +670,10 @@
                             <label>Doctor WhatsApp</label>
                             <input type="text" id="set-wa-doctor" value="{{ settings.wa_doctor or '' }}" placeholder="91XXXXXXXXXX">
                         </div>
+                        <div class="form-group">
+                            <label>Dietitian WhatsApp</label>
+                            <input type="text" id="set-wa-dietitian" value="{{ settings.wa_dietitian or '' }}" placeholder="91XXXXXXXXXX">
+                        </div>
                     </div>
                     <div class="text-sm text-muted mb-sm">Numbers with country code (no +). Used by WhatsApp share buttons.</div>
 
@@ -1643,6 +1647,7 @@ function saveSettings() {
         wa_reception: document.getElementById('set-wa-reception').value.trim(),
         wa_manager: document.getElementById('set-wa-manager').value.trim(),
         wa_doctor: document.getElementById('set-wa-doctor').value.trim(),
+        wa_dietitian: document.getElementById('set-wa-dietitian').value.trim(),
     };
 
     document.getElementById('settings-status').textContent = 'Saving...';

@@ -293,6 +293,7 @@ async def _get_settings(doctor_id: str) -> dict:
         "doc_email": "", "doc_phone": "", "clinic_address": "",
         "doc_extra_quals": "", "groq_api_key": "",
         "wa_reception": "", "wa_manager": "", "wa_doctor": "",
+        "wa_dietitian": "",
     }
     try:
         async with async_session_factory() as session:
@@ -315,6 +316,7 @@ async def _get_settings(doctor_id: str) -> dict:
                     "wa_reception": s.wa_reception or "",
                     "wa_manager": s.wa_manager or "",
                     "wa_doctor": s.wa_doctor or "",
+                    "wa_dietitian": s.wa_dietitian or "",
                 }
     except Exception:
         pass
@@ -350,7 +352,7 @@ async def api_save_settings(request: Request):
             for key in ["clinic_name", "doc_name", "doc_subtitle", "doc_degree",
                          "doc_reg_no", "doc_email", "doc_phone", "clinic_address",
                          "doc_extra_quals", "groq_api_key",
-                         "wa_reception", "wa_manager", "wa_doctor"]:
+                         "wa_reception", "wa_manager", "wa_doctor", "wa_dietitian"]:
                 if key in body:
                     setattr(s, key, str(body[key]))
 

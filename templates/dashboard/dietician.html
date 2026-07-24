@@ -1,20 +1,78 @@
 {% extends "dashboard/base.html" %}
 
-{% block title %}AI Dietician{% endblock %}
-{% block page_title %}🥗 AI Dietician{% endblock %}
+{% block title %}AI Dietitian{% endblock %}
+{% block page_title %}🥗 AI Dietitian{% endblock %}
 
 {% block content %}
-<div class="card" style="max-width:900px;margin:0 auto;">
-  <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;">
-    <!-- LEFT: Form -->
-    <div>
+<div style="display:grid;grid-template-columns:1fr 1.8fr;gap:20px;align-items:start;">
+
+  <!-- LEFT: Queue Panel -->
+  <div class="card" style="position:sticky;top:80px;">
+    <div class="card-title">📋 Dietitian Queue</div>
+
+    <!-- Search / Filter -->
+    <div class="form-group">
+      <input type="text" id="queue-search" placeholder="🔍 Search patient..." class="form-input" oninput="filterQueue()">
+    </div>
+
+    <!-- Queue List -->
+    <div id="queue-list" style="max-height:500px;overflow-y:auto;">
+      {% if queue_entries %}
+      {% for entry in queue_entries %}
+      <div class="queue-item" data-patient-id="{{ entry.patient_id }}" data-name="{{ entry.patient_name }}"
+           data-age="{{ entry.age }}" data-gender="{{ entry.gender }}"
+           data-phone="{{ entry.phone }}" data-complaints="{{ entry.notes }}"
+           data-visit-id="{{ entry.visit_id }}"
+           onclick="selectQueuePatient(this)">
+        <div class="qi-token">{{ entry.token_number }}</div>
+        <div class="qi-info">
+          <div class="qi-name">{{ entry.patient_name }}</div>
+          <div class="qi-meta">{{ entry.age or '?' }}y · {{ entry.gender or 'N/A' }} · {{ entry.notes or '—' }}</div>
+        </div>
+        <div class="qi-status status-{{ entry.status | lower | replace(' ', '_') }}">{{ entry.status }}</div>
+      </div>
+      {% endfor %}
+      {% else %}
+      <div class="text-muted text-sm" style="text-align:center;padding:30px 0;">
+        <div style="font-size:32px;margin-bottom:8px;">🥗</div>
+        No patients in Dietitian queue
+      </div>
+      {% endif %}
+    </div>
+
+    <!-- Quick call-to-action -->
+    <button class="btn btn-outline btn-sm" onclick="refreshQueue()" style="width:100%;margin-top:8px;">
+      🔄 Refresh Queue
+    </button>
+  </div>
+
+  <!-- RIGHT: Form + Output -->
+  <div>
+    <div class="card" style="margin-bottom:16px;">
       <div class="card-title">Patient Details</div>
 
-      <div class="form-group">
-        <label>Patient Name *</label>
-        <input type="text" id="d-name" placeholder="Full name" class="form-input">
+      <!-- Selected patient badge -->
+      <div id="selected-patient" style="display:none;background:rgba(34,197,94,0.1);border:1px solid rgba(34,197,94,0.2);border-radius:8px;padding:10px;margin-bottom:12px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+          <div>
+            <strong id="sp-name" style="color:#4ade80;"></strong>
+            <span class="text-muted text-sm" id="sp-meta" style="margin-left:8px;"></span>
+          </div>
+          <button class="btn btn-ghost btn-sm" onclick="clearSelected()">✕ Clear</button>
+        </div>
       </div>
+
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+        <div class="form-group">
+          <label>Patient Name *</label>
+          <input type="text" id="d-name" placeholder="Full name" class="form-input">
+        </div>
+        <div class="form-group">
+          <label>Phone</label>
+          <input type="tel" id="d-phone" placeholder="Phone" class="form-input">
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;">
         <div class="form-group">
           <label>Age</label>
           <input type="number" id="d-age" placeholder="Years" class="form-input">
@@ -27,22 +85,36 @@
             <option value="Other">Other</option>
           </select>
         </div>
+        <div class="form-group">
+          <label>Visit ID</label>
+          <input type="text" id="d-visit-id" placeholder="Auto" class="form-input" readonly>
+        </div>
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
         <div class="form-group">
           <label>Weight (kg)</label>
-          <input type="number" step="0.1" id="d-weight" placeholder="e.g. 70" class="form-input">
+          <input type="number" step="0.1" id="d-weight" placeholder="e.g. 70" class="form-input" oninput="updateProteinTarget();calcBMI();">
         </div>
         <div class="form-group">
           <label>Height (cm)</label>
-          <input type="number" step="0.1" id="d-height" placeholder="e.g. 170" class="form-input">
+          <input type="number" step="0.1" id="d-height" placeholder="e.g. 170" class="form-input" oninput="updateProteinTarget();calcBMI();">
         </div>
       </div>
-      <div id="d-bmi-display" class="text-muted text-sm" style="margin-bottom:12px;display:none;"></div>
+      <div id="d-bmi-display" class="text-muted text-sm" style="margin-bottom:8px;display:none;"></div>
+
+      <!-- Protein & Fiber Target Display -->
+      <div id="macro-targets" style="display:none;background:rgba(59,130,246,0.08);border:1px solid rgba(59,130,246,0.15);border-radius:8px;padding:12px;margin-bottom:12px;">
+        <div style="font-size:13px;font-weight:600;margin-bottom:6px;">🎯 Calculated Nutrition Targets</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;font-size:12px;">
+          <div><span class="text-muted">Protein:</span> <strong id="tgt-protein" style="color:#3b82f6;">—</strong></div>
+          <div><span class="text-muted">Fiber:</span> <strong id="tgt-fiber" style="color:#22c55e;">—</strong></div>
+          <div><span class="text-muted">Calories:</span> <strong id="tgt-calories" style="color:#f59e0b;">—</strong></div>
+        </div>
+      </div>
 
       <div class="form-group">
-        <label>Medical Conditions (comma separated)</label>
-        <input type="text" id="d-conditions" placeholder="e.g. Diabetes, Hypertension, PCOD" class="form-input">
+        <label>Medical Conditions</label>
+        <input type="text" id="d-conditions" placeholder="e.g. Diabetes, Hypertension, CKD" class="form-input" oninput="updateProteinTarget()">
         <div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:6px;">
           <button class="tag-btn" onclick="tagCondition('Diabetes')">Diabetes</button>
           <button class="tag-btn" onclick="tagCondition('Hypertension')">Hypertension</button>
@@ -56,26 +128,25 @@
       </div>
 
       <div class="form-group">
-        <label>Allergies / Intolerances</label>
-        <input type="text" id="d-allergies" placeholder="e.g. Nuts, Gluten, Lactose" class="form-input">
-      </div>
-
-      <div class="form-group">
-        <label>Diet Goal</label>
-        <select id="d-goal" class="form-input">
-          <option value="General health">General Health / Maintenance</option>
-          <option value="Weight loss">Weight Loss</option>
-          <option value="Weight gain">Weight Gain</option>
-          <option value="Diabetes management">Diabetes Management</option>
-          <option value="Blood pressure control">Blood Pressure Control</option>
-          <option value="Heart health">Heart Health</option>
-          <option value="PCOS management">PCOD/PCOS Management</option>
-          <option value="Muscle building">Muscle Building</option>
-          <option value="Pregnancy nutrition">Pregnancy Nutrition</option>
-        </select>
+        <label>Complaints / Reason</label>
+        <textarea id="d-complaints" placeholder="Chief complaints..." rows="2" class="form-input" style="resize:vertical;"></textarea>
       </div>
 
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+        <div class="form-group">
+          <label>Diet Goal</label>
+          <select id="d-goal" class="form-input">
+            <option value="General health">General Health / Maintenance</option>
+            <option value="Weight loss">Weight Loss</option>
+            <option value="Weight gain">Weight Gain</option>
+            <option value="Diabetes management">Diabetes Management</option>
+            <option value="Blood pressure control">Blood Pressure Control</option>
+            <option value="Heart health">Heart Health</option>
+            <option value="PCOS management">PCOD/PCOS Management</option>
+            <option value="Muscle building">Muscle Building</option>
+            <option value="Pregnancy nutrition">Pregnancy Nutrition</option>
+          </select>
+        </div>
         <div class="form-group">
           <label>Diet Type</label>
           <select id="d-diet-type" class="form-input">
@@ -88,6 +159,9 @@
             <option value="Gluten-free">Gluten-free</option>
           </select>
         </div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
         <div class="form-group">
           <label>Meals per Day</label>
           <select id="d-meals" class="form-input">
@@ -97,24 +171,23 @@
             <option value="5 small">5 small meals</option>
           </select>
         </div>
-      </div>
-
-      <div class="form-group">
-        <label>Daily Calorie Target (kcal) <span class="text-muted" style="font-weight:400;">— Leave empty for AI to auto-calculate</span></label>
-        <input type="number" id="d-calories" placeholder="e.g. 1800" class="form-input" min="800" max="5000" step="50">
-        <div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:6px;">
-          <button class="tag-btn" onclick="setCalories(1200)">1200 kcal</button>
-          <button class="tag-btn" onclick="setCalories(1500)">1500 kcal</button>
-          <button class="tag-btn" onclick="setCalories(1800)">1800 kcal</button>
-          <button class="tag-btn" onclick="setCalories(2000)">2000 kcal</button>
-          <button class="tag-btn" onclick="setCalories(2500)">2500 kcal</button>
-          <button class="tag-btn" onclick="setCalories('')">❌ Auto</button>
+        <div class="form-group">
+          <label>Daily Calorie Target (kcal)</label>
+          <input type="number" id="d-calories" placeholder="Auto-calc" class="form-input" min="800" max="5000" step="50" oninput="updateProteinTarget()">
+          <div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:4px;">
+            <button class="tag-btn" onclick="setCalories(1200)">1200</button>
+            <button class="tag-btn" onclick="setCalories(1500)">1500</button>
+            <button class="tag-btn" onclick="setCalories(1800)">1800</button>
+            <button class="tag-btn" onclick="setCalories(2000)">2000</button>
+            <button class="tag-btn" onclick="setCalories(2500)">2500</button>
+            <button class="tag-btn" onclick="setCalories('')">❌ Auto</button>
+          </div>
         </div>
       </div>
 
       <div class="form-group">
-        <label>Dietary Restrictions</label>
-        <input type="text" id="d-restrictions" placeholder="e.g. No spicy food, Low salt" class="form-input">
+        <label>Dietary Restrictions / Allergies</label>
+        <input type="text" id="d-restrictions" placeholder="e.g. No spicy food, Low salt, Nuts allergy" class="form-input">
       </div>
 
       <button class="btn btn-primary" onclick="generateDietPlan()" id="d-generate-btn" style="width:100%;">
@@ -123,20 +196,32 @@
       <div id="d-status" class="text-sm text-muted" style="margin-top:8px;"></div>
     </div>
 
-    <!-- RIGHT: Output -->
-    <div>
+    <!-- Output -->
+    <div class="card">
       <div class="card-title">AI Diet Plan</div>
       <div id="d-output" class="rx-output" style="min-height:400px;max-height:600px;overflow-y:auto;font-size:13px;line-height:1.7;white-space:pre-wrap;">
         <div class="text-muted" style="text-align:center;padding:40px 0;">
           🥗 Fill patient details and click Generate<br>
-          <span style="font-size:12px;">Uses Groq AI to create personalized Indian diet plans</span>
+          <span style="font-size:12px;">Uses Groq AI — IFCT/NIN/ICMR compliant diet plans</span>
         </div>
       </div>
       <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;">
         <button class="btn btn-ghost btn-sm" onclick="copyDietPlan()">📋 Copy</button>
         <button class="btn btn-ghost btn-sm" onclick="printDietPlan()">🖨️ Print</button>
         <button class="btn btn-ghost btn-sm" onclick="downloadDietPdf()">📄 Download PDF</button>
-        <button class="btn btn-ghost btn-sm" onclick="shareDietWhatsApp()">📱 WhatsApp</button>
+
+        <!-- WhatsApp Share Dropdown -->
+        <div style="position:relative;display:inline-block;">
+          <button class="btn btn-ghost btn-sm" onclick="toggleWAMenu()" style="background:rgba(37,211,102,0.1);border-color:#25d366;color:#25d366;">
+            📱 WhatsApp ▾
+          </button>
+          <div id="wa-menu" style="display:none;position:absolute;bottom:100%;right:0;margin-bottom:4px;background:var(--card,#1e293b);border:1px solid var(--border,rgba(255,255,255,0.08));border-radius:8px;min-width:200px;z-index:100;box-shadow:0 8px 24px rgba(0,0,0,0.3);">
+            <div class="wa-menu-item" onclick="shareWA('patient')">📱 Send to Patient</div>
+            <div class="wa-menu-item" onclick="shareWA('reception')">🏥 Send to Reception</div>
+            <div class="wa-menu-item" onclick="shareWA('doctor')">👨‍⚕️ Send to Doctor</div>
+            <div class="wa-menu-item" onclick="shareWA('manager')">📊 Send to Manager</div>
+          </div>
+        </div>
       </div>
     </div>
   </div>
@@ -154,6 +239,7 @@
 }
 .form-input:focus { border-color: #3b82f6; }
 select.form-input { cursor: pointer; }
+textarea.form-input { font-family: inherit; }
 .rx-output {
   background: rgba(255,255,255,0.03); border: 1px solid var(--border,rgba(255,255,255,0.08));
   border-radius: 8px; padding: 16px; font-family: 'Courier New', monospace;
@@ -171,19 +257,145 @@ select.form-input { cursor: pointer; }
   font-size: 11px; cursor: pointer; transition: all 0.1s; font-family: inherit;
 }
 .tag-btn:hover { background: rgba(59,130,246,0.15); border-color: #3b82f6; color: #93b4f8; }
+
+/* Queue items */
+.queue-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px; border-radius: 8px; cursor: pointer;
+  border: 1px solid transparent; transition: all 0.12s;
+  margin-bottom: 4px;
+}
+.queue-item:hover { background: rgba(59,130,246,0.08); border-color: rgba(59,130,246,0.15); }
+.queue-item.selected { background: rgba(34,197,94,0.08); border-color: rgba(34,197,94,0.2); }
+.qi-token {
+  font-size: 12px; font-weight: 700; color: #667eea;
+  background: rgba(102,126,234,0.1); padding: 4px 8px; border-radius: 6px; min-width: 32px; text-align: center;
+}
+.qi-info { flex: 1; min-width: 0; }
+.qi-name { font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.qi-meta { font-size: 11px; color: var(--text-muted,#8892a8); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.qi-status { font-size: 10px; font-weight: 600; padding: 2px 8px; border-radius: 10px; }
+.status-WAITING { background: rgba(246,173,85,0.15); color: #f6ad55; }
+.status-CALLED { background: rgba(102,126,234,0.15); color: #667eea; }
+.status-IN_PROGRESS { background: rgba(72,187,120,0.15); color: #48bb78; }
+.status-COMPLETED { background: rgba(160,174,192,0.15); color: #a0aec0; }
+
+/* WA menu */
+#wa-menu { z-index: 1000; }
+.wa-menu-item {
+  padding: 10px 16px; font-size: 13px; cursor: pointer; color: var(--text,#e2e8f0);
+  transition: background 0.1s; white-space: nowrap;
+}
+.wa-menu-item:hover { background: rgba(37,211,102,0.1); color: #25d366; }
+.wa-menu-item:first-child { border-radius: 8px 8px 0 0; }
+.wa-menu-item:last-child { border-radius: 0 0 8px 8px; }
+
+@media(max-width:900px){
+  .reception-grid { grid-template-columns: 1fr !important; }
+}
 </style>
 
 <script>
-function tagCondition(condition) {
-  const inp = document.getElementById('d-conditions');
-  const existing = inp.value.split(',').map(s => s.trim()).filter(Boolean);
-  if (!existing.includes(condition)) {
-    existing.push(condition);
-    inp.value = existing.join(', ');
-  }
+// ── Queue ──────────────────────────────────────────────────────────
+function filterQueue() {
+  const q = document.getElementById('queue-search').value.toLowerCase();
+  document.querySelectorAll('.queue-item').forEach(el => {
+    const name = (el.dataset.name || '').toLowerCase();
+    const pid = (el.dataset.patientId || '').toLowerCase();
+    el.style.display = (name.includes(q) || pid.includes(q)) ? 'flex' : 'none';
+  });
 }
 
-// Auto-calculate BMI
+function selectQueuePatient(el) {
+  // Highlight
+  document.querySelectorAll('.queue-item').forEach(e => e.classList.remove('selected'));
+  el.classList.add('selected');
+
+  // Auto-fill form
+  document.getElementById('d-name').value = el.dataset.name || '';
+  document.getElementById('d-age').value = el.dataset.age || '';
+  document.getElementById('d-gender').value = el.dataset.gender || 'Male';
+  document.getElementById('d-phone').value = el.dataset.phone || '';
+  document.getElementById('d-complaints').value = el.dataset.complaints || '';
+  document.getElementById('d-visit-id').value = el.dataset.visitId || '';
+
+  // Show selected badge
+  const sp = document.getElementById('selected-patient');
+  document.getElementById('sp-name').textContent = el.dataset.name || '';
+  document.getElementById('sp-meta').textContent = (el.dataset.age || '?') + 'y · ' + (el.dataset.gender || 'N/A');
+  sp.style.display = 'block';
+
+  // Recalc protein target
+  updateProteinTarget();
+  calcBMI();
+}
+
+function clearSelected() {
+  document.getElementById('selected-patient').style.display = 'none';
+  document.querySelectorAll('.queue-item').forEach(e => e.classList.remove('selected'));
+}
+
+function refreshQueue() {
+  fetch('/staff/api/dietitian-queue')
+    .then(r => r.json())
+    .then(res => {
+      if (res.ok) {
+        const container = document.getElementById('queue-list');
+        const searchVal = document.getElementById('queue-search').value;
+        if (res.entries.length === 0) {
+          container.innerHTML = '<div class="text-muted text-sm" style="text-align:center;padding:30px 0;"><div style="font-size:32px;margin-bottom:8px;">🥗</div>No patients in Dietitian queue</div>';
+          return;
+        }
+        let html = '';
+        res.entries.forEach(e => {
+          html += `<div class="queue-item" data-patient-id="${e.patient_id}" data-name="${e.patient_name}"
+            data-age="${e.age || ''}" data-gender="${e.gender || ''}"
+            data-phone="${e.phone || ''}" data-complaints="${e.notes || ''}"
+            data-visit-id="${e.visit_id || ''}"
+            onclick="selectQueuePatient(this)">
+            <div class="qi-token">${e.token_number}</div>
+            <div class="qi-info">
+              <div class="qi-name">${e.patient_name}</div>
+              <div class="qi-meta">${e.age || '?'}y · ${e.gender || 'N/A'} · ${(e.notes || '—').substring(0,40)}</div>
+            </div>
+            <div class="qi-status status-${e.status}">${e.status}</div>
+          </div>`;
+        });
+        container.innerHTML = html;
+        if (searchVal) filterQueue();
+      }
+    })
+    .catch(() => {});
+}
+
+// ── Protein / Fiber Target Calculator ──────────────────────────────
+function updateProteinTarget() {
+  const w = parseFloat(document.getElementById('d-weight').value);
+  const conditions = (document.getElementById('d-conditions').value || '').toLowerCase();
+  const hasCKD = conditions.includes('ckd') || conditions.includes('kidney') || conditions.includes('renal');
+  const gender = document.getElementById('d-gender').value;
+  const cal = document.getElementById('d-calories').value.trim();
+
+  const tgtDiv = document.getElementById('macro-targets');
+  if (!w || w <= 0) { tgtDiv.style.display = 'none'; return; }
+
+  const proteinPerKg = hasCKD ? 0.8 : 1.3;
+  const proteinTarget = Math.round(w * proteinPerKg);
+  const fiberTarget = gender === 'Female' ? 28 : 35;
+  const calTarget = cal ? parseInt(cal) : Math.round(w * 28);
+
+  document.getElementById('tgt-protein').textContent = proteinTarget + ' g/day (' + proteinPerKg + ' g/kg)';
+  document.getElementById('tgt-fiber').textContent = fiberTarget + ' g/day (NIN)';
+  document.getElementById('tgt-calories').textContent = calTarget + ' kcal/day';
+
+  // Color-code protein: if CKD show warning
+  const protEl = document.getElementById('tgt-protein');
+  protEl.style.color = hasCKD ? '#f59e0b' : '#3b82f6';
+
+  tgtDiv.style.display = 'block';
+}
+
+// ── BMI Calculator ─────────────────────────────────────────────────
 function calcBMI() {
   const w = parseFloat(document.getElementById('d-weight').value);
   const h = parseFloat(document.getElementById('d-height').value);
@@ -191,28 +403,40 @@ function calcBMI() {
   if (w > 0 && h > 0) {
     const bmi = w / ((h/100) ** 2);
     let cat = bmi < 18.5 ? 'Underweight' : bmi < 25 ? 'Normal' : bmi < 30 ? 'Overweight' : 'Obese';
-    display.textContent = `📊 BMI: ${bmi.toFixed(1)} (${cat})`;
+    display.textContent = '📊 BMI: ' + bmi.toFixed(1) + ' (' + cat + ')';
     display.style.display = 'block';
   } else {
     display.style.display = 'none';
   }
 }
-document.getElementById('d-weight').addEventListener('input', calcBMI);
-document.getElementById('d-height').addEventListener('input', calcBMI);
+
+// ── Tags ────────────────────────────────────────────────────────────
+function tagCondition(condition) {
+  const inp = document.getElementById('d-conditions');
+  const existing = inp.value.split(',').map(s => s.trim()).filter(Boolean);
+  if (!existing.includes(condition)) {
+    existing.push(condition);
+    inp.value = existing.join(', ');
+  }
+  updateProteinTarget();
+}
 
 function setCalories(val) {
   document.getElementById('d-calories').value = val;
+  updateProteinTarget();
 }
 
+// ── Generate Diet Plan ─────────────────────────────────────────────
 function generateDietPlan() {
   const data = {
     name: document.getElementById('d-name').value.trim(),
+    phone: document.getElementById('d-phone').value.trim(),
     age: document.getElementById('d-age').value,
     gender: document.getElementById('d-gender').value,
     weight: document.getElementById('d-weight').value,
     height: document.getElementById('d-height').value,
     conditions: document.getElementById('d-conditions').value.trim(),
-    allergies: document.getElementById('d-allergies').value.trim(),
+    complaints: document.getElementById('d-complaints').value.trim(),
     goal: document.getElementById('d-goal').value,
     diet_type: document.getElementById('d-diet-type').value,
     meals_per_day: document.getElementById('d-meals').value,
@@ -220,7 +444,7 @@ function generateDietPlan() {
     target_calories: document.getElementById('d-calories').value.trim(),
   };
 
-  if (!data.name) { alert('Patient name is required'); return; }
+  if (!data.name) { showToast('Patient name is required', 'warning'); return; }
 
   const btn = document.getElementById('d-generate-btn');
   const status = document.getElementById('d-status');
@@ -228,8 +452,8 @@ function generateDietPlan() {
 
   btn.disabled = true;
   btn.textContent = '⏳ Generating...';
-  status.textContent = 'AI is creating a personalized diet plan...';
-  output.textContent = '⏳\n\nAnalyzing patient profile...\nCalculating nutritional requirements...\nCreating personalized meal plan...';
+  status.textContent = 'AI is creating a clinical diet plan...';
+  output.textContent = '⏳\n\nAnalyzing patient profile...\nCalculating nutritional requirements (IFCT/NIN/ICMR)...\nCreating personalized clinical meal plan...';
 
   fetch('/staff/api/diet-plan', {
     method: 'POST',
@@ -256,17 +480,18 @@ function generateDietPlan() {
   });
 }
 
+// ── Copy / Print / PDF ─────────────────────────────────────────────
 function copyDietPlan() {
   const text = document.getElementById('d-output').textContent;
   navigator.clipboard.writeText(text).then(() => {
-    alert('📋 Copied to clipboard!');
+    showToast('📋 Copied to clipboard!', 'success');
   }).catch(() => {});
 }
 
 function printDietPlan() {
   const text = document.getElementById('d-output').textContent;
   const win = window.open('', '_blank');
-  win.document.write(`<pre style="font-family:monospace;font-size:14px;padding:20px;line-height:1.6;">${text}</pre>`);
+  win.document.write('<pre style="font-family:monospace;font-size:14px;padding:20px;line-height:1.6;">' + text + '</pre>');
   win.document.close();
   win.print();
 }
@@ -274,10 +499,11 @@ function printDietPlan() {
 function downloadDietPdf() {
   const input = document.getElementById('d-output');
   const text = input.textContent || input.innerText;
-  if (!text || text.includes('Fill patient details')) { alert('Generate a diet plan first'); return; }
+  if (!text || text.includes('Fill patient details')) { showToast('Generate a diet plan first', 'warning'); return; }
 
   const data = {
     patient_name: document.getElementById('d-name').value.trim() || 'Patient',
+    phone: document.getElementById('d-phone').value.trim(),
     age: document.getElementById('d-age').value,
     gender: document.getElementById('d-gender').value,
     weight: document.getElementById('d-weight').value,
@@ -299,15 +525,123 @@ function downloadDietPdf() {
   .then(blob => {
     window.open(URL.createObjectURL(blob), '_blank');
   })
-  .catch(e => alert('PDF error: ' + e));
+  .catch(e => showToast('PDF error: ' + e, 'danger'));
 }
 
-function shareDietWhatsApp() {
-  const text = document.getElementById('d-output').textContent;
-  if (!text || text.includes('Fill patient details')) { alert('Generate a diet plan first'); return; }
-  const name = document.getElementById('d-name').value.trim() || 'Patient';
-  const msg = `🥗 *Diet Plan for ${name}*\n\n${text.substring(0, 3000)}\n\n— GIL CLINIC`;
-  window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank');
+// ── WhatsApp Sharing (like Smart OPD) ──────────────────────────────
+let waMenuOpen = false;
+let _waReception = '';
+let _waManager = '';
+let _waDoctor = '';
+
+// Load WhatsApp settings from staff API
+function loadWASettings() {
+  fetch('/staff/api/dietitian-settings')
+    .then(r => r.json())
+    .then(s => {
+      _waReception = s.wa_reception || '';
+      _waManager = s.wa_manager || '';
+      _waDoctor = s.wa_doctor || '';
+    })
+    .catch(() => {});
 }
+loadWASettings();
+function toggleWAMenu() {
+  waMenuOpen = !waMenuOpen;
+  document.getElementById('wa-menu').style.display = waMenuOpen ? 'block' : 'none';
+}
+document.addEventListener('click', function(e) {
+  if (waMenuOpen && !e.target.closest('#wa-menu') && !e.target.closest('[onclick*="toggleWAMenu"]')) {
+    waMenuOpen = false;
+    document.getElementById('wa-menu').style.display = 'none';
+  }
+});
+
+function shareWA(role) {
+  const name = document.getElementById('d-name').value.trim();
+  const text = document.getElementById('d-output').textContent;
+  const phone = document.getElementById('d-phone').value.trim();
+  const age = document.getElementById('d-age').value.trim();
+  const gender = document.getElementById('d-gender').value;
+  const weight = document.getElementById('d-weight').value.trim();
+  const conditions = document.getElementById('d-conditions').value.trim();
+
+  if (!name) { showToast('Patient name required', 'error'); return; }
+  if (!text || text.includes('Fill patient details')) { showToast('Generate a diet plan first', 'warning'); return; }
+
+  let number = '';
+  let msg = '';
+
+  switch(role) {
+    case 'patient':
+      number = phone;
+      msg = '🥗 *Clinical Diet Plan for ' + name + '*\n' +
+        '👤 ' + age + '/' + gender + (weight ? ' | Wt: ' + weight + 'kg' : '') +
+        (conditions ? '\n🏥 ' + conditions : '') +
+        '\n\n' + text.substring(0, 3500) +
+        '\n\n— GIL CLINIC | Dietitian Dept';
+      break;
+    case 'reception':
+      number = _waReception;
+      msg = '🏥 *New Dietitian Consultation*\n\n👤 *' + name + '*' +
+        (phone ? '\n📞 ' + phone : '') +
+        (age ? '\n👤 ' + age + '/' + gender : '') +
+        (weight ? '\n⚖️ ' + weight + 'kg' : '') +
+        (conditions ? '\n🏥 ' + conditions : '') +
+        '\n\n— GIL CLINIC';
+      break;
+    case 'doctor':
+      number = _waDoctor;
+      msg = '👨‍⚕️ *Dietitian Referral — ' + name + '*\n' +
+        (phone ? '\n📞 ' + phone : '') +
+        (age ? '\n👤 ' + age + '/' + gender : '') +
+        (weight ? '\n⚖️ ' + weight + 'kg' : '') +
+        (conditions ? '\n🏥 ' + conditions : '') +
+        '\n\n*Diet Plan:*\n' + text.substring(0, 2000);
+      break;
+    case 'manager':
+      number = _waManager;
+      msg = '📊 *Dietitian Daily Update*\n\n👤 *' + name + '*' +
+        (phone ? '\n📞 ' + phone : '') +
+        (age ? '\n👤 ' + age + '/' + gender : '') +
+        (conditions ? '\n🏥 ' + conditions : '') +
+        '\n\n— GIL CLINIC | Dietitian Dept';
+      break;
+  }
+
+  if (!number && role !== 'patient') {
+    showToast('Set ' + role + ' WhatsApp number in OPD Settings', 'error');
+    waMenuOpen = false;
+    document.getElementById('wa-menu').style.display = 'none';
+    return;
+  }
+  if (!number && role === 'patient') {
+    showToast('Patient phone number not entered', 'error');
+    waMenuOpen = false;
+    document.getElementById('wa-menu').style.display = 'none';
+    return;
+  }
+
+  number = number.replace(/[^0-9]/g, '');
+  const url = number ? 'https://wa.me/' + number + '?text=' + encodeURIComponent(msg) : 'https://wa.me/?text=' + encodeURIComponent(msg);
+  window.open(url, '_blank');
+  showToast('📱 WhatsApp opened for ' + role, 'success');
+  waMenuOpen = false;
+  document.getElementById('wa-menu').style.display = 'none';
+}
+
+// ── Auto-refresh queue every 30s ───────────────────────────────────
+let queueRefreshTimer = setInterval(() => {
+  // Only refresh if queue-visibile (not scrolled away)
+  const q = document.getElementById('queue-list');
+  if (q && q.offsetParent !== null) refreshQueue();
+}, 30000);
+
+// ── Listen for Enter on name field to start generate ───────────────
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Enter' && e.ctrlKey) {
+    generateDietPlan();
+  }
+});
 </script>
 {% endblock %}

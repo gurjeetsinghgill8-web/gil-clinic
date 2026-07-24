@@ -306,57 +306,50 @@ def make_diet_pdf(
     diet_type: str = "",
     target_calories: str = "",
     diet_plan: str = "",
-    clinic_name: str = "My Clinic",
-    doc_name: str = "Doctor",
+    clinic_name: str = "GIL CLINIC",
+    doc_name: str = "Dietitian",
+    phone: str = "",
 ) -> bytes:
     """
-    Generate a professional Diet Plan PDF with clinic letterhead.
+    Generate a professional Clinical Diet Plan PDF following international standards.
 
-    Args:
-        patient_name: Patient name
-        age: Patient age
-        gender: Patient gender
-        weight: Weight in kg
-        height: Height in cm
-        bmi: BMI value
-        conditions: Medical conditions
-        goal: Diet goal
-        diet_type: Diet preference
-        target_calories: Calorie target
-        diet_plan: Full diet plan text (AI generated)
-        clinic_name: Clinic name for header
-        doc_name: Doctor name for header
-
-    Returns:
-        PDF bytes
+    Features:
+    - Clinic letterhead with green theme
+    - Patient info box
+    - Prescribed macro-nutrient targets table
+    - Per-meal nutritional breakdown (Protein | Fiber | Calories per food item)
+    - Daily nutrition summary
+    - Foods to include/avoid sections
+    - Professional footer
     """
     pdf = FPDF()
     pdf.add_page()
 
     # ── Letterhead ──────────────────────────────────────────────
     pdf.set_fill_color(0, 100, 50)
-    pdf.rect(0, 0, 210, 40, "F")
+    pdf.rect(0, 0, 210, 38, "F")
     pdf.set_xy(10, 5)
-    pdf.set_font("Helvetica", "B", 18)
+    pdf.set_font("Helvetica", "B", 16)
     pdf.set_text_color(255, 255, 255)
-    pdf.cell(190, 10, safe_str("🥗 Personalized Diet Plan"), align="C")
+    pdf.cell(190, 10, safe_str("🥗 Clinical Dietary Prescription"), align="C")
     pdf.set_xy(10, 17)
-    pdf.set_font("Helvetica", "", 10)
+    pdf.set_font("Helvetica", "", 9)
     pdf.set_text_color(200, 255, 220)
-    pdf.cell(190, 6, safe_str(clinic_name), align="C")
-    pdf.set_xy(10, 24)
-    pdf.set_font("Helvetica", "I", 9)
-    pdf.cell(190, 6, f"Prepared by: {safe_str(doc_name)}", align="C")
-    pdf.set_xy(10, 31)
+    pdf.cell(190, 5, safe_str(clinic_name), align="C")
+    pdf.set_xy(10, 23)
     pdf.set_font("Helvetica", "I", 8)
-    pdf.cell(190, 5, f"Date: {datetime.datetime.now().strftime('%d-%b-%Y')}", align="C")
+    pdf.set_text_color(180, 240, 200)
+    pdf.cell(190, 5, f"Prepared by: {safe_str(doc_name)}", align="C")
+    pdf.set_xy(10, 29)
+    pdf.set_font("Helvetica", "I", 7)
+    pdf.cell(190, 5, f"Date: {datetime.datetime.now().strftime('%d-%b-%Y')} | IFCT/NIN/ICMR Compliant", align="C")
 
-    y_pos = 46
+    y_pos = 44
 
     # ── Patient Info Box ────────────────────────────────────────
-    pdf.set_fill_color(240, 255, 240)
+    pdf.set_fill_color(235, 250, 240)
     pdf.set_draw_color(0, 150, 80)
-    pdf.rect(10, y_pos, 190, 30, "DF")
+    pdf.rect(10, y_pos, 190, 32, "DF")
     pdf.set_xy(14, y_pos + 3)
     pdf.set_font("Helvetica", "B", 10)
     pdf.set_text_color(0, 80, 40)
@@ -371,41 +364,43 @@ def make_diet_pdf(
     pdf.cell(86, 5, " | ".join(info_parts), ln=False, align="R")
 
     pdf.set_xy(14, y_pos + 11)
-    pdf.set_font("Helvetica", "", 9)
+    pdf.set_font("Helvetica", "", 8.5)
     details = []
-    if weight: details.append(f"Wt: {weight}kg")
-    if height: details.append(f"Ht: {height}cm")
+    if weight: details.append(f"Wt: {weight} kg")
+    if height: details.append(f"Ht: {height} cm")
     if bmi: details.append(f"BMI: {bmi}")
-    if conditions: details.append(f"Conditions: {conditions}")
-    if target_calories: details.append(f"Target: {target_calories} kcal")
-    pdf.multi_cell(182, 5, " | ".join(details))
+    if phone: details.append(f"Ph: {phone}")
+    pdf.multi_cell(182, 4.5, " | ".join(details))
 
-    y_pos += 36
+    pdf.set_xy(14, y_pos + 18)
+    pdf.set_font("Helvetica", "", 8.5)
+    meta = []
+    if conditions: meta.append(f"Conditions: {conditions}")
+    if goal: meta.append(f"Goal: {goal}")
+    if diet_type: meta.append(f"Diet: {diet_type}")
+    if target_calories: meta.append(f"Target: {target_calories} kcal")
+    pdf.multi_cell(182, 4.5, " | ".join(meta))
 
-    # ── Plan Info ───────────────────────────────────────────────
-    if goal or diet_type:
-        pdf.set_xy(10, y_pos)
-        pdf.set_font("Helvetica", "I", 9)
-        pdf.set_text_color(80, 80, 80)
-        plan_info = []
-        if goal: plan_info.append(f"Goal: {goal}")
-        if diet_type: plan_info.append(f"Diet: {diet_type}")
-        pdf.cell(190, 5, " | ".join(plan_info), align="C")
-        y_pos += 8
+    y_pos += 38
 
     # ── Divider ─────────────────────────────────────────────────
     pdf.set_draw_color(0, 150, 80)
     pdf.set_line_width(0.5)
     pdf.line(10, y_pos, 200, y_pos)
-    y_pos += 4
+    y_pos += 5
 
     # ── Diet Plan Content ───────────────────────────────────────
     if diet_plan:
         lines = diet_plan.split("\n")
         pdf.set_text_color(30, 30, 30)
+
+        # Track if we're inside a table-like section
+        in_table = False
+
         for line in lines:
-            line = line.strip()
-            if not line:
+            line_stripped = line.strip()
+            line_display = line  # keep original indentation for display
+            if not line_stripped:
                 y_pos += 2
                 continue
 
@@ -414,41 +409,118 @@ def make_diet_pdf(
                 pdf.add_page()
                 y_pos = 10
 
-            # Section headers (lines with emoji or ALL CAPS or ending with :)
-            is_header = (
-                any(line.startswith(e) for e in ["🥗", "GOAL", "DIET", "DAILY", "PROTEIN",
-                                                  "EARLY", "BREAKFAST", "LUNCH", "DINNER",
-                                                  "SNACK", "WATER", "FOODS", "LIFESTYLE",
-                                                  "INDIAN", "WEEK", "MEAL", "RECIPE"])
-                or line.endswith(":")
-                or line.isupper()
+            # Detect section headers
+            is_section_header = (
+                line_stripped.startswith("CLINICAL DIETARY")
+                or line_stripped.startswith("PRESCRIBED NUTRITION")
+                or line_stripped.startswith("DAILY MEAL PLAN")
+                or line_stripped.startswith("DAILY NUTRITION SUMMARY")
+                or line_stripped.startswith("PROTEIN SOURCES")
+                or line_stripped.startswith("FIBER SOURCES")
+                or line_stripped.startswith("FOODS TO INCLUDE")
+                or line_stripped.startswith("FOODS TO LIMIT")
+                or line_stripped.startswith("LIFESTYLE")
+                or line_stripped.startswith("INDIAN HEALTHY")
+                or line_stripped.startswith("WEEK 1 SAMPLE")
+                or line_stripped.startswith("Follow-up")
             )
-            is_subheader = line.startswith("  ") and (":" in line or "-" in line)
 
-            if is_header:
-                pdf.set_font("Helvetica", "B", 10)
-                pdf.set_fill_color(235, 250, 240)
+            # Detect macro targets line
+            is_macro_line = (
+                line_stripped.startswith("CALORIES:")
+                or line_stripped.startswith("PROTEIN:")
+                or line_stripped.startswith("CARBOHYDRATES:")
+                or line_stripped.startswith("FAT:")
+                or line_stripped.startswith("FIBER:")
+                or line_stripped.startswith("WATER:")
+            )
+
+            # Detect food item with → Protein/Fiber/Calories
+            is_food_detail = "→ Protein:" in line_stripped or "Protein:" in line_stripped
+
+            # Detect summary totals
+            is_summary = line_stripped.startswith("TOTAL PROTEIN") or line_stripped.startswith("TOTAL FIBER") or line_stripped.startswith("TOTAL CALORIES")
+
+            # Detect PATIENT / WEIGHT / CONDITIONS info line
+            is_info_line = (
+                line_stripped.startswith("PATIENT:")
+                or line_stripped.startswith("WEIGHT:")
+                or line_stripped.startswith("CONDITIONS:")
+                or line_stripped.startswith("DIET TYPE:")
+            )
+
+            if is_section_header:
+                # Section header — green background
+                pdf.set_fill_color(220, 245, 230)
+                pdf.set_font("Helvetica", "B", 9.5)
                 if y_pos > 10:
-                    y_pos += 2
+                    y_pos += 3
                 pdf.set_xy(10, y_pos)
-                pdf.cell(190, 6, safe_str(line), fill=True)
+                pdf.cell(190, 6, safe_str(line_stripped), fill=True)
                 y_pos += 7
-            elif is_subheader:
+                in_table = True
+
+            elif is_macro_line:
+                # Macro target — bold with highlight
+                pdf.set_fill_color(240, 250, 242)
                 pdf.set_font("Helvetica", "B", 9)
                 pdf.set_xy(14, y_pos)
-                pdf.multi_cell(182, 4.5, safe_str(line))
+                pdf.cell(182, 5.5, safe_str(line_stripped), fill=True)
+                y_pos += 6.5
+
+            elif is_food_detail:
+                # Food protein/fiber/calories detail — monospace style, indented
+                pdf.set_font("Helvetica", "", 8.5)
+                pdf.set_text_color(60, 60, 60)
+                pdf.set_xy(18, y_pos)
+                pdf.multi_cell(178, 4.5, safe_str(line_stripped))
                 y_pos = pdf.get_y() + 1
-            else:
-                pdf.set_font("Helvetica", "", 9)
+
+            elif is_summary:
+                # Summary line — bold, blue-ish
+                pdf.set_fill_color(235, 245, 255)
+                pdf.set_font("Helvetica", "B", 9)
                 pdf.set_xy(14, y_pos)
-                pdf.multi_cell(182, 4.5, safe_str(line))
+                pdf.cell(182, 5.5, safe_str(line_stripped), fill=True)
+                y_pos += 6.5
+
+            elif is_info_line:
+                # Info line — smaller, muted
+                pdf.set_font("Helvetica", "", 8.5)
+                pdf.set_text_color(80, 80, 80)
+                pdf.set_xy(14, y_pos)
+                pdf.cell(182, 4.5, safe_str(line_stripped))
+                y_pos += 5
+
+            elif line_stripped.startswith("•") or line_stripped.startswith("-"):
+                # Meal item bullet
+                pdf.set_font("Helvetica", "", 9)
+                pdf.set_text_color(40, 40, 40)
+                pdf.set_xy(14, y_pos)
+                pdf.multi_cell(182, 4.5, safe_str(line_stripped))
                 y_pos = pdf.get_y() + 1
+
+            elif line_stripped.startswith("GIL CLINIC"):
+                # Clinic line — center
+                pdf.set_font("Helvetica", "B", 8)
+                pdf.set_text_color(0, 100, 50)
+                pdf.set_xy(10, y_pos)
+                pdf.cell(190, 4.5, safe_str(line_stripped), align="C")
+                y_pos += 5
+
+            else:
+                # Regular body text
+                pdf.set_font("Helvetica", "", 9)
+                pdf.set_text_color(40, 40, 40)
+                pdf.set_xy(14, y_pos)
+                pdf.multi_cell(182, 4.5, safe_str(line_stripped))
+                y_pos = pdf.get_y() + 1.5
 
     # ── Footer ──────────────────────────────────────────────────
     pdf.set_y(-15)
     pdf.set_font("Helvetica", "I", 7)
     pdf.set_text_color(150, 150, 150)
-    pdf.cell(0, 10, "This diet plan is AI-generated and should be reviewed by a qualified dietitian.", align="C")
+    pdf.cell(0, 10, "This diet plan is AI-generated using IFCT/NIN/ICMR guidelines. Should be reviewed by a qualified dietitian.", align="C")
 
     result = pdf.output(dest="S")
     if isinstance(result, bytearray):
