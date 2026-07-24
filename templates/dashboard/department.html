@@ -13,7 +13,8 @@
   </div>
   <div class="cp-name">
     <div class="token" style="display:inline-flex;margin-right:8px;">{{ current_patient.token_number }}</div>
-    {{ current_patient.patient_id }}
+    <span style="font-weight:600;">{{ current_patient.patient_name }}</span>
+    <span style="font-size:12px;color:#718096;margin-left:8px;">{{ current_patient.patient_id }}</span>
   </div>
   <div class="cp-meta">{{ dept_name }} · Waiting {{ current_patient.wait_minutes }} min</div>
   <div class="cp-actions">
@@ -35,6 +36,17 @@
       data-dept="{{ dept_id }}">
       🔔 Alert Patient
     </button>
+    <!-- WhatsApp Share Dropdown -->
+    <span style="position:relative;display:inline-block;">
+      <button class="btn btn-sm" onclick="toggleWAMenu()" style="background:rgba(37,211,102,0.12);border-color:#25D366;color:#25D366;font-size:13px;">
+        📱 WhatsApp ▾
+      </button>
+      <div id="wa-menu" style="display:none;position:absolute;top:100%;right:0;background:var(--card);border:1px solid var(--border);border-radius:8px;z-index:200;min-width:180px;box-shadow:0 8px 30px rgba(0,0,0,0.15);margin-top:4px;">
+        <button class="btn btn-sm btn-ghost" onclick="shareWA('reception')" style="display:flex;width:100%;border-radius:0;border-bottom:1px solid var(--border);padding:10px 14px;">🏥 Send to Reception</button>
+        <button class="btn btn-sm btn-ghost" onclick="shareWA('doctor')" style="display:flex;width:100%;border-radius:0;border-bottom:1px solid var(--border);padding:10px 14px;">👨‍⚕️ Send to Doctor</button>
+        <button class="btn btn-sm btn-ghost" onclick="shareWA('manager')" style="display:flex;width:100%;border-radius:0;padding:10px 14px;">👔 Send to Manager</button>
+      </div>
+    </span>
   </div>
 </div>
 {% else %}
@@ -63,7 +75,7 @@
       {% for entry in queue %}
       <tr>
         <td><div class="token">{{ entry.token_number }}</div></td>
-        <td><strong>{{ entry.patient_id }}</strong></td>
+        <td><strong>{{ entry.patient_name }}</strong><br><span style="font-size:11px;color:#718096;">{{ entry.patient_id }}</span></td>
         <td>
           <span class="status status-{{ entry.status | lower | replace(' ', '_') }}">
             {{ entry.status }}
@@ -116,8 +128,83 @@
 {% endblock %}
 
 {% block extra_js %}
+<!-- Hidden fields for WhatsApp number storage -->
+<input type="hidden" id="wa-reception" value="">
+<input type="hidden" id="wa-manager" value="">
+<input type="hidden" id="wa-doctor" value="">
+<input type="hidden" id="dept-name" value="{{ dept_name }}">
+<input type="hidden" id="dept-icon" value="{{ dept_icon }}">
 <script>
   window.STAFF_NAME = '{{ dept_name }} Tech';
   window.autoRefreshEnabled = true;
+
+  // ── WhatsApp Jugaad for Labs ─────────────────────────────────────
+  let waMenuOpen = false;
+
+  // Load WhatsApp numbers from settings API
+  function loadWASettings() {
+    fetch('/staff/api/dietitian-settings')
+      .then(r => r.json())
+      .then(s => {
+        document.getElementById('wa-reception').value = s.wa_reception || '';
+        document.getElementById('wa-manager').value = s.wa_manager || '';
+        document.getElementById('wa-doctor').value = s.wa_doctor || '';
+      })
+      .catch(() => {});
+  }
+  loadWASettings();
+
+  function toggleWAMenu() {
+    waMenuOpen = !waMenuOpen;
+    document.getElementById('wa-menu').style.display = waMenuOpen ? 'block' : 'none';
+  }
+  // Close menu on outside click
+  document.addEventListener('click', function(e) {
+    if (waMenuOpen && !e.target.closest('#wa-menu') && !e.target.closest('[onclick*="toggleWAMenu"]')) {
+      waMenuOpen = false;
+      document.getElementById('wa-menu').style.display = 'none';
+    }
+  });
+
+  function shareWA(role) {
+    const ptNameEl = document.querySelector('.cp-name span:first-of-type');
+    const name = ptNameEl ? ptNameEl.textContent.trim() : 'Patient';
+    const deptName = document.getElementById('dept-name').value;
+    const deptIcon = document.getElementById('dept-icon').value;
+    const token = document.querySelector('.cp-name .token');
+    const tokenNum = token ? token.textContent.trim() : '';
+
+    let number = '';
+    let msg = '';
+
+    switch(role) {
+      case 'reception':
+        number = document.getElementById('wa-reception').value;
+        msg = `🏥 *New ${deptName} Patient*\n\n👤 *${name}* (Token #${tokenNum})\n📋 ${deptName} Lab — ${deptIcon}\n\n— GIL CLINIC`;
+        break;
+      case 'doctor':
+        number = document.getElementById('wa-doctor').value;
+        msg = `👨‍⚕️ *${deptName} Lab — Patient Alert*\n\n👤 *${name}* (Token #${tokenNum})\n📋 ${deptName} Lab Report Ready/In Progress\n\n— GIL CLINIC`;
+        break;
+      case 'manager':
+        number = document.getElementById('wa-manager').value;
+        msg = `📊 *${deptName} Lab Update*\n\n👤 *${name}* (Token #${tokenNum})\n📋 ${deptName} Lab\n\n— GIL CLINIC`;
+        break;
+    }
+
+    if (!number) {
+      showToast('Set ' + role + ' WhatsApp number in OPD Settings', 'error');
+      waMenuOpen = false;
+      document.getElementById('wa-menu').style.display = 'none';
+      return;
+    }
+
+    number = number.replace(/[^0-9]/g, '');
+    const url = 'https://wa.me/' + number + '?text=' + encodeURIComponent(msg);
+    window.open(url, '_blank');
+    showToast('📱 WhatsApp opened for ' + role, 'success');
+    waMenuOpen = false;
+    document.getElementById('wa-menu').style.display = 'none';
+  }
 </script>
 {% endblock %}
