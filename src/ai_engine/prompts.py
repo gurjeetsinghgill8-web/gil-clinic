@@ -292,6 +292,83 @@ Provide a thorough, data-driven analysis in plain text (no markdown):
 # RX OUTPUT VALIDATION
 # ════════════════════════════════════════════════════════════════════════════
 
+def gp_prompt_followup(patient_name: str, vitals: str, complaints: str,
+                        doc_name: str, doc_degree: str, 
+                        past_diagnoses: str, past_medicines: str,
+                        past_advice: str) -> str:
+    """
+    FOLLOW-UP RX prompt — for returning patients with chronic conditions.
+    Past medicines are categorized as CONTINUE / MODIFIED / STOPPED.
+    AI distinguishes chronic management from new acute complaints.
+    """
+    doc_info = f"Dr. {doc_name}"
+    if doc_degree:
+        doc_info += f" ({doc_degree})"
+
+    return f"""You are an experienced AI Clinical Assistant working with {doc_info} — FOLLOW-UP VISIT.
+
+The patient is returning for a follow-up visit. You have their previous prescription data.
+
+CURRENT VISIT:
+Patient: {patient_name}
+Vitals: {vitals or 'Not provided'}
+Complaints: {complaints or 'Not provided'}
+
+PAST PRESCRIPTION RECORDS:
+Past Diagnoses:
+{past_diagnoses or 'Not available'}
+
+Past Medicines:
+{past_medicines or 'Not available'}
+
+Past Advice:
+{past_advice or 'Not available'}
+
+YOUR TASK — Analyze the follow-up visit and produce a treatment plan:
+
+1. Assessment: Summarize the patient's current status — are the chronic conditions controlled, improving, or worsening?
+2. Chronic Condition Management: For each chronic condition, state CONTINUE / MODIFY / STOP for the previous treatment.
+   - [CONTINUE] — same drug/dose is appropriate
+   - [MODIFIED] — changed dose or drug (specify changes)
+   - [STOPPED] — this drug is no longer needed (with reason)
+3. New Acute Issues: If the patient has new complaints unrelated to chronic conditions, list separately.
+4. Treatment Plan: Complete prescription including:
+   - Continued chronic medications (marked [CONTINUE])
+   - Modified medications with new doses/drugs (marked [MODIFIED])
+   - Any new medications for acute issues (marked [NEW])
+   - Specific drug names, doses, frequency (OD/BD/TDS), duration, food timing
+5. Investigations: Comma-separated list of tests needed. NO sentences.
+6. Advice: Updated lifestyle/diet recommendations.
+
+OUTPUT FORMAT:
+Assessment:
+Diagnosis:
+Chronic Conditions:
+• [Condition 1] — [CONTINUE/MODIFIED/STOPPED]
+• [Condition 2] — [CONTINUE/MODIFIED/STOPPED]
+
+Treatment:
+1. [CONTINUE/MODIFIED/NEW] Drug name + dose + frequency + duration
+2. [CONTINUE/MODIFIED/NEW] Drug name + dose + frequency + duration
+3. ...
+
+Investigations: (comma-separated only)
+Advice:
+Follow-up:
+
+CRITICAL RULES:
+- CONTINUE means the exact same drug/dose/frequency
+- MODIFIED means changed dose, frequency, or switched to another drug in same class
+- STOPPED means de-prescribed — give clinical reason
+- NEVER include "Drug Review" or "Check Interactions" section
+- Investigations MUST be comma-separated only, NO sentences
+- Be specific about which chronic conditions are controlled vs uncontrolled"""
+
+
+# ════════════════════════════════════════════════════════════════════════════
+# RX OUTPUT VALIDATION
+# ════════════════════════════════════════════════════════════════════════════
+
 def validate_rx(text: str) -> Tuple[bool, List[str]]:
     """
     Validate AI Rx output — checks if required sections are present.

@@ -91,8 +91,8 @@ from src.infrastructure.queue.models.queue_entry_model import QueueEntryModel
 # ── AI Engine ────────────────────────────────────────────────────────────────
 from src.ai_engine.groq_client import call_groq, call_groq_vision, parse_ai_json
 from src.ai_engine.prompts import (
-    gp_prompt_assistant, gp_prompt_suggest,
-    specialty_prompt, drug_review_prompt, cme_prompt,
+    gp_prompt_assistant, gp_prompt_suggest, gp_prompt_followup,
+    specialty_prompt, drug_review_prompt, cme_prompt, research_prompt,
 )
 
 # ── PDF Generator ────────────────────────────────────────────────────────────
@@ -562,6 +562,59 @@ async def api_patient_history(request: Request, patient_id: str = Query(""), pat
         return {"ok": False, "error": str(e)}
 
 
+@router.get("/api/patient-progress", include_in_schema=False)
+async def api_patient_progress(request: Request, patient_name: str = Query(""), patient_id: str = Query("")):
+    """Get structured vitals trend data for patient progress charts.
+    Returns parsed BP/sugar/weight values from last 10 visits."""
+    sess = _require_opd_session(request)
+    doctor_id = sess["doctor_id"]
+    try:
+        async with async_session_factory() as session:
+            like_pattern = f"%{patient_name or ''}%"
+            rx_rows = await session.execute(
+                sa.select(OpdPrescriptionModel)
+                .where(
+                    OpdPrescriptionModel.doctor_id == doctor_id,
+                    sa.or_(
+                        OpdPrescriptionModel.patient_name.ilike(like_pattern),
+                        OpdPrescriptionModel.patient_id == patient_id,
+                    ) if patient_id else OpdPrescriptionModel.patient_name.ilike(like_pattern),
+                )
+                .where(OpdPrescriptionModel.vitals != "")
+                .order_by(OpdPrescriptionModel.created_at.desc())
+                .limit(10)
+            )
+            trend = []
+            for r in rx_rows.scalars():
+                v = str(r.vitals or "").lower()
+                entry = {
+                    "date": r.created_at.strftime("%d-%b") if r.created_at else "",
+                    "vitals": r.vitals or "",
+                }
+                # Parse BP
+                bp = re.search(r"(\d{2,3})\s*/\s*(\d{2,3})", v)
+                if bp:
+                    entry["sys"] = int(bp.group(1))
+                    entry["dia"] = int(bp.group(2))
+                # Parse Sugar
+                sg = re.search(r"(?:rbs|fbs|pp|sugar|bs|glucose|random)\s*[:=]?\s*(\d{2,4})", v)
+                if sg:
+                    entry["sugar"] = int(sg.group(1))
+                # Parse Weight
+                wt = re.search(r"(?:wt|weight)\s*[:=]?\s*(\d{2,3})", v)
+                if wt:
+                    entry["weight"] = int(wt.group(1))
+                # Parse Pulse/HR
+                hr = re.search(r"(?:hr|pulse|pr)\s*[:=]?\s*(\d{2,3})", v)
+                if hr:
+                    entry["hr"] = int(hr.group(1))
+                trend.append(entry)
+            return {"ok": True, "trend": trend}
+    except Exception as e:
+        logger.error("Patient progress error: %s", e)
+        return {"ok": False, "trend": [], "error": str(e)}
+
+
 @router.get("/api/roster", include_in_schema=False)
 async def api_roster(request: Request, filter: str = Query("today")):
     sess = _require_opd_session(request)
@@ -761,6 +814,53 @@ async def api_generate_rx(request: Request):
         return {"ok": False, "error": "AI Generation failed. Check API key."}
 
     return {"ok": True, "prescription": result, "mode": "suggest" if allow_suggest_drugs else "assistant"}
+
+
+@router.post("/api/generate-followup-rx", include_in_schema=False)
+async def api_generate_followup_rx(request: Request):
+    """Follow-up Rx — uses past prescription context with CONTINUE/MODIFY/STOP markers."""
+    sess = _require_opd_session(request)
+    doctor_id = sess["doctor_id"]
+
+    try:
+        body = await request.json()
+    except Exception:
+        return {"ok": False, "error": "Invalid JSON"}
+
+    patient_name = body.get("patient_name", "")
+    vitals = body.get("vitals", "")
+    complaints = body.get("complaints", "")
+    past_diagnoses = body.get("past_diagnoses", "")
+    past_medicines = body.get("past_medicines", "")
+    past_advice = body.get("past_advice", "")
+
+    if not patient_name:
+        return {"ok": False, "error": "Patient name required"}
+
+    settings = await _get_settings(doctor_id)
+
+    prompt = gp_prompt_followup(
+        patient_name=patient_name,
+        vitals=vitals,
+        complaints=complaints,
+        doc_name=settings.get("doc_name", "Doctor"),
+        doc_degree=settings.get("doc_degree", ""),
+        past_diagnoses=past_diagnoses,
+        past_medicines=past_medicines,
+        past_advice=past_advice,
+    )
+
+    groq_key = settings.get("groq_api_key") or os.getenv("GROQ_API_KEY", "")
+    if not groq_key:
+        return {"ok": False, "error": "Groq API key not configured. Set in Settings."}
+
+    os.environ["GROQ_API_KEY"] = groq_key
+    result = call_groq([prompt], temp=0.3)
+
+    if not result:
+        return {"ok": False, "error": "AI Generation failed. Check API key."}
+
+    return {"ok": True, "prescription": result, "mode": "followup"}
 
 
 @router.post("/api/drug-review", include_in_schema=False)
@@ -1601,6 +1701,117 @@ async def api_admin_stats(request: Request):
             }
     except Exception:
         return {"total_prescriptions": 0, "total_queue_patients": 0, "total_licenses": 0}
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# RESEARCH AGENT (Upgrade 6 — Chief-Only)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@router.post("/api/research", include_in_schema=False)
+async def api_research(request: Request):
+    """Research agent — analyzes practice data. Chief-only."""
+    sess = _require_opd_session(request)
+    doctor_id = sess["doctor_id"]
+    if not _has_chief_access(sess):
+        return {"ok": False, "error": "Only Chief can access research."}
+
+    try:
+        body = await request.json()
+    except Exception:
+        return {"ok": False, "error": "Invalid JSON"}
+
+    question = body.get("question", "").strip()
+    if not question:
+        return {"ok": False, "error": "Research question required"}
+
+    try:
+        async with async_session_factory() as session:
+            # Fetch last 150 prescriptions for analysis
+            rx_rows = await session.execute(
+                sa.select(OpdPrescriptionModel)
+                .where(OpdPrescriptionModel.doctor_id == doctor_id)
+                .order_by(OpdPrescriptionModel.created_at.desc())
+                .limit(150)
+            )
+            rx_list = list(rx_rows.scalars())
+
+            # Count patients and revenue
+            patient_ids = set()
+            total_revenue = 0
+            for r in rx_list:
+                if r.patient_id:
+                    patient_ids.add(r.patient_id)
+                try:
+                    total_revenue += int(r.fee or 0)
+                except (ValueError, TypeError):
+                    pass
+
+            # Build sample data string (compressed)
+            sample_lines = []
+            for r in rx_list[:100]:
+                parts = [f"Pt: {r.patient_name or ''}"]
+                if r.diagnosis:
+                    parts.append(f"Dx: {r.diagnosis[:100]}")
+                if r.medicines:
+                    meds = r.medicines[:80].replace("\n", "; ")
+                    parts.append(f"Rx: {meds}")
+                if r.fee:
+                    parts.append(f"Fee: ₹{r.fee}")
+                if r.created_at:
+                    parts.append(f"Date: {r.created_at.strftime('%d-%b')}")
+                sample_lines.append(" | ".join(parts))
+            patient_data = "\n".join(sample_lines[:80])
+
+            # Fetch starred specialty upgrades
+            star_rows = await session.execute(
+                sa.select(SpecialtyUpgradeModel)
+                .where(SpecialtyUpgradeModel.doctor_id == doctor_id)
+                .where(SpecialtyUpgradeModel.is_starred == True)
+                .order_by(SpecialtyUpgradeModel.created_at.desc())
+                .limit(20)
+            )
+            starred_list = list(star_rows.scalars())
+            starred_data_lines = []
+            for s in starred_list[:10]:
+                parts = [f"Pt: {s.patient_name or ''}", f"Spec: {s.specialty or ''}"]
+                if s.upgraded_rx:
+                    parts.append(f"Rx: {s.upgraded_rx[:80]}")
+                if s.star_note:
+                    parts.append(f"Note: {s.star_note[:80]}")
+                starred_data_lines.append(" | ".join(parts))
+            starred_data = "\n".join(starred_data_lines[:10]) or "No starred cases."
+
+            settings = await _get_settings(doctor_id)
+            prompt = research_prompt(
+                doc_name=settings.get("doc_name", "Doctor"),
+                patient_count=len(patient_ids),
+                total_revenue=total_revenue,
+                patient_data=patient_data,
+                starred_data=starred_data,
+                question=question,
+            )
+
+            groq_key = settings.get("groq_api_key") or os.getenv("GROQ_API_KEY", "")
+            if not groq_key:
+                return {"ok": False, "error": "Groq API key not configured."}
+            os.environ["GROQ_API_KEY"] = groq_key
+
+            result = call_groq([prompt], temp=0.3)
+
+            if not result:
+                return {"ok": False, "error": "Research query failed."}
+
+            stats = {
+                "total_prescriptions": len(rx_list),
+                "unique_patients": len(patient_ids),
+                "total_revenue": total_revenue,
+                "starred_cases": len(starred_list),
+            }
+            return {"ok": True, "result": result, "stats": stats}
+
+    except Exception as e:
+        logger.error("Research error: %s", e)
+        return {"ok": False, "error": str(e)}
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

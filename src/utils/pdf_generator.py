@@ -65,102 +65,117 @@ def make_rx_pdf(
     pdf.add_page()
 
     # ── Letterhead Background ─────────────────────────────────────────
+    # Full-width light blue background
     pdf.set_fill_color(235, 245, 255)
-    pdf.rect(0, 0, 210, 54, "F")
+    pdf.rect(0, 0, 210, 58, "F")
+    # Dark blue accent line
     pdf.set_draw_color(0, 51, 102)
     pdf.set_line_width(0.8)
-    pdf.line(0, 54, 210, 54)
+    pdf.line(0, 58, 210, 58)
     pdf.set_line_width(0.2)
 
-    # LEFT: Doctor Name
+    # ── LEFT COLUMN: Doctor Info ─────────────────────────────────────
+    # Doctor Name (larger, bold)
     pdf.set_xy(8, 4)
-    pdf.set_font("Helvetica", "B", 13)
+    pdf.set_font("Helvetica", "B", 14)
     pdf.set_text_color(0, 51, 102)
     pdf.cell(100, 7, safe_str(doc_name), ln=False)
 
-    # RIGHT: Clinic Name
-    pdf.set_xy(108, 4)
-    pdf.set_font("Helvetica", "B", 12)
-    pdf.set_text_color(0, 51, 102)
-    pdf.cell(97, 7, safe_str(clinic_name), ln=False, align="R")
-
-    # LEFT: Degrees
+    # Degrees (below name)
     pdf.set_xy(8, 12)
     pdf.set_font("Helvetica", "B", 9)
     pdf.set_text_color(30, 30, 120)
     pdf.cell(100, 5, safe_str(doc_degree), ln=False)
 
-    # RIGHT: Address line 1
+    # Specialty/Subtitle (below degrees)
+    if doc_subtitle:
+        pdf.set_xy(8, 18)
+        pdf.set_font("Helvetica", "I", 9)
+        pdf.set_text_color(60, 60, 120)
+        pdf.cell(100, 5, safe_str(doc_subtitle), ln=False)
+
+    # Extra Qualifications (below subtitle, up to 4 lines)
+    if doc_extra_quals:
+        extra_lines = [l.strip() for l in doc_extra_quals.split("\n") if l.strip()]
+        pdf.set_font("Helvetica", "", 7.5)
+        pdf.set_text_color(80, 80, 100)
+        for i, eq in enumerate(extra_lines[:4]):
+            pdf.set_xy(8, 24 + i * 4)
+            pdf.cell(100, 4, safe_str(eq), ln=False)
+
+    # ── RIGHT COLUMN: Clinic Info ────────────────────────────────────
+    # Clinic Name
+    pdf.set_xy(105, 4)
+    pdf.set_font("Helvetica", "B", 12)
+    pdf.set_text_color(0, 51, 102)
+    pdf.cell(97, 7, safe_str(clinic_name), ln=False, align="R")
+
+    # Address lines
     addr_lines = []
     if clinic_address:
         addr_lines = [l.strip() for l in clinic_address.split("\n") if l.strip()]
-    pdf.set_xy(108, 12)
-    pdf.set_font("Helvetica", "", 8)
-    pdf.set_text_color(60, 60, 60)
+
+    y_right = 12
     if addr_lines:
-        pdf.cell(97, 5, safe_str(addr_lines[0]), ln=False, align="R")
+        pdf.set_font("Helvetica", "", 8)
+        pdf.set_text_color(60, 60, 60)
+        for al in addr_lines[:3]:
+            pdf.set_xy(105, y_right)
+            pdf.cell(97, 4.5, safe_str(al), ln=False, align="R")
+            y_right += 4.5
 
-    # LEFT: Specialty / Subtitle
-    pdf.set_xy(8, 18)
-    pdf.set_font("Helvetica", "I", 9)
-    pdf.set_text_color(60, 60, 120)
-    pdf.cell(100, 5, safe_str(doc_subtitle), ln=False)
+    # Phone & Email on right
+    contact_parts = []
+    if doc_phone:
+        contact_parts.append(f"📞 {doc_phone}")
+    if doc_email:
+        contact_parts.append(f"✉ {doc_email}")
+    if contact_parts:
+        pdf.set_xy(105, y_right)
+        pdf.set_font("Helvetica", "", 7.5)
+        pdf.set_text_color(70, 70, 70)
+        pdf.cell(97, 4.5, safe_str(" | ".join(contact_parts)), ln=False, align="R")
+        y_right += 5
 
-    # RIGHT: Address line 2 (or phone/email)
-    pdf.set_xy(108, 18)
-    pdf.set_font("Helvetica", "", 8)
-    pdf.set_text_color(60, 60, 60)
-    addr_line_2 = ""
-    if len(addr_lines) > 1:
-        addr_line_2 = addr_lines[1]
-    elif doc_phone:
-        addr_line_2 = f"📞 {doc_phone}"
-    pdf.cell(97, 5, safe_str(addr_line_2), ln=False, align="R")
-
-    # LEFT: Extra qualifications
-    pdf.set_xy(8, 24)
-    pdf.set_font("Helvetica", "", 8)
-    pdf.set_text_color(80, 80, 80)
-    quals = doc_extra_quals or ""
-    pdf.cell(100, 5, safe_str(quals), ln=False)
-
-    # RIGHT: Reg no / Email
-    pdf.set_xy(108, 24)
-    pdf.set_font("Helvetica", "", 7)
-    pdf.set_text_color(100, 100, 100)
-    reg_str = f"Reg: {doc_reg_no}" if doc_reg_no else ""
-    if doc_email and reg_str:
-        reg_str += f" | {doc_email}"
-    elif doc_email:
-        reg_str = doc_email
-    pdf.cell(97, 5, safe_str(reg_str), ln=False, align="R")
+    # Registration Number
+    if doc_reg_no:
+        pdf.set_xy(105, y_right)
+        pdf.set_font("Helvetica", "", 7.5)
+        pdf.set_text_color(100, 100, 100)
+        pdf.cell(97, 4.5, safe_str(f"Reg No: {doc_reg_no}"), ln=False, align="R")
 
     # ── Patient Info Row ────────────────────────────────────────────
-    pdf.set_xy(8, 32)
+    y_info = 62
+    pdf.set_xy(8, y_info)
     pdf.set_font("Helvetica", "B", 10)
     pdf.set_text_color(0, 0, 0)
-    pdf.cell(50, 6, f"Patient: {safe_str(pt_name)}", ln=False)
+    pdf.cell(60, 6, f"Patient: {safe_str(pt_name)}", ln=False)
 
+    # Date
     pdf.set_font("Helvetica", "", 9)
-    pdf.set_xy(108, 32)
+    pdf.set_xy(110, y_info)
     date_str = datetime.datetime.now().strftime("%d-%b-%Y %I:%M %p")
-    pdf.cell(97, 6, f"Date: {date_str}", ln=False, align="R")
+    pdf.cell(92, 6, f"Date: {date_str}", ln=False, align="R")
 
     # Vitals
-    pdf.set_xy(8, 39)
-    pdf.set_font("Helvetica", "I", 9)
-    pdf.set_text_color(80, 80, 80)
-    pdf.cell(194, 6, safe_str(f"Vitals: {vitals}" if vitals else ""), ln=False)
+    if vitals:
+        pdf.set_xy(8, y_info + 7)
+        pdf.set_font("Helvetica", "I", 9)
+        pdf.set_text_color(80, 80, 80)
+        pdf.cell(194, 6, safe_str(f"Vitals: {vitals}"), ln=False)
 
     # Specialty label (if upgrade)
     if specialty_label:
-        pdf.set_xy(8, 46)
+        pdf.set_xy(8, y_info + 14)
         pdf.set_font("Helvetica", "B", 9)
         pdf.set_text_color(180, 50, 50)
         pdf.cell(100, 6, safe_str(f"⚕️ {specialty_label} Consult"), ln=False)
 
     # ── Divider ─────────────────────────────────────────────────────
-    y_pos = 56
+    y_pos = y_info + 20
+    pdf.set_draw_color(200, 200, 200)
+    pdf.line(8, y_pos, 202, y_pos)
+    y_pos += 4
 
     # ── Prescription Body ───────────────────────────────────────────
     pdf.set_xy(8, y_pos)

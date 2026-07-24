@@ -164,25 +164,29 @@
         td { padding: 10px 12px; border-bottom: 1px solid var(--border); font-size: 13px; }
         tr:hover td { background: rgba(59,130,246,0.03); }
 
-        /* ── Autocomplete ── */
-        .autocomplete-wrap { position: relative; }
-        .autocomplete-list {
-            position: absolute;
-            top: 100%; left: 0; right: 0;
-            background: var(--card);
-            border: 1px solid var(--border);
-            border-radius: 8px;
-            max-height: 200px;
-            overflow-y: auto;
-            z-index: 100;
-            display: none;
+        /* ── Drug Quick Buttons (Upgrade 3) ── */
+        .drug-btn-wrap {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            margin-top: 6px;
+            min-height: 0;
+            transition: min-height 0.15s;
         }
-        .autocomplete-list.show { display: block; }
-        .autocomplete-item {
-            padding: 8px 14px;
-            font-size: 13px;
+        .drug-btn-wrap:empty { display: none; }
+        .drug-btn {
+            font-size: 12px;
+            padding: 4px 12px;
+            border-radius: 16px;
+            border: 1px solid #bfdbfe;
+            background: #eff6ff;
+            color: #1d4ed8;
             cursor: pointer;
-            transition: background 0.1s;
+            transition: all 0.1s;
+            white-space: nowrap;
+        }
+        .drug-btn:hover { background: #dbeafe; border-color: #60a5fa; transform: translateY(-1px); }
+        .drug-btn:active { transform: translateY(0); background: #bfdbfe; }
         }
         .autocomplete-item:hover { background: rgba(59,130,246,0.1); }
 
@@ -272,6 +276,45 @@
         .spec-item:hover { background: rgba(59,130,246,0.08); }
         .spec-item input { width: auto; }
         .spec-item label { margin: 0; cursor: pointer; }
+
+        /* ── Patient Progress Banner ── */
+        .progress-banner {
+            border-radius: var(--radius);
+            padding: 16px;
+            margin-bottom: 12px;
+            border: 1px solid var(--border);
+        }
+        .progress-banner.improving { background: #f0fdf4; border-color: #86efac; }
+        .progress-banner.worsening { background: #fef2f2; border-color: #fca5a5; }
+        .progress-banner.mixed { background: #fefce8; border-color: #fde047; }
+        .progress-banner .verdict { font-size: 16px; font-weight: 700; margin-bottom: 8px; }
+        .progress-banner .verdict .arrow { font-size: 20px; }
+        .progress-banner .param-grid { display: flex; gap: 12px; flex-wrap: wrap; }
+        .progress-param {
+            background: rgba(255,255,255,0.7);
+            border-radius: 8px;
+            padding: 8px 14px;
+            min-width: 120px;
+            border: 1px solid var(--border);
+        }
+        .progress-param .label { font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.3px; }
+        .progress-param .value { font-size: 16px; font-weight: 700; }
+        .progress-param .value .badge { font-size: 12px; margin-left: 6px; padding: 1px 8px; border-radius: 10px; }
+        .badge-green { background: #86efac; color: #166534; }
+        .badge-yellow { background: #fde047; color: #854d0e; }
+        .badge-red { background: #fca5a5; color: #991b1b; }
+        .badge-gray { background: #e2e8f0; color: #475569; }
+
+        /* ── Mini SVG Chart ── */
+        .mini-chart-wrap {
+            background: rgba(255,255,255,0.8);
+            border-radius: 8px;
+            padding: 10px;
+            border: 1px solid var(--border);
+            margin-top: 8px;
+        }
+        .mini-chart-wrap svg { width: 100%; height: 80px; display: block; }
+        .mini-chart-wrap .chart-title { font-size: 11px; color: var(--text-muted); margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.3px; }
     </style>
 </head>
 <body>
@@ -325,6 +368,7 @@
                     <div class="flex gap-sm">
                         <button class="btn btn-ghost btn-sm" onclick="clearRxForm()">🔄 New Patient</button>
                         <button class="btn btn-ghost btn-sm" onclick="toggleSearch()">🔍 Search Old</button>
+                        <button class="btn btn-sm btn-primary" id="followup-btn" onclick="showFollowupDialog()" style="display:none;">🔄 Follow-Up Rx</button>
                     </div>
                 </div>
 
@@ -461,7 +505,7 @@
                             <label>Medicine Text (AI ke liye / Manual)</label>
                             <div class="autocomplete-wrap">
                                 <textarea id="pt-medicines" rows="3" placeholder="Medicines will appear here when you click 'Generate Medicine Text'..."></textarea>
-                                <div class="autocomplete-list" id="drug-suggestions"></div>
+                                <div class="drug-btn-wrap" id="drug-suggestions"></div>
                             </div>
                         </div>
                         <div class="form-group">
@@ -649,18 +693,25 @@
             <!-- ════════════════ TAB: SETTINGS ════════════════ -->
             <div class="tab-content" id="tab-settings">
                 <h2 class="mb-sm">⚙️ Doctor / Clinic Settings</h2>
-                <div class="card">
-                    <div class="form-row">
+                <div class="grid-2" style="grid-template-columns: 1fr 1fr; gap:16px;">
+                    <div class="card">
+                        <div class="card-title">Clinic Information</div>
                         <div class="form-group">
                             <label>Clinic Name</label>
                             <input type="text" id="set-clinic-name" value="{{ settings.clinic_name or '' }}">
                         </div>
                         <div class="form-group">
+                            <label>Clinic Address</label>
+                            <textarea id="set-address" rows="3" placeholder="Line 1&#10;Line 2 (optional)">{{ settings.clinic_address or '' }}</textarea>
+                            <span class="text-sm text-muted">Each line appears separately on letterhead</span>
+                        </div>
+                    </div>
+                    <div class="card">
+                        <div class="card-title">Doctor Profile</div>
+                        <div class="form-group">
                             <label>Doctor Name</label>
                             <input type="text" id="set-doc-name" value="{{ settings.doc_name or '' }}">
                         </div>
-                    </div>
-                    <div class="form-row">
                         <div class="form-group">
                             <label>Degree (e.g. MBBS, MD)</label>
                             <input type="text" id="set-degree" value="{{ settings.doc_degree or '' }}">
@@ -669,18 +720,18 @@
                             <label>Subtitle / Specialty</label>
                             <input type="text" id="set-subtitle" value="{{ settings.doc_subtitle or '' }}">
                         </div>
-                    </div>
-                    <div class="form-row">
                         <div class="form-group">
                             <label>Registration No.</label>
                             <input type="text" id="set-reg" value="{{ settings.doc_reg_no or '' }}">
                         </div>
                         <div class="form-group">
-                            <label>Extra Qualifications</label>
-                            <input type="text" id="set-extra" value="{{ settings.doc_extra_quals or '' }}">
+                            <label>Additional Qualifications & Fellowships</label>
+                            <textarea id="set-extra" rows="3" placeholder="Fellowship in Cardiology&#10;Dip. Diabetology&#10;PG Diploma in Diabetes">{{ settings.doc_extra_quals or '' }}</textarea>
+                            <span class="text-sm text-muted">One per line — shows on PDF letterhead</span>
                         </div>
                     </div>
-                    <div class="form-row">
+                    <div class="card">
+                        <div class="card-title">Contact</div>
                         <div class="form-group">
                             <label>Email</label>
                             <input type="email" id="set-email" value="{{ settings.doc_email or '' }}">
@@ -690,39 +741,66 @@
                             <input type="text" id="set-phone" value="{{ settings.doc_phone or '' }}">
                         </div>
                     </div>
-                    <div class="form-group">
-                        <label>Clinic Address</label>
-                        <textarea id="set-address" rows="2">{{ settings.clinic_address or '' }}</textarea>
-                    </div>
-                    <div class="form-group">
-                        <label>Groq API Key (for AI features)</label>
-                        <input type="password" id="set-groq-key" value="{{ settings.groq_api_key or '' }}" placeholder="gsk_...">
-                    </div>
-
-                    <!-- ── WhatsApp Jugaad Numbers ── -->
-                    <div class="card-title" style="margin-top:20px;">📱 WhatsApp Jugaad — One-Click Share Numbers</div>
-                    <div class="form-row-3">
+                    <div class="card">
+                        <div class="card-title">API & Integration</div>
                         <div class="form-group">
-                            <label>Reception WhatsApp</label>
-                            <input type="text" id="set-wa-reception" value="{{ settings.wa_reception or '' }}" placeholder="91XXXXXXXXXX">
-                        </div>
-                        <div class="form-group">
-                            <label>Manager WhatsApp</label>
-                            <input type="text" id="set-wa-manager" value="{{ settings.wa_manager or '' }}" placeholder="91XXXXXXXXXX">
-                        </div>
-                        <div class="form-group">
-                            <label>Doctor WhatsApp</label>
-                            <input type="text" id="set-wa-doctor" value="{{ settings.wa_doctor or '' }}" placeholder="91XXXXXXXXXX">
-                        </div>
-                        <div class="form-group">
-                            <label>Dietitian WhatsApp</label>
-                            <input type="text" id="set-wa-dietitian" value="{{ settings.wa_dietitian or '' }}" placeholder="91XXXXXXXXXX">
+                            <label>Groq API Key (for AI features)</label>
+                            <input type="password" id="set-groq-key" value="{{ settings.groq_api_key or '' }}" placeholder="gsk_...">
                         </div>
                     </div>
-                    <div class="text-sm text-muted mb-sm">Numbers with country code (no +). Used by WhatsApp share buttons.</div>
-
-                    <button class="btn btn-primary" onclick="saveSettings()">💾 Save Settings</button>
-                    <span id="settings-status" class="text-muted text-sm" style="margin-left:12px;"></span>
+                    <div class="card" style="grid-column:1/2;">
+                        <div class="card-title">📱 WhatsApp Jugaad Numbers</div>
+                        <div class="form-row-2">
+                            <div class="form-group">
+                                <label>Reception</label>
+                                <input type="text" id="set-wa-reception" value="{{ settings.wa_reception or '' }}" placeholder="91XXXXXXXXXX">
+                            </div>
+                            <div class="form-group">
+                                <label>Manager</label>
+                                <input type="text" id="set-wa-manager" value="{{ settings.wa_manager or '' }}" placeholder="91XXXXXXXXXX">
+                            </div>
+                            <div class="form-group">
+                                <label>Doctor</label>
+                                <input type="text" id="set-wa-doctor" value="{{ settings.wa_doctor or '' }}" placeholder="91XXXXXXXXXX">
+                            </div>
+                            <div class="form-group">
+                                <label>Dietitian</label>
+                                <input type="text" id="set-wa-dietitian" value="{{ settings.wa_dietitian or '' }}" placeholder="91XXXXXXXXXX">
+                            </div>
+                        </div>
+                        <div class="text-sm text-muted">Numbers with country code (no +). Used by WhatsApp share buttons.</div>
+                    </div>
+                    <div class="card" style="grid-column:2/3;">
+                        <div class="card-title">📄 Prescription Header Preview</div>
+                        <div id="letterhead-preview" style="border:1px solid var(--border);border-radius:8px;padding:12px;background:rgb(235,245,255);font-family:Helvetica,Arial,sans-serif;font-size:12px;line-height:1.4;">
+                            <div style="display:flex;justify-content:space-between;margin-bottom:8px;">
+                                <span class="letterhead-left" style="font-weight:bold;font-size:14px;color:#003366;" id="preview-doc-name">Dr. Name</span>
+                                <span class="letterhead-right" style="font-weight:bold;font-size:13px;color:#003366;" id="preview-clinic-name">Clinic Name</span>
+                            </div>
+                            <div style="display:flex;justify-content:space-between;margin-bottom:4px;">
+                                <span class="letterhead-left" style="font-weight:bold;font-size:10px;color:#1e1e78;" id="preview-degree">MBBS, MD</span>
+                                <span class="letterhead-right" style="font-size:10px;color:#3c3c3c;" id="preview-address">Clinic Address</span>
+                            </div>
+                            <div style="display:flex;justify-content:space-between;margin-bottom:4px;">
+                                <span class="letterhead-left" style="font-style:italic;font-size:10px;color:#3c3c78;" id="preview-subtitle">Specialty</span>
+                                <span class="letterhead-right" style="font-size:10px;color:#3c3c3c;" id="preview-contact">📞 Phone</span>
+                            </div>
+                            <div style="display:flex;justify-content:space-between;">
+                                <span class="letterhead-left" style="font-size:9px;color:#505064;" id="preview-extra">Extra qualifications</span>
+                                <span class="letterhead-right" style="font-size:9px;color:#646464;" id="preview-reg">Reg No: DMC-12345</span>
+                            </div>
+                            <div style="height:1px;background:#ccc;margin:8px 0;"></div>
+                            <div style="display:flex;justify-content:space-between;font-size:11px;">
+                                <span id="preview-patient">Patient: Demo Patient</span>
+                                <span id="preview-date">Date: 24-Jul-2026</span>
+                            </div>
+                        </div>
+                        <div class="text-sm text-muted mt-sm">Live preview — saves with settings</div>
+                    </div>
+                    <div style="grid-column:1/3;margin-top:-8px;">
+                        <button class="btn btn-primary" onclick="saveSettings()">💾 Save All Settings</button>
+                        <span id="settings-status" class="text-muted text-sm" style="margin-left:12px;"></span>
+                    </div>
                 </div>
             </div>
 
@@ -854,6 +932,16 @@ function selectPatient(p) {
 
     // Load past history
     loadPatientHistory(p.patient_id || '', p.patient_name);
+
+    // Show Follow-Up button if patient has past visits
+    const followupBtn = document.getElementById('followup-btn');
+    if (p.total_visits && p.total_visits > 0) {
+        followupBtn.style.display = 'inline-flex';
+        followupBtn.dataset.patientId = p.patient_id || p.patient_uuid || '';
+        followupBtn.dataset.patientName = p.patient_name;
+    } else {
+        followupBtn.style.display = 'none';
+    }
 }
 
 // ════════════════════════════════════════════════════════════════
@@ -1041,7 +1129,91 @@ function clearRxForm() {
     document.getElementById('rx-output').value = '';
     document.getElementById('rx-output-section').style.display = 'none';
     document.getElementById('rx-status').textContent = '';
+    document.getElementById('followup-btn').style.display = 'none';
+    // Remove progress banner
+    const pb = document.getElementById('progress-banner-container');
+    if (pb) pb.innerHTML = '';
+    const mc = document.getElementById('mini-chart-container');
+    if (mc) mc.innerHTML = '';
     clearSelected();
+}
+
+// ════════════════════════════════════════════════════════════════
+// FOLLOW-UP RX (Upgrade 5)
+// ════════════════════════════════════════════════════════════════
+let _followupPastData = null;
+
+function showFollowupDialog() {
+    const btn = document.getElementById('followup-btn');
+    const patientId = btn.dataset.patientId || _currentPatientId;
+    const patientName = btn.dataset.patientName || document.getElementById('pt-name').value.trim();
+    if (!patientName) { showToast('Select a patient first', 'error'); return; }
+
+    // Fetch past prescription data for follow-up
+    fetch('/opd/api/patient-history?patient_name=' + encodeURIComponent(patientName) +
+        (patientId ? '&patient_id=' + encodeURIComponent(patientId) : ''))
+    .then(r => r.json())
+    .then(res => {
+        if (!res.ok || !res.past_rx || res.past_rx.length === 0) {
+            showToast('No past records found for this patient', 'error');
+            return;
+        }
+
+        const lastRx = res.past_rx[0];
+        _followupPastData = {
+            past_diagnoses: lastRx.diagnosis || '',
+            past_medicines: lastRx.medicines || '',
+            past_advice: lastRx.advice || '',
+            last_date: lastRx.date || '',
+        };
+
+        // Show confirmation with past data preview
+        const msg = `🔄 Follow-Up for ${patientName}\n\n` +
+            `Last Visit: ${_followupPastData.last_date}\n` +
+            `Past Dx: ${(_followupPastData.past_diagnoses || '').substring(0, 100)}\n` +
+            `Past Meds: ${(_followupPastData.past_medicines || '').substring(0, 100)}\n\n` +
+            `Generate follow-up prescription with CONTINUE/MODIFY/STOP markers?`;
+
+        if (confirm(msg)) {
+            generateFollowupRx(patientName, patientId);
+        }
+    })
+    .catch(e => showToast('Error loading past data', 'error'));
+}
+
+function generateFollowupRx(patientName, patientId) {
+    const data = {
+        patient_name: patientName,
+        vitals: document.getElementById('pt-vitals').value.trim(),
+        complaints: document.getElementById('pt-complaints').value.trim(),
+        past_diagnoses: _followupPastData?.past_diagnoses || '',
+        past_medicines: _followupPastData?.past_medicines || '',
+        past_advice: _followupPastData?.past_advice || '',
+    };
+
+    document.getElementById('rx-status').innerHTML = '<span class="spinner"></span> Generating Follow-Up Rx...';
+
+    fetch('/opd/api/generate-followup-rx', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(data),
+    })
+    .then(r => r.json())
+    .then(res => {
+        if (res.ok) {
+            document.getElementById('rx-output').value = res.prescription;
+            document.getElementById('rx-output-section').style.display = 'block';
+            document.getElementById('rx-status').textContent = '✅ Follow-Up Rx generated. Review and save.';
+            showToast('✅ Follow-Up Rx ready');
+        } else {
+            document.getElementById('rx-status').textContent = '❌ ' + (res.error || 'Generation failed');
+            showToast('❌ ' + (res.error || 'Failed'), 'error');
+        }
+    })
+    .catch(e => {
+        document.getElementById('rx-status').textContent = '❌ Error: ' + e;
+        showToast('Error generating follow-up', 'error');
+    });
 }
 
 // Quick investigations toggle
@@ -1054,33 +1226,38 @@ function toggleInv(btn) {
     document.getElementById('pt-investigations').value = Array.from(selectedInvs).join(', ');
 }
 
-// Drug autocomplete
+// Drug autocomplete — Quick buttons (Upgrade 3)
+let _drugButtonClickHandler = null;
 document.getElementById('pt-medicines').addEventListener('input', function() {
     const val = this.value.trim();
     const lastLine = val.split('\n').pop().trim();
+    const wrap = document.getElementById('drug-suggestions');
     if (lastLine.length < 2) {
-        document.getElementById('drug-suggestions').classList.remove('show');
+        wrap.innerHTML = '';
         return;
     }
     fetch('/opd/api/drugs?q=' + encodeURIComponent(lastLine))
         .then(r => r.json())
         .then(data => {
-            const list = document.getElementById('drug-suggestions');
-            list.innerHTML = '';
-            if (data.length === 0) { list.classList.remove('show'); return; }
-            data.forEach(d => {
-                const div = document.createElement('div');
-                div.className = 'autocomplete-item';
-                div.textContent = d;
-                div.onclick = () => {
+            wrap.innerHTML = '';
+            if (data.length === 0) return;
+            // Show max 6 as clickable buttons
+            data.slice(0, 6).forEach(d => {
+                const btn = document.createElement('button');
+                btn.className = 'drug-btn';
+                btn.textContent = d;
+                btn.type = 'button';
+                btn.onclick = () => {
                     const lines = this.value.split('\n');
                     lines[lines.length - 1] = d;
                     this.value = lines.join('\n');
-                    list.classList.remove('show');
+                    wrap.innerHTML = '';
+                    // Trigger input event so buttons refresh
+                    const evt = new Event('input', { bubbles: true });
+                    this.dispatchEvent(evt);
                 };
-                list.appendChild(div);
+                wrap.appendChild(btn);
             });
-            list.classList.add('show');
         });
 });
 
@@ -1385,70 +1562,288 @@ function selectQueuePatient(patientId, patientUuid, visitId, name, age, gender, 
 function loadPatientHistory(patientId, patientName) {
     let url = '/opd/api/patient-history?patient_name=' + encodeURIComponent(patientName);
     if (patientId) url += '&patient_id=' + encodeURIComponent(patientId);
+    const progressUrl = '/opd/api/patient-progress?patient_name=' + encodeURIComponent(patientName) +
+        (patientId ? '&patient_id=' + encodeURIComponent(patientId) : '');
 
-    fetch(url)
-        .then(r => r.json())
-        .then(res => {
-            if (!res.ok) return;
-            const info = [];
+    Promise.all([
+        fetch(url).then(r => r.json()),
+        fetch(progressUrl).then(r => r.json()),
+    ])
+    .then(([res, progRes]) => {
+        const statusEl = document.getElementById('rx-status');
+        if (!res.ok) { statusEl.textContent = '❌ Error loading history'; return; }
+        const info = [];
+        let bannerHtml = '';
 
-            // Patient info
-            if (res.patient) {
-                const p = res.patient;
-                if (p.total_visits) info.push(`Visit #${p.total_visits}`);
-                if (p.last_visit_at) info.push(`Last: ${p.last_visit_at}`);
-                if (p.medical_history && p.medical_history.length) {
-                    info.push(`History: ${p.medical_history.join(', ').substring(0, 100)}`);
+        // ── Patient info ──
+        if (res.patient) {
+            const p = res.patient;
+            if (p.total_visits) info.push(`Visit #${p.total_visits}`);
+            if (p.last_visit_at) info.push(`Last: ${p.last_visit_at}`);
+            if (p.age && p.gender) info.push(`${p.age}Y / ${p.gender}`);
+            if (p.medical_history && p.medical_history.length) {
+                info.push(`Hx: ${p.medical_history.join(', ').substring(0, 120)}`);
+            }
+        }
+
+        // ── Past prescriptions ──
+        if (res.past_rx && res.past_rx.length) {
+            const last = res.past_rx[0];
+            info.push(`Last Rx: ${last.date || ''}`);
+
+            // Set vitals if empty
+            if (last.vitals && !document.getElementById('pt-vitals').value) {
+                document.getElementById('pt-vitals').value = last.vitals;
+            }
+        }
+
+        if (info.length) {
+            statusEl.textContent = '📋 ' + info.join(' | ');
+        }
+
+        // ════════════════════════════════════════════════════════════
+        // PROGRESS BANNER (Upgrade 4 — color-coded vitals comparison)
+        // ════════════════════════════════════════════════════════════
+        const currentVitals = document.getElementById('pt-vitals').value;
+        const pastRx = res.past_rx || [];
+        const lastRx = pastRx.length ? pastRx[0] : null;
+        const trend = progRes.ok ? (progRes.trend || []) : [];
+
+        if (lastRx && lastRx.vitals && currentVitals && lastRx.vitals !== currentVitals) {
+            bannerHtml = renderProgressBanner(lastRx.vitals, currentVitals, lastRx.date, trend);
+        } else if (trend.length >= 2) {
+            // Show trend-only banner even without current vitals
+            bannerHtml = renderTrendOnlyBanner(trend);
+        }
+
+        // Render banner before rx-status
+        let bannerContainer = document.getElementById('progress-banner-container');
+        if (!bannerContainer) {
+            bannerContainer = document.createElement('div');
+            bannerContainer.id = 'progress-banner-container';
+            statusEl.parentNode.insertBefore(bannerContainer, statusEl.nextSibling);
+        }
+        bannerContainer.innerHTML = bannerHtml;
+
+        // ════════════════════════════════════════════════════════════
+        // MINI CHARTS (Upgrade 2 — SVG line charts for trend data)
+        // ════════════════════════════════════════════════════════════
+        if (trend.length >= 2) {
+            let chartContainer = document.getElementById('mini-chart-container');
+            if (!chartContainer) {
+                chartContainer = document.createElement('div');
+                chartContainer.id = 'mini-chart-container';
+                chartContainer.className = 'mini-chart-wrap';
+                // Insert after banner
+                if (bannerContainer.nextSibling) {
+                    bannerContainer.parentNode.insertBefore(chartContainer, bannerContainer.nextSibling);
+                } else {
+                    bannerContainer.parentNode.appendChild(chartContainer);
                 }
             }
 
-            // Past prescriptions — compare vitals for progress banner
-            if (res.past_rx && res.past_rx.length) {
-                const last = res.past_rx[0];
-                info.push(`Last Rx: ${last.date || ''}`);
+            // Determine which parameters to chart
+            const hasBP = trend.some(t => t.sys !== undefined);
+            const hasSugar = trend.some(t => t.sugar !== undefined);
+            const hasWeight = trend.some(t => t.weight !== undefined);
+            const hasHR = trend.some(t => t.hr !== undefined);
 
-                // Progress banner: compare previous vitals with current
-                const currentVitals = document.getElementById('pt-vitals').value;
-                if (last.vitals && currentVitals && last.vitals !== currentVitals) {
-                    // Simple BP comparison
-                    const prevBP = last.vitals.match(/(\d+)\s*\/\s*(\d+)/);
-                    const currBP = currentVitals.match(/(\d+)\s*\/\s*(\d+)/);
-                    if (prevBP && currBP) {
-                        const prevS = parseInt(prevBP[1]), prevD = parseInt(prevBP[2]);
-                        const currS = parseInt(currBP[1]), currD = parseInt(currBP[2]);
-                        if (currS < prevS && currD < prevD) {
-                            info.push('🟢 BP improved');
-                        } else if (currS > prevS + 10 || currD > prevD + 10) {
-                            info.push('🔴 BP worsened');
-                        } else {
-                            info.push('⚪ BP stable');
-                        }
-                    }
-                    // Sugar comparison
-                    const prevSugar = last.vitals.match(/F[-\s]?(\d+)|PP[-\s]?(\d+)|R[-\s]?(\d+)|(\d+)\s*mg\/dl/i);
-                    const currSugar = currentVitals.match(/F[-\s]?(\d+)|PP[-\s]?(\d+)|R[-\s]?(\d+)|(\d+)\s*mg\/dl/i);
-                    if (prevSugar && currSugar) {
-                        const pv = parseInt(prevSugar[1] || prevSugar[2] || prevSugar[3] || prevSugar[4]);
-                        const cv = parseInt(currSugar[1] || currSugar[2] || currSugar[3] || currSugar[4]);
-                        if (pv && cv) {
-                            if (cv < pv - 20) info.push('🟢 Sugar improved');
-                            else if (cv > pv + 20) info.push('🔴 Sugar worsened');
-                            else info.push('⚪ Sugar stable');
-                        }
-                    }
-                }
+            let chartsHtml = '';
+            if (hasBP) chartsHtml += renderMiniChart(trend, 'BP (SYS)', 'sys', '#3b82f6', 'mmHg', 80, 200);
+            if (hasSugar) chartsHtml += renderMiniChart(trend, 'Sugar', 'sugar', '#ef4444', 'mg/dL', 50, 350);
+            if (hasWeight) chartsHtml += renderMiniChart(trend, 'Weight', 'weight', '#22c55e', 'kg', 40, 120);
+            if (hasHR) chartsHtml += renderMiniChart(trend, 'Pulse', 'hr', '#a855f7', 'bpm', 50, 120);
 
-                // Set vitals if empty
-                if (last.vitals && !document.getElementById('pt-vitals').value) {
-                    document.getElementById('pt-vitals').value = last.vitals;
-                }
-            }
+            chartContainer.innerHTML = chartsHtml
+                ? `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px;">${chartsHtml}</div>`
+                : '';
+        }
+    })
+    .catch(e => {});
+}
 
-            if (info.length) {
-                document.getElementById('rx-status').textContent = '📋 ' + info.join(' | ');
-            }
-        })
-        .catch(e => {});
+/* ─── Progress Banner (Upgrade 4) ─── */
+function renderProgressBanner(prevVitals, currVitals, prevDate, trend) {
+    const prevDateStr = prevDate || 'last visit';
+    const prevV = prevVitals.toLowerCase();
+    const currV = currVitals.toLowerCase();
+    let params = [];
+
+    // BP comparison
+    const prevBP = prevV.match(/(\d{2,3})\s*\/\s*(\d{2,3})/);
+    const currBP = currV.match(/(\d{2,3})\s*\/\s*(\d{2,3})/);
+    let bpStatus = '', bpLabel = 'BP';
+
+    if (prevBP && currBP) {
+        const ps = parseInt(prevBP[1]), pd = parseInt(prevBP[2]);
+        const cs = parseInt(currBP[1]), cd = parseInt(currBP[2]);
+        const diffS = cs - ps, diffD = cd - pd;
+        const arrow = diffS > 0 ? '↑' : diffS < 0 ? '↓' : '→';
+        let badge, cls;
+        if (cs < 130 && cd < 80) { badge = '✅ Controlled'; cls = 'badge-green'; }
+        else if (cs < 140 && cd < 90) { badge = '🟡 Borderline'; cls = 'badge-yellow'; }
+        else { badge = '🔴 High'; cls = 'badge-red'; }
+        bpStatus = `${cs}/${cd} ${arrow}${diffS !== 0 ? Math.abs(diffS) : ''}`;
+        bpLabel = `BP ${cs}/${cd}`;
+    }
+
+    // Sugar comparison
+    const sugarRe = /(?:rbs|fbs|pp|sugar|bs|glucose|random)\s*[:=]?\s*(\d{2,4})/i;
+    const prevSg = prevV.match(sugarRe);
+    const currSg = currV.match(sugarRe);
+    let sugarLabel = '', sugarStatus = '';
+    if (prevSg && currSg) {
+        const pv = parseInt(prevSg[1]), cv = parseInt(currSg[1]);
+        const diff = cv - pv;
+        const arrow = diff > 0 ? '↑' : diff < 0 ? '↓' : '→';
+        let badge, cls;
+        if (cv < 140) { badge = '✅ Normal'; cls = 'badge-green'; }
+        else if (cv < 200) { badge = '🟡 Borderline'; cls = 'badge-yellow'; }
+        else { badge = '🔴 High'; cls = 'badge-red'; }
+        sugarLabel = `Sugar ${cv}`;
+        sugarStatus = `${badge} ${arrow}${Math.abs(diff)}`;
+    }
+
+    // Weight comparison
+    const wtRe = /(?:wt|weight)\s*[:=]?\s*(\d{2,3})/i;
+    const prevWt = prevV.match(wtRe);
+    const currWt = currV.match(wtRe);
+    let weightLabel = '', weightStatus = '';
+    if (prevWt && currWt) {
+        const pv = parseInt(prevWt[1]), cv = parseInt(currWt[1]);
+        const diff = cv - pv;
+        const arrow = diff > 0 ? '↑' : diff < 0 ? '↓' : '→';
+        let badge;
+        if (diff < 0) badge = '✅ Reduced';
+        else if (diff === 0) badge = '→ Same';
+        else badge = '⚠️ Increased';
+        weightLabel = `Wt ${cv}kg`;
+        weightStatus = `${badge} ${arrow}${Math.abs(diff)}`;
+    }
+
+    // Overall verdict
+    let improving = 0, worsening = 0;
+    if (currBP && prevBP) {
+        const cs = parseInt(currBP[1]), cd = parseInt(currBP[2]);
+        const ps = parseInt(prevBP[1]), pd = parseInt(prevBP[2]);
+        if (cs < ps && cd < pd) improving++;
+        else if (cs > ps + 10 || cd > pd + 10) worsening++;
+    }
+    if (currSg && prevSg) {
+        const cv = parseInt(currSg[1]), pv = parseInt(prevSg[1]);
+        if (cv < pv) improving++;
+        else if (cv > pv + 20) worsening++;
+    }
+    if (currWt && prevWt) {
+        const cv = parseInt(currWt[1]), pv = parseInt(prevWt[1]);
+        if (cv < pv) improving++;
+        else if (cv > pv + 2) worsening++;
+    }
+
+    let verdictCls = 'mixed', verdictIcon = '📊', verdictText = 'Mixed';
+    if (improving > worsening) { verdictCls = 'improving'; verdictIcon = '🎉'; verdictText = 'Improving'; }
+    else if (worsening > improving) { verdictCls = 'worsening'; verdictIcon = '⚠️'; verdictText = 'Worsening'; }
+
+    return `<div class="progress-banner ${verdictCls}">
+        <div class="verdict">${verdictIcon} Patient Progress — Since ${prevDateStr} &middot; <span class="arrow">${verdictText}</span></div>
+        <div class="param-grid">
+            ${bpLabel ? `<div class="progress-param"><div class="label">${bpLabel}</div><div class="value">${bpStatus}</div></div>` : ''}
+            ${sugarLabel ? `<div class="progress-param"><div class="label">${sugarLabel}</div><div class="value">${sugarStatus}</div></div>` : ''}
+            ${weightLabel ? `<div class="progress-param"><div class="label">${weightLabel}</div><div class="value">${weightStatus}</div></div>` : ''}
+        </div>
+    </div>`;
+}
+
+function renderTrendOnlyBanner(trend) {
+    // Show trend summary without current vitals comparison
+    return `<div class="progress-banner mixed">
+        <div class="verdict">📈 Visit History — ${trend.length} records</div>
+        <div class="param-grid" style="font-size:13px;color:var(--text-muted);">
+            ${trend.slice(0,5).map(t => `<span>${t.date}: ${t.vitals.substring(0,40)}</span>`).join('')}
+        </div>
+    </div>`;
+}
+
+/* ─── Mini SVG Line Chart (Upgrade 2) ─── */
+function renderMiniChart(trend, label, key, color, unit, yMin, yMax) {
+    const values = trend.map(t => t[key]).filter(v => v !== undefined);
+    if (values.length < 2) return '';
+    const dates = trend.map(t => t.date);
+    const w = 280, h = 80, pad = { top: 10, bottom: 18, left: 6, right: 6 };
+    const chartW = w - pad.left - pad.right;
+    const chartH = h - pad.top - pad.bottom;
+
+    // Compute min/max range
+    let minVal = Math.min(...values);
+    let maxVal = Math.max(...values);
+    const range = maxVal - minVal || 1;
+    // Add 20% padding
+    minVal = Math.max(yMin || 0, minVal - range * 0.2);
+    maxVal = Math.min(yMax || 300, maxVal + range * 0.2);
+    const valRange = maxVal - minVal || 1;
+
+    // Build path + reference lines
+    const stepX = chartW / (values.length - 1);
+    const points = values.map((v, i) => {
+        const x = pad.left + i * stepX;
+        const y = pad.top + chartH - ((v - minVal) / valRange) * chartH;
+        return `${i === 0 ? 'M' : 'L'}${x.toFixed(1)},${y.toFixed(1)}`;
+    }).join(' ');
+    const linePath = points;
+
+    // Dots
+    const dots = values.map((v, i) => {
+        const x = pad.left + i * stepX;
+        const y = pad.top + chartH - ((v - minVal) / valRange) * chartH;
+        return `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="3" fill="${color}" stroke="#fff" stroke-width="1.5"/>`;
+    }).join('');
+
+    // Y-axis labels
+    const yLabels = [];
+    const steps = 3;
+    for (let i = 0; i <= steps; i++) {
+        const val = minVal + (valRange / steps) * i;
+        const y = pad.top + chartH - ((val - minVal) / valRange) * chartH;
+        yLabels.push(`<text x="4" y="${y + 3}" font-size="8" fill="#94a3b8">${Math.round(val)}</text>`);
+    }
+
+    // X-axis labels (first, middle, last)
+    const xLabels = [];
+    [0, Math.floor(values.length / 2), values.length - 1].forEach(idx => {
+        if (idx < dates.length) {
+            const x = pad.left + idx * stepX;
+            const label = dates[idx] || '';
+            xLabels.push(`<text x="${x.toFixed(1)}" y="${h - 3}" font-size="7" fill="#94a3b8" text-anchor="middle">${label}</text>`);
+        }
+    });
+
+    // Last value annotation
+    const lastVal = values[values.length - 1];
+    const lastX = pad.left + (values.length - 1) * stepX;
+    const lastY = pad.top + chartH - ((lastVal - minVal) / valRange) * chartH;
+    const annotY = Math.max(pad.top + 2, lastY - 8);
+
+    return `<div>
+        <div class="chart-title">${label} (${unit})</div>
+        <svg viewBox="0 0 ${w} ${h}" xmlns="http://www.w3.org/2000/svg">
+            <!-- Grid lines -->
+            <line x1="${pad.left}" y1="${pad.top}" x2="${w - pad.right}" y2="${pad.top}" stroke="#f1f5f9" stroke-width="0.5"/>
+            <line x1="${pad.left}" y1="${pad.top + chartH / 2}" x2="${w - pad.right}" y2="${pad.top + chartH / 2}" stroke="#f1f5f9" stroke-width="0.5"/>
+            <line x1="${pad.left}" y1="${pad.top + chartH}" x2="${w - pad.right}" y2="${pad.top + chartH}" stroke="#f1f5f9" stroke-width="0.5"/>
+            <!-- Area fill -->
+            <path d="M${pad.left},${pad.top + chartH} ${points.slice(1)} L${pad.left + (values.length-1)*stepX},${pad.top + chartH} Z" fill="${color}15" stroke="none"/>
+            <!-- Line -->
+            <path d="${linePath}" fill="none" stroke="${color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            <!-- Dots -->
+            ${dots}
+            <!-- Last value label -->
+            <text x="${Math.min(lastX + 4, w - 40)}" y="${annotY}" font-size="9" font-weight="600" fill="${color}">${lastVal}</text>
+            <!-- Y labels -->
+            ${yLabels.join('')}
+            <!-- X labels -->
+            ${xLabels.join('')}
+        </svg>
+    </div>`;
 }
 
 function reprintPdf(name, vitals, rx) {
@@ -1767,6 +2162,41 @@ function printStarredPdf(name, rx) {
 // ════════════════════════════════════════════════════════════════
 // SETTINGS
 // ════════════════════════════════════════════════════════════════
+function updateLetterheadPreview() {
+    const docName = document.getElementById('set-doc-name').value.trim() || 'Dr. Name';
+    const clinicName = document.getElementById('set-clinic-name').value.trim() || 'Clinic Name';
+    const degree = document.getElementById('set-degree').value.trim() || 'MBBS, MD';
+    const subtitle = document.getElementById('set-subtitle').value.trim() || '';
+    const reg = document.getElementById('set-reg').value.trim() || 'Reg No: —';
+    const extra = document.getElementById('set-extra').value.trim() || '';
+    const email = document.getElementById('set-email').value.trim() || '';
+    const phone = document.getElementById('set-phone').value.trim() || '';
+    const address = document.getElementById('set-address').value.trim() || 'Clinic Address';
+
+    document.getElementById('preview-doc-name').textContent = docName;
+    document.getElementById('preview-clinic-name').textContent = clinicName;
+    document.getElementById('preview-degree').textContent = degree;
+    document.getElementById('preview-subtitle').textContent = subtitle || '—';
+    document.getElementById('preview-extra').textContent = extra.split('\n')[0] || '—';
+    document.getElementById('preview-reg').textContent = reg ? `Reg No: ${reg}` : '—';
+
+    const contactParts = [];
+    if (phone) contactParts.push('📞 ' + phone);
+    if (email) contactParts.push('✉ ' + email);
+    document.getElementById('preview-contact').textContent = contactParts.join(' | ') || '📞 Phone';
+
+    const addrLine = address.split('\n')[0] || 'Clinic Address';
+    document.getElementById('preview-address').textContent = addrLine;
+}
+
+// Live preview on any settings input change
+document.addEventListener('DOMContentLoaded', function() {
+    const settingInputs = document.querySelectorAll('#tab-settings input, #tab-settings textarea');
+    settingInputs.forEach(el => {
+        el.addEventListener('input', updateLetterheadPreview);
+    });
+});
+
 function saveSettings() {
     const data = {
         clinic_name: document.getElementById('set-clinic-name').value.trim(),
@@ -1797,6 +2227,7 @@ function saveSettings() {
         if (res.ok) {
             showToast('✅ Settings saved!');
             document.getElementById('settings-status').textContent = '✅ Saved';
+            updateLetterheadPreview();
         } else {
             document.getElementById('settings-status').textContent = '❌ ' + (res.error || 'Failed');
         }
@@ -1804,8 +2235,13 @@ function saveSettings() {
 }
 
 // ════════════════════════════════════════════════════════════════
-// RESEARCH
-// ════════════════════════════════════════════════════════════════
+// RESEARCH (Upgrade 6)
+function escapeHtml(text) {
+    const d = document.createElement('div');
+    d.textContent = text;
+    return d.innerHTML;
+}
+
 function setResearchQ(q) {
     document.getElementById('research-q').value = q;
 }
@@ -1815,19 +2251,35 @@ function runResearch() {
     if (!q) { showToast('Enter a question', 'error'); return; }
 
     document.getElementById('research-result').style.display = 'block';
-    document.getElementById('research-result').textContent = '⏳ Analyzing...';
+    document.getElementById('research-result').innerHTML = '<span class="spinner"></span> Analyzing your practice data...';
 
-    fetch('/opd/api/drug-review', {
+    fetch('/opd/api/research', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({
-            vitals: 'Research analysis',
-            prescription: `Research question: ${q}\n\nPatient data: ${JSON.stringify(rosterData.slice(0, 50))}`,
-        }),
+        body: JSON.stringify({ question: q }),
     })
     .then(r => r.json())
     .then(res => {
-        document.getElementById('research-result').textContent = res.review || 'No analysis generated';
+        const el = document.getElementById('research-result');
+        if (res.ok) {
+            // Show stats + result
+            const stats = res.stats || {};
+            let html = `<div class="card" style="margin-bottom:12px;padding:12px;background:#f8fafc;">
+                <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;text-align:center;">
+                    <div><div style="font-size:20px;font-weight:700;">${stats.total_prescriptions || 0}</div><div class="text-sm text-muted">Prescriptions</div></div>
+                    <div><div style="font-size:20px;font-weight:700;">${stats.unique_patients || 0}</div><div class="text-sm text-muted">Unique Patients</div></div>
+                    <div><div style="font-size:20px;font-weight:700;">₹${(stats.total_revenue || 0).toLocaleString()}</div><div class="text-sm text-muted">Total Revenue</div></div>
+                    <div><div style="font-size:20px;font-weight:700;">${stats.starred_cases || 0}</div><div class="text-sm text-muted">Starred Cases</div></div>
+                </div>
+            </div>`;
+            html += '<div style="white-space:pre-wrap;font-size:14px;line-height:1.7;">' + escapeHtml(res.result) + '</div>';
+            el.innerHTML = html;
+        } else {
+            el.innerHTML = '<div class="text-danger">❌ ' + (res.error || 'Analysis failed') + '</div>';
+        }
+    })
+    .catch(e => {
+        document.getElementById('research-result').innerHTML = '<div class="text-danger">❌ Error: ' + e + '</div>';
     });
 }
 

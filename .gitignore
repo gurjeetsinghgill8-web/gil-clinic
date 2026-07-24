@@ -35,3 +35,4 @@ ghos_memory/
 node_modules/
 package-lock.json
 package.json
+repo-analysis
