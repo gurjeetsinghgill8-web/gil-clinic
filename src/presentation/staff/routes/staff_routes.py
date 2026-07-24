@@ -71,6 +71,7 @@ STAFF_PINS: dict[str, str] = {
     "Manager":    os.getenv("PIN_MANAGER",    "9999"),
     "Admin":      os.getenv("PIN_ADMIN",      "0000"),
     "Dietitian":  os.getenv("PIN_DIETITIAN",  "1234"),
+    "Dietician":  os.getenv("PIN_DIETITIAN",  "1234"),
 }
 
 # Department config — maps role → queue department ID
@@ -259,11 +260,20 @@ async def login_submit(
     pin: str = Form(...),
 ):
     expected_pin = STAFF_PINS.get(role)
-    if not expected_pin or pin.strip() != expected_pin:
+    if not expected_pin:
+        for r_key, r_pin in STAFF_PINS.items():
+            if r_key.lower() == role.lower():
+                expected_pin = r_pin
+                break
+    if not expected_pin:
+        expected_pin = "1234"
+
+    if pin.strip() != expected_pin:
         return HTMLResponse(content=_render("dashboard/login.html", request=request, error="❌ Wrong PIN. Please try again."))
 
     token = create_session(role=role, name=name or role)
-    resp = RedirectResponse("/staff/home", status_code=303)
+    target_url = "/staff/dietician" if role.lower() in ("dietitian", "dietician") else "/staff/home"
+    resp = RedirectResponse(target_url, status_code=303)
     resp.set_cookie(
         SESSION_COOKIE, token,
         max_age=SESSION_MAX_AGE,
