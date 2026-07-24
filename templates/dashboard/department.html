@@ -41,10 +41,13 @@
       <button class="btn btn-sm" onclick="toggleWAMenu()" style="background:rgba(37,211,102,0.12);border-color:#25D366;color:#25D366;font-size:13px;">
         📱 WhatsApp ▾
       </button>
-      <div id="wa-menu" style="display:none;position:absolute;top:100%;right:0;background:var(--card);border:1px solid var(--border);border-radius:8px;z-index:200;min-width:180px;box-shadow:0 8px 30px rgba(0,0,0,0.15);margin-top:4px;">
+      <div id="wa-menu" style="display:none;position:absolute;top:100%;right:0;background:var(--card);border:1px solid var(--border);border-radius:8px;z-index:200;min-width:200px;box-shadow:0 8px 30px rgba(0,0,0,0.15);margin-top:4px;">
+        <button class="btn btn-sm btn-ghost" onclick="shareWA('patient')" style="display:flex;width:100%;border-radius:0;border-bottom:1px solid var(--border);padding:10px 14px;">📱 Send to Patient</button>
         <button class="btn btn-sm btn-ghost" onclick="shareWA('reception')" style="display:flex;width:100%;border-radius:0;border-bottom:1px solid var(--border);padding:10px 14px;">🏥 Send to Reception</button>
         <button class="btn btn-sm btn-ghost" onclick="shareWA('doctor')" style="display:flex;width:100%;border-radius:0;border-bottom:1px solid var(--border);padding:10px 14px;">👨‍⚕️ Send to Doctor</button>
-        <button class="btn btn-sm btn-ghost" onclick="shareWA('manager')" style="display:flex;width:100%;border-radius:0;padding:10px 14px;">👔 Send to Manager</button>
+        <button class="btn btn-sm btn-ghost" onclick="shareWA('manager')" style="display:flex;width:100%;border-radius:0;border-bottom:1px solid var(--border);padding:10px 14px;">👔 Send to Manager</button>
+        <button class="btn btn-sm btn-ghost" onclick="shareWA('all')" style="display:flex;width:100%;border-radius:0;border-bottom:1px solid var(--border);padding:10px 14px;background:rgba(37,211,102,0.06);">📨 Send to All</button>
+        <button class="btn btn-sm btn-ghost" onclick="shareWA('alert')" style="display:flex;width:100%;border-radius:0;padding:10px 14px;color:#e53e3e;">🔔 Alert via WhatsApp</button>
       </div>
     </span>
   </div>
@@ -134,6 +137,7 @@
 <input type="hidden" id="wa-doctor" value="">
 <input type="hidden" id="dept-name" value="{{ dept_name }}">
 <input type="hidden" id="dept-icon" value="{{ dept_icon }}">
+<input type="hidden" id="patient-phone" value="{{ current_patient.patient_phone or '' }}">
 <script>
   window.STAFF_NAME = '{{ dept_name }} Tech';
   window.autoRefreshEnabled = true;
@@ -166,43 +170,82 @@
     }
   });
 
-  function shareWA(role) {
+  function getCurrentPatientInfo() {
     const ptNameEl = document.querySelector('.cp-name span:first-of-type');
     const name = ptNameEl ? ptNameEl.textContent.trim() : 'Patient';
     const deptName = document.getElementById('dept-name').value;
     const deptIcon = document.getElementById('dept-icon').value;
     const token = document.querySelector('.cp-name .token');
     const tokenNum = token ? token.textContent.trim() : '';
+    const patientPhone = document.getElementById('patient-phone').value.replace(/[^0-9]/g, '');
+    return { name, deptName, deptIcon, tokenNum, patientPhone };
+  }
 
-    let number = '';
-    let msg = '';
+  function shareWA(role) {
+    const { name, deptName, deptIcon, tokenNum, patientPhone } = getCurrentPatientInfo();
+    const waReception = document.getElementById('wa-reception').value.replace(/[^0-9]/g, '');
+    const waManager = document.getElementById('wa-manager').value.replace(/[^0-9]/g, '');
+    const waDoctor = document.getElementById('wa-doctor').value.replace(/[^0-9]/g, '');
+
+    const baseMsg = `🏥 *${deptName} — ${name}*\n👤 Token #${tokenNum}\n📋 ${deptName} Lab ${deptIcon}\n\n— GIL CLINIC`;
+    const alertMsg = `🔔 *Patient Alert — ${deptName}*\n\n👤 *${name}* (Token #${tokenNum})\n📋 Your ${deptName} report is ready / in progress. Please check with the ${deptName} desk.\n\n— GIL CLINIC`;
+
+    let targets = [];
 
     switch(role) {
+      case 'patient':
+        if (!patientPhone) {
+          showToast('Patient phone number not found', 'error');
+          closeWA(); return;
+        }
+        targets = [{ num: patientPhone, msg: baseMsg }];
+        break;
       case 'reception':
-        number = document.getElementById('wa-reception').value;
-        msg = `🏥 *New ${deptName} Patient*\n\n👤 *${name}* (Token #${tokenNum})\n📋 ${deptName} Lab — ${deptIcon}\n\n— GIL CLINIC`;
+        if (!waReception) { showToast('Set Reception number in Settings', 'error'); closeWA(); return; }
+        targets = [{ num: waReception, msg: baseMsg }];
         break;
       case 'doctor':
-        number = document.getElementById('wa-doctor').value;
-        msg = `👨‍⚕️ *${deptName} Lab — Patient Alert*\n\n👤 *${name}* (Token #${tokenNum})\n📋 ${deptName} Lab Report Ready/In Progress\n\n— GIL CLINIC`;
+        if (!waDoctor) { showToast('Set Doctor number in Settings', 'error'); closeWA(); return; }
+        targets = [{ num: waDoctor, msg: `👨‍⚕️ *${deptName} Lab — Patient Alert*\n\n👤 *${name}* (Token #${tokenNum})\n📋 ${deptName} Lab Report Ready/In Progress\n\n— GIL CLINIC` }];
         break;
       case 'manager':
-        number = document.getElementById('wa-manager').value;
-        msg = `📊 *${deptName} Lab Update*\n\n👤 *${name}* (Token #${tokenNum})\n📋 ${deptName} Lab\n\n— GIL CLINIC`;
+        if (!waManager) { showToast('Set Manager number in Settings', 'error'); closeWA(); return; }
+        targets = [{ num: waManager, msg: `📊 *${deptName} Lab Update*\n\n👤 *${name}* (Token #${tokenNum})\n📋 ${deptName} Lab\n\n— GIL CLINIC` }];
+        break;
+      case 'all':
+        // Send to all available numbers
+        if (patientPhone) targets.push({ num: patientPhone, msg: baseMsg + '\n📱 (Patient Copy)' });
+        if (waReception) targets.push({ num: waReception, msg: baseMsg + '\n🏥 (Reception Copy)' });
+        if (waManager) targets.push({ num: waManager, msg: baseMsg + '\n👔 (Manager Copy)' });
+        if (targets.length === 0) {
+          showToast('No numbers available (patient phone or settings)', 'error');
+          closeWA(); return;
+        }
+        break;
+      case 'alert':
+        // Alert via WhatsApp — send alert message to patient + reception
+        if (patientPhone) targets.push({ num: patientPhone, msg: alertMsg });
+        if (waReception) targets.push({ num: waReception, msg: `🔔 *${deptName} Alert — ${name}*\n👤 Token #${tokenNum}\nAlready alerted via WhatsApp.` });
+        if (targets.length === 0) {
+          showToast('No numbers to alert', 'error');
+          closeWA(); return;
+        }
         break;
     }
 
-    if (!number) {
-      showToast('Set ' + role + ' WhatsApp number in OPD Settings', 'error');
-      waMenuOpen = false;
-      document.getElementById('wa-menu').style.display = 'none';
-      return;
-    }
+    // Open WhatsApp for each target
+    targets.forEach((t, i) => {
+      setTimeout(() => {
+        const url = 'https://wa.me/' + t.num + '?text=' + encodeURIComponent(t.msg);
+        window.open(url, '_blank');
+      }, i * 800); // 800ms gap between tabs
+    });
 
-    number = number.replace(/[^0-9]/g, '');
-    const url = 'https://wa.me/' + number + '?text=' + encodeURIComponent(msg);
-    window.open(url, '_blank');
-    showToast('📱 WhatsApp opened for ' + role, 'success');
+    showToast('📱 WhatsApp opened for ' + targets.length + ' recipient(s)', 'success');
+    closeWA();
+  }
+
+  function closeWA() {
     waMenuOpen = false;
     document.getElementById('wa-menu').style.display = 'none';
   }
