@@ -327,15 +327,24 @@ def diet_plan_prompt(
     meals_per_day: str,
     restrictions: str,
     target_calories: str = "",
+    protein_ratio: str = "1.0",
 ) -> str:
     """
     Generate a professional clinical diet plan following international standards.
     Uses IFCT/NIN/ICMR food composition database values.
     Includes per-food protein grams, fiber grams, and daily macro targets.
     """
-    # Determine protein requirement based on CKD status
-    has_ckd = "ckd" in conditions.lower() or "kidney" in conditions.lower() or "renal" in conditions.lower()
-    protein_factor = "0.6-0.8" if has_ckd else "1.2-1.5"
+    try:
+        pr_val = float(protein_ratio)
+    except Exception:
+        pr_val = 1.0
+
+    try:
+        w_val = float(weight)
+        protein_grams = round(w_val * pr_val)
+        protein_spec = f"{weight} kg × {pr_val:.1f} g/kg = {protein_grams} g/day"
+    except Exception:
+        protein_spec = f"{pr_val:.1f} g/kg body weight"
 
     # Fiber target by gender
     fiber_target = "25-30g (women) / 30-38g (men)" if gender == "Female" else "30-38g (women) / 25-30g (men)"
@@ -359,8 +368,7 @@ PATIENT PROFILE:
 - Dietary Restrictions: {restrictions or 'None'}
 
 CRITICAL NUTRITION TARGETS (must calculate from weight):
-- PROTEIN: {weight} kg × {protein_factor} g/kg = {protein_factor.replace('-', '–')} g/day
-  {'→ CKD patient: Low protein (0.6-0.8 g/kg) to protect kidneys' if has_ckd else '→ NON-CKD patient: Normal-high protein (1.2-1.5 g/kg) for maintenance/repair'}
+- PROTEIN TARGET PRESCRIBED BY DIETITIAN: {protein_spec} (Strict Target Ratio: {pr_val:.1f} g/kg body weight)
 - FIBER: {fiber_target} per NIN/ICMR guidelines
 - Use Mifflin-St Jeor equation for BMR, apply activity factor 1.2 (sedentary) to 1.5 (active)
 

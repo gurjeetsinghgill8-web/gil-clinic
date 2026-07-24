@@ -780,6 +780,7 @@ async def api_diet_plan(request: Request):
         meals_per_day=body.get("meals_per_day", "3 main + 2 snacks"),
         restrictions=body.get("restrictions", ""),
         target_calories=body.get("target_calories", ""),
+        protein_ratio=body.get("protein_ratio", "1.0"),
     )
 
     groq_key = os.getenv("GROQ_API_KEY", "")

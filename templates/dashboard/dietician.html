@@ -163,13 +163,17 @@
 
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
         <div class="form-group">
-          <label>Meals per Day</label>
-          <select id="d-meals" class="form-input">
-            <option value="3 main + 2 snacks">3 meals + 2 snacks</option>
-            <option value="3 main">3 meals only</option>
-            <option value="6 small">6 small meals</option>
-            <option value="5 small">5 small meals</option>
-          </select>
+          <label>Protein Target Ratio (g / kg body wt)</label>
+          <input type="number" id="d-protein-ratio" value="1.0" step="0.1" min="0.4" max="3.5" class="form-input" oninput="updateProteinTarget()">
+          <div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:4px;">
+            <button class="tag-btn" onclick="setProteinRatio(0.6)">0.6</button>
+            <button class="tag-btn" onclick="setProteinRatio(0.8)">0.8 (CKD)</button>
+            <button class="tag-btn" onclick="setProteinRatio(1.0)">1.0 (Default)</button>
+            <button class="tag-btn" onclick="setProteinRatio(1.2)">1.2</button>
+            <button class="tag-btn" onclick="setProteinRatio(1.5)">1.5</button>
+            <button class="tag-btn" onclick="setProteinRatio(1.6)">1.6</button>
+            <button class="tag-btn" onclick="setProteinRatio(2.0)">2.0</button>
+          </div>
         </div>
         <div class="form-group">
           <label>Daily Calorie Target (kcal)</label>
@@ -183,6 +187,16 @@
             <button class="tag-btn" onclick="setCalories('')">❌ Auto</button>
           </div>
         </div>
+      </div>
+
+      <div class="form-group">
+        <label>Meals per Day</label>
+        <select id="d-meals" class="form-input">
+          <option value="3 main + 2 snacks">3 meals + 2 snacks</option>
+          <option value="3 main">3 meals only</option>
+          <option value="6 small">6 small meals</option>
+          <option value="5 small">5 small meals</option>
+        </select>
       </div>
 
       <div class="form-group">
@@ -381,28 +395,41 @@ function refreshQueue() {
 // ── Protein / Fiber Target Calculator ──────────────────────────────
 function updateProteinTarget() {
   const w = parseFloat(document.getElementById('d-weight').value);
+  const ratioInput = document.getElementById('d-protein-ratio').value;
+  let ratio = parseFloat(ratioInput);
+  if (isNaN(ratio) || ratio <= 0) ratio = 1.0;
+
   const conditions = (document.getElementById('d-conditions').value || '').toLowerCase();
-  const hasCKD = conditions.includes('ckd') || conditions.includes('kidney') || conditions.includes('renal');
   const gender = document.getElementById('d-gender').value;
   const cal = document.getElementById('d-calories').value.trim();
 
   const tgtDiv = document.getElementById('macro-targets');
   if (!w || w <= 0) { tgtDiv.style.display = 'none'; return; }
 
-  const proteinPerKg = hasCKD ? 0.8 : 1.3;
-  const proteinTarget = Math.round(w * proteinPerKg);
+  const proteinTarget = Math.round(w * ratio);
   const fiberTarget = gender === 'Female' ? 28 : 35;
   const calTarget = cal ? parseInt(cal) : Math.round(w * 28);
 
-  document.getElementById('tgt-protein').textContent = proteinTarget + ' g/day (' + proteinPerKg + ' g/kg)';
+  document.getElementById('tgt-protein').textContent = proteinTarget + ' g/day (' + ratio.toFixed(1) + ' g/kg)';
   document.getElementById('tgt-fiber').textContent = fiberTarget + ' g/day (NIN)';
   document.getElementById('tgt-calories').textContent = calTarget + ' kcal/day';
 
-  // Color-code protein: if CKD show warning
+  // Color-code protein ratio
   const protEl = document.getElementById('tgt-protein');
-  protEl.style.color = hasCKD ? '#f59e0b' : '#3b82f6';
+  if (ratio <= 0.8) {
+    protEl.style.color = '#f59e0b'; // Amber for low/CKD
+  } else if (ratio >= 1.6) {
+    protEl.style.color = '#8b5cf6'; // Purple for high
+  } else {
+    protEl.style.color = '#2563eb'; // Blue default
+  }
 
   tgtDiv.style.display = 'block';
+}
+
+function setProteinRatio(val) {
+  document.getElementById('d-protein-ratio').value = val;
+  updateProteinTarget();
 }
 
 // ── BMI Calculator ─────────────────────────────────────────────────
@@ -428,6 +455,9 @@ function tagCondition(condition) {
     existing.push(condition);
     inp.value = existing.join(', ');
   }
+  if (condition === 'CKD' || condition === 'Kidney') {
+    document.getElementById('d-protein-ratio').value = 0.8;
+  }
   updateProteinTarget();
 }
 
@@ -445,6 +475,7 @@ function generateDietPlan() {
     gender: document.getElementById('d-gender').value,
     weight: document.getElementById('d-weight').value,
     height: document.getElementById('d-height').value,
+    protein_ratio: document.getElementById('d-protein-ratio').value || '1.0',
     conditions: document.getElementById('d-conditions').value.trim(),
     complaints: document.getElementById('d-complaints').value.trim(),
     goal: document.getElementById('d-goal').value,
