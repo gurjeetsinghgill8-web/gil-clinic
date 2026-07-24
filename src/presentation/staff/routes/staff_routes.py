@@ -459,7 +459,7 @@ async def tmt(request: Request):  return await _dept_page(request, "TMT",  "tmt"
 async def opd(request: Request):  return await _dept_page(request, "OPD",  "opd")
 
 @router.get("/dietitian", include_in_schema=False)
-async def dietitian(request: Request): return await _dept_page(request, "Dietitian", "dietician")
+async def dietitian(request: Request): return RedirectResponse("/staff/dietician")
 
 
 # ── Doctor ─────────────────────────────────────────────────────────────────────
