@@ -1766,7 +1766,7 @@ async def api_research(request: Request):
             star_rows = await session.execute(
                 sa.select(SpecialtyUpgradeModel)
                 .where(SpecialtyUpgradeModel.doctor_id == doctor_id)
-                .where(SpecialtyUpgradeModel.is_starred == True)
+                .where(SpecialtyUpgradeModel.is_starred == 1)
                 .order_by(SpecialtyUpgradeModel.created_at.desc())
                 .limit(20)
             )
