@@ -908,6 +908,40 @@ async def api_optimize_rx(request: Request):
     return {"ok": True, "prescription": result}
 
 
+@router.post("/api/clinical-support", include_in_schema=False)
+async def api_clinical_support(request: Request):
+    """Clinical Decision Support — DDx, missed Ix, algorithm, referral. Doctor reference only."""
+    sess = _require_opd_session(request)
+    doctor_id = sess["doctor_id"]
+
+    try:
+        body = await request.json()
+    except Exception:
+        return {"ok": False, "error": "Invalid JSON"}
+
+    settings = await _get_settings(doctor_id)
+    groq_key = settings.get("groq_api_key") or os.getenv("GROQ_API_KEY", "")
+    if not groq_key:
+        return {"ok": False, "error": "Groq API key not configured."}
+    os.environ["GROQ_API_KEY"] = groq_key
+
+    from src.ai_engine.prompts import clinical_support_prompt
+    prompt = clinical_support_prompt(
+        patient_name=body.get("patient_name", ""),
+        vitals=body.get("vitals", ""),
+        complaints=body.get("complaints", ""),
+        current_diagnosis=body.get("diagnosis", ""),
+        current_medicines=body.get("medicines", ""),
+        current_investigations=body.get("investigations", ""),
+    )
+
+    result = call_groq([prompt], temp=0.3, max_tokens=3000)
+    if not result:
+        return {"ok": False, "error": "Clinical support generation failed."}
+
+    return {"ok": True, "support": result}
+
+
 @router.post("/api/drug-review", include_in_schema=False)
 async def api_drug_review(request: Request):
     sess = _require_opd_session(request)

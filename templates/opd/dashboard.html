@@ -262,6 +262,39 @@
         ::-webkit-scrollbar-track { background: transparent; }
         ::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.15); border-radius: 3px; }
 
+        /* Clinical Decision Support Panel */
+        .clinical-support {
+            border: 2px dashed #f59e0b !important;
+            background: linear-gradient(135deg, rgba(245,158,11,0.03), rgba(217,119,6,0.02)) !important;
+            border-radius: 12px;
+            padding: 16px 20px;
+            margin-top: 16px;
+        }
+        .clinical-support .cs-header {
+            display: flex; align-items: center; gap: 8px; margin-bottom: 12px;
+            font-weight: 700; color: #d97706; font-size: 14px;
+        }
+        .clinical-support .cs-warning {
+            font-size: 10px; color: #92400e; background: rgba(245,158,11,0.12);
+            padding: 3px 8px; border-radius: 4px; font-weight: 600;
+        }
+        .clinical-support .cs-section {
+            margin-bottom: 14px; padding: 10px 12px;
+            background: rgba(0,0,0,0.02); border-radius: 8px;
+            border-left: 3px solid #f59e0b;
+        }
+        .clinical-support .cs-section h4 {
+            margin: 0 0 6px 0; font-size: 13px; color: #92400e;
+        }
+        .clinical-support .cs-section pre {
+            margin: 0; white-space: pre-wrap; font-size: 12px; line-height: 1.6;
+            font-family: 'Segoe UI', system-ui, sans-serif; color: var(--text);
+        }
+        .clinical-support .cs-loading {
+            display: flex; align-items: center; gap: 8px; color: #d97706;
+            font-size: 13px; padding: 12px 0;
+        }
+
         /* Specialty checkboxes */
         .spec-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 8px; }
         .spec-item {
@@ -565,6 +598,15 @@
                         </div>
                     </div>
                     <textarea id="rx-output" rows="12" style="font-family:monospace;font-size:13px;"></textarea>
+
+                    <!-- Clinical Decision Support Panel -->
+                    <div id="clinical-support-section" style="display:none;" class="clinical-support">
+                        <div class="cs-header">
+                            🧠 Clinical Decision Support
+                            <span class="cs-warning">⚠️ DOCTOR REFERENCE — Not in Prescription / PDF</span>
+                        </div>
+                        <div id="clinical-support-content"></div>
+                    </div>
                 </div>
             </div>
 
@@ -1320,6 +1362,8 @@ function generateRx() {
             const modeText = res.mode === 'suggest' ? '💡 AI Suggestions (review before using)' : '✅ AI Assistant output';
             document.getElementById('rx-status').textContent = modeText;
             showToast('Prescription generated!');
+            // Load clinical decision support
+            loadClinicalSupport();
         } else {
             document.getElementById('rx-status').textContent = '❌ ' + (res.error || 'Generation failed');
             showToast(res.error || 'Generation failed', 'error');
@@ -1355,6 +1399,7 @@ function optimizeRx() {
             document.getElementById('rx-output').value = res.prescription;
             document.getElementById('rx-status').textContent = '✅ Rx Optimized — crisp numbered format';
             showToast('Prescription optimized!');
+            loadClinicalSupport();
         } else {
             document.getElementById('rx-status').textContent = '❌ ' + (res.error || 'Optimization failed');
             showToast(res.error || 'Optimization failed', 'error');
@@ -1363,6 +1408,71 @@ function optimizeRx() {
     .catch(e => {
         document.getElementById('rx-status').textContent = '❌ Error: ' + e;
         showToast('Network error', 'error');
+    });
+}
+
+// ════════════════════════════════════════════════════════════════
+// CLINICAL DECISION SUPPORT
+// ════════════════════════════════════════════════════════════════
+function loadClinicalSupport() {
+    const rx = document.getElementById('rx-output').value.trim();
+    if (!rx) return;
+
+    const panel = document.getElementById('clinical-support-section');
+    const content = document.getElementById('clinical-support-content');
+    panel.style.display = 'block';
+    content.innerHTML = '<div class="cs-loading"><span class="spinner"></span> Generating clinical decision support...</div>';
+
+    // Extract diagnosis and medicines from Rx text
+    const diagnosisMatch = rx.match(/Diagnosis:?\n?([\s\S]*?)(?=\n(?:Treatment|Management|Drugs|Investigations|Advice|Follow-up|$))/i);
+    const diag = diagnosisMatch ? diagnosisMatch[1].trim() : '';
+
+    const medsMatch = rx.match(/(?:Treatment|Drugs|Management Plan):?\n?([\s\S]*?)(?=\n(?:Investigations|Advice|Follow-up|$))/i);
+    const meds = medsMatch ? medsMatch[1].trim() : '';
+
+    const invMatch = rx.match(/Investigations?:?\n?([\s\S]*?)(?=\n(?:Advice|Follow-up|$))/i);
+    const invs = invMatch ? invMatch[1].trim() : document.getElementById('pt-investigations').value.trim();
+
+    fetch('/opd/api/clinical-support', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+            patient_name: document.getElementById('pt-name').value.trim(),
+            vitals: document.getElementById('pt-vitals').value.trim(),
+            complaints: document.getElementById('pt-complaints').value.trim(),
+            diagnosis: diag,
+            medicines: meds || document.getElementById('pt-medicines').value.trim(),
+            investigations: invs,
+        }),
+    })
+    .then(r => r.json())
+    .then(res => {
+        if (res.ok && res.support) {
+            // Parse sections and render them
+            const text = res.support;
+            const sections = [
+                { emoji: '🔀', title: 'Differential Diagnosis', key: 'DIFFERENTIAL DIAGNOSIS' },
+                { emoji: '🔬', title: 'Missed / Suggested Investigations', key: 'MISSED' },
+                { emoji: '📋', title: 'Diagnostic Algorithm', key: 'DIAGNOSTIC ALGORITHM' },
+                { emoji: '🏥', title: 'Suggested Specialty Referral', key: 'SPECIALTY REFERRAL' },
+            ];
+
+            let html = '';
+            for (const sec of sections) {
+                const re = new RegExp(`${sec.key}[\\s\\S]*?(?=\\n[━🔀🔬📋🏥]|$)`, 'i');
+                const match = text.match(re);
+                if (match) {
+                    html += `<div class="cs-section"><h4>${sec.emoji} ${sec.title}</h4><pre>${match[0].replace(/^[━🔀🔬📋🏥\s]+/,'').trim()}</pre></div>`;
+                }
+            }
+            // Fallback: show raw if no sections matched
+            content.innerHTML = html || `<div class="cs-section"><pre>${text}</pre></div>`;
+        } else {
+            content.innerHTML = '<div class="text-muted" style="font-size:12px;">⚠️ Could not load clinical support. Try again.</div>';
+        }
+    })
+    .catch(e => {
+        content.innerHTML = '<div class="text-muted" style="font-size:12px;">⚠️ Error loading clinical support.</div>';
     });
 }
 
