@@ -804,7 +804,7 @@ async def api_generate_rx(request: Request):
         )
 
     # Call Groq
-    groq_key = settings.get("groq_api_key") or os.getenv("GROQ_API_KEY", "")
+    groq_key = os.getenv("GROQ_API_KEY") or settings.get("groq_api_key") or ""
     if not groq_key:
         return {"ok": False, "error": "Groq API key not configured. Set in Settings."}
 
@@ -857,7 +857,7 @@ async def api_generate_followup_rx(request: Request):
         past_advice=past_advice,
     )
 
-    groq_key = settings.get("groq_api_key") or os.getenv("GROQ_API_KEY", "")
+    groq_key = os.getenv("GROQ_API_KEY") or settings.get("groq_api_key") or ""
     if not groq_key:
         return {"ok": False, "error": "Groq API key not configured. Set in Settings."}
 
@@ -886,7 +886,7 @@ async def api_optimize_rx(request: Request):
         return {"ok": False, "error": "No prescription to optimize"}
 
     settings = await _get_settings(doctor_id)
-    groq_key = settings.get("groq_api_key") or os.getenv("GROQ_API_KEY", "")
+    groq_key = os.getenv("GROQ_API_KEY") or settings.get("groq_api_key") or ""
     if not groq_key:
         return {"ok": False, "error": "Groq API key not configured. Set in Settings."}
     os.environ["GROQ_API_KEY"] = groq_key
@@ -920,7 +920,7 @@ async def api_clinical_support(request: Request):
         return {"ok": False, "error": "Invalid JSON"}
 
     settings = await _get_settings(doctor_id)
-    groq_key = settings.get("groq_api_key") or os.getenv("GROQ_API_KEY", "")
+    groq_key = os.getenv("GROQ_API_KEY") or settings.get("groq_api_key") or ""
     if not groq_key:
         return {"ok": False, "error": "Groq API key not configured."}
     os.environ["GROQ_API_KEY"] = groq_key
@@ -957,7 +957,7 @@ async def api_drug_review(request: Request):
     prescription = body.get("prescription", "")
 
     settings = await _get_settings(sess["doctor_id"])
-    groq_key = settings.get("groq_api_key") or os.getenv("GROQ_API_KEY", "")
+    groq_key = os.getenv("GROQ_API_KEY") or settings.get("groq_api_key") or ""
     if not groq_key:
         return {"ok": False, "error": "Groq API key not configured."}
     os.environ["GROQ_API_KEY"] = groq_key
@@ -974,7 +974,7 @@ async def api_transcribe(request: Request):
     doctor_id = sess["doctor_id"]
 
     settings = await _get_settings(doctor_id)
-    groq_key = settings.get("groq_api_key") or os.getenv("GROQ_API_KEY", "")
+    groq_key = os.getenv("GROQ_API_KEY") or settings.get("groq_api_key") or ""
     if not groq_key:
         return {"ok": False, "error": "Groq API key not configured."}
     os.environ["GROQ_API_KEY"] = groq_key
@@ -1013,7 +1013,7 @@ async def api_cme(request: Request):
         return {"ok": False, "error": "Topic required."}
 
     settings = await _get_settings(sess["doctor_id"])
-    groq_key = settings.get("groq_api_key") or os.getenv("GROQ_API_KEY", "")
+    groq_key = os.getenv("GROQ_API_KEY") or settings.get("groq_api_key") or ""
     if not groq_key:
         return {"ok": False, "error": "Groq API key not configured."}
     os.environ["GROQ_API_KEY"] = groq_key
@@ -1412,7 +1412,7 @@ async def api_specialty_upgrade(request: Request):
         return {"ok": False, "error": "Patient name, prescription, and specialties required."}
 
     settings = await _get_settings(doctor_id)
-    groq_key = settings.get("groq_api_key") or os.getenv("GROQ_API_KEY", "")
+    groq_key = os.getenv("GROQ_API_KEY") or settings.get("groq_api_key") or ""
     if not groq_key:
         return {"ok": False, "error": "Groq API key not configured."}
     os.environ["GROQ_API_KEY"] = groq_key
@@ -1664,7 +1664,7 @@ async def api_scan_ai_read(request: Request):
         return {"ok": False, "error": "No image data"}
 
     settings = await _get_settings(sess["doctor_id"])
-    groq_key = settings.get("groq_api_key") or os.getenv("GROQ_API_KEY", "")
+    groq_key = os.getenv("GROQ_API_KEY") or settings.get("groq_api_key") or ""
     if not groq_key:
         return {"ok": False, "error": "Groq API key not configured."}
     os.environ["GROQ_API_KEY"] = groq_key
@@ -1978,7 +1978,7 @@ async def api_research(request: Request):
                 question=question,
             )
 
-            groq_key = settings.get("groq_api_key") or os.getenv("GROQ_API_KEY", "")
+            groq_key = os.getenv("GROQ_API_KEY") or settings.get("groq_api_key") or ""
             if not groq_key:
                 return {"ok": False, "error": "Groq API key not configured."}
             os.environ["GROQ_API_KEY"] = groq_key
