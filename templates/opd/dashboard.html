@@ -1448,24 +1448,40 @@ function loadClinicalSupport() {
     .then(r => r.json())
     .then(res => {
         if (res.ok && res.support) {
-            // Parse sections and render them
-            const text = res.support;
-            const sections = [
-                { emoji: '🔀', title: 'Differential Diagnosis', key: 'DIFFERENTIAL DIAGNOSIS' },
-                { emoji: '🔬', title: 'Missed / Suggested Investigations', key: 'MISSED' },
-                { emoji: '📋', title: 'Diagnostic Algorithm', key: 'DIAGNOSTIC ALGORITHM' },
-                { emoji: '🏥', title: 'Suggested Specialty Referral', key: 'SPECIALTY REFERRAL' },
-            ];
-
+            // Clean and display the AI-formatted support text
+            let text = res.support
+                .replace(/━━+/g, '')  // Remove box-drawing dividers
+                .replace(/^\s*\n/gm, '')  // Remove empty lines
+                .trim();
+            
+            // Split by emoji section headers and render as cards
+            const sectionEmojis = ['🔀', '🔬', '📋', '🏥'];
             let html = '';
-            for (const sec of sections) {
-                const re = new RegExp(`${sec.key}[\\s\\S]*?(?=\\n[━🔀🔬📋🏥]|$)`, 'i');
-                const match = text.match(re);
-                if (match) {
-                    html += `<div class="cs-section"><h4>${sec.emoji} ${sec.title}</h4><pre>${match[0].replace(/^[━🔀🔬📋🏥\s]+/,'').trim()}</pre></div>`;
+            let remaining = text;
+            
+            for (let i = 0; i < sectionEmojis.length; i++) {
+                const emoji = sectionEmojis[i];
+                const nextEmoji = sectionEmojis[i + 1];
+                const startIdx = remaining.indexOf(emoji);
+                if (startIdx === -1) continue;
+                
+                let chunk = remaining.substring(startIdx);
+                if (nextEmoji) {
+                    const endIdx = chunk.indexOf(nextEmoji);
+                    if (endIdx !== -1) chunk = chunk.substring(0, endIdx);
+                }
+                remaining = remaining.substring(startIdx + chunk.length);
+                
+                // First line is the title, rest is content
+                const lines = chunk.split('\n');
+                const title = lines[0].replace(emoji, '').trim();
+                const content = lines.slice(1).join('\n').trim();
+                
+                if (content) {
+                    html += `<div class="cs-section"><h4>${emoji} ${title}</h4><pre>${content}</pre></div>`;
                 }
             }
-            // Fallback: show raw if no sections matched
+            
             content.innerHTML = html || `<div class="cs-section"><pre>${text}</pre></div>`;
         } else {
             content.innerHTML = '<div class="text-muted" style="font-size:12px;">⚠️ Could not load clinical support. Try again.</div>';
