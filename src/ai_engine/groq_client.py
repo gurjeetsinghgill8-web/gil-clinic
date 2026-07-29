@@ -62,18 +62,36 @@ def _get_api_key() -> str:
     except Exception:
         pass
 
-    # Fallback 3: Default key (for cloud / Railway deployments)
-    try:
-        _k1 = "gsk_1b8e4X6B8GiaJSnb"
-        _k2 = "Dr4pWGdyb3FYZbMR"
-        _k3 = "S34tZHetWTcdNjBM3UQl"
-        fallback_key = _k1 + _k2 + _k3
-        os.environ["GROQ_API_KEY"] = fallback_key
-        return fallback_key
-    except Exception:
-        pass
-
+    # Fallback 3: No valid key found
     return ""
+
+
+# ════════════════════════════════════════════════════════════════════════════
+# RATE LIMIT GUARD — prevents hitting Groq free tier limits (30 RPM)
+# ════════════════════════════════════════════════════════════════════════════
+import random as _random
+_request_times: List[float] = []  # Timestamps of recent requests
+_MAX_RPM = 15  # Very conservative for free tier (actual limit ~30 but throttles aggressively)
+_WINDOW_SEC = 60  # Sliding window in seconds
+_MIN_GAP_SEC = 2.0  # Minimum 2s gap between requests to avoid burst rate limits
+
+def _rate_limit_guard():
+    """Enforce rate limit: if too many requests in last 60s, sleep until safe."""
+    now = time.time()
+    # Clean old timestamps
+    while _request_times and _request_times[0] < now - _WINDOW_SEC:
+        _request_times.pop(0)
+    # If at limit, wait until oldest request expires
+    if len(_request_times) >= _MAX_RPM:
+        wait = _request_times[0] - (now - _WINDOW_SEC) + 0.5
+        if wait > 0:
+            logger.info("Rate guard: %d requests in window, sleeping %.1fs", len(_request_times), wait)
+            time.sleep(wait)
+            return _rate_limit_guard()  # Re-check after sleep
+    # Enforce minimum gap between requests
+    if _request_times and (now - _request_times[-1]) < _MIN_GAP_SEC:
+        time.sleep(_MIN_GAP_SEC - (now - _request_times[-1]))
+    _request_times.append(time.time())
 
 
 # Eagerly load API key on module import
@@ -155,28 +173,42 @@ def call_groq_with_error(messages: list, model: str = None, temp: float = 0.3, m
         "max_tokens": max_tokens,
     }
 
+    _rate_limit_guard()  # Enforce RPM limit before each call
+
     last_error = ""
     for attempt in range(3):
         try:
             resp = requests.post(url, headers=headers, json=payload, timeout=90)
             if resp.status_code == 429:
-                logger.warning("Rate limit hit, retry %d/2 after 2s", attempt + 1)
-                time.sleep(2)
+                # Exponential backoff with jitter: 2s, 4s, 8s + random
+                wait = (2 ** (attempt + 1)) + _random.uniform(0, 1)
+                last_error = f"Rate limited (attempt {attempt+1}/3, waiting {wait:.1f}s)"
+                logger.warning(last_error)
+                time.sleep(wait)
                 continue
+            if resp.status_code == 401:
+                return "", "❌ Invalid Groq API key. Please update key in Settings or secret.txt."
+            if resp.status_code == 403:
+                return "", "❌ Groq API access denied. Check billing/credits at console.groq.com."
             if not resp.ok:
-                last_error = f"HTTP {resp.status_code}: {resp.text[:300]}"
+                last_error = f"HTTP {resp.status_code}: {resp.text[:200]}"
                 logger.error("Groq error: %s", last_error)
-                break
+                time.sleep(1)
+                continue
             data = resp.json()
             _update_token_usage(data.get("usage", {}))
             content = data["choices"][0]["message"]["content"]
             return sanitize_output(content), ""
+        except requests.exceptions.Timeout:
+            last_error = "Request timed out (90s). Groq servers may be slow."
+            logger.warning("Groq timeout (attempt %d)", attempt + 1)
+            time.sleep(2)
         except requests.exceptions.RequestException as e:
             last_error = f"Network error: {str(e)}"
             logger.error("Groq request error (attempt %d): %s", attempt + 1, e)
-            time.sleep(1)
+            time.sleep(2 ** (attempt + 1))
 
-    return "", last_error or "Groq API call failed after retries."
+    return "", last_error or "Groq API failed after 3 attempts. Please try again."
 
 
 def call_groq(messages: list, model: str = None, temp: float = 0.3, max_tokens: int = 4000) -> str:
