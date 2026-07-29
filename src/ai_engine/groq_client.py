@@ -1,5 +1,5 @@
 """
-groq_client — Groq API: chat completions, vision, audio transcription, token tracking.
+groq_client — Dual AI Provider: Groq (primary) + DeepSeek (fallback).
 All AI calls go through this module. No business logic here, just API wrappers.
 """
 
@@ -17,16 +17,42 @@ import requests
 logger = logging.getLogger(__name__)
 
 GROQ_BASE_URL: str = "https://api.groq.com/openai/v1"
+DEEPSEEK_BASE_URL: str = "https://api.deepseek.com/v1"
 _token_tracker: Dict[str, int] = {"prompt_tokens": 0, "completion_tokens": 0}
 
 # Default models (overridable via env or per-call)
 DEFAULT_TEXT_MODEL = os.getenv("GROQ_TEXT_MODEL", "llama-3.3-70b-versatile")
 DEFAULT_VISION_MODEL = os.getenv("GROQ_VISION_MODEL", "meta-llama/llama-4-scout-17b-16e-instruct")
 DEFAULT_WHISPER_MODEL = os.getenv("GROQ_WHISPER_MODEL", "whisper-large-v3")
+DEEPSEEK_MODEL = os.getenv("DEEPSEEK_MODEL", "deepseek-chat")
+
+
+def _read_keys_from_file(filepath) -> dict:
+    """Read GROQ_KEY= and DEEPSEEK_KEY= from a file. Returns {groq: str, deepseek: str}."""
+    keys = {"groq": "", "deepseek": ""}
+    try:
+        if filepath.exists():
+            for line in filepath.read_text().splitlines():
+                line = line.strip()
+                if line.startswith("#") or not line:
+                    continue
+                if line.startswith("GROQ_KEY="):
+                    keys["groq"] = line.split("=", 1)[1].strip().strip('"').strip("'")
+                elif line.startswith("DEEPSEEK_KEY="):
+                    keys["deepseek"] = line.split("=", 1)[1].strip().strip('"').strip("'")
+                elif line.startswith("sk-") or line.startswith("gsk_"):
+                    # Unlabeled key — guess by prefix
+                    if line.startswith("gsk_"):
+                        keys["groq"] = line
+                    elif line.startswith("sk-"):
+                        keys["deepseek"] = line
+    except Exception:
+        pass
+    return keys
 
 
 def _get_api_key() -> str:
-    """Get Groq API key from env var, secret.txt, .env, or default fallback."""
+    """Get Groq API key from env var, secret.txt, or .env."""
     key = os.getenv("GROQ_API_KEY", "")
     if key and len(key.strip()) > 10:
         return key.strip()
@@ -34,69 +60,75 @@ def _get_api_key() -> str:
     from pathlib import Path
     root_dir = Path(__file__).parents[2]
 
-    # Fallback 1: secret.txt in project root
-    try:
-        secret_file = root_dir / "secret.txt"
-        if secret_file.exists():
-            for line in secret_file.read_text().splitlines():
-                line = line.strip()
-                if not line or line.startswith("#"):
-                    continue
-                if len(line) > 10:
-                    os.environ["GROQ_API_KEY"] = line
-                    return line
-    except Exception:
-        pass
+    # Check secret.txt
+    keys = _read_keys_from_file(root_dir / "secret.txt")
+    if keys["groq"] and len(keys["groq"]) > 10:
+        os.environ["GROQ_API_KEY"] = keys["groq"]
+        return keys["groq"]
 
-    # Fallback 2: .env in project root
-    try:
-        env_file = root_dir / ".env"
-        if env_file.exists():
-            for line in env_file.read_text().splitlines():
-                line = line.strip()
-                if line.startswith("GROQ_API_KEY="):
-                    val = line.split("=", 1)[1].strip().strip('"').strip("'")
-                    if val and len(val) > 10:
-                        os.environ["GROQ_API_KEY"] = val
-                        return val
-    except Exception:
-        pass
+    # Check .env
+    keys = _read_keys_from_file(root_dir / ".env")
+    if keys["groq"] and len(keys["groq"]) > 10:
+        os.environ["GROQ_API_KEY"] = keys["groq"]
+        return keys["groq"]
 
-    # Fallback 3: No valid key found
+    return ""
+
+
+def _get_deepseek_key() -> str:
+    """Get DeepSeek API key from env var, secret.txt, or .env."""
+    key = os.getenv("DEEPSEEK_KEY", "")
+    if key and len(key.strip()) > 10:
+        return key.strip()
+
+    from pathlib import Path
+    root_dir = Path(__file__).parents[2]
+
+    # Check secret.txt
+    keys = _read_keys_from_file(root_dir / "secret.txt")
+    if keys["deepseek"] and len(keys["deepseek"]) > 10:
+        os.environ["DEEPSEEK_KEY"] = keys["deepseek"]
+        return keys["deepseek"]
+
+    # Check .env
+    keys = _read_keys_from_file(root_dir / ".env")
+    if keys["deepseek"] and len(keys["deepseek"]) > 10:
+        os.environ["DEEPSEEK_KEY"] = keys["deepseek"]
+        return keys["deepseek"]
+
     return ""
 
 
 # ════════════════════════════════════════════════════════════════════════════
-# RATE LIMIT GUARD — prevents hitting Groq free tier limits (30 RPM)
+# RATE LIMIT GUARD — shared across both providers
 # ════════════════════════════════════════════════════════════════════════════
 import random as _random
-_request_times: List[float] = []  # Timestamps of recent requests
-_MAX_RPM = 15  # Very conservative for free tier (actual limit ~30 but throttles aggressively)
-_WINDOW_SEC = 60  # Sliding window in seconds
-_MIN_GAP_SEC = 2.0  # Minimum 2s gap between requests to avoid burst rate limits
+_request_times: List[float] = []
+_MAX_RPM = 15
+_WINDOW_SEC = 60
+_MIN_GAP_SEC = 2.0
 
 def _rate_limit_guard():
     """Enforce rate limit: if too many requests in last 60s, sleep until safe."""
     now = time.time()
-    # Clean old timestamps
     while _request_times and _request_times[0] < now - _WINDOW_SEC:
         _request_times.pop(0)
-    # If at limit, wait until oldest request expires
     if len(_request_times) >= _MAX_RPM:
         wait = _request_times[0] - (now - _WINDOW_SEC) + 0.5
         if wait > 0:
             logger.info("Rate guard: %d requests in window, sleeping %.1fs", len(_request_times), wait)
             time.sleep(wait)
-            return _rate_limit_guard()  # Re-check after sleep
-    # Enforce minimum gap between requests
+            return _rate_limit_guard()
     if _request_times and (now - _request_times[-1]) < _MIN_GAP_SEC:
         time.sleep(_MIN_GAP_SEC - (now - _request_times[-1]))
     _request_times.append(time.time())
 
 
-# Eagerly load API key on module import
+# Eagerly load keys on module import
 if not os.getenv("GROQ_API_KEY"):
     _get_api_key()
+if not os.getenv("DEEPSEEK_KEY"):
+    _get_deepseek_key()
 
 
 
@@ -125,23 +157,46 @@ def get_token_usage() -> dict:
 
 
 # ════════════════════════════════════════════════════════════════════════════
-# TEXT CHAT COMPLETIONS (for Rx generation, CME, Research, etc.)
+# DUAL-PROVIDER CORE — tries Groq first, falls back to DeepSeek
 # ════════════════════════════════════════════════════════════════════════════
 
-def call_groq_with_error(messages: list, model: str = None, temp: float = 0.3, max_tokens: int = 4000) -> tuple[str, str]:
-    """
-    Groq chat completions — returns tuple of (response_text, error_message).
-    """
-    api_key = _get_api_key()
-    if not api_key:
-        return "", "Groq API key not configured."
-
-    if model is None:
-        model = DEFAULT_TEXT_MODEL
-
-    url = f"{GROQ_BASE_URL}/chat/completions"
+def _call_provider(url: str, api_key: str, model: str, groq_messages: list,
+                   temp: float, max_tokens: int, provider_name: str) -> tuple[str, str]:
+    """Call a single AI provider. Returns (response_text, error_message)."""
     headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
+    payload = {"model": model, "messages": groq_messages, "temperature": temp, "max_tokens": max_tokens}
 
+    for attempt in range(3):
+        try:
+            resp = requests.post(f"{url}/chat/completions", headers=headers, json=payload, timeout=90)
+            if resp.status_code == 429:
+                wait = (2 ** (attempt + 1)) + _random.uniform(0, 1)
+                logger.warning("%s rate limited (attempt %d/3, wait %.1fs)", provider_name, attempt + 1, wait)
+                time.sleep(wait)
+                continue
+            if resp.status_code == 401:
+                return "", f"❌ Invalid {provider_name} API key."
+            if resp.status_code == 403:
+                return "", f"❌ {provider_name} access denied. Check billing/credits."
+            if not resp.ok:
+                logger.error("%s HTTP %d: %s", provider_name, resp.status_code, resp.text[:200])
+                time.sleep(1)
+                continue
+            data = resp.json()
+            _update_token_usage(data.get("usage", {}))
+            return sanitize_output(data["choices"][0]["message"]["content"]), ""
+        except requests.exceptions.Timeout:
+            logger.warning("%s timeout (attempt %d)", provider_name, attempt + 1)
+            time.sleep(2)
+        except requests.exceptions.RequestException as e:
+            logger.error("%s error (attempt %d): %s", provider_name, attempt + 1, e)
+            time.sleep(2 ** (attempt + 1))
+
+    return "", f"{provider_name} failed after 3 attempts."
+
+
+def _build_messages(messages: list) -> list:
+    """Convert mixed text+image list into API-compatible message format."""
     groq_messages = []
     text_items = [item for item in messages if isinstance(item, str)]
     if len(text_items) == 1:
@@ -158,62 +213,54 @@ def call_groq_with_error(messages: list, model: str = None, temp: float = 0.3, m
                 buf = io.BytesIO()
                 item.save(buf, format='JPEG', quality=85)
                 img_b64 = base64.b64encode(buf.getvalue()).decode('utf-8')
-                content = [
-                    {"type": "text", "text": "Analyze this prescription image carefully. Extract patient name, vitals, complaints, medications, and advice."},
+                groq_messages.append({"role": "user", "content": [
+                    {"type": "text", "text": "Analyze this prescription image carefully."},
                     {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{img_b64}"}}
-                ]
-                groq_messages.append({"role": "user", "content": content})
+                ]})
             except Exception as e:
                 logger.error("Image conversion error: %s", e)
+    return groq_messages
 
-    payload = {
-        "model": model,
-        "messages": groq_messages,
-        "temperature": temp,
-        "max_tokens": max_tokens,
-    }
 
-    _rate_limit_guard()  # Enforce RPM limit before each call
+def call_groq_with_error(messages: list, model: str = None, temp: float = 0.3, max_tokens: int = 4000) -> tuple[str, str]:
+    """
+    Dual-provider AI call: tries Groq first, falls back to DeepSeek if rate-limited.
+    Returns tuple of (response_text, error_message).
+    """
+    groq_messages = _build_messages(messages)
+    _rate_limit_guard()
 
-    last_error = ""
-    for attempt in range(3):
-        try:
-            resp = requests.post(url, headers=headers, json=payload, timeout=90)
-            if resp.status_code == 429:
-                # Exponential backoff with jitter: 2s, 4s, 8s + random
-                wait = (2 ** (attempt + 1)) + _random.uniform(0, 1)
-                last_error = f"Rate limited (attempt {attempt+1}/3, waiting {wait:.1f}s)"
-                logger.warning(last_error)
-                time.sleep(wait)
-                continue
-            if resp.status_code == 401:
-                return "", "❌ Invalid Groq API key. Please update key in Settings or secret.txt."
-            if resp.status_code == 403:
-                return "", "❌ Groq API access denied. Check billing/credits at console.groq.com."
-            if not resp.ok:
-                last_error = f"HTTP {resp.status_code}: {resp.text[:200]}"
-                logger.error("Groq error: %s", last_error)
-                time.sleep(1)
-                continue
-            data = resp.json()
-            _update_token_usage(data.get("usage", {}))
-            content = data["choices"][0]["message"]["content"]
-            return sanitize_output(content), ""
-        except requests.exceptions.Timeout:
-            last_error = "Request timed out (90s). Groq servers may be slow."
-            logger.warning("Groq timeout (attempt %d)", attempt + 1)
-            time.sleep(2)
-        except requests.exceptions.RequestException as e:
-            last_error = f"Network error: {str(e)}"
-            logger.error("Groq request error (attempt %d): %s", attempt + 1, e)
-            time.sleep(2 ** (attempt + 1))
+    # ── Try Groq ──
+    groq_key = _get_api_key()
+    if groq_key:
+        if model is None:
+            model = DEFAULT_TEXT_MODEL
+        text, err = _call_provider(GROQ_BASE_URL, groq_key, model, groq_messages, temp, max_tokens, "Groq")
+        if text:
+            return text, ""
+        # If Groq failed with rate limit (not auth error), try DeepSeek
+        if "Invalid" not in err and "access denied" not in err:
+            logger.info("Groq unavailable (%s), trying DeepSeek fallback...", err[:60])
 
-    return "", last_error or "Groq API failed after 3 attempts. Please try again."
+    # ── Fallback: DeepSeek ──
+    ds_key = _get_deepseek_key()
+    if ds_key:
+        ds_model = DEEPSEEK_MODEL if (model is None or model == DEFAULT_TEXT_MODEL) else model
+        # DeepSeek doesn't support some Groq model names, use deepseek-chat
+        if "llama" in ds_model.lower() or "meta" in ds_model.lower():
+            ds_model = DEEPSEEK_MODEL
+        text, err = _call_provider(DEEPSEEK_BASE_URL, ds_key, ds_model, groq_messages, temp, max_tokens, "DeepSeek")
+        if text:
+            return text, ""
+        return "", err or "DeepSeek fallback also failed."
+
+    return "", "No AI provider available. Configure GROQ_KEY or DEEPSEEK_KEY in secret.txt."
 
 
 def call_groq(messages: list, model: str = None, temp: float = 0.3, max_tokens: int = 4000) -> str:
     """
-    Groq chat completions — returns assistant's text response (cleaned), or empty string on failure.
+    Dual-provider AI call — returns assistant's text response, or empty string on failure.
+    Tries Groq → DeepSeek automatically.
     """
     text, _ = call_groq_with_error(messages, model=model, temp=temp, max_tokens=max_tokens)
     return text
