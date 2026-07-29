@@ -19,7 +19,7 @@ _REQUIRED_RX_SECTIONS: List[str] = ["Diagnosis", "Drugs", "Advice", "Follow-up"]
 def gp_prompt_assistant(patient_name: str, vitals: str, notes: str,
                          doc_name: str, doc_degree: str = "", doc_hospital: str = "",
                          past_context: str = "", progress_context: str = "",
-                         doctor_medicines: str = "") -> str:
+                         doctor_medicines: str = "", include_investigations: bool = True) -> str:
     """
     AI ASSISTANT MODE (default) — AI does NOT generate drugs/treatment.
     The doctor has already prescribed or will prescribe medicines.
@@ -110,11 +110,50 @@ RULES (Indian OPD context):
 	- NEVER include "Drug Review" or "Check Interactions" section
 	- NEVER add extra commentary
 
-	OUTPUT FORMAT (every drug line starts with 💡 SUGGESTION:):
-	Diagnosis: (numbered list — 1. Dx1, 2. Dx2, etc.)
-	💡 SUGGESTION — Treatment: (numbered list with drug names, doses, frequency, duration)
-	Advice:
-	Follow-up:"""
+		OUTPUT FORMAT (every drug line starts with 💡 SUGGESTION:):
+		Diagnosis: (numbered list — 1. Dx1, 2. Dx2, etc.)
+		💡 SUGGESTION — Treatment: (numbered list with drug names, doses, frequency, duration)
+		Investigations: (comma-separated test names only — NO sentences)
+		Advice:
+		Follow-up:"""
+
+
+# ════════════════════════════════════════════════════════════════════════════
+# OPTIMIZE RX PROMPT — refines existing Rx into crisp numbered format
+# ════════════════════════════════════════════════════════════════════════════
+
+def optimize_prompt(patient_name: str, vitals: str, complaints: str,
+                    current_rx: str, doctor_medicines: str = "",
+                    include_investigations: bool = True) -> str:
+    """Refine Rx into crisp numbered format — removes paragraphs, adds structure."""
+    inv_output = "\nInvestigations:" if include_investigations else ""
+    meds_ctx = f"\nDOCTOR MEDICINES:\n{doctor_medicines}" if doctor_medicines else ""
+    return f"""You are a clinical documentation optimizer. Convert rough prescriptions into CLEAN, CRISP, NUMBERED format.
+
+PATIENT: {patient_name}
+VITALS: {vitals or 'N/A'}
+COMPLAINTS: {complaints or 'N/A'}{meds_ctx}
+
+RAW PRESCRIPTION TO OPTIMIZE:
+{current_rx}
+
+REWRITE AS (numbered only, NO paragraphs):
+Diagnosis:
+1. 
+2. 
+
+Treatment:
+1. [Drug] [Dose] [Freq] x [Duration]
+2. [Drug] [Dose] [Freq] x [Duration]{inv_output}
+
+Advice:
+1. 
+2. 
+
+Follow-up:
+[1 line]
+
+RULES: Numbered format ONLY. NO stories. NO paragraphs. Like a real Rx — crisp, precise, actionable."""
 
 
 # ════════════════════════════════════════════════════════════════════════════
@@ -125,41 +164,118 @@ def specialty_prompt(patient_name: str, vitals: str, current_rx: str,
                      specialty_name: str, specialty_data: dict, custom_name: str = "") -> str:
     """
     System prompt for specialty consultation upgrade.
-    Compares GP Rx with specialist recommendations.
+    Fixed guidelines per specialty, numbered crisp output, sources cited.
+    Guideline-first approach: guidelines → treatment → investigations → advice.
     """
     persona = specialty_data.get("persona", f"Senior {specialty_name} Specialist")
     guidelines = specialty_data.get("guidelines", "Latest clinical guidelines")
+    primary_source = specialty_data.get("primary_source", "Standard clinical guidelines")
     focus = specialty_data.get("focus", specialty_name)
+    indian_brands = specialty_data.get("indian_brands", "")
     display_name = custom_name or specialty_name
+
+    brands_hint = ""
+    if indian_brands:
+        brands_hint = f"\n\nINDIAN BRAND DRUG REFERENCE (prefer these brands):\n{indian_brands}"
 
     return f"""You are {persona}.
 
-You are reviewing a patient who was initially seen by a GP. Your task is to provide a SPECIALIST OPINION.
+TASK: Review a GP prescription and provide a SPECIALIST OPINION following FIXED, authoritative guidelines ONLY. Do NOT generate random advice — every recommendation must be traceable to the specific guidelines listed below.
 
-Patient: {patient_name}
+PATIENT:
+Name: {patient_name}
 Vitals: {vitals or 'Not provided'}
 
 CURRENT GP PRESCRIPTION:
 {current_rx}
 
-CLINICAL GUIDELINES: {guidelines}
-SPECIALTY FOCUS: {focus}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+FIXED GUIDELINES (USE ONLY THESE):
+PRIMARY SOURCE: {primary_source}
+SPECIFIC GUIDELINES: {guidelines}
+SPECIALTY FOCUS: {focus}{brands_hint}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-Provide your specialist prescription and recommendations in plain text (no markdown):
+SYSTEMATIC APPROACH (follow this exact sequence):
 
-{display_name} SPECIALIST PRESCRIPTION:
+STEP 1 — GUIDELINE SELECTION:
+State which specific guideline(s) from the list above apply to this patient's condition. Reference exact guideline names and year.
+
+STEP 2 — DIAGNOSIS REFINEMENT (numbered list):
+1. Primary diagnosis as per guidelines
+2. Secondary/associated conditions
+3. Differential diagnoses to rule out
+
+STEP 3 — TREATMENT (numbered list, each line includes: drug name + dose + frequency + duration):
+1. [Drug Name] [Dose] [Freq] x [Duration] — [Brief reason per guideline]
+2. [Drug Name] [Dose] [Freq] x [Duration] — [Brief reason per guideline]
+CRITICAL: Use Indian brand names from the reference list above. Every drug recommendation must cite which guideline recommends it.
+Include BOTH the generic name and an Indian brand.
+
+STEP 4 — INVESTIGATIONS (numbered list):
+1. Test Name — [Purpose per guideline]
+2. Test Name — [Purpose per guideline]
+Only order tests recommended by the listed guidelines.
+
+STEP 5 — ADVICE & LIFESTYLE (numbered list):
+1. Specific, actionable advice point
+2. Include diet/exercise/self-care relevant to Indian context
+Hindi-English mix is acceptable for patient communication.
+
+STEP 6 — FOLLOW-UP PLAN:
+When to return, what to monitor, red-flag symptoms requiring urgent specialist referral.
+
+STEP 7 — COMPARISON WITH GP Rx:
+ADD: (what the specialist would add to GP Rx)
+MODIFY: (what to change from GP Rx, with specific changes)
+REMOVE: (what to stop, with clinical reason)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SOURCES & CITATIONS:
+List each guideline actually used, with the specific recommendation it supported.
+Format: [Guideline Name, Year] — Used for: [specific recommendation]
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+CRITICAL RULES:
+1. ALL sections MUST use ONLY numbered format (1. 2. 3.) — ABSOLUTELY NO paragraphs or descriptive text
+2. NEVER invent guidelines — use ONLY those listed above in "FIXED GUIDELINES"
+3. Every drug MUST include: generic name + Indian brand + dose + frequency + duration
+4. Be CONCISE — no stories, no lengthy explanations between points
+5. Include SOURCES section at the end listing each guideline actually referenced
+
+OUTPUT FORMAT:
+Guidelines Applied:
+1. [Guideline Name, Year]
+
 Diagnosis:
-Drugs: (specialist-recommended medications with Indian brand alternatives)
-Advice: (specialist-specific lifestyle/diet modifications)
+1. [Primary Dx]
+2. [Secondary Dx]
+
+Treatment:
+1. [Generic] (Brand) [Dose] [Freq] x [Duration] — [Guideline: X]
+2. ...
+
+Investigations:
+1. [Test] — [Purpose]
+2. ...
+
+Advice:
+1. [Point]
+2. ...
+
 Follow-up:
-Investigations needed:
+[Timeline + monitoring]
 
-COMPARISON WITH GP Rx:
-- What would you ADD to the GP prescription?
-- What would you CHANGE from the GP prescription?
-- What would you REMOVE from the GP prescription?
+Comparison with GP Rx:
+ADD: 
+• [Item]
+MODIFY:
+• [Item with specific change]
+REMOVE:
+• [Item with reason]
 
-**EVIDENCE BASE:** (cite key studies/guidelines supporting your recommendations)
+Sources:
+• [Guideline Name, Year] — Used for: [specific recommendation]
 """
 
 

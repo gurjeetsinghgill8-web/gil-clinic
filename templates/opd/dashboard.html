@@ -266,16 +266,24 @@
         .spec-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 8px; }
         .spec-item {
             display: flex; align-items: center; gap: 8px;
-            padding: 8px 12px;
+            padding: 10px 14px;
             background: rgba(0,0,0,0.02);
-            border: 1px solid var(--border);
-            border-radius: 8px;
+            border: 2px solid var(--border);
+            border-radius: 10px;
             cursor: pointer;
-            transition: all 0.1s;
+            transition: all 0.15s;
+            user-select: none;
         }
-        .spec-item:hover { background: rgba(59,130,246,0.08); }
-        .spec-item input { width: auto; }
-        .spec-item label { margin: 0; cursor: pointer; }
+        .spec-item:hover { background: rgba(59,130,246,0.06); border-color: rgba(59,130,246,0.3); }
+        .spec-item.selected { background: rgba(59,130,246,0.12); border-color: var(--primary); box-shadow: 0 0 0 2px rgba(59,130,246,0.15); }
+        .spec-item input { display: none; }
+        .spec-item label { margin: 0; cursor: pointer; font-weight: 500; pointer-events: none; }
+        .spec-item .spec-check { 
+            width: 20px; height: 20px; border-radius: 4px; border: 2px solid #ccc;
+            display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+            font-size: 12px; transition: all 0.15s;
+        }
+        .spec-item.selected .spec-check { background: var(--primary); border-color: var(--primary); color: #fff; }
 
         /* ── Patient Progress Banner ── */
         .progress-banner {
@@ -519,6 +527,7 @@
 
                     <div class="flex gap-md mt-sm">
                         <button class="btn btn-primary" onclick="generateRx()">🤖 AI Generate Prescription</button>
+                        <button class="btn btn-warning" onclick="optimizeRx()" id="optimize-btn" style="display:none;background:linear-gradient(135deg,#f59e0b,#d97706);color:#fff;">🔄 Optimize Rx</button>
                         <button class="btn btn-success" onclick="saveRx()">💾 Save</button>
                         <button class="btn btn-ghost" onclick="previewPdf()">📄 PDF Preview</button>
                     </div>
@@ -526,6 +535,10 @@
                         <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px;">
                             <input type="checkbox" id="ai-suggest-drugs" style="width:auto;">
                             🤖 Allow AI to suggest drug changes? <span class="text-muted" style="font-size:11px;">(Default: AI assists only)</span>
+                        </label>
+                        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px;">
+                            <input type="checkbox" id="ai-include-investigations" checked style="width:auto;">
+                            🔬 Include Investigations section <span class="text-muted" style="font-size:11px;">(Uncheck to skip lab tests)</span>
                         </label>
                     </div>
                     <div class="mt-sm text-muted text-sm" id="rx-status"></div>
@@ -649,24 +662,24 @@
                             <button class="btn btn-sm btn-ghost" onclick="clearAllSpecs()">❌ Clear All</button>
                         </div>
                         <div class="spec-grid">
-                            <div class="spec-item"><input type="checkbox" class="spec-cb" value="❤️ Cardiology"><label>❤️ Cardiology</label></div>
-                            <div class="spec-item"><input type="checkbox" class="spec-cb" value="🦴 Orthopedics"><label>🦴 Orthopedics</label></div>
-                            <div class="spec-item"><input type="checkbox" class="spec-cb" value="🫁 Pulmonology"><label>🫁 Pulmonology</label></div>
-                            <div class="spec-item"><input type="checkbox" class="spec-cb" value="👶 Pediatrics"><label>👶 Pediatrics</label></div>
-                            <div class="spec-item"><input type="checkbox" class="spec-cb" value="🩸 Diabetology"><label>🩸 Diabetology</label></div>
-                            <div class="spec-item"><input type="checkbox" class="spec-cb" value="🧠 Neurology"><label>🧠 Neurology</label></div>
-                            <div class="spec-item"><input type="checkbox" class="spec-cb" value="👩‍⚕️ Gynecology"><label>👩‍⚕️ Gynecology</label></div>
-                            <div class="spec-item"><input type="checkbox" class="spec-cb" value="👁️ Ophthalmology"><label>👁️ Ophthalmology</label></div>
-                            <div class="spec-item"><input type="checkbox" class="spec-cb" value="👂 ENT"><label>👂 ENT</label></div>
-                            <div class="spec-item"><input type="checkbox" class="spec-cb" value="🩺 Gastroenterology"><label>🩺 Gastroenterology</label></div>
-                            <div class="spec-item"><input type="checkbox" class="spec-cb" value="🧬 Dermatology"><label>🧬 Dermatology</label></div>
-                            <div class="spec-item"><input type="checkbox" class="spec-cb" value="🧪 Endocrinology"><label>🧪 Endocrinology</label></div>
-                            <div class="spec-item"><input type="checkbox" class="spec-cb" value="🫀 Rheumatology"><label>🫀 Rheumatology</label></div>
-                            <div class="spec-item"><input type="checkbox" class="spec-cb" value="🧠 Psychiatry"><label>🧠 Psychiatry</label></div>
-                            <div class="spec-item"><input type="checkbox" class="spec-cb" value="🩺 Urology"><label>🩺 Urology</label></div>
-                            <div class="spec-item"><input type="checkbox" class="spec-cb" value="🩺 Nephrology"><label>🩺 Nephrology</label></div>
-                            <div class="spec-item"><input type="checkbox" class="spec-cb" value="🩺 Oncology"><label>🩺 Oncology</label></div>
-                            <div class="spec-item"><input type="checkbox" class="spec-cb" value="🩺 General Surgery"><label>🩺 General Surgery</label></div>
+                            <div class="spec-item" onclick="toggleSpec(this)"><span class="spec-check">✓</span><input type="checkbox" class="spec-cb" value="❤️ Cardiology"><label>❤️ Cardiology</label></div>
+                            <div class="spec-item" onclick="toggleSpec(this)"><span class="spec-check">✓</span><input type="checkbox" class="spec-cb" value="🦴 Orthopedics"><label>🦴 Orthopedics</label></div>
+                            <div class="spec-item" onclick="toggleSpec(this)"><span class="spec-check">✓</span><input type="checkbox" class="spec-cb" value="🫁 Pulmonology"><label>🫁 Pulmonology</label></div>
+                            <div class="spec-item" onclick="toggleSpec(this)"><span class="spec-check">✓</span><input type="checkbox" class="spec-cb" value="👶 Pediatrics"><label>👶 Pediatrics</label></div>
+                            <div class="spec-item" onclick="toggleSpec(this)"><span class="spec-check">✓</span><input type="checkbox" class="spec-cb" value="🩸 Diabetology"><label>🩸 Diabetology</label></div>
+                            <div class="spec-item" onclick="toggleSpec(this)"><span class="spec-check">✓</span><input type="checkbox" class="spec-cb" value="🧠 Neurology"><label>🧠 Neurology</label></div>
+                            <div class="spec-item" onclick="toggleSpec(this)"><span class="spec-check">✓</span><input type="checkbox" class="spec-cb" value="👩‍⚕️ Gynecology"><label>👩‍⚕️ Gynecology</label></div>
+                            <div class="spec-item" onclick="toggleSpec(this)"><span class="spec-check">✓</span><input type="checkbox" class="spec-cb" value="👁️ Ophthalmology"><label>👁️ Ophthalmology</label></div>
+                            <div class="spec-item" onclick="toggleSpec(this)"><span class="spec-check">✓</span><input type="checkbox" class="spec-cb" value="👂 ENT"><label>👂 ENT</label></div>
+                            <div class="spec-item" onclick="toggleSpec(this)"><span class="spec-check">✓</span><input type="checkbox" class="spec-cb" value="🩺 Gastroenterology"><label>🩺 Gastroenterology</label></div>
+                            <div class="spec-item" onclick="toggleSpec(this)"><span class="spec-check">✓</span><input type="checkbox" class="spec-cb" value="🧬 Dermatology"><label>🧬 Dermatology</label></div>
+                            <div class="spec-item" onclick="toggleSpec(this)"><span class="spec-check">✓</span><input type="checkbox" class="spec-cb" value="🧪 Endocrinology"><label>🧪 Endocrinology</label></div>
+                            <div class="spec-item" onclick="toggleSpec(this)"><span class="spec-check">✓</span><input type="checkbox" class="spec-cb" value="🫀 Rheumatology"><label>🫀 Rheumatology</label></div>
+                            <div class="spec-item" onclick="toggleSpec(this)"><span class="spec-check">✓</span><input type="checkbox" class="spec-cb" value="🧠 Psychiatry"><label>🧠 Psychiatry</label></div>
+                            <div class="spec-item" onclick="toggleSpec(this)"><span class="spec-check">✓</span><input type="checkbox" class="spec-cb" value="🩺 Urology"><label>🩺 Urology</label></div>
+                            <div class="spec-item" onclick="toggleSpec(this)"><span class="spec-check">✓</span><input type="checkbox" class="spec-cb" value="🩺 Nephrology"><label>🩺 Nephrology</label></div>
+                            <div class="spec-item" onclick="toggleSpec(this)"><span class="spec-check">✓</span><input type="checkbox" class="spec-cb" value="🩺 Oncology"><label>🩺 Oncology</label></div>
+                            <div class="spec-item" onclick="toggleSpec(this)"><span class="spec-check">✓</span><input type="checkbox" class="spec-cb" value="🩺 General Surgery"><label>🩺 General Surgery</label></div>
                         </div>
                     </div>
                     <div class="form-group">
@@ -1273,6 +1286,7 @@ function generateRx() {
         past_context: '',
         doctor_medicines: document.getElementById('pt-medicines').value.trim(),
         allow_suggest_drugs: document.getElementById('ai-suggest-drugs').checked,
+        include_investigations: document.getElementById('ai-include-investigations').checked,
     };
     if (!data.patient_name) { showToast('Patient name required', 'error'); return; }
 
@@ -1302,12 +1316,48 @@ function generateRx() {
         if (res.ok) {
             document.getElementById('rx-output').value = res.prescription;
             document.getElementById('rx-output-section').style.display = 'block';
+            document.getElementById('optimize-btn').style.display = 'inline-block';
             const modeText = res.mode === 'suggest' ? '💡 AI Suggestions (review before using)' : '✅ AI Assistant output';
             document.getElementById('rx-status').textContent = modeText;
             showToast('Prescription generated!');
         } else {
             document.getElementById('rx-status').textContent = '❌ ' + (res.error || 'Generation failed');
             showToast(res.error || 'Generation failed', 'error');
+        }
+    })
+    .catch(e => {
+        document.getElementById('rx-status').textContent = '❌ Error: ' + e;
+        showToast('Network error', 'error');
+    });
+}
+
+function optimizeRx() {
+    const currentRx = document.getElementById('rx-output').value.trim();
+    if (!currentRx) { showToast('Generate a prescription first, then optimize', 'error'); return; }
+
+    document.getElementById('rx-status').innerHTML = '<span class="spinner"></span> Optimizing prescription...';
+
+    fetch('/opd/api/optimize-rx', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+            prescription: currentRx,
+            patient_name: document.getElementById('pt-name').value.trim(),
+            vitals: document.getElementById('pt-vitals').value.trim(),
+            complaints: document.getElementById('pt-complaints').value.trim(),
+            doctor_medicines: document.getElementById('pt-medicines').value.trim(),
+            include_investigations: document.getElementById('ai-include-investigations').checked,
+        }),
+    })
+    .then(r => r.json())
+    .then(res => {
+        if (res.ok) {
+            document.getElementById('rx-output').value = res.prescription;
+            document.getElementById('rx-status').textContent = '✅ Rx Optimized — crisp numbered format';
+            showToast('Prescription optimized!');
+        } else {
+            document.getElementById('rx-status').textContent = '❌ ' + (res.error || 'Optimization failed');
+            showToast(res.error || 'Optimization failed', 'error');
         }
     })
     .catch(e => {
@@ -2003,11 +2053,29 @@ function loadPendingScans() {
 // SPECIALTY UPGRADE
 // ════════════════════════════════════════════════════════════════
 	function selectAllSpecs() {
-	    document.querySelectorAll('.spec-cb').forEach(cb => cb.checked = true);
+	    document.querySelectorAll('.spec-item').forEach(item => {
+	        const cb = item.querySelector('.spec-cb');
+	        cb.checked = true;
+	        item.classList.add('selected');
+	    });
 	}
 
 	function clearAllSpecs() {
-	    document.querySelectorAll('.spec-cb').forEach(cb => cb.checked = false);
+	    document.querySelectorAll('.spec-item').forEach(item => {
+	        const cb = item.querySelector('.spec-cb');
+	        cb.checked = false;
+	        item.classList.remove('selected');
+	    });
+	}
+
+	function toggleSpec(item) {
+	    const cb = item.querySelector('.spec-cb');
+	    cb.checked = !cb.checked;
+	    if (cb.checked) {
+	        item.classList.add('selected');
+	    } else {
+	        item.classList.remove('selected');
+	    }
 	}
 
 	function runUpgrade() {

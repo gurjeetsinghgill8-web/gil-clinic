@@ -774,6 +774,7 @@ async def api_generate_rx(request: Request):
     past_context = body.get("past_context", "")
     doctor_medicines = body.get("doctor_medicines", "")
     allow_suggest_drugs = body.get("allow_suggest_drugs", False)
+    include_investigations = body.get("include_investigations", True)
 
     if not patient_name:
         return {"ok": False, "error": "Patient name required"}
@@ -812,6 +813,12 @@ async def api_generate_rx(request: Request):
 
     if not result:
         return {"ok": False, "error": "AI Generation failed. Check API key."}
+
+    # Post-process: strip Investigations section if doctor unchecked the toggle
+    if not include_investigations:
+        import re
+        result = re.sub(r'\n\s*Investigations:.*?(?=\n\s*(?:Advice|Follow-up|$))', '', result, flags=re.DOTALL | re.IGNORECASE)
+        result = re.sub(r'\n\s*Investigations needed:.*?(?=\n\s*(?:Advice|Follow-up|$))', '', result, flags=re.DOTALL | re.IGNORECASE)
 
     return {"ok": True, "prescription": result, "mode": "suggest" if allow_suggest_drugs else "assistant"}
 
@@ -861,6 +868,44 @@ async def api_generate_followup_rx(request: Request):
         return {"ok": False, "error": "AI Generation failed. Check API key."}
 
     return {"ok": True, "prescription": result, "mode": "followup"}
+
+
+@router.post("/api/optimize-rx", include_in_schema=False)
+async def api_optimize_rx(request: Request):
+    """Optimize existing Rx into crisp numbered format — removes paragraphs."""
+    sess = _require_opd_session(request)
+    doctor_id = sess["doctor_id"]
+
+    try:
+        body = await request.json()
+    except Exception:
+        return {"ok": False, "error": "Invalid JSON"}
+
+    prescription = body.get("prescription", "")
+    if not prescription.strip():
+        return {"ok": False, "error": "No prescription to optimize"}
+
+    settings = await _get_settings(doctor_id)
+    groq_key = settings.get("groq_api_key") or os.getenv("GROQ_API_KEY", "")
+    if not groq_key:
+        return {"ok": False, "error": "Groq API key not configured. Set in Settings."}
+    os.environ["GROQ_API_KEY"] = groq_key
+
+    from src.ai_engine.prompts import optimize_prompt
+    prompt = optimize_prompt(
+        patient_name=body.get("patient_name", ""),
+        vitals=body.get("vitals", ""),
+        complaints=body.get("complaints", ""),
+        current_rx=prescription,
+        doctor_medicines=body.get("doctor_medicines", ""),
+        include_investigations=body.get("include_investigations", True),
+    )
+
+    result = call_groq([prompt], temp=0.2, max_tokens=3000)
+    if not result:
+        return {"ok": False, "error": "Optimization failed. Check API key or try again."}
+
+    return {"ok": True, "prescription": result}
 
 
 @router.post("/api/drug-review", include_in_schema=False)
@@ -1185,24 +1230,132 @@ async def api_delete_template(request: Request, name: str = Query(...)):
 # ═══════════════════════════════════════════════════════════════════════════════
 
 SPECIALTIES = {
-    "❤️ Cardiology":          {"persona": "Cardiologist (DM Cardiology)", "guidelines": "ACC/AHA 2024, ESC 2023, CSI", "focus": "HTN, HF, IHD, arrhythmias"},
-    "🦴 Orthopedics":         {"persona": "Orthopedic Surgeon (MS Ortho)", "guidelines": "AAOS, NICE Musculoskeletal, IOA", "focus": "joint pain, OA, back pain"},
-    "🫁 Pulmonology":         {"persona": "Pulmonologist (DM Pulmonology)", "guidelines": "GOLD 2024, GINA 2024, RNTCP", "focus": "asthma, COPD, TB"},
-    "👶 Pediatrics":          {"persona": "Pediatrician (MD Pediatrics)", "guidelines": "IAP 2024, WHO Child Growth", "focus": "fever, infections, growth"},
-    "🩸 Diabetology":         {"persona": "Diabetologist (DM Endocrinology)", "guidelines": "ADA 2024, RSSDI, AACE", "focus": "DM1/2, insulin, HbA1c"},
-    "🧠 Neurology":           {"persona": "Neurologist (DM Neurology)", "guidelines": "AAN, ESO Stroke, IAN", "focus": "headache, epilepsy, stroke"},
-    "👩‍⚕️ Gynecology":        {"persona": "Gynecologist (MS OBG)", "guidelines": "FOGSI, RCOG, WHO", "focus": "PCOD, menstrual, pregnancy"},
-    "👁️ Ophthalmology":      {"persona": "Ophthalmologist (MS Ophthalmology)", "guidelines": "AAO, ICO, AIOS", "focus": "cataract, glaucoma, refraction, retinopathy"},
-    "👂 ENT":                 {"persona": "ENT Surgeon (MS ENT)", "guidelines": "AAO-HNS, IACO, AOI", "focus": "hearing loss, sinusitis, tonsillitis, vertigo"},
-    "🩺 Gastroenterology":    {"persona": "Gastroenterologist (DM Gastro)", "guidelines": "ACG, AGA, ISG, INASL", "focus": "GERD, IBS, hepatitis, liver disease"},
-    "🧬 Dermatology":         {"persona": "Dermatologist (MD Derm)", "guidelines": "IADVL, AAD, BAD", "focus": "acne, eczema, psoriasis, skin infections"},
-    "🧪 Endocrinology":       {"persona": "Endocrinologist (DM Endo)", "guidelines": "AACE, ENDO, RSSDI, ISE", "focus": "thyroid, PCOD, osteoporosis, pituitary"},
-    "🫀 Rheumatology":        {"persona": "Rheumatologist (DM Rheumatology)", "guidelines": "ACR, EULAR, IRA", "focus": "RA, lupus, gout, vasculitis, fibromyalgia"},
-    "🧠 Psychiatry":          {"persona": "Psychiatrist (MD Psychiatry)", "guidelines": "APA, IPS, WHO mhGAP", "focus": "depression, anxiety, insomnia, OCD"},
-    "🩺 Urology":             {"persona": "Urologist (MS Urology / MCh)", "guidelines": "AUA, EAU, USI", "focus": "BPH, renal stones, UTI, incontinence"},
-    "🩺 Nephrology":          {"persona": "Nephrologist (DM Nephrology)", "guidelines": "KDIGO, ISN, RSI", "focus": "CKD, dialysis, hypertension, electrolyte"},
-    "🩺 Oncology":            {"persona": "Medical Oncologist (DM Oncology)", "guidelines": "NCCN, ASCO, ICMR, ISMPO", "focus": "cancer screening, chemotherapy, palliation"},
-    "🩺 General Surgery":     {"persona": "General Surgeon (MS Surgery)", "guidelines": "ASCRS, AMASI, IAGES", "focus": "hernia, appendicitis, gallstones, fistula"},
+    "❤️ Cardiology": {
+        "persona": "Senior Interventional Cardiologist (DM Cardiology, FACC, FESC)",
+        "guidelines": "AHA/ACC 2023 Hypertension Guidelines, ESC 2024 Heart Failure Guidelines, ACC/AHA 2023 Chronic Coronary Disease, ESC 2024 Atrial Fibrillation, Braunwald's Heart Disease 12th Ed, CSI India CVD Guidelines",
+        "primary_source": "American Heart Association / American College of Cardiology (AHA/ACC) + European Society of Cardiology (ESC)",
+        "indian_brands": "Telma (Telmisartan), Cilacar (Cilnidipine), Rozavel (Rosuvastatin), Ecosprin (Aspirin), Clopilet (Clopidogrel), Metolar (Metoprolol), Lanoxin (Digoxin), Lasix (Furosemide), Aldactone (Spironolactone), Cardivas (Carvedilol)",
+        "focus": "Hypertension, Heart Failure, IHD, Arrhythmias, Valvular Heart Disease, Dyslipidemia",
+    },
+    "🦴 Orthopedics": {
+        "persona": "Senior Orthopedic Surgeon (MS Ortho, FACS, FIAS)",
+        "guidelines": "AAOS 2023 Clinical Practice Guidelines, NICE Musculoskeletal Guidelines NG226, IOA (Indian Orthopedic Association) Guidelines, AO Trauma Foundation, Oxford Textbook of Orthopedics",
+        "primary_source": "American Academy of Orthopaedic Surgeons (AAOS) + Indian Orthopedic Association (IOA)",
+        "indian_brands": "Calpol (Paracetamol), Voveran (Diclofenac), Myospaz (Chlorzoxazone), Shelcal (Calcium+VitD3), Gemcal (Calcium Citrate), Rejoin (Glucosamine), Naprosyn (Naproxen), Flexon (Ibuprofen+Paracetamol)",
+        "focus": "Osteoarthritis, Low Back Pain, Joint Pain, Fractures, Sprains, Osteoporosis, Cervical/Lumbar Spondylosis",
+    },
+    "🫁 Pulmonology": {
+        "persona": "Senior Pulmonologist (DM Pulmonary Medicine, FCCP)",
+        "guidelines": "GOLD 2024 COPD Strategy, GINA 2024 Asthma Guidelines, ATS/IDSA CAP Guidelines 2023, RNTCP/NTEP India TB Guidelines, BTS Pleural Disease, Fletcher's Respiratory Medicine",
+        "primary_source": "Global Initiative for Chronic Obstructive Lung Disease (GOLD) + Global Initiative for Asthma (GINA) + ATS/IDSA",
+        "indian_brands": "Foracort (Formoterol+Budesonide), Duolin (Levosalbutamol+Ipratropium), Montek (Montelukast), Allegra (Fexofenadine), Deriphyllin (Etofylline+Theophylline), Pulmoclear (Acetylcysteine), Ciplox (Ciprofloxacin)",
+        "focus": "Asthma, COPD, Tuberculosis, Pneumonia, ILD, Allergic Rhinitis, Bronchiectasis",
+    },
+    "👶 Pediatrics": {
+        "persona": "Senior Pediatrician (MD Pediatrics, FIAP, NNF certified)",
+        "guidelines": "IAP 2024 Immunization Schedule, WHO IMCI Guidelines 2023, IAP Growth Charts 2024, NNF Neonatal Care Protocols, AAP Clinical Practice Guidelines, Nelson Textbook of Pediatrics 22nd Ed",
+        "primary_source": "Indian Academy of Pediatrics (IAP) + World Health Organization (WHO) + American Academy of Pediatrics (AAP)",
+        "indian_brands": "P-250 (Paracetamol), Azee (Azithromycin), Taxim-O (Cefixime), Maxtra (Phenylephrine+CPM), Zincolife (Zinc), Enterogermina (Probiotic), Aristozyme (Digestive enzymes), Nutrolin-B (Multivitamin)",
+        "focus": "Fever, URTI, Diarrhea, Growth Monitoring, Immunization, Nutritional Deficiencies, Neonatal care",
+    },
+    "🩸 Diabetology": {
+        "persona": "Senior Diabetologist (DM Endocrinology, CDE certified)",
+        "guidelines": "ADA Standards of Care 2024, RSSDI Clinical Practice Guidelines 2024, AACE/ACE Comprehensive Diabetes Algorithm 2024, IDF Global Diabetes Guidelines, Joslin's Diabetes Deskbook",
+        "primary_source": "American Diabetes Association (ADA) + Research Society for Study of Diabetes in India (RSSDI)",
+        "indian_brands": "Glycomet (Metformin), Glimiprex (Glimepiride), Janumet (Sitagliptin+Metformin), Forxiga (Dapagliflozin), Istavel (Sitagliptin), Volix (Voglibose), Lantus (Insulin Glargine), Humalog (Insulin Lispro)",
+        "focus": "Type 2 DM, Type 1 DM, Insulin Management, HbA1c Control, Diabetic Complications, Prediabetes, Metabolic Syndrome",
+    },
+    "🧠 Neurology": {
+        "persona": "Senior Neurologist (DM Neurology, FIAN, FAAN)",
+        "guidelines": "AAN Clinical Practice Guidelines 2024, ESO Stroke Guidelines 2024, IHS Migraine Classification ICHD-3, ILAE Epilepsy Guidelines, IAN (Indian Academy of Neurology) Guidelines, Bradley's Neurology 8th Ed",
+        "primary_source": "American Academy of Neurology (AAN) + European Stroke Organisation (ESO) + Indian Academy of Neurology (IAN)",
+        "indian_brands": "Eptoin (Phenytoin), Valparin (Valproate), Lobazam (Clobazam), Levipil (Levetiracetam), Tryptomer (Amitriptyline), Sibelium (Flunarizine), Strocit (Citicoline), Nootropil (Piracetam)",
+        "focus": "Headache/Migraine, Epilepsy, Stroke/TIA, Neuropathy, Vertigo, Parkinsonism, Dementia",
+    },
+    "👩‍⚕️ Gynecology": {
+        "persona": "Senior Gynecologist (MS OBG, FICOG, FOGSI)",
+        "guidelines": "FOGSI Clinical Protocols 2024, RCOG Green-top Guidelines 2024, WHO Reproductive Health Guidelines, ACOG Practice Bulletins, Novak's Gynecology 16th Ed",
+        "primary_source": "Federation of Obstetric & Gynaecological Societies of India (FOGSI) + Royal College of O&G (RCOG)",
+        "indian_brands": "Primolut-N (Norethisterone), Meprate (Medroxyprogesterone), Ovares (Clomiphene), Dronis (Drospirenone+EE), Pause (Estrogen), Folicare (Folic Acid), Shecal (Calcium), M2-Tone (Herbal PCOS)",
+        "focus": "PCOD/PCOS, Menstrual Disorders, Menopause, Pregnancy care, Contraception, Vaginal Infections, Fibroid Uterus",
+    },
+    "👁️ Ophthalmology": {
+        "persona": "Senior Ophthalmologist (MS Ophthalmology, FICO, FAICO)",
+        "guidelines": "AAO Preferred Practice Patterns 2024, ICO Clinical Guidelines, AIOS (All India Ophthalmological Society) Protocols, NEI Diabetic Retinopathy Guidelines, Yanoff & Duker's Ophthalmology 6th Ed",
+        "primary_source": "American Academy of Ophthalmology (AAO) + International Council of Ophthalmology (ICO) + AIOS",
+        "indian_brands": "Refresh Tears (Carboxymethylcellulose), Lotepred (Loteprednol), Moxicip (Moxifloxacin), Opticrom (Cromoglycate), Careprost (Bimatoprost), Dorzox (Dorzolamide), Ocurest (Ketorolac)",
+        "focus": "Refractive Errors, Cataract, Glaucoma, Conjunctivitis, Diabetic Retinopathy, Dry Eye, Computer Vision Syndrome",
+    },
+    "👂 ENT": {
+        "persona": "Senior ENT Surgeon (MS ENT, FACS, FAOI)",
+        "guidelines": "AAO-HNS Clinical Practice Guidelines 2024, AOI (Association of Otolaryngologists of India) Protocols, IACO Guidelines, Cummings Otolaryngology 7th Ed, Scott-Brown's Otorhinolaryngology",
+        "primary_source": "American Academy of Oto-HNS (AAO-HNS) + Association of Otolaryngologists of India (AOI)",
+        "indian_brands": "Sinarest (Paracetamol+Phenylephrine), Otrivin (Xylometazoline), Allegra (Fexofenadine), Cetzine (Cetirizine), Candid Mouth Paint (Clotrimazole), Betadine Gargle (Povidone-Iodine), Otorex (Ofloxacin ear drops)",
+        "focus": "Sinusitis, Allergic Rhinitis, Tonsillitis, Otitis Media, Hearing Loss, Vertigo, Epistaxis, Pharyngitis",
+    },
+    "🩺 Gastroenterology": {
+        "persona": "Senior Gastroenterologist (DM Gastroenterology, FASGE, ISG)",
+        "guidelines": "ACG Clinical Guidelines 2024, AGA Clinical Practice Updates 2024, ISG (Indian Society of Gastroenterology) Protocols, INASL Liver Disease Guidelines, Sleisenger & Fordtran's GI Disease 11th Ed",
+        "primary_source": "American College of Gastroenterology (ACG) + Indian Society of Gastroenterology (ISG) + INASL",
+        "indian_brands": "Pan (Pantoprazole), Razo (Rabeprazole), Ocid (Omeprazole), Domstal (Domperidone), Rifagut (Rifaximin), Udiliv (Ursodeoxycholic Acid), Librax (Chlordiazepoxide+Clidinium), Cremaffin (Liquid Paraffin)",
+        "focus": "GERD, IBS, Hepatitis, Fatty Liver/NAFLD, Peptic Ulcer, Constipation, Pancreatitis, Cirrhosis",
+    },
+    "🧬 Dermatology": {
+        "persona": "Senior Dermatologist (MD Dermatology, IADVL, FAAD)",
+        "guidelines": "IADVL Clinical Guidelines 2024, AAD Clinical Guidelines 2024, BAD Guidelines, EDF Guidelines, Fitzpatrick's Dermatology 9th Ed, Rook's Textbook of Dermatology",
+        "primary_source": "Indian Association of Dermatologists Venereologists & Leprologists (IADVL) + American Academy of Dermatology (AAD)",
+        "indian_brands": "T-Bact (Mupirocin), Fucidin (Fusidic Acid), Lobate (Clobetasol), Candid-B (Clotrimazole+Beclomethasone), Acnestar (Benzoyl Peroxide), Isotroin (Isotretinoin), Cetaphil (Moisturizer), Calosoft (Calamine)",
+        "focus": "Acne, Eczema/Atopic Dermatitis, Psoriasis, Fungal Infections, Urticaria, Vitiligo, Hair Loss, Contact Dermatitis",
+    },
+    "🧪 Endocrinology": {
+        "persona": "Senior Endocrinologist (DM Endocrinology, FACE, ISE)",
+        "guidelines": "AACE/ACE Clinical Guidelines 2024, Endocrine Society Guidelines 2024, RSSDI Diabetes Guidelines, ISE (Indian Society of Endocrinology) Protocols, Williams Textbook of Endocrinology 15th Ed",
+        "primary_source": "American Association of Clinical Endocrinology (AACE) + Endocrine Society + Indian Society of Endocrinology (ISE)",
+        "indian_brands": "Eltroxin (Levothyroxine), Thyronorm (Thyroxine), Neomercazole (Carbimazole), Glycomet (Metformin), Shelcal CT (Calcium+Calcitriol), Gemcal Plus (Calcium+VitD3), Bonmax (Ibandronic Acid)",
+        "focus": "Hypothyroidism, Hyperthyroidism, PCOD, Osteoporosis, Vitamin D Deficiency, Obesity, Pituitary Disorders",
+    },
+    "🫀 Rheumatology": {
+        "persona": "Senior Rheumatologist (DM Rheumatology, FACR, IRA)",
+        "guidelines": "ACR Clinical Practice Guidelines 2024, EULAR Recommendations 2024, IRA (Indian Rheumatology Association) Guidelines, BSR Guidelines, Kelley & Firestein's Textbook of Rheumatology 11th Ed",
+        "primary_source": "American College of Rheumatology (ACR) + European League Against Rheumatism (EULAR) + IRA",
+        "indian_brands": "Saaz (Sulfasalazine), HCQ (Hydroxychloroquine), Folvite (Folic Acid), Omnacortil (Prednisolone), Etoshine (Etoricoxib), Feburic (Febuxostat), Zyloric (Allopurinol), Shelcal (Calcium+VitD3)",
+        "focus": "Rheumatoid Arthritis, SLE/Lupus, Gout, Ankylosing Spondylitis, Fibromyalgia, Osteoarthritis, Vasculitis",
+    },
+    "🧠 Psychiatry": {
+        "persona": "Senior Psychiatrist (MD Psychiatry, MIPS, FIPA)",
+        "guidelines": "APA Practice Guidelines 2024, IPS (Indian Psychiatric Society) Clinical Guidelines, WHO mhGAP 2.0, NICE Mental Health Guidelines, Kaplan & Sadock's Psychiatry 12th Ed",
+        "primary_source": "American Psychiatric Association (APA) + Indian Psychiatric Society (IPS) + WHO mhGAP",
+        "indian_brands": "Pexep (Paroxetine), Nexito (Escitalopram), Zapiz (Clonazepam), Petril (Lorazepam), Oleanz (Olanzapine), Sulpitac (Amisulpride), Modalert (Modafinil), Inspiral (Methylphenidate)",
+        "focus": "Depression, Anxiety Disorders, Insomnia, Panic Attacks, OCD, Bipolar Disorder, Schizophrenia, Stress Management",
+    },
+    "🩺 Urology": {
+        "persona": "Senior Urologist (MS Urology, MCh, FUSI)",
+        "guidelines": "AUA Clinical Guidelines 2024, EAU Guidelines 2024, USI (Urological Society of India) Protocols, Campbell-Walsh Urology 12th Ed, NICE Urology Guidelines",
+        "primary_source": "American Urological Association (AUA) + European Association of Urology (EAU) + USI",
+        "indian_brands": "Urimax (Tamsulosin), Alfusin (Alfuzosin), Soliten (Solifenacin), Niftran (Nitrofurantoin), Veltam-F (Tamsulosin+Finasteride), Cital (Potassium Citrate), Zupar (Tolterodine), Ciprobid (Ciprofloxacin)",
+        "focus": "BPH/Prostate Enlargement, Renal Stones, UTI, Incontinence, Erectile Dysfunction, Hematuria, Phimosis",
+    },
+    "🩺 Nephrology": {
+        "persona": "Senior Nephrologist (DM Nephrology, FISN, FASN)",
+        "guidelines": "KDIGO 2024 Clinical Practice Guidelines, ISN Guidelines, RSI (Renal Society of India) Protocols, Brenner & Rector's The Kidney 11th Ed, NICE CKD Guidelines",
+        "primary_source": "Kidney Disease Improving Global Outcomes (KDIGO) + International Society of Nephrology (ISN) + RSI",
+        "indian_brands": "Cilacar (Cilnidipine), Arkamin (Clonidine), Shelcal (Calcium Carbonate), Phostat (Calcium Acetate), Erypro (Erythropoietin), Orofer-XT (Iron), Nephrocap (Multivitamin renal), Renolog (Sodium Bicarbonate)",
+        "focus": "CKD, Dialysis Management, Hypertension, Electrolyte Imbalance, AKI, Nephrotic Syndrome, Renal Stones Prevention",
+    },
+    "🩺 Oncology": {
+        "persona": "Senior Medical Oncologist (DM Oncology, ECMO, ISMPO)",
+        "guidelines": "NCCN Clinical Practice Guidelines 2024, ASCO Guidelines 2024, ICMR Cancer Guidelines India, ISMPO (Indian Society of Medical & Paediatric Oncology) Protocols, DeVita's Cancer 12th Ed",
+        "primary_source": "National Comprehensive Cancer Network (NCCN) + American Society of Clinical Oncology (ASCO) + ICMR India",
+        "indian_brands": "Capecitabine, Tamoxifen, Letrozole, Imatinib, Methotrexate, Ondem (Ondansetron), Wysolone (Prednisolone), Folvite (Folic Acid), Orofer (Iron), Gemcitabine, Paclitaxel",
+        "focus": "Cancer Screening, Chemotherapy Management, Palliative Care, Breast Cancer, Lung Cancer, GI Cancers, Lymphoma, Leukemia",
+    },
+    "🩺 General Surgery": {
+        "persona": "Senior General Surgeon (MS Surgery, FACS, FIAGES)",
+        "guidelines": "ACS Surgery Guidelines 2024, AMASI (Association of Minimal Access Surgeons of India) Protocols, IAGES Guidelines, Sabiston Textbook of Surgery 21st Ed, Schwartz's Principles of Surgery 11th Ed",
+        "primary_source": "American College of Surgeons (ACS) + AMASI + Indian Association of Gastrointestinal Endo-Surgeons (IAGES)",
+        "indian_brands": "Taxim (Cefotaxime), Metrogyl (Metronidazole), Pan (Pantoprazole), Emset (Ondansetron), Dynapar (Diclofenac injection), Neosporin (Polymyxin ointment), T-Bact (Mupirocin), Ciprodac (Ciprofloxacin)",
+        "focus": "Hernia, Appendicitis, Gallstones/Cholecystitis, Abscess Drainage, Fistula, Piles, Wound Care, Minor Surgical Procedures",
+    },
 }
 
 
