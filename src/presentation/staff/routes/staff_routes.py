@@ -799,7 +799,7 @@ async def api_diet_plan(request: Request):
         protein_ratio=body.get("protein_ratio", "1.0"),
     )
 
-    from src.ai_engine.groq_client import _get_api_key
+    from src.ai_engine.groq_client import _get_api_key, call_groq_with_error
     groq_key = _get_api_key()
     if not groq_key:
         try:
@@ -810,13 +810,13 @@ async def api_diet_plan(request: Request):
             pass
 
     if not groq_key:
-        return {"ok": False, "error": "Groq API key not configured. Add key to secret.txt or .env"}
+        return {"ok": False, "error": "Groq API key not configured."}
 
     os.environ["GROQ_API_KEY"] = groq_key
-    result = call_groq([prompt], temp=0.3, max_tokens=4000)
+    result, err_msg = call_groq_with_error([prompt], temp=0.3, max_tokens=4000)
 
     if not result:
-        return {"ok": False, "error": "AI generation failed. Check API key or connection."}
+        return {"ok": False, "error": f"AI generation failed: {err_msg or 'Check connection'}"}
 
     return {"ok": True, "diet_plan": result}
 

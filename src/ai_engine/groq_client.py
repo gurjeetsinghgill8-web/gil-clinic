@@ -110,17 +110,13 @@ def get_token_usage() -> dict:
 # TEXT CHAT COMPLETIONS (for Rx generation, CME, Research, etc.)
 # ════════════════════════════════════════════════════════════════════════════
 
-def call_groq(messages: list, model: str = None, temp: float = 0.3, max_tokens: int = 4000) -> str:
+def call_groq_with_error(messages: list, model: str = None, temp: float = 0.3, max_tokens: int = 4000) -> tuple[str, str]:
     """
-    Groq chat completions — accepts list of content items (text strings or PIL Images).
-    Automatically converts images to base64 for multimodal input.
-    Returns the assistant's text response (cleaned), or empty string on failure.
-    Supports retry on rate limit (max 2 retries, 2s sleep).
+    Groq chat completions — returns tuple of (response_text, error_message).
     """
     api_key = _get_api_key()
     if not api_key:
-        logger.error("Groq API key not configured.")
-        return ""
+        return "", "Groq API key not configured."
 
     if model is None:
         model = DEFAULT_TEXT_MODEL
@@ -128,7 +124,6 @@ def call_groq(messages: list, model: str = None, temp: float = 0.3, max_tokens: 
     url = f"{GROQ_BASE_URL}/chat/completions"
     headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
 
-    # Build messages — convert mixed content (text + images) to proper format
     groq_messages = []
     text_items = [item for item in messages if isinstance(item, str)]
     if len(text_items) == 1:
@@ -141,7 +136,6 @@ def call_groq(messages: list, model: str = None, temp: float = 0.3, max_tokens: 
 
     for item in messages:
         if hasattr(item, 'save'):
-            # PIL Image — convert to base64
             try:
                 buf = io.BytesIO()
                 item.save(buf, format='JPEG', quality=85)
@@ -161,28 +155,36 @@ def call_groq(messages: list, model: str = None, temp: float = 0.3, max_tokens: 
         "max_tokens": max_tokens,
     }
 
-    last_status = 0
+    last_error = ""
     for attempt in range(3):
         try:
             resp = requests.post(url, headers=headers, json=payload, timeout=90)
-            last_status = resp.status_code
             if resp.status_code == 429:
                 logger.warning("Rate limit hit, retry %d/2 after 2s", attempt + 1)
                 time.sleep(2)
                 continue
-            resp.raise_for_status()
+            if not resp.ok:
+                last_error = f"HTTP {resp.status_code}: {resp.text[:300]}"
+                logger.error("Groq error: %s", last_error)
+                break
             data = resp.json()
             _update_token_usage(data.get("usage", {}))
-            return sanitize_output(data["choices"][0]["message"]["content"])
-        except requests.exceptions.HTTPError as e:
-            logger.error("Groq HTTP error (attempt %d): %s", attempt + 1, e)
-        except (KeyError, IndexError) as e:
-            logger.error("Groq response parse error: %s", e)
+            content = data["choices"][0]["message"]["content"]
+            return sanitize_output(content), ""
         except requests.exceptions.RequestException as e:
+            last_error = f"Network error: {str(e)}"
             logger.error("Groq request error (attempt %d): %s", attempt + 1, e)
-        if last_status != 429:
-            break
-    return ""
+            time.sleep(1)
+
+    return "", last_error or "Groq API call failed after retries."
+
+
+def call_groq(messages: list, model: str = None, temp: float = 0.3, max_tokens: int = 4000) -> str:
+    """
+    Groq chat completions — returns assistant's text response (cleaned), or empty string on failure.
+    """
+    text, _ = call_groq_with_error(messages, model=model, temp=temp, max_tokens=max_tokens)
+    return text
 
 
 # ════════════════════════════════════════════════════════════════════════════
