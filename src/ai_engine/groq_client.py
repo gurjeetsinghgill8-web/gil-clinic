@@ -26,8 +26,49 @@ DEFAULT_WHISPER_MODEL = os.getenv("GROQ_WHISPER_MODEL", "whisper-large-v3")
 
 
 def _get_api_key() -> str:
-    """Get Groq API key from env var, or an explicit key passed elsewhere."""
-    return os.getenv("GROQ_API_KEY", "")
+    """Get Groq API key from env var, secret.txt, or .env fallback."""
+    key = os.getenv("GROQ_API_KEY", "")
+    if key and len(key.strip()) > 10:
+        return key.strip()
+
+    from pathlib import Path
+    root_dir = Path(__file__).parents[2]
+
+    # Fallback 1: secret.txt in project root
+    try:
+        secret_file = root_dir / "secret.txt"
+        if secret_file.exists():
+            for line in secret_file.read_text().splitlines():
+                line = line.strip()
+                if not line or line.startswith("#"):
+                    continue
+                if len(line) > 10:
+                    os.environ["GROQ_API_KEY"] = line
+                    return line
+    except Exception:
+        pass
+
+    # Fallback 2: .env in project root
+    try:
+        env_file = root_dir / ".env"
+        if env_file.exists():
+            for line in env_file.read_text().splitlines():
+                line = line.strip()
+                if line.startswith("GROQ_API_KEY="):
+                    val = line.split("=", 1)[1].strip().strip('"').strip("'")
+                    if val and len(val) > 10:
+                        os.environ["GROQ_API_KEY"] = val
+                        return val
+    except Exception:
+        pass
+
+    return ""
+
+
+# Eagerly load API key on module import
+if not os.getenv("GROQ_API_KEY"):
+    _get_api_key()
+
 
 
 def _update_token_usage(usage: dict) -> None:

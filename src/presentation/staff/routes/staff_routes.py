@@ -799,15 +799,24 @@ async def api_diet_plan(request: Request):
         protein_ratio=body.get("protein_ratio", "1.0"),
     )
 
-    groq_key = os.getenv("GROQ_API_KEY", "")
+    from src.ai_engine.groq_client import _get_api_key
+    groq_key = _get_api_key()
     if not groq_key:
-        return {"ok": False, "error": "GROQ_API_KEY not set in environment"}
+        try:
+            from src.presentation.opd.routes.opd_routes import _get_settings
+            settings = await _get_settings("clinic_default")
+            groq_key = settings.get("groq_api_key", "")
+        except Exception:
+            pass
+
+    if not groq_key:
+        return {"ok": False, "error": "Groq API key not configured. Add key to secret.txt or .env"}
 
     os.environ["GROQ_API_KEY"] = groq_key
-    result = call_groq([prompt], temp=0.3)
+    result = call_groq([prompt], temp=0.3, max_tokens=4000)
 
     if not result:
-        return {"ok": False, "error": "AI generation failed. Check API key."}
+        return {"ok": False, "error": "AI generation failed. Check API key or connection."}
 
     return {"ok": True, "diet_plan": result}
 
