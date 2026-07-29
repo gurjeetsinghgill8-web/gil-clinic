@@ -50,27 +50,29 @@ Clinical Notes: {notes or 'Not provided'}
 {progress_context}
 {meds_section}
 
-	YOUR TASK — Provide ONLY these sections (plain text, no markdown):
-	
-	1. Diagnosis: List diagnoses as numbered items ONLY (1. Diabetes Mellitus 2. Hypertension 3. ...). CRITICAL: Do NOT write a story or paragraph. Each diagnosis on its own line with a number. Example: "1. Diabetes Mellitus\n2. Hypertension" — NOT "Patient has diabetes and hypertension..."
-	2. Investigations: CRITICAL — List tests as comma-separated values ONLY. Do NOT write sentences or paragraphs. Example: "CBC, MP, Widal, RBS, Urine RM". Do NOT say "CBC is recommended to check for infection" or any reasoning. ONLY test names.
-	3. Treatment: List treatment/management plan as numbered items (1. Drug name + dose + frequency + duration per line). Example: "1. Tab Metformin 500mg BD after food x 1 month\n2. Tab Amlodipine 5mg OD morning x 1 month"
-	4. Advice: Suggest lifestyle modifications, diet tips, exercise, patient education (Hindi-English mix OK). Keep short and practical.
-	5. Follow-up: Recommend follow-up timeline and what to monitor. Short.
-	
-	CRITICAL RULES:
-	- NEVER generate a new drug list from scratch
-	- NEVER rewrite the doctor's prescription
-	- NEVER include "Drug Review" or "Check Interactions" section — DO NOT output this section
-	- NEVER add any extra text, commentary, or explanations
-	- Investigations MUST be ONLY test names separated by commas - no sentences
-	
-	OUTPUT FORMAT (exactly this, no extra sections):
-	Diagnosis:
-	Treatment:
-	Investigations:
-	Advice:
-	Follow-up:"""
+    YOUR TASK — Provide ONLY these sections (plain text, no markdown):
+    
+    1. Diagnosis: List ONLY diagnoses DIRECTLY supported by the patient's stated complaints and vitals. CRITICAL: Do NOT invent, guess, or add conditions not mentioned. If the patient says "cough fever", diagnose respiratory issues ONLY — do NOT add Diabetes, Hypertension, or any condition not indicated by the data. If vitals are missing, do NOT assume abnormal values. Each diagnosis on its own numbered line. Example for "cough, fever": "1. Acute Upper Respiratory Infection\n2. Acute Bronchitis (suspected)". Example WRONG: "1. Diabetes 2. Hypertension" when patient only mentioned cough.
+    2. Investigations: CRITICAL — List ONLY tests relevant to the STATED complaints. Comma-separated ONLY. No sentences. Example for cough+fever: "CBC, Chest X-ray, CRP". Do NOT add unrelated tests.
+    3. Treatment: List treatment/management plan as numbered items (1. Drug name + dose + frequency + duration per line).
+    4. Advice: Suggest lifestyle modifications, diet tips. Hindi-English mix OK. Keep short and practical.
+    5. Follow-up: Recommend follow-up timeline. Short.
+    
+    CRITICAL RULES:
+    - 🚫 ANTI-HALLUCINATION: ONLY diagnose from the patient's ACTUAL complaints & vitals. NEVER add Diabetes, Hypertension, CKD, or any chronic condition unless EXPLICITLY mentioned in complaints or vitals are clearly abnormal
+    - 🚫 If insufficient information for a firm diagnosis, say "? Query [Condition] — needs evaluation" rather than stating it as fact
+    - NEVER generate a new drug list from scratch
+    - NEVER rewrite the doctor's prescription
+    - NEVER include "Drug Review" or "Check Interactions" section
+    - Investigations MUST be ONLY test names separated by commas - no sentences
+    - NEVER add any extra text, commentary, or explanations
+    
+    OUTPUT FORMAT (exactly this, no extra sections):
+    Diagnosis:
+    Treatment:
+    Investigations:
+    Advice:
+    Follow-up:"""
 
 
 def gp_prompt_suggest(patient_name: str, vitals: str, notes: str,
@@ -95,27 +97,33 @@ Clinical Notes: {notes or 'Not provided'}
 
 IMPORTANT: You are making SUGGESTIONS only. Every drug recommendation must be clearly prefixed with "💡 SUGGESTION:" so the doctor can easily review, accept, or reject.
 
-RULES (Indian OPD context):
-1. Use INN/generic drug names first, brand names in brackets where relevant.
-2. Indian standard dosages: Tab. Amlodipine 5mg, Tab. Metformin 500mg BD.
-3. Specify form (Tab./Cap./Syp./Inj.), frequency (OD/BD/TDS/QID), duration, food timing.
-4. Mention brand alternatives common in India: e.g., Telma (Telmisartan), Glycomet (Metformin).
-5. Suggest relevant Indian OPD investigations.
-6. Clear follow-up timeline.
-7. Add lifestyle/diet advice.
-8. Flag red-flag symptoms requiring urgent referral.
-
-	CRITICAL RULES:
-	- Investigations: ONLY list test names as comma-separated. NO sentences. Example: "CBC, MP, Widal"
-	- NEVER include "Drug Review" or "Check Interactions" section
-	- NEVER add extra commentary
-
-		OUTPUT FORMAT (every drug line starts with 💡 SUGGESTION:):
-		Diagnosis: (numbered list — 1. Dx1, 2. Dx2, etc.)
-		💡 SUGGESTION — Treatment: (numbered list with drug names, doses, frequency, duration)
-		Investigations: (comma-separated test names only — NO sentences)
-		Advice:
-		Follow-up:"""
+    RULES (Indian OPD context):
+    1. Use INN/generic drug names first, brand names in brackets where relevant.
+    2. Indian standard dosages: Tab. Amlodipine 5mg, Tab. Metformin 500mg BD.
+    3. Specify form (Tab./Cap./Syp./Inj.), frequency (OD/BD/TDS/QID), duration, food timing.
+    4. Mention brand alternatives common in India: e.g., Telma (Telmisartan), Glycomet (Metformin).
+    5. Suggest relevant Indian OPD investigations.
+    6. Clear follow-up timeline.
+    7. Add lifestyle/diet advice.
+    8. Flag red-flag symptoms requiring urgent referral.
+    
+    🚫 ANTI-HALLUCINATION RULES:
+    - ONLY diagnose from the patient's ACTUAL complaints & vitals
+    - NEVER add Diabetes, Hypertension, CKD or any chronic condition UNLESS explicitly mentioned in complaints or vitals are clearly abnormal
+    - If vitals are not provided, do NOT assume abnormal vitals
+    - Diagnose ONLY what the complaints directly indicate
+    
+    CRITICAL RULES:
+    - Investigations: ONLY list test names as comma-separated. NO sentences. Example: "CBC, MP, Widal"
+    - NEVER include "Drug Review" or "Check Interactions" section
+    - NEVER add extra commentary
+    
+    OUTPUT FORMAT (every drug line starts with 💡 SUGGESTION:):
+    Diagnosis: (numbered list — 1. Dx1, 2. Dx2, etc.)
+    💡 SUGGESTION — Treatment: (numbered list with drug names, doses, frequency, duration)
+    Investigations: (comma-separated test names only — NO sentences)
+    Advice:
+    Follow-up:"""
 
 
 # ════════════════════════════════════════════════════════════════════════════
