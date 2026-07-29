@@ -130,14 +130,17 @@ def call_groq(messages: list, model: str = None, temp: float = 0.3, max_tokens: 
 
     # Build messages — convert mixed content (text + images) to proper format
     groq_messages = []
+    text_items = [item for item in messages if isinstance(item, str)]
+    if len(text_items) == 1:
+        groq_messages.append({"role": "user", "content": text_items[0]})
+    else:
+        for i, item in enumerate(messages):
+            if isinstance(item, str):
+                role = "system" if i == 0 else "user"
+                groq_messages.append({"role": role, "content": item})
+
     for item in messages:
-        if isinstance(item, str):
-            # Plain text
-            if not groq_messages:
-                groq_messages.append({"role": "system", "content": item})
-            else:
-                groq_messages.append({"role": "user", "content": item})
-        elif hasattr(item, 'save'):
+        if hasattr(item, 'save'):
             # PIL Image — convert to base64
             try:
                 buf = io.BytesIO()
