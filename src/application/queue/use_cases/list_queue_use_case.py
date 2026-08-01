@@ -81,6 +81,7 @@ class ListQueueUseCase(BaseUseCase):
                             "id": str(e.id),
                             "visit_id": e.visit_id,
                             "patient_id": e.patient_id,
+                            "patient_uuid": e.patient_uuid,
                             "patient_name": e.patient_name,
                             "service_code": e.service_code,
                             "service_name": e.service_name,

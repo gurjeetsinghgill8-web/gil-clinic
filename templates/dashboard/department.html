@@ -7,7 +7,7 @@
 
 <!-- Current Patient -->
 {% if current_patient %}
-<div class="current-patient" data-auto-refresh>
+<div class="current-patient" data-auto-refresh data-phone="{{ current_patient.patient_phone or current_patient.phone or '' }}">
   <div style="font-size:12px;color:#667eea;font-weight:700;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">
     🔴 CURRENT PATIENT
   </div>
@@ -137,7 +137,7 @@
 <input type="hidden" id="wa-doctor" value="">
 <input type="hidden" id="dept-name" value="{{ dept_name }}">
 <input type="hidden" id="dept-icon" value="{{ dept_icon }}">
-<input type="hidden" id="patient-phone" value="{{ current_patient.patient_phone or '' }}">
+<input type="hidden" id="patient-phone" value="{{ current_patient.patient_phone or current_patient.phone or '' }}">
 <script>
   window.STAFF_NAME = '{{ dept_name }} Tech';
   window.autoRefreshEnabled = true;
@@ -177,7 +177,12 @@
     const deptIcon = document.getElementById('dept-icon').value;
     const token = document.querySelector('.cp-name .token');
     const tokenNum = token ? token.textContent.trim() : '';
-    const patientPhone = document.getElementById('patient-phone').value.replace(/[^0-9]/g, '');
+    let rawPhone = document.getElementById('patient-phone').value || '';
+    if (!rawPhone) {
+      const cpDiv = document.querySelector('.current-patient');
+      if (cpDiv && cpDiv.dataset.phone) rawPhone = cpDiv.dataset.phone;
+    }
+    const patientPhone = typeof sanitizePhoneNumber === 'function' ? sanitizePhoneNumber(rawPhone) : (rawPhone ? rawPhone.replace(/\D/g, '') : '');
     return { name, deptName, deptIcon, tokenNum, patientPhone };
   }
 

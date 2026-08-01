@@ -202,21 +202,28 @@ async def _get_queue(request: Request, department: str | None = None,
                     if e.get("service_code", "").upper() == service_code_filter.upper()
                 ]
 
-            # Add wait_minutes helper and patient phone
-            now = datetime.now(timezone.utc)
-            # Collect patient_uuids to batch-fetch phone numbers
+            # Collect patient_uuids & patient_ids to batch-fetch phone numbers
             patient_uuids = list({e.get("patient_uuid", "") for e in entries if e.get("patient_uuid")})
+            patient_ids = list({e.get("patient_id", "") for e in entries if e.get("patient_id")})
             phone_map: dict[str, str] = {}
-            if patient_uuids:
+            if patient_uuids or patient_ids:
                 try:
                     from src.infrastructure.patient.models.patient_model import PatientModel
-                    stmt = sa.select(PatientModel.id, PatientModel.phone).where(
-                        PatientModel.id.in_(patient_uuids)
+                    stmt = sa.select(PatientModel.id, PatientModel.patient_id, PatientModel.phone).where(
+                        sa.or_(
+                            PatientModel.id.in_(patient_uuids),
+                            PatientModel.patient_id.in_(patient_ids)
+                        )
                     )
                     rows = (await session.execute(stmt)).all()
-                    phone_map = {str(r[0]): r[1] for r in rows}
-                except Exception:
-                    pass
+                    for r in rows:
+                        p_uuid_str = str(r[0])
+                        p_id_str = str(r[1])
+                        phone_num = r[2] or ""
+                        phone_map[p_uuid_str] = phone_num
+                        phone_map[p_id_str] = phone_num
+                except Exception as ex:
+                    logger.error("Phone lookup error: %s", ex)
             for e in entries:
                 try:
                     created = datetime.fromisoformat(
@@ -227,7 +234,10 @@ async def _get_queue(request: Request, department: str | None = None,
                     e["wait_minutes"] = 0
                 # Attach phone number for WhatsApp sharing
                 puuid = e.get("patient_uuid", "")
-                e["patient_phone"] = phone_map.get(puuid, "")
+                pid = e.get("patient_id", "")
+                phone = phone_map.get(puuid) or phone_map.get(pid, "")
+                e["patient_phone"] = phone
+                e["phone"] = phone
             return entries
     except Exception:
         return []
