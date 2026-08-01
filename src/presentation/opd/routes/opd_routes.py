@@ -1594,6 +1594,119 @@ async def api_get_scans(request: Request):
         return []
 
 
+@router.post("/api/scan-ai", include_in_schema=False)
+async def api_scan_ai(request: Request):
+    """Process uploaded handwritten prescription image via Groq Vision AI OCR."""
+    sess = _require_opd_session(request)
+    try:
+        body = await request.json()
+    except Exception:
+        return {"ok": False, "error": "Invalid JSON"}
+
+    image_b64 = body.get("image", "")
+    if not image_b64:
+        return {"ok": False, "error": "No image provided"}
+
+    try:
+        import base64
+        import io
+        from PIL import Image
+        from src.ai_engine.groq_client import call_groq_vision, parse_ai_json
+
+        # Remove header if present
+        if "," in image_b64:
+            image_b64 = image_b64.split(",", 1)[1]
+
+        image_bytes = base64.b64decode(image_b64)
+        img = Image.open(io.BytesIO(image_bytes))
+
+        # Vision OCR execution
+        raw_text = call_groq_vision(img)
+        parsed = parse_ai_json(raw_text)
+
+        return {"ok": True, "parsed": parsed, "raw": raw_text}
+    except Exception as e:
+        logger.error("Scan AI processing error: %s", e)
+        return {"ok": False, "error": str(e)}
+
+
+@router.post("/api/save-rx", include_in_schema=False)
+async def api_save_rx(request: Request):
+    """Save OPD Prescription to database and auto-update queue status for inter-department sync."""
+    sess = _require_opd_session(request)
+    doctor_id = sess["doctor_id"]
+
+    try:
+        body = await request.json()
+    except Exception:
+        return {"ok": False, "error": "Invalid JSON"}
+
+    patient_name = body.get("patient_name", "").strip()
+    if not patient_name:
+        return {"ok": False, "error": "Patient name required"}
+
+    try:
+        async with async_session_factory() as session:
+            rx = OpdPrescriptionModel(
+                patient_name=patient_name,
+                phone=body.get("phone", ""),
+                doctor_id=doctor_id,
+                vitals=body.get("vitals", ""),
+                complaints=body.get("complaints", ""),
+                medicines=body.get("medicines", ""),
+                investigations=body.get("investigations", ""),
+                diagnosis=body.get("diagnosis", ""),
+                fee=body.get("fee", "0"),
+                ai_generated=body.get("ai_generated", False),
+            )
+            session.add(rx)
+
+            # Auto-update queue entry for OPD to COMPLETED / REPORT_READY for inter-department sync
+            visit_id = body.get("visit_id") or body.get("patient_id")
+            if visit_id:
+                try:
+                    from src.infrastructure.queue.models.queue_entry_model import QueueEntryModel
+                    stmt = (
+                        sa.update(QueueEntryModel)
+                        .where(QueueEntryModel.id == visit_id)
+                        .values(status="REPORT_READY", updated_at=datetime.datetime.now(datetime.timezone.utc))
+                    )
+                    await session.execute(stmt)
+                except Exception:
+                    pass
+
+            await session.commit()
+            return {"ok": True, "id": rx.id, "message": "Prescription saved & inter-department queue status updated!"}
+    except Exception as e:
+        logger.error("Save Rx error: %s", e)
+        return {"ok": False, "error": str(e)}
+
+
+@router.post("/api/transcribe", include_in_schema=False)
+async def api_transcribe_audio(request: Request):
+    """Transcribe doctor consultation voice dictation using Groq Whisper API (EkaScribe style)."""
+    sess = _require_opd_session(request)
+    try:
+        form = await request.form()
+        audio_file = form.get("audio")
+        if not audio_file:
+            return {"ok": False, "error": "No audio file provided"}
+
+        audio_bytes = await audio_file.read()
+        filename = getattr(audio_file, "filename", "audio.webm") or "audio.webm"
+
+        from src.ai_engine.groq_client import call_whisper
+        transcription = call_whisper(audio_bytes, filename=filename)
+
+        if not transcription:
+            return {"ok": False, "error": "Transcription empty or failed"}
+
+        return {"ok": True, "text": transcription}
+    except Exception as e:
+        logger.error("Voice transcription error: %s", e)
+        return {"ok": False, "error": str(e)}
+
+
 @router.post("/api/scan-approve", include_in_schema=False)
 async def api_approve_scan(request: Request):
     sess = _require_opd_session(request)

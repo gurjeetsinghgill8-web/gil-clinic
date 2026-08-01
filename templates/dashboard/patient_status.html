@@ -68,21 +68,29 @@
     {% endfor %}
   </div>
 
-  <!-- Status Message -->
+  <!-- Status Message & WhatsApp Contact -->
   {% set all_done = patient_entries | selectattr('status', 'in', ['COMPLETED', 'REPORT_READY', 'DELIVERED']) | list %}
   {% if all_done | length == patient_entries | length %}
-  <div class="alert alert-success">
-    🎉 All tests complete! Please collect your reports from Reception.
+  <div class="alert alert-success" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;">
+    <div>🎉 All tests complete! Please collect your reports from Reception.</div>
+    <button onclick="openWhatsApp('919876543210', 'Hello GIL Clinic Reception, my token reports are complete. Patient: {{ patient_entries[0].patient_id }}')" 
+      style="background:#25D366;color:white;border:none;padding:8px 14px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;">
+      📱 Message Reception
+    </button>
   </div>
   {% else %}
-  <div class="alert alert-warning">
-    ⏳ {{ patient_entries | length - all_done | length }} test(s) still in progress. Please wait.
+  <div class="alert alert-warning" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;">
+    <div>⏳ {{ patient_entries | length - all_done | length }} test(s) still in progress. Please wait.</div>
+    <button onclick="openWhatsApp('919876543210', 'Hello GIL Clinic Reception, checking update for Token #{{ patient_entries[0].token_number }} (Patient: {{ patient_entries[0].patient_id }})')" 
+      style="background:rgba(37,211,102,0.15);color:#128C7E;border:1px solid #25D366;padding:8px 14px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;">
+      💬 WhatsApp Desk
+    </button>
   </div>
   {% endif %}
 
   <!-- Auto-refresh note -->
   <div style="text-align:center;font-size:12px;color:#a0aec0;margin-top:8px;">
-    Page refreshes every 30 seconds automatically
+    🔄 Page refreshes every 30 seconds automatically
   </div>
 </div>
 

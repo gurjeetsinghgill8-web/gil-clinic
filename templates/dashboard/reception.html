@@ -78,13 +78,19 @@
           <th>Test</th>
           <th>Status</th>
           <th>Time</th>
+          <th>WhatsApp</th>
         </tr>
       </thead>
       <tbody>
         {% for entry in queue_entries %}
         <tr>
           <td><div class="token">{{ entry.token_number }}</div></td>
-          <td><strong>{{ entry.patient_name or entry.patient_id }}</strong></td>
+          <td>
+            <strong>{{ entry.patient_name or entry.patient_id }}</strong>
+            {% if entry.patient_phone %}
+            <div style="font-size:11px;color:#718096;">📞 {{ entry.patient_phone }}</div>
+            {% endif %}
+          </td>
           <td>{{ entry.service_code or entry.department }}</td>
           <td>
             <span class="status status-{{ entry.status | lower | replace(' ', '_') }}">
@@ -92,6 +98,13 @@
             </span>
           </td>
           <td style="font-size:12px;color:#718096;">{{ entry.created_at | format_time }}</td>
+          <td>
+            <button class="btn btn-sm btn-ghost" 
+              onclick="sendReceptionWhatsApp('{{ entry.patient_name or entry.patient_id }}', '{{ entry.token_number }}', '{{ entry.service_code or entry.department }}', '{{ entry.patient_phone }}')"
+              style="background:rgba(37,211,102,0.12);color:#128C7E;border:1px solid #25D366;padding:4px 8px;font-size:12px;border-radius:6px;cursor:pointer;">
+              📱 Send Slip
+            </button>
+          </td>
         </tr>
         {% endfor %}
       </tbody>
@@ -177,6 +190,20 @@ regForm.addEventListener('submit', async function(e) {
   btn.disabled = false;
   btn.textContent = '➕ Register Patient';
 });
+
+function sendReceptionWhatsApp(name, token, service, phone) {
+  if (!phone) {
+    showToast('⚠️ No phone number registered for ' + name, 'warning');
+    return;
+  }
+  const msg = `🏥 *GIL CLINIC — Patient Token Slip*\n\n👤 *Patient Name:* ${name}\n🎟️ *Token Number:* #${token}\n🩺 *Service:* ${service}\n📌 *Status:* Registered & In Queue\n\n🔍 Track Live Queue Status:\nhttps://cardioqueue-production.up.railway.app/staff/patient-status\n\n— GIL CLINIC`;
+  if (typeof openWhatsApp === 'function') {
+    openWhatsApp(phone, msg);
+  } else {
+    const sanitized = typeof sanitizePhoneNumber === 'function' ? sanitizePhoneNumber(phone) : (phone ? phone.replace(/\D/g, '') : '');
+    window.open(`https://wa.me/${sanitized}?text=${encodeURIComponent(msg)}`, '_blank');
+  }
+}
 </script>
 {% endblock %}
 {% block extra_js %}

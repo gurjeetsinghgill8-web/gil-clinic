@@ -119,6 +119,8 @@ class TechnicianActionUseCase(BaseUseCase):
                     "service_code": entry.service_code,
                     "token_number": entry.token_number,
                     "previous_status": previous_status,
+                    "new_status": new_status,
+                    "status_display": entry.status_display,
                     "action": action,
                     "timestamp": entry.updated_at.isoformat(),
                     "message": f"{entry.patient_name} — {action}: {entry.status_display}",

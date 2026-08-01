@@ -818,6 +818,22 @@ async def api_diet_plan(request: Request):
     if not result:
         return {"ok": False, "error": f"AI generation failed: {err_msg or 'Check connection'}"}
 
+    # Auto-update queue entry for Dietitian to REPORT_READY for inter-department sync
+    visit_id = body.get("visit_id")
+    if visit_id:
+        try:
+            async with async_session_factory() as session:
+                from src.infrastructure.queue.models.queue_entry_model import QueueEntryModel
+                stmt = (
+                    sa.update(QueueEntryModel)
+                    .where(QueueEntryModel.id == visit_id)
+                    .values(status="REPORT_READY", updated_at=datetime.now(timezone.utc))
+                )
+                await session.execute(stmt)
+                await session.commit()
+        except Exception:
+            pass
+
     return {"ok": True, "diet_plan": result}
 
 

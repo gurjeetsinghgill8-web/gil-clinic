@@ -233,11 +233,18 @@
         break;
     }
 
-    // Open WhatsApp for each target
+    // Open WhatsApp for each target with sanitized phone numbers (+91)
+    let openedCount = 0;
     targets.forEach((t, i) => {
       setTimeout(() => {
-        const url = 'https://wa.me/' + t.num + '?text=' + encodeURIComponent(t.msg);
-        window.open(url, '_blank');
+        const sanitized = typeof sanitizePhoneNumber === 'function' ? sanitizePhoneNumber(t.num) : (t.num ? String(t.num).replace(/\D/g, '') : null);
+        if (sanitized) {
+          const url = 'https://wa.me/' + sanitized + '?text=' + encodeURIComponent(t.msg);
+          window.open(url, '_blank');
+          openedCount++;
+        } else {
+          showToast('⚠️ Invalid phone number: ' + (t.num || 'Empty'), 'error');
+        }
       }, i * 800); // 800ms gap between tabs
     });
 

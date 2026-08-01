@@ -663,8 +663,8 @@ function shareWA(role) {
     return;
   }
 
-  number = number.replace(/[^0-9]/g, '');
-  const url = number ? 'https://wa.me/' + number + '?text=' + encodeURIComponent(msg) : 'https://wa.me/?text=' + encodeURIComponent(msg);
+  const sanitized = typeof sanitizePhoneNumber === 'function' ? sanitizePhoneNumber(number) : (number ? String(number).replace(/\D/g, '') : null);
+  const url = sanitized ? 'https://wa.me/' + sanitized + '?text=' + encodeURIComponent(msg) : 'https://wa.me/?text=' + encodeURIComponent(msg);
   window.open(url, '_blank');
   showToast('📱 WhatsApp opened for ' + role, 'success');
   waMenuOpen = false;
