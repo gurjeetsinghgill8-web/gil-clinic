@@ -298,6 +298,12 @@ async def root():
     return RedirectResponse("/staff/")
 
 
+@app.get("/health", include_in_schema=False)
+async def health():
+    """Healthcheck endpoint for Railway deployment container."""
+    return {"status": "ok", "build": "2026.08.02.v2", "timestamp": "2026-08-02T11:45:00Z"}
+
+
 # =========================================================================
 # Main
 # =========================================================================
