@@ -515,6 +515,8 @@
                     <div class="form-group">
                         <label>Complaints / Clinical Notes
                             <button id="voice-btn" class="btn btn-sm btn-ghost" onclick="toggleRecording()" title="Record audio complaints" style="padding:2px 8px;font-size:14px;margin-left:8px;vertical-align:middle;">🎙️ Record</button>
+                            <button type="button" class="btn btn-sm" onclick="document.getElementById('camera-file-input').click()" style="background:#7c3aed;color:white;font-weight:700;padding:3px 10px;font-size:12px;margin-left:6px;border:none;border-radius:6px;cursor:pointer;vertical-align:middle;">📷 Scan Rx</button>
+                            <button type="button" class="btn btn-sm" onclick="document.getElementById('gallery-file-input').click()" style="background:#2563eb;color:white;font-weight:700;padding:3px 10px;font-size:12px;margin-left:6px;border:none;border-radius:6px;cursor:pointer;vertical-align:middle;">🖼️ Upload Rx</button>
                             <span id="voice-status" class="text-sm text-muted" style="font-size:11px;margin-left:4px;"></span>
                         </label>
                         <textarea id="pt-complaints" rows="3" placeholder="Describe complaints..."></textarea>
@@ -550,9 +552,17 @@
                     </div>
 
                     <div class="card" style="margin-bottom:12px;padding:12px;background:var(--card-bg);border:1px solid var(--border);">
-                        <div class="flex-between mb-sm">
+                        <div class="flex-between mb-sm" style="flex-wrap:wrap;gap:6px;">
                             <label style="font-weight:600;font-size:14px;">💊 Add Medicine</label>
-                            <button class="btn btn-sm btn-primary" onclick="addMedicineRow()">+ Add</button>
+                            <div class="flex gap-xs" style="flex-wrap:wrap;align-items:center;">
+                                <button type="button" class="btn btn-sm" onclick="document.getElementById('camera-file-input').click()" style="background:#7c3aed;color:white;font-weight:700;padding:4px 10px;font-size:12px;border:none;border-radius:6px;cursor:pointer;">
+                                    📷 Scan Rx
+                                </button>
+                                <button type="button" class="btn btn-sm" onclick="document.getElementById('gallery-file-input').click()" style="background:#2563eb;color:white;font-weight:700;padding:4px 10px;font-size:12px;border:none;border-radius:6px;cursor:pointer;">
+                                    🖼️ Upload Rx
+                                </button>
+                                <button class="btn btn-sm btn-primary" onclick="addMedicineRow()">+ Add</button>
+                            </div>
                         </div>
                         <div id="medicines-container">
                             <div class="med-row" data-index="0" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:6px;">

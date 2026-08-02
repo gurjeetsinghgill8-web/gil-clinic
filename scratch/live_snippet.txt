@@ -1,0 +1,28 @@
+ent active" id="tab-rx">
+                <div class="flex-between mb-sm">
+                    <h2>📝 New Prescription</h2>
+                    <div class="flex gap-sm">
+                        <button class="btn btn-ghost btn-sm" onclick="clearRxForm()">🔄 New Patient</button>
+                        <button class="btn btn-ghost btn-sm" onclick="toggleSearch()">🔍 Search Old</button>
+                        <button class="btn btn-sm btn-primary" id="followup-btn" onclick="showFollowupDialog()" style="display:none;">🔄 Follow-Up Rx</button>
+                    </div>
+                </div>
+
+                <!-- Patient Search (hidden by default) -->
+                <div id="search-section" style="display:none;" class="card mb-sm">
+                    <div class="card-title">Search Existing Patient</div>
+                    <div class="autocomplete-wrap">
+                        <input type="text" id="patient-search" placeholder="Type name or phone..." oninput="debouncedSearch()">
+                        <div class="autocomplete-list" id="search-results"></div>
+                    </div>
+                    <div id="selected-patient" style="display:none; margin-top:8px;">
+                        <div class="flex-between">
+                            <span id="selected-patient-info"></span>
+                            <button class="btn btn-sm btn-ghost" onclick="clearSelected()">✕ Clear</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Main Form -->
+                <div class="card">
+                    <div class="for
