@@ -409,30 +409,38 @@
                     <div class="flex gap-sm" style="flex-wrap:wrap;">
                         <button class="btn btn-ghost btn-sm" onclick="clearRxForm()">🔄 New Patient</button>
                         <button class="btn btn-ghost btn-sm" onclick="toggleSearch()">🔍 Search Old</button>
-                        <button class="btn btn-sm" onclick="toggleQuickScan()" style="background:#8b5cf6;color:white;font-weight:600;padding:6px 12px;border:none;border-radius:6px;cursor:pointer;">📸 Snap/Scan Reports</button>
                         <button class="btn btn-sm btn-primary" id="followup-btn" onclick="showFollowupDialog()" style="display:none;">🔄 Follow-Up Rx</button>
                     </div>
                 </div>
 
-                <!-- Quick Camera/Batch Scan Section -->
-                <div id="quick-scan-section" style="display:none;background:linear-gradient(135deg, rgba(139,92,246,0.06), rgba(99,102,241,0.06));border:1px solid #c084fc;border-radius:12px;padding:16px;margin-bottom:16px;">
-                    <div class="flex-between mb-sm">
-                        <h4 style="margin:0;color:#6b21a8;font-size:15px;display:flex;align-items:center;gap:6px;">
-                            📸 Snap/Upload Prescriptions & Lab Reports (AI Auto-Parse)
+                <!-- Prominent AI Camera & Gallery Upload Toolbar (Always Visible) -->
+                <div class="card mb-sm" style="background:linear-gradient(135deg, rgba(124,58,237,0.08), rgba(37,99,235,0.08));border:1.5px solid #a855f7;border-radius:12px;padding:16px;">
+                    <div class="flex-between mb-sm" style="flex-wrap:wrap;gap:8px;">
+                        <h4 style="margin:0;color:#581c87;font-size:15px;display:flex;align-items:center;gap:6px;">
+                            📸 Snap/Upload Old Prescriptions & Lab Reports (Groq Vision AI)
                         </h4>
-                        <button class="btn btn-sm btn-ghost" onclick="toggleQuickScan()">✕ Close</button>
+                        <span style="font-size:11px;background:#f3e8ff;color:#7e22ce;padding:3px 10px;border-radius:12px;font-weight:700;">1-by-1 Sequential AI Queue</span>
                     </div>
                     <div style="font-size:12px;color:#6b21a8;margin-bottom:12px;">
-                        Take camera snaps or upload multi-page lab reports/old handwritten prescriptions. AI Vision will sequentially process all images 1-by-1 and auto-fill your prescription!
+                        Take camera snaps of handwritten prescriptions or pick multi-page lab reports from mobile gallery. AI Vision sequentially reads all images 1-by-1 and auto-fills your prescription below!
                     </div>
-                    <div class="form-group mb-sm">
-                        <input type="file" id="quick-scan-files" accept="image/*" capture="environment" multiple onchange="previewQuickScans()" style="padding:8px;border:1px solid #c084fc;border-radius:8px;background:white;width:100%;">
+
+                    <!-- Native File Inputs -->
+                    <input type="file" id="camera-file-input" accept="image/*" capture="environment" style="display:none;" onchange="handleCameraCapture(this)">
+                    <input type="file" id="gallery-file-input" accept="image/*" multiple style="display:none;" onchange="handleGalleryUpload(this)">
+
+                    <div class="flex gap-sm mb-sm" style="flex-wrap:wrap;">
+                        <button type="button" class="btn" onclick="document.getElementById('camera-file-input').click()" style="background:#7c3aed;color:white;font-weight:700;font-size:13px;padding:10px 18px;border:none;border-radius:8px;cursor:pointer;display:inline-flex;align-items:center;gap:8px;box-shadow:0 3px 10px rgba(124,58,237,0.25);">
+                            <span style="font-size:18px;">📷</span> <strong>Take Live Camera Snap</strong>
+                        </button>
+
+                        <button type="button" class="btn" onclick="document.getElementById('gallery-file-input').click()" style="background:#2563eb;color:white;font-weight:700;font-size:13px;padding:10px 18px;border:none;border-radius:8px;cursor:pointer;display:inline-flex;align-items:center;gap:8px;box-shadow:0 3px 10px rgba(37,99,235,0.25);">
+                            <span style="font-size:18px;">🖼️</span> <strong>Upload from Gallery / Memory</strong>
+                        </button>
                     </div>
+
                     <div id="quick-scan-previews" class="flex flex-wrap gap-sm mb-sm"></div>
-                    <div id="quick-scan-status" class="text-sm mb-sm" style="font-weight:500;"></div>
-                    <button class="btn btn-sm" onclick="processQuickScans()" style="background:#7c3aed;color:white;font-weight:600;padding:8px 16px;border:none;border-radius:8px;cursor:pointer;">
-                        🤖 AI Read & Auto-Fill Prescription
-                    </button>
+                    <div id="quick-scan-status" class="text-sm" style="font-weight:600;color:#581c87;"></div>
                 </div>
 
                 <!-- Patient Search (hidden by default) -->
@@ -680,19 +688,30 @@
 
             <!-- ════════════════ TAB: BATCH SCAN ════════════════ -->
             <div class="tab-content" id="tab-batch">
-                <h2 class="mb-sm">📸 Batch Scan</h2>
+                <h2 class="mb-sm">📸 Batch Scan (Prescriptions & Pathology Reports)</h2>
                 <div class="card">
-                    <div class="card-title">Upload Prescription Images</div>
-                    <div class="form-group">
-                        <input type="file" id="scan-files" accept="image/*" multiple onchange="previewScans()">
+                    <div class="card-title">Snap or Upload Document Images</div>
+                    <div style="font-size:13px;color:#64748b;margin-bottom:14px;">
+                        Capture camera photos or pick multi-page lab reports/old handwritten prescriptions from gallery.
                     </div>
+                    
+                    <!-- Native File Inputs for Batch Tab -->
+                    <input type="file" id="batch-tab-camera" accept="image/*" capture="environment" style="display:none;" onchange="handleCameraCapture(this)">
+                    <input type="file" id="batch-tab-gallery" accept="image/*" multiple style="display:none;" onchange="handleGalleryUpload(this)">
+
+                    <div class="flex gap-sm mb-sm" style="flex-wrap:wrap;">
+                        <button type="button" class="btn" onclick="document.getElementById('batch-tab-camera').click()" style="background:#7c3aed;color:white;font-weight:700;font-size:13px;padding:10px 18px;border:none;border-radius:8px;cursor:pointer;display:inline-flex;align-items:center;gap:8px;">
+                            <span style="font-size:18px;">📷</span> <strong>Take Live Camera Snap</strong>
+                        </button>
+
+                        <button type="button" class="btn" onclick="document.getElementById('batch-tab-gallery').click()" style="background:#2563eb;color:white;font-weight:700;font-size:13px;padding:10px 18px;border:none;border-radius:8px;cursor:pointer;display:inline-flex;align-items:center;gap:8px;">
+                            <span style="font-size:18px;">🖼️</span> <strong>Upload from Gallery / Memory</strong>
+                        </button>
+                    </div>
+
                     <div id="scan-previews" class="flex flex-wrap gap-sm" style="margin-bottom:12px;"></div>
-                    <div id="scan-queue-status" class="text-muted text-sm mb-sm"></div>
-                    <button class="btn btn-primary" onclick="processAllScans()">🤖 AI Read All</button>
-                </div>
-                <div class="card">
-                    <div class="card-title">Pending Scans</div>
-                    <div id="pending-scans"></div>
+                    <div id="scan-queue-status" class="text-muted text-sm mb-sm" style="font-weight:600;"></div>
+                    <button class="btn btn-primary" onclick="processAllScans()">🤖 AI Read All (1-by-1 Queue)</button>
                 </div>
             </div>
 
@@ -1018,40 +1037,66 @@ function loadQueuePatients() {
 let selectedScanFiles = [];
 let quickScanFiles = [];
 
-function toggleQuickScan() {
-    const el = document.getElementById('quick-scan-section');
-    el.style.display = el.style.display === 'none' ? 'block' : 'none';
+function handleCameraCapture(input) {
+    if (!input.files || input.files.length === 0) return;
+    const newFiles = Array.from(input.files);
+    quickScanFiles = quickScanFiles.concat(newFiles);
+    selectedScanFiles = quickScanFiles;
+    renderQuickScanPreviews();
+    processQuickScansAuto();
 }
 
-function previewQuickScans() {
-    const input = document.getElementById('quick-scan-files');
-    const container = document.getElementById('quick-scan-previews');
-    container.innerHTML = '';
-    quickScanFiles = Array.from(input.files);
-    if (quickScanFiles.length === 0) return;
+function handleGalleryUpload(input) {
+    if (!input.files || input.files.length === 0) return;
+    const newFiles = Array.from(input.files);
+    quickScanFiles = quickScanFiles.concat(newFiles);
+    selectedScanFiles = quickScanFiles;
+    renderQuickScanPreviews();
+    processQuickScansAuto();
+}
 
-    quickScanFiles.forEach(file => {
-        const reader = new FileReader();
-        reader.onload = function(e) {
-            const div = document.createElement('div');
-            div.style.cssText = 'position:relative;width:100px;height:100px;border:1px solid #c084fc;border-radius:8px;overflow:hidden;background:#f3e8ff;';
-            div.innerHTML = `
-                <img src="${e.target.result}" style="width:100%;height:100%;object-fit:cover;">
-                <div style="position:absolute;bottom:0;left:0;right:0;background:rgba(124,58,237,0.8);color:white;font-size:10px;padding:2px 4px;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${file.name}</div>
-            `;
-            container.appendChild(div);
-        };
-        reader.readAsDataURL(file);
+function renderQuickScanPreviews() {
+    const containers = [
+        document.getElementById('quick-scan-previews'),
+        document.getElementById('scan-previews')
+    ];
+    containers.forEach(container => {
+        if (!container) return;
+        container.innerHTML = '';
+        quickScanFiles.forEach((file, index) => {
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const div = document.createElement('div');
+                div.style.cssText = 'position:relative;width:100px;height:100px;border:1.5px solid #c084fc;border-radius:8px;overflow:hidden;background:#f3e8ff;';
+                div.innerHTML = `
+                    <img src="${e.target.result}" style="width:100%;height:100%;object-fit:cover;">
+                    <button type="button" onclick="removeQuickScanFile(${index})" style="position:absolute;top:2px;right:2px;background:rgba(225,29,72,0.9);color:white;border:none;border-radius:50%;width:20px;height:20px;font-size:11px;cursor:pointer;display:flex;align-items:center;justify-content:center;">✕</button>
+                    <div style="position:absolute;bottom:0;left:0;right:0;background:rgba(124,58,237,0.85);color:white;font-size:9px;padding:2px 4px;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${file.name}</div>
+                `;
+                container.appendChild(div);
+            };
+            reader.readAsDataURL(file);
+        });
     });
-    document.getElementById('quick-scan-status').textContent = `Ready to process ${quickScanFiles.length} photo(s) in sequential AI queue.`;
+
+    const statusEls = [
+        document.getElementById('quick-scan-status'),
+        document.getElementById('scan-queue-status')
+    ];
+    statusEls.forEach(statusEl => {
+        if (statusEl) statusEl.textContent = `Ready to process ${quickScanFiles.length} photo(s) in sequential AI queue.`;
+    });
 }
 
-function processQuickScans() {
-    if (!quickScanFiles || quickScanFiles.length === 0) {
-        showToast('Please select at least 1 prescription or lab report image', 'error');
-        return;
-    }
-    const statusEl = document.getElementById('quick-scan-status');
+function removeQuickScanFile(index) {
+    quickScanFiles.splice(index, 1);
+    selectedScanFiles = quickScanFiles;
+    renderQuickScanPreviews();
+}
+
+function processQuickScansAuto() {
+    if (!quickScanFiles || quickScanFiles.length === 0) return;
+    const statusEl = document.getElementById('quick-scan-status') || document.getElementById('scan-queue-status');
     processAllScansSequential(quickScanFiles, statusEl);
 }
 
