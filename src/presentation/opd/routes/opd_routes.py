@@ -1707,6 +1707,120 @@ async def api_transcribe_audio(request: Request):
         return {"ok": False, "error": str(e)}
 
 
+@router.get("/api/search", include_in_schema=False)
+async def api_search_patients(request: Request, q: str = Query("")):
+    """Unified Patient Search & Recall Engine.
+    
+    Searches patients across Queue, Patient Master, and Prescriptions by
+    Name, Phone Number, Disease/Diagnosis, Token Number, or Patient ID.
+    """
+    sess = _require_opd_session(request)
+    query_str = q.strip()
+    if not query_str or len(query_str) < 2:
+        return []
+
+    results = []
+    seen_ids = set()
+
+    try:
+        async with async_session_factory() as session:
+            # 1. Search in Queue Entries (Today's active patients)
+            from src.infrastructure.queue.models.queue_entry_model import QueueEntryModel
+            q_stmt = sa.select(QueueEntryModel).where(
+                sa.or_(
+                    QueueEntryModel.patient_name.ilike(f"%{query_str}%"),
+                    QueueEntryModel.patient_id.ilike(f"%{query_str}%"),
+                    QueueEntryModel.token_number.ilike(f"%{query_str}%"),
+                    QueueEntryModel.service_code.ilike(f"%{query_str}%"),
+                    QueueEntryModel.notes.ilike(f"%{query_str}%"),
+                )
+            ).order_by(QueueEntryModel.created_at.desc()).limit(20)
+
+            q_rows = (await session.execute(q_stmt)).scalars().all()
+            for r in q_rows:
+                key = f"q_{r.id}"
+                if key not in seen_ids:
+                    seen_ids.add(key)
+                    results.append({
+                        "patient_name": r.patient_name,
+                        "patient_id": r.patient_id,
+                        "patient_uuid": r.patient_uuid,
+                        "phone": "",
+                        "vitals": "",
+                        "complaints": r.notes or "",
+                        "diagnosis": "",
+                        "token_number": r.token_number,
+                        "service_code": r.service_code,
+                        "status": r.status,
+                        "date": r.created_at.strftime("%Y-%m-%d") if r.created_at else "",
+                        "source": "queue",
+                    })
+
+            # 2. Search in PatientModel (Master Patients)
+            from src.infrastructure.patient.models.patient_model import PatientModel
+            p_stmt = sa.select(PatientModel).where(
+                sa.or_(
+                    PatientModel.name.ilike(f"%{query_str}%"),
+                    PatientModel.phone.ilike(f"%{query_str}%"),
+                    PatientModel.patient_id.ilike(f"%{query_str}%"),
+                )
+            ).order_by(PatientModel.updated_at.desc()).limit(20)
+
+            p_rows = (await session.execute(p_stmt)).scalars().all()
+            for p in p_rows:
+                key = f"p_{p.id}"
+                if key not in seen_ids:
+                    seen_ids.add(key)
+                    results.append({
+                        "patient_name": p.name,
+                        "patient_id": p.patient_id,
+                        "patient_uuid": str(p.id),
+                        "phone": p.phone or "",
+                        "age": p.age,
+                        "gender": p.gender,
+                        "vitals": "",
+                        "complaints": "",
+                        "diagnosis": "",
+                        "date": p.last_visit_at.strftime("%Y-%m-%d") if p.last_visit_at else "",
+                        "source": "patient",
+                    })
+
+            # 3. Search in OpdPrescriptionModel (Past Prescriptions & Diseases)
+            rx_stmt = sa.select(OpdPrescriptionModel).where(
+                sa.or_(
+                    OpdPrescriptionModel.patient_name.ilike(f"%{query_str}%"),
+                    OpdPrescriptionModel.phone.ilike(f"%{query_str}%"),
+                    OpdPrescriptionModel.diagnosis.ilike(f"%{query_str}%"),
+                    OpdPrescriptionModel.complaints.ilike(f"%{query_str}%"),
+                    OpdPrescriptionModel.medicines.ilike(f"%{query_str}%"),
+                    OpdPrescriptionModel.investigations.ilike(f"%{query_str}%"),
+                )
+            ).order_by(OpdPrescriptionModel.id.desc()).limit(20)
+
+            rx_rows = (await session.execute(rx_stmt)).scalars().all()
+            for rx in rx_rows:
+                key = f"rx_{rx.id}"
+                if key not in seen_ids:
+                    seen_ids.add(key)
+                    results.append({
+                        "patient_name": rx.patient_name,
+                        "patient_id": "",
+                        "phone": rx.phone or "",
+                        "vitals": rx.vitals or "",
+                        "complaints": rx.complaints or "",
+                        "diagnosis": rx.diagnosis or "",
+                        "medicines": rx.medicines or "",
+                        "investigations": rx.investigations or "",
+                        "date": rx.date or "",
+                        "source": "prescription",
+                    })
+
+            return results
+    except Exception as e:
+        logger.error("Search error: %s", e)
+        return []
+
+
 @router.post("/api/scan-approve", include_in_schema=False)
 async def api_approve_scan(request: Request):
     sess = _require_opd_session(request)

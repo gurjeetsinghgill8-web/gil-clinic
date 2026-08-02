@@ -272,8 +272,8 @@ def call_groq(messages: list, model: str = None, temp: float = 0.3, max_tokens: 
 
 def call_groq_vision(image, context: str = "") -> str:
     """
-    Call Groq vision model with a single image to read handwritten prescription.
-    Returns extracted text from the image.
+    Call Groq vision model to parse handwritten prescriptions OR pathology lab reports.
+    Extracts structured clinical data, lab parameters, abnormal flags, and medicines.
     """
     if not hasattr(image, 'save'):
         # It's a file-like object, convert to PIL Image
@@ -284,15 +284,15 @@ def call_groq_vision(image, context: str = "") -> str:
             return ""
 
     messages = [
-        f"""You are an expert Indian pharmacist reading handwritten prescriptions.
-Extract ALL information from this prescription image.
+        f"""You are a world-class AI Clinical Specialist reading handwritten doctor prescriptions AND pathology lab reports.
+Extract ALL clinical information from this document image.
 
 Return in this EXACT JSON format (no markdown, no code fences, pure JSON):
-{{"patient_name": "name or empty", "phone": "10 digits or empty", "vitals": "BP/HR/Sugar/Weight or empty", "fee": "amount or 0", "complaints": "chief complaints", "diagnosis": "diagnosis if visible", "medicines": "all medicines with doses, frequency, duration", "advice": "lifestyle/diet advice", "follow_up": "follow up instructions", "investigations": "lab tests if mentioned"}}
+{{"patient_name": "name or empty", "phone": "10 digits or empty", "age": "years or empty", "gender": "Male/Female/empty", "vitals": "BP/HR/Sugar/Weight or empty", "complaints": "chief complaints", "diagnosis": "diagnoses or impressions", "medicines": "all medicines with doses, frequency, and duration", "investigations": "lab test results with values and abnormal flags (e.g. Hb 9.2 L, HbA1c 8.5% H)", "advice": "lifestyle/diet advice", "follow_up": "follow up date or instructions"}}
 {f"Context: {context}" if context else ""}""",
         image
     ]
-    return call_groq(messages, model=DEFAULT_VISION_MODEL, temp=0.1, max_tokens=2000)
+    return call_groq(messages, model=DEFAULT_VISION_MODEL, temp=0.1, max_tokens=2500)
 
 
 def parse_ai_json(text: str) -> dict:

@@ -18,6 +18,15 @@
   </div>
   <div class="cp-meta">{{ dept_name }} · Waiting {{ current_patient.wait_minutes }} min</div>
   <div class="cp-actions">
+    <button class="btn btn-sm" onclick="shareWA('patient')" style="background:#25D366;color:white;font-weight:600;font-size:13px;border:none;padding:8px 14px;border-radius:6px;cursor:pointer;">
+      📢 Call Patient (WhatsApp)
+    </button>
+    <button class="btn btn-outline"
+      data-action="recall"
+      data-entry-id="{{ current_patient.id }}"
+      data-dept="{{ dept_id }}">
+      🔄 Recall Patient
+    </button>
     <button class="btn btn-success"
       data-action="complete"
       data-entry-id="{{ current_patient.id }}"
@@ -30,16 +39,10 @@
       data-dept="{{ dept_id }}">
       📄 Report Ready
     </button>
-    <button class="btn btn-outline"
-      data-action="alert"
-      data-entry-id="{{ current_patient.id }}"
-      data-dept="{{ dept_id }}">
-      🔔 Alert Patient
-    </button>
     <!-- WhatsApp Share Dropdown -->
     <span style="position:relative;display:inline-block;">
       <button class="btn btn-sm" onclick="toggleWAMenu()" style="background:rgba(37,211,102,0.12);border-color:#25D366;color:#25D366;font-size:13px;">
-        📱 WhatsApp ▾
+        📱 WhatsApp Options ▾
       </button>
       <div id="wa-menu" style="display:none;position:absolute;top:100%;right:0;background:var(--card);border:1px solid var(--border);border-radius:8px;z-index:200;min-width:200px;box-shadow:0 8px 30px rgba(0,0,0,0.15);margin-top:4px;">
         <button class="btn btn-sm btn-ghost" onclick="shareWA('patient')" style="display:flex;width:100%;border-radius:0;border-bottom:1px solid var(--border);padding:10px 14px;">📱 Send to Patient</button>
@@ -107,12 +110,12 @@
             data-dept="{{ dept_id }}">
             ✅ Done
           </button>
-          {% elif entry.status == 'COMPLETED' %}
+          {% elif entry.status == 'COMPLETED' or entry.status == 'REPORT_READY' %}
           <button class="btn btn-outline btn-sm"
-            data-action="report-ready"
+            data-action="recall"
             data-entry-id="{{ entry.id }}"
             data-dept="{{ dept_id }}">
-            📄 Report
+            🔄 Recall
           </button>
           {% endif %}
         </td>

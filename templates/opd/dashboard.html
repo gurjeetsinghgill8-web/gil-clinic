@@ -942,27 +942,179 @@ function debouncedSearch() {
 function doSearch() {
     const q = document.getElementById('patient-search').value.trim();
     const list = document.getElementById('search-results');
-    if (q.length < 2) { list.classList.remove('show'); return; }
+    if (q.length < 2) { loadQueuePatients(); return; }
 
     fetch('/opd/api/search?q=' + encodeURIComponent(q))
         .then(r => r.json())
         .then(data => {
             list.innerHTML = '';
-            if (data.length === 0) {
-                list.innerHTML = '<div class="autocomplete-item text-muted">No results</div>';
+            if (!data || data.length === 0) {
+                list.innerHTML = '<div class="autocomplete-item text-muted">No matching patients or diseases found</div>';
             } else {
                 data.forEach(p => {
                     const div = document.createElement('div');
                     div.className = 'autocomplete-item';
-                    div.textContent = p.source === 'queue'
-                        ? `🆔 ${p.patient_name} (${p.phone}) [${p.patient_id}]`
-                        : `${p.patient_name} (${p.phone}) — ${p.date || ''}`;
+                    let infoText = `👤 <strong>${p.patient_name}</strong>`;
+                    if (p.phone) infoText += ` 📞 ${p.phone}`;
+                    if (p.token_number) infoText += ` 🎟️ #${p.token_number}`;
+                    if (p.diagnosis) infoText += ` <span style="font-size:11px;color:#2563eb;margin-left:4px;">🩺 ${p.diagnosis}</span>`;
+                    if (p.date) infoText += ` <span style="font-size:11px;color:#64748b;margin-left:4px;">(${p.date})</span>`;
+                    div.innerHTML = infoText;
                     div.onclick = () => selectPatient(p);
                     list.appendChild(div);
                 });
             }
             list.classList.add('show');
+        })
+        .catch(() => {
+            list.innerHTML = '<div class="autocomplete-item text-muted">Search error</div>';
         });
+}
+
+function loadQueuePatients() {
+    fetch('/opd/api/search?q=CQ')
+        .then(r => r.json())
+        .then(data => {
+            const list = document.getElementById('search-results');
+            if (!list || !data || data.length === 0) return;
+            list.innerHTML = '<div style="font-size:12px;font-weight:700;color:#64748b;padding:8px 12px;border-bottom:1px solid #e2e8f0;">📋 TODAY\'S OPD QUEUE:</div>';
+            data.forEach(p => {
+                const div = document.createElement('div');
+                div.className = 'autocomplete-item';
+                div.innerHTML = `🎟️ <strong>#${p.token_number || ''}</strong> ${p.patient_name} ${p.phone ? '('+p.phone+')' : ''} <span style="font-size:11px;background:#e0f2fe;color:#0369a1;padding:2px 6px;border-radius:4px;margin-left:6px;">${p.status || 'WAITING'}</span>`;
+                div.onclick = () => selectPatient(p);
+                list.appendChild(div);
+            });
+            list.classList.add('show');
+        })
+        .catch(() => {});
+}
+
+// ════════════════════════════════════════════════════════════════
+// BATCH SCAN VISION OCR (Prescriptions + Pathology Reports)
+// ════════════════════════════════════════════════════════════════
+let selectedScanFiles = [];
+
+function previewScans() {
+    const input = document.getElementById('scan-files');
+    const container = document.getElementById('scan-previews');
+    container.innerHTML = '';
+    selectedScanFiles = Array.from(input.files);
+
+    if (selectedScanFiles.length === 0) return;
+
+    selectedScanFiles.forEach((file) => {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            const div = document.createElement('div');
+            div.style.cssText = 'position:relative;width:120px;height:120px;border:1px solid #cbd5e1;border-radius:8px;overflow:hidden;background:#f8fafc;';
+            div.innerHTML = `
+                <img src="${e.target.result}" style="width:100%;height:100%;object-fit:cover;">
+                <div style="position:absolute;bottom:0;left:0;right:0;background:rgba(0,0,0,0.6);color:white;font-size:10px;padding:2px 4px;text-align:center;">${file.name}</div>
+            `;
+            container.appendChild(div);
+        };
+        reader.readAsDataURL(file);
+    });
+    document.getElementById('scan-queue-status').textContent = `Ready to process ${selectedScanFiles.length} image(s) (Prescriptions / Lab Reports)`;
+}
+
+function processAllScans() {
+    if (!selectedScanFiles || selectedScanFiles.length === 0) {
+        showToast('Please select at least 1 prescription or lab report image', 'error');
+        return;
+    }
+
+    const statusEl = document.getElementById('scan-queue-status');
+    statusEl.innerHTML = `⏳ Processing ${selectedScanFiles.length} image(s) with Groq Vision AI OCR...`;
+
+    let completed = 0;
+    let combinedParsed = {
+        patient_name: '', phone: '', age: '', gender: '', vitals: '',
+        complaints: [], diagnosis: [], medicines: [], investigations: [], advice: []
+    };
+
+    selectedScanFiles.forEach((file) => {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            fetch('/opd/api/scan-ai', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ image: e.target.result })
+            })
+            .then(r => r.json())
+            .then(res => {
+                completed++;
+                if (res.ok && res.parsed) {
+                    const p = res.parsed;
+                    if (p.patient_name) combinedParsed.patient_name = p.patient_name;
+                    if (p.phone) combinedParsed.phone = p.phone;
+                    if (p.age) combinedParsed.age = p.age;
+                    if (p.gender) combinedParsed.gender = p.gender;
+                    if (p.vitals) combinedParsed.vitals = p.vitals;
+                    if (p.complaints) combinedParsed.complaints.push(p.complaints);
+                    if (p.diagnosis) combinedParsed.diagnosis.push(p.diagnosis);
+                    if (p.medicines) combinedParsed.medicines.push(p.medicines);
+                    if (p.investigations) combinedParsed.investigations.push(p.investigations);
+                    if (p.advice) combinedParsed.advice.push(p.advice);
+                }
+
+                if (completed === selectedScanFiles.length) {
+                    statusEl.innerHTML = `✅ All ${completed} image(s) parsed successfully by AI Vision! Populating prescription...`;
+                    applyParsedDataToForm(combinedParsed);
+                    showToast('🎉 Batch Vision Scan Complete!');
+                }
+            })
+            .catch(() => {
+                completed++;
+                if (completed === selectedScanFiles.length) {
+                    applyParsedDataToForm(combinedParsed);
+                }
+            });
+        };
+        reader.readAsDataURL(file);
+    });
+}
+
+function applyParsedDataToForm(p) {
+    if (p.patient_name && !document.getElementById('pt-name').value) {
+        document.getElementById('pt-name').value = p.patient_name;
+    }
+    if (p.phone && !document.getElementById('pt-phone').value) {
+        document.getElementById('pt-phone').value = p.phone;
+    }
+    if (p.age && !document.getElementById('pt-age').value) {
+        document.getElementById('pt-age').value = p.age;
+    }
+    if (p.gender && !document.getElementById('pt-gender').value) {
+        document.getElementById('pt-gender').value = p.gender;
+    }
+    if (p.vitals) {
+        const cur = document.getElementById('pt-vitals').value;
+        document.getElementById('pt-vitals').value = cur ? cur + ' | ' + p.vitals : p.vitals;
+    }
+    if (p.complaints.length) {
+        const cur = document.getElementById('pt-complaints').value;
+        document.getElementById('pt-complaints').value = cur ? cur + '\n' + p.complaints.join('\n') : p.complaints.join('\n');
+    }
+    if (p.diagnosis.length) {
+        const cur = document.getElementById('pt-diagnosis').value;
+        document.getElementById('pt-diagnosis').value = cur ? cur + '\n' + p.diagnosis.join('\n') : p.diagnosis.join('\n');
+    }
+    if (p.medicines.length) {
+        const cur = document.getElementById('pt-medicines').value;
+        document.getElementById('pt-medicines').value = cur ? cur + '\n' + p.medicines.join('\n') : p.medicines.join('\n');
+    }
+    if (p.investigations.length) {
+        const cur = document.getElementById('pt-investigations').value;
+        document.getElementById('pt-investigations').value = cur ? cur + '\n' + p.investigations.join('\n') : p.investigations.join('\n');
+    }
+    if (p.advice.length) {
+        const cur = document.getElementById('pt-advice').value;
+        document.getElementById('pt-advice').value = cur ? cur + '\n' + p.advice.join('\n') : p.advice.join('\n');
+    }
+
+    if (typeof switchTab === 'function') switchTab('rx');
 }
 
 function selectPatient(p) {
