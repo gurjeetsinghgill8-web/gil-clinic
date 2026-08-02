@@ -1,28 +1,20 @@
 ent active" id="tab-rx">
                 <div class="flex-between mb-sm">
                     <h2>📝 New Prescription</h2>
-                    <div class="flex gap-sm">
+                    <div class="flex gap-sm" style="flex-wrap:wrap;">
                         <button class="btn btn-ghost btn-sm" onclick="clearRxForm()">🔄 New Patient</button>
                         <button class="btn btn-ghost btn-sm" onclick="toggleSearch()">🔍 Search Old</button>
                         <button class="btn btn-sm btn-primary" id="followup-btn" onclick="showFollowupDialog()" style="display:none;">🔄 Follow-Up Rx</button>
                     </div>
                 </div>
 
-                <!-- Patient Search (hidden by default) -->
-                <div id="search-section" style="display:none;" class="card mb-sm">
-                    <div class="card-title">Search Existing Patient</div>
-                    <div class="autocomplete-wrap">
-                        <input type="text" id="patient-search" placeholder="Type name or phone..." oninput="debouncedSearch()">
-                        <div class="autocomplete-list" id="search-results"></div>
+                <!-- Prominent AI Camera & Gallery Upload Toolbar (Always Visible) -->
+                <div class="card mb-sm" style="background:linear-gradient(135deg, rgba(124,58,237,0.08), rgba(37,99,235,0.08));border:1.5px solid #a855f7;border-radius:12px;padding:16px;">
+                    <div class="flex-between mb-sm" style="flex-wrap:wrap;gap:8px;">
+                        <h4 style="margin:0;color:#581c87;font-size:15px;display:flex;align-items:center;gap:6px;">
+                            📸 Snap/Upload Old Prescriptions & Lab Reports (Groq Vision AI)
+                        </h4>
+                        <span style="font-size:11px;background:#f3e8ff;color:#7e22ce;padding:3px 10px;border-radius:12px;font-weight:700;">1-by-1 Sequential AI Queue</span>
                     </div>
-                    <div id="selected-patient" style="display:none; margin-top:8px;">
-                        <div class="flex-between">
-                            <span id="selected-patient-info"></span>
-                            <button class="btn btn-sm btn-ghost" onclick="clearSelected()">✕ Clear</button>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Main Form -->
-                <div class="card">
-                    <div class="for
+                    <div style="font-size:12px;color:#6b21a8;margin-bottom:12px;">
+                        Take camera snaps of handwritten prescriptions or pick multi-page lab reports 
