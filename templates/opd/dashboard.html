@@ -406,11 +406,33 @@
             <div class="tab-content active" id="tab-rx">
                 <div class="flex-between mb-sm">
                     <h2>📝 New Prescription</h2>
-                    <div class="flex gap-sm">
+                    <div class="flex gap-sm" style="flex-wrap:wrap;">
                         <button class="btn btn-ghost btn-sm" onclick="clearRxForm()">🔄 New Patient</button>
                         <button class="btn btn-ghost btn-sm" onclick="toggleSearch()">🔍 Search Old</button>
+                        <button class="btn btn-sm" onclick="toggleQuickScan()" style="background:#8b5cf6;color:white;font-weight:600;padding:6px 12px;border:none;border-radius:6px;cursor:pointer;">📸 Snap/Scan Reports</button>
                         <button class="btn btn-sm btn-primary" id="followup-btn" onclick="showFollowupDialog()" style="display:none;">🔄 Follow-Up Rx</button>
                     </div>
+                </div>
+
+                <!-- Quick Camera/Batch Scan Section -->
+                <div id="quick-scan-section" style="display:none;background:linear-gradient(135deg, rgba(139,92,246,0.06), rgba(99,102,241,0.06));border:1px solid #c084fc;border-radius:12px;padding:16px;margin-bottom:16px;">
+                    <div class="flex-between mb-sm">
+                        <h4 style="margin:0;color:#6b21a8;font-size:15px;display:flex;align-items:center;gap:6px;">
+                            📸 Snap/Upload Prescriptions & Lab Reports (AI Auto-Parse)
+                        </h4>
+                        <button class="btn btn-sm btn-ghost" onclick="toggleQuickScan()">✕ Close</button>
+                    </div>
+                    <div style="font-size:12px;color:#6b21a8;margin-bottom:12px;">
+                        Take camera snaps or upload multi-page lab reports/old handwritten prescriptions. AI Vision will sequentially process all images 1-by-1 and auto-fill your prescription!
+                    </div>
+                    <div class="form-group mb-sm">
+                        <input type="file" id="quick-scan-files" accept="image/*" capture="environment" multiple onchange="previewQuickScans()" style="padding:8px;border:1px solid #c084fc;border-radius:8px;background:white;width:100%;">
+                    </div>
+                    <div id="quick-scan-previews" class="flex flex-wrap gap-sm mb-sm"></div>
+                    <div id="quick-scan-status" class="text-sm mb-sm" style="font-weight:500;"></div>
+                    <button class="btn btn-sm" onclick="processQuickScans()" style="background:#7c3aed;color:white;font-weight:600;padding:8px 16px;border:none;border-radius:8px;cursor:pointer;">
+                        🤖 AI Read & Auto-Fill Prescription
+                    </button>
                 </div>
 
                 <!-- Patient Search (hidden by default) -->
@@ -994,29 +1016,66 @@ function loadQueuePatients() {
 // BATCH SCAN VISION OCR (Prescriptions + Pathology Reports)
 // ════════════════════════════════════════════════════════════════
 let selectedScanFiles = [];
+let quickScanFiles = [];
+
+function toggleQuickScan() {
+    const el = document.getElementById('quick-scan-section');
+    el.style.display = el.style.display === 'none' ? 'block' : 'none';
+}
+
+function previewQuickScans() {
+    const input = document.getElementById('quick-scan-files');
+    const container = document.getElementById('quick-scan-previews');
+    container.innerHTML = '';
+    quickScanFiles = Array.from(input.files);
+    if (quickScanFiles.length === 0) return;
+
+    quickScanFiles.forEach(file => {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            const div = document.createElement('div');
+            div.style.cssText = 'position:relative;width:100px;height:100px;border:1px solid #c084fc;border-radius:8px;overflow:hidden;background:#f3e8ff;';
+            div.innerHTML = `
+                <img src="${e.target.result}" style="width:100%;height:100%;object-fit:cover;">
+                <div style="position:absolute;bottom:0;left:0;right:0;background:rgba(124,58,237,0.8);color:white;font-size:10px;padding:2px 4px;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${file.name}</div>
+            `;
+            container.appendChild(div);
+        };
+        reader.readAsDataURL(file);
+    });
+    document.getElementById('quick-scan-status').textContent = `Ready to process ${quickScanFiles.length} photo(s) in sequential AI queue.`;
+}
+
+function processQuickScans() {
+    if (!quickScanFiles || quickScanFiles.length === 0) {
+        showToast('Please select at least 1 prescription or lab report image', 'error');
+        return;
+    }
+    const statusEl = document.getElementById('quick-scan-status');
+    processAllScansSequential(quickScanFiles, statusEl);
+}
 
 function previewScans() {
     const input = document.getElementById('scan-files');
     const container = document.getElementById('scan-previews');
     container.innerHTML = '';
     selectedScanFiles = Array.from(input.files);
-
     if (selectedScanFiles.length === 0) return;
 
-    selectedScanFiles.forEach((file) => {
+    selectedScanFiles.forEach(file => {
         const reader = new FileReader();
         reader.onload = function(e) {
             const div = document.createElement('div');
             div.style.cssText = 'position:relative;width:120px;height:120px;border:1px solid #cbd5e1;border-radius:8px;overflow:hidden;background:#f8fafc;';
             div.innerHTML = `
                 <img src="${e.target.result}" style="width:100%;height:100%;object-fit:cover;">
-                <div style="position:absolute;bottom:0;left:0;right:0;background:rgba(0,0,0,0.6);color:white;font-size:10px;padding:2px 4px;text-align:center;">${file.name}</div>
+                <div style="position:absolute;bottom:0;left:0;right:0;background:rgba(0,0,0,0.6);color:white;font-size:10px;padding:2px 4px;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${file.name}</div>
             `;
             container.appendChild(div);
         };
         reader.readAsDataURL(file);
     });
-    document.getElementById('scan-queue-status').textContent = `Ready to process ${selectedScanFiles.length} image(s) (Prescriptions / Lab Reports)`;
+    document.getElementById('scan-queue-status').textContent = `Ready to process ${selectedScanFiles.length} image(s) in sequential AI queue.`;
 }
 
 function processAllScans() {
@@ -1024,56 +1083,62 @@ function processAllScans() {
         showToast('Please select at least 1 prescription or lab report image', 'error');
         return;
     }
-
     const statusEl = document.getElementById('scan-queue-status');
-    statusEl.innerHTML = `⏳ Processing ${selectedScanFiles.length} image(s) with Groq Vision AI OCR...`;
+    processAllScansSequential(selectedScanFiles, statusEl);
+}
 
-    let completed = 0;
+function readFileAsDataURL(file) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = e => resolve(e.target.result);
+        reader.onerror = e => reject(e);
+        reader.readAsDataURL(file);
+    });
+}
+
+async function processAllScansSequential(files, statusEl) {
+    if (!files || files.length === 0) return;
+
     let combinedParsed = {
         patient_name: '', phone: '', age: '', gender: '', vitals: '',
         complaints: [], diagnosis: [], medicines: [], investigations: [], advice: []
     };
 
-    selectedScanFiles.forEach((file) => {
-        const reader = new FileReader();
-        reader.onload = function(e) {
-            fetch('/opd/api/scan-ai', {
+    const total = files.length;
+    for (let i = 0; i < total; i++) {
+        const file = files[i];
+        const percent = Math.round(((i + 1) / total) * 100);
+        statusEl.innerHTML = `⏳ <strong>Processing document ${i + 1} of ${total} (${percent}%)</strong>: <em>${file.name}</em>...<div style="width:100%;background:#e2e8f0;border-radius:4px;height:8px;margin-top:6px;overflow:hidden;"><div style="width:${percent}%;background:#7c3aed;height:100%;transition:width 0.3s;"></div></div>`;
+        
+        try {
+            const dataUrl = await readFileAsDataURL(file);
+            const res = await fetch('/opd/api/scan-ai', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ image: e.target.result })
-            })
-            .then(r => r.json())
-            .then(res => {
-                completed++;
-                if (res.ok && res.parsed) {
-                    const p = res.parsed;
-                    if (p.patient_name) combinedParsed.patient_name = p.patient_name;
-                    if (p.phone) combinedParsed.phone = p.phone;
-                    if (p.age) combinedParsed.age = p.age;
-                    if (p.gender) combinedParsed.gender = p.gender;
-                    if (p.vitals) combinedParsed.vitals = p.vitals;
-                    if (p.complaints) combinedParsed.complaints.push(p.complaints);
-                    if (p.diagnosis) combinedParsed.diagnosis.push(p.diagnosis);
-                    if (p.medicines) combinedParsed.medicines.push(p.medicines);
-                    if (p.investigations) combinedParsed.investigations.push(p.investigations);
-                    if (p.advice) combinedParsed.advice.push(p.advice);
-                }
+                body: JSON.stringify({ image: dataUrl })
+            }).then(r => r.json());
 
-                if (completed === selectedScanFiles.length) {
-                    statusEl.innerHTML = `✅ All ${completed} image(s) parsed successfully by AI Vision! Populating prescription...`;
-                    applyParsedDataToForm(combinedParsed);
-                    showToast('🎉 Batch Vision Scan Complete!');
-                }
-            })
-            .catch(() => {
-                completed++;
-                if (completed === selectedScanFiles.length) {
-                    applyParsedDataToForm(combinedParsed);
-                }
-            });
-        };
-        reader.readAsDataURL(file);
-    });
+            if (res.ok && res.parsed) {
+                const p = res.parsed;
+                if (p.patient_name) combinedParsed.patient_name = p.patient_name;
+                if (p.phone) combinedParsed.phone = p.phone;
+                if (p.age) combinedParsed.age = p.age;
+                if (p.gender) combinedParsed.gender = p.gender;
+                if (p.vitals) combinedParsed.vitals = p.vitals;
+                if (p.complaints) combinedParsed.complaints.push(p.complaints);
+                if (p.diagnosis) combinedParsed.diagnosis.push(p.diagnosis);
+                if (p.medicines) combinedParsed.medicines.push(p.medicines);
+                if (p.investigations) combinedParsed.investigations.push(p.investigations);
+                if (p.advice) combinedParsed.advice.push(p.advice);
+            }
+        } catch (err) {
+            console.error('Scan error on file ' + file.name, err);
+        }
+    }
+
+    statusEl.innerHTML = `✅ <strong>All ${total} document(s) scanned successfully!</strong> Auto-filling prescription...`;
+    applyParsedDataToForm(combinedParsed);
+    showToast(`🎉 Sequential scan of ${total} document(s) complete!`);
 }
 
 function applyParsedDataToForm(p) {
