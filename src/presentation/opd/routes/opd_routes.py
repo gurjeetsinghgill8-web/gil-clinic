@@ -123,9 +123,28 @@ def _read_opd_session(token: str) -> Optional[dict]:
 
 def _get_opd_session(request: Request) -> Optional[dict]:
     token = request.cookies.get(SESSION_COOKIE)
-    if not token:
-        return None
-    return _read_opd_session(token)
+    if token:
+        sess = _read_opd_session(token)
+        if sess:
+            return sess
+
+    # Fallback to staff session if logged in via staff portal (/staff/login)
+    staff_token = request.cookies.get("staff_session")
+    if staff_token:
+        try:
+            from src.presentation.staff.routes.staff_routes import _signer as staff_signer
+            staff_sess = staff_signer.loads(staff_token, max_age=60 * 60 * 12)
+            if staff_sess:
+                return {
+                    "role": "chief" if staff_sess.get("role") in ("Admin", "Doctor") else "junior",
+                    "doctor_id": staff_sess.get("user_id") or "clinic_default",
+                    "name": staff_sess.get("name") or "Chief Doctor",
+                    "lic_info": {},
+                    "ts": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+                }
+        except Exception:
+            pass
+    return None
 
 
 def _require_opd_session(request: Request) -> dict:

@@ -507,7 +507,7 @@ async def doctor(request: Request):
     sess = get_session(request)
     if not sess:
         return RedirectResponse("/staff/login")
-    return RedirectResponse("/api/v1/queue/doctor-dashboard-page")
+    return RedirectResponse("/opd/dashboard")
 
 
 # ── Manager ────────────────────────────────────────────────────────────────────

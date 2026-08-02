@@ -460,6 +460,17 @@
 
                 <!-- Main Form -->
                 <div class="card">
+                    <div class="flex-between mb-sm" style="flex-wrap:wrap;gap:8px;border-bottom:1px solid var(--border);padding-bottom:10px;">
+                        <h3 style="margin:0;font-size:16px;color:#1e293b;display:flex;align-items:center;gap:6px;">👤 Patient Information & Vision Scan</h3>
+                        <div class="flex gap-sm" style="flex-wrap:wrap;">
+                            <button type="button" class="btn btn-sm" onclick="document.getElementById('camera-file-input').click()" style="background:#7c3aed;color:white;font-weight:700;padding:6px 14px;border:none;border-radius:6px;cursor:pointer;">
+                                📷 Camera Snap
+                            </button>
+                            <button type="button" class="btn btn-sm" onclick="document.getElementById('gallery-file-input').click()" style="background:#2563eb;color:white;font-weight:700;padding:6px 14px;border:none;border-radius:6px;cursor:pointer;">
+                                🖼️ Gallery Upload
+                            </button>
+                        </div>
+                    </div>
                     <div class="form-row">
                         <div class="form-group">
                             <label>Patient Name *</label>
