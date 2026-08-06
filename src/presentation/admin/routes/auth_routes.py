@@ -222,35 +222,50 @@ async def admin_logout():
 
 
 async def seed_default_admins():
-    """Create default super_admin and ceo accounts if they don't exist.
+    """Create or update default super_admin and ceo accounts.
 
-    Called once at application startup. Passwords are loaded from env vars
-    or generated with defaults.
-
-    SUPER_ADMIN: 16-char auto-generated password (emailed to Gurjeet)
-    CEO: 12-char fixed password (set by Gurjeet)
+    Called at every startup. If SUPER_ADMIN_PASSWORD or CEO_PASSWORD env vars
+    are set, passwords are updated even for existing accounts.
     """
     try:
         async with async_session_factory() as session:
-            # Check if super_admin exists
+            # ── Super Admin ──────────────────────────────────────────
+            sa_password = os.getenv("SUPER_ADMIN_PASSWORD", "")
+            sa_username = os.getenv("SUPER_ADMIN_USERNAME", "superadmin")
+
             row = await session.execute(
                 sa.select(AdminUserModel).where(AdminUserModel.role == "super_admin")
             )
             existing_sa = row.scalar_one_or_none()
 
-            if not existing_sa:
-                # Generate 16-char password for super_admin
+            if existing_sa and sa_password:
+                # Update password if env var is set
+                sa_hash = bcrypt.hashpw(sa_password.encode("utf-8"), bcrypt.gensalt(rounds=12)).decode("utf-8")
+                existing_sa.password_hash = sa_hash
+                existing_sa.username = sa_username
+                existing_sa.email = os.getenv("SUPER_ADMIN_EMAIL", existing_sa.email or "")
+                await session.commit()
+                logger.info("✅ Super Admin password UPDATED (username: %s)", sa_username)
+                print(f"\n{'='*60}")
+                print(f"🔐 SUPER ADMIN — Password Updated!")
+                print(f"   Username: {sa_username}")
+                print(f"   Password: {sa_password}")
+                print(f"{'='*60}\n")
+
+            elif not existing_sa:
+                # Create new super_admin
                 import secrets
                 import string
 
-                sa_password = os.getenv(
-                    "SUPER_ADMIN_PASSWORD",
-                    "".join(secrets.choice(string.ascii_letters + string.digits + "!@#$%^&*") for _ in range(16)),
-                )
+                if not sa_password:
+                    sa_password = "".join(
+                        secrets.choice(string.ascii_letters + string.digits + "!@#$%^&*")
+                        for _ in range(16)
+                    )
                 sa_hash = bcrypt.hashpw(sa_password.encode("utf-8"), bcrypt.gensalt(rounds=12)).decode("utf-8")
 
                 sa_admin = AdminUserModel(
-                    username=os.getenv("SUPER_ADMIN_USERNAME", "superadmin"),
+                    username=sa_username,
                     password_hash=sa_hash,
                     role="super_admin",
                     display_name="Technical Admin",
@@ -258,26 +273,36 @@ async def seed_default_admins():
                 )
                 session.add(sa_admin)
                 await session.commit()
-                logger.info("✅ Super Admin account seeded (username: %s)", sa_admin.username)
-                # Print password so Gurjeet can save it (only on first run)
+                logger.info("✅ Super Admin account CREATED (username: %s)", sa_username)
                 print(f"\n{'='*60}")
                 print(f"🔐 SUPER ADMIN CREDENTIALS (SAVE THESE!)")
-                print(f"   Username: {sa_admin.username}")
+                print(f"   Username: {sa_username}")
                 print(f"   Password: {sa_password}")
                 print(f"{'='*60}\n")
 
-            # Check if ceo exists
+            # ── CEO ──────────────────────────────────────────────────
+            ceo_password = os.getenv("CEO_PASSWORD", "")
+            ceo_username = os.getenv("CEO_USERNAME", "ceo")
+
             row = await session.execute(
                 sa.select(AdminUserModel).where(AdminUserModel.role == "ceo")
             )
             existing_ceo = row.scalar_one_or_none()
 
-            if not existing_ceo:
-                ceo_password = os.getenv("CEO_PASSWORD", "ceo123456789")  # 12-char default
+            if existing_ceo and ceo_password:
+                ceo_hash = bcrypt.hashpw(ceo_password.encode("utf-8"), bcrypt.gensalt(rounds=12)).decode("utf-8")
+                existing_ceo.password_hash = ceo_hash
+                existing_ceo.username = ceo_username
+                await session.commit()
+                logger.info("✅ CEO password UPDATED (username: %s)", ceo_username)
+
+            elif not existing_ceo:
+                if not ceo_password:
+                    ceo_password = "ceo123456789"  # 12-char default
                 ceo_hash = bcrypt.hashpw(ceo_password.encode("utf-8"), bcrypt.gensalt(rounds=12)).decode("utf-8")
 
                 ceo_admin = AdminUserModel(
-                    username=os.getenv("CEO_USERNAME", "ceo"),
+                    username=ceo_username,
                     password_hash=ceo_hash,
                     role="ceo",
                     display_name="CEO",
@@ -285,10 +310,10 @@ async def seed_default_admins():
                 )
                 session.add(ceo_admin)
                 await session.commit()
-                logger.info("✅ CEO account seeded (username: %s)", ceo_admin.username)
+                logger.info("✅ CEO account CREATED (username: %s)", ceo_username)
                 print(f"\n{'='*60}")
                 print(f"🔐 CEO CREDENTIALS (SAVE THESE!)")
-                print(f"   Username: {ceo_admin.username}")
+                print(f"   Username: {ceo_username}")
                 print(f"   Password: {ceo_password}")
                 print(f"{'='*60}\n")
 

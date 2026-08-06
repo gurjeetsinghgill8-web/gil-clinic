@@ -353,8 +353,22 @@ if _dash_static.exists():
 
 @app.get("/", include_in_schema=False)
 async def root():
-    """Root redirect → Staff Dashboard."""
-    return RedirectResponse("/staff/")
+    """Landing page — Super Admin or Clinic Login."""
+    return HTMLResponse(content=_render_landing())
+
+
+def _render_landing() -> str:
+    """Render the 2-button landing page."""
+    import jinja2
+    _loader = jinja2.FileSystemLoader(str(Path(__file__).parent / "templates"))
+    _env = jinja2.Environment(loader=_loader, auto_reload=True)
+    return _env.get_template("landing.html").render()
+
+
+@app.get("/clinic-portal", include_in_schema=False)
+async def clinic_portal():
+    """Redirect to clinic login page."""
+    return RedirectResponse("/staff/login")
 
 
 @app.get("/health", include_in_schema=False)

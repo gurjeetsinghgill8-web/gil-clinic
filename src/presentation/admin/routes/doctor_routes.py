@@ -73,6 +73,8 @@ async def api_onboard_doctor(
     doctor_reg_no: str = Form(""),
     specialty: str = Form("General Physician"),
     license_duration: int = Form(2),  # 2, 3, or 4 months
+    custom_username: str = Form(""),  # optional — doctor's preferred username
+    custom_password: str = Form(""),  # optional — doctor's preferred password
 ):
     """Create a new clinic + doctor with auto-generated credentials."""
     sess = require_admin_session(request)
@@ -93,8 +95,14 @@ async def api_onboard_doctor(
             )
             clinic_count = clinic_count_row.scalar() or 0
 
-            # Generate credentials
+            # Generate credentials (auto or custom)
             creds = generate_all_credentials(doctor_name.strip(), clinic_count)
+
+            # Override with custom credentials if provided
+            if custom_username.strip():
+                creds["clinic_username"] = custom_username.strip()
+            if custom_password.strip():
+                creds["clinic_password"] = custom_password.strip()
 
             # Hash password
             password_hash = bcrypt.hashpw(

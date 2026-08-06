@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GIL CLINIC — Login</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700;14..32,800&display=swap');
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        :root {
+            --bg: #0f172a;
+            --card: #1e293b;
+            --border: rgba(255,255,255,0.08);
+            --text: #e2e8f0;
+            --text-muted: #94a3b8;
+        }
+        body {
+            font-family: 'Inter', system-ui, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        .container { text-align: center; max-width: 500px; width: 100%; }
+        .logo { font-size: 64px; margin-bottom: 8px; }
+        h1 { font-size: 28px; font-weight: 800; color: #f8fafc; letter-spacing: -0.5px; }
+        .subtitle { color: var(--text-muted); font-size: 15px; margin: 8px 0 32px; }
+
+        .login-options {
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+        }
+        .login-btn {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            padding: 20px 28px;
+            border-radius: 14px;
+            text-decoration: none;
+            transition: all 0.2s;
+            cursor: pointer;
+            border: 2px solid transparent;
+            text-align: left;
+        }
+        .login-btn.admin {
+            background: linear-gradient(135deg, #1e293b, #312e81);
+            border-color: rgba(99,102,241,0.4);
+        }
+        .login-btn.admin:hover {
+            border-color: #6366f1;
+            transform: translateY(-2px);
+            box-shadow: 0 8px 24px rgba(99,102,241,0.25);
+        }
+        .login-btn.clinic {
+            background: linear-gradient(135deg, #1e293b, #065f46);
+            border-color: rgba(34,197,94,0.4);
+        }
+        .login-btn.clinic:hover {
+            border-color: #22c55e;
+            transform: translateY(-2px);
+            box-shadow: 0 8px 24px rgba(34,197,94,0.25);
+        }
+        .login-btn .icon {
+            font-size: 36px;
+            width: 56px;
+            height: 56px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 12px;
+            flex-shrink: 0;
+        }
+        .login-btn.admin .icon { background: rgba(99,102,241,0.2); }
+        .login-btn.clinic .icon { background: rgba(34,197,94,0.2); }
+        .login-btn .info h3 { font-size: 17px; font-weight: 700; color: #f8fafc; margin-bottom: 2px; }
+        .login-btn .info p { font-size: 12px; color: #94a3b8; }
+        .login-btn .arrow { margin-left: auto; font-size: 20px; opacity: 0.5; }
+
+        .footer {
+            margin-top: 40px;
+            font-size: 12px;
+            color: #475569;
+            display: flex;
+            gap: 20px;
+            justify-content: center;
+        }
+        .footer a { color: #64748b; text-decoration: none; }
+        .footer a:hover { color: #94a3b8; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="logo">🏥</div>
+        <h1>GIL CLINIC</h1>
+        <p class="subtitle">CardioQueue — Multi-Specialty Clinic Management</p>
+
+        <div class="login-options">
+            <a href="/admin/login" class="login-btn admin">
+                <div class="icon">🔐</div>
+                <div class="info">
+                    <h3>Super Admin</h3>
+                    <p>CEO / Technical Team — Manage all clinics</p>
+                </div>
+                <span class="arrow">→</span>
+            </a>
+
+            <a href="/clinic-portal" class="login-btn clinic">
+                <div class="icon">🏥</div>
+                <div class="info">
+                    <h3>Clinic Login</h3>
+                    <p>Doctor / Staff — Access your clinic dashboard</p>
+                </div>
+                <span class="arrow">→</span>
+            </a>
+        </div>
+
+        <div class="footer">
+            <a href="/staff/patient-status">🔍 Patient Status Check</a>
+            <a href="/health">📊 System Status</a>
+        </div>
+    </div>
+</body>
+</html>
