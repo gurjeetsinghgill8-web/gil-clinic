@@ -25,6 +25,9 @@ class QueueEntryModel(Base):
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), primary_key=True, default=uuid7
     )
+    clinic_id: Mapped[str | None] = mapped_column(
+        String(36), nullable=True, index=True
+    )
     visit_id: Mapped[str] = mapped_column(String(50), nullable=False, index=True)
     patient_id: Mapped[str] = mapped_column(String(30), nullable=False)
     patient_uuid: Mapped[str] = mapped_column(String(36), nullable=False)

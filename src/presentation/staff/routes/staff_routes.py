@@ -663,7 +663,23 @@ async def staff_register_patient(request: Request):
                     session.add(q)
                     entries_created.append({"service": code, "token": token})
                 await session.commit()
+                # Generate WhatsApp notification data
+                whatsapp_links = []
+                if phone:
+                    from src.infrastructure.notification.whatsapp_cloud_api import (
+                        build_patient_token_message, build_wa_me_url,
+                    )
+                    for entry in entries_created:
+                        msg = build_patient_token_message(
+                            patient_name, str(entry["token"]), entry["service"]
+                        )
+                        whatsapp_links.append({
+                            "service": entry["service"],
+                            "token": entry["token"],
+                            "url": build_wa_me_url(phone, msg),
+                        })
                 return {"ok": True, "patient_id": patient_id, "visit_id": visit_id, "entries": entries_created,
+                        "whatsapp": whatsapp_links,
                         "message": f"{patient_name} — new test(s) added"}
 
             # ── New patient — create patient + queue entries ──
@@ -725,7 +741,23 @@ async def staff_register_patient(request: Request):
                 entries_created.append({"service": code, "token": token})
 
             await session.commit()
+            # Generate WhatsApp notification data
+            whatsapp_links = []
+            if phone:
+                from src.infrastructure.notification.whatsapp_cloud_api import (
+                    build_patient_token_message, build_wa_me_url,
+                )
+                for entry in entries_created:
+                    msg = build_patient_token_message(
+                        name, str(entry["token"]), entry["service"]
+                    )
+                    whatsapp_links.append({
+                        "service": entry["service"],
+                        "token": entry["token"],
+                        "url": build_wa_me_url(phone, msg),
+                    })
             return {"ok": True, "patient_id": patient_id, "visit_id": visit_id, "entries": entries_created,
+                    "whatsapp": whatsapp_links,
                     "message": f"{name} registered! Patient ID: {patient_id}"}
 
     except Exception as exc:

@@ -1,0 +1,39 @@
+# ─── GIL CLINIC Local Deployment ────────────────────────────────────
+# Run on doctor's laptop:  docker compose -f docker-compose.local.yml up
+# ─────────────────────────────────────────────────────────────────────
+
+version: "3.9"
+
+services:
+  gil-clinic:
+    build:
+      context: .
+      dockerfile: Dockerfile.local
+    container_name: gil-clinic-local
+    ports:
+      - "8000:8000"
+    volumes:
+      # Persistent local database
+      - ./clinic_data:/app/data
+      # Mount templates for live editing
+      - ./templates:/app/templates:ro
+    environment:
+      - GHOS_DB_URL=sqlite:///./data/clinic.db
+      - GHOS_DB_URL_ASYNC=sqlite+aiosqlite:///./data/clinic.db
+      - GHOS_DEV_AUTH_BYPASS=true
+      - SECRET_KEY=${SECRET_KEY:-local-dev-secret-change-me}
+      - GROQ_API_KEY=${GROQ_API_KEY:-}
+      - SUPER_ADMIN_USERNAME=${SUPER_ADMIN_USERNAME:-superadmin}
+      - SUPER_ADMIN_PASSWORD=${SUPER_ADMIN_PASSWORD:-}
+      - CEO_USERNAME=${CEO_USERNAME:-ceo}
+      - CEO_PASSWORD=${CEO_PASSWORD:-}
+      - WHATSAPP_PHONE_NUMBER_ID=${WHATSAPP_PHONE_NUMBER_ID:-}
+      - WHATSAPP_ACCESS_TOKEN=${WHATSAPP_ACCESS_TOKEN:-}
+      - LICENSE_SERVER_URL=${LICENSE_SERVER_URL:-https://cardioqueue-production.up.railway.app}
+      - CLINIC_CODE=${CLINIC_CODE:-}
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3

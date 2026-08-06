@@ -1615,8 +1615,14 @@ async def api_get_scans(request: Request):
 
 @router.post("/api/scan-ai", include_in_schema=False)
 async def api_scan_ai(request: Request):
-    """Process uploaded handwritten prescription image via Groq Vision AI OCR."""
+    """Process uploaded handwritten prescription image via Groq Vision AI OCR.
+
+    Loads Groq API key from environment OR per-doctor OPD settings.
+    Handles base64 images from camera snap or gallery upload.
+    """
     sess = _require_opd_session(request)
+    doctor_id = sess.get("doctor_id", "")
+
     try:
         body = await request.json()
     except Exception:
@@ -1626,13 +1632,24 @@ async def api_scan_ai(request: Request):
     if not image_b64:
         return {"ok": False, "error": "No image provided"}
 
+    # Load Groq API key — check env first, then doctor's settings
+    groq_key = os.getenv("GROQ_API_KEY") or ""
+    if not groq_key and doctor_id:
+        settings = await _get_settings(doctor_id)
+        groq_key = settings.get("groq_api_key") or ""
+    if not groq_key:
+        return {"ok": False, "error": "Groq API key not configured. Add key in OPD Settings."}
+
+    # Temporarily set for groq_client
+    os.environ["GROQ_API_KEY"] = groq_key
+
     try:
         import base64
         import io
         from PIL import Image
         from src.ai_engine.groq_client import call_groq_vision, parse_ai_json
 
-        # Remove header if present
+        # Remove data:image/... header if present
         if "," in image_b64:
             image_b64 = image_b64.split(",", 1)[1]
 
@@ -1646,7 +1663,7 @@ async def api_scan_ai(request: Request):
         return {"ok": True, "parsed": parsed, "raw": raw_text}
     except Exception as e:
         logger.error("Scan AI processing error: %s", e)
-        return {"ok": False, "error": str(e)}
+        return {"ok": False, "error": f"AI scan failed: {str(e)}"}
 
 
 @router.post("/api/save-rx", include_in_schema=False)
@@ -1895,48 +1912,6 @@ async def api_approve_scan(request: Request):
         return {"ok": False, "error": str(e)}
 
 
-@router.post("/api/scan-ai", include_in_schema=False)
-async def api_scan_ai_read(request: Request):
-    """AI read a scan image and extract structured data."""
-    sess = _require_opd_session(request)
-
-    try:
-        body = await request.json()
-    except Exception:
-        return {"ok": False, "error": "Invalid JSON"}
-
-    image_b64 = body.get("image", "")
-    if not image_b64:
-        return {"ok": False, "error": "No image data"}
-
-    settings = await _get_settings(sess["doctor_id"])
-    groq_key = os.getenv("GROQ_API_KEY") or settings.get("groq_api_key") or ""
-    if not groq_key:
-        return {"ok": False, "error": "Groq API key not configured."}
-    os.environ["GROQ_API_KEY"] = groq_key
-
-    # Decode base64 to bytes for AI
-    import base64
-    try:
-        image_bytes = base64.b64decode(image_b64)
-    except Exception:
-        return {"ok": False, "error": "Invalid base64 image"}
-
-    from PIL import Image
-    import io
-    try:
-        img = Image.open(io.BytesIO(image_bytes))
-    except Exception:
-        return {"ok": False, "error": "Cannot decode image"}
-
-    result = call_groq_vision(img, context="Extract all prescription details.")
-    parsed = parse_ai_json(result)
-
-    return {
-        "ok": True,
-        "raw": result,
-        "parsed": parsed,
-    }
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

@@ -39,6 +39,9 @@ class PatientModel(Base):
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), primary_key=True, default=uuid7
     )
+    clinic_id: Mapped[str | None] = mapped_column(
+        String(36), nullable=True, index=True
+    )
     patient_id: Mapped[str] = mapped_column(
         String(30), unique=True, nullable=False, index=True
     )

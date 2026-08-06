@@ -1,7 +1,7 @@
 # ─── Dockerfile for CardioQueue (FastAPI) ──────────────────────────────────────
 FROM python:3.11-slim
 
-ENV BUILD_CACHE_BUST="2026-08-02T11:45:00"
+ENV BUILD_CACHE_BUST="2026-08-06T19:00:00"
 
 WORKDIR /app
 

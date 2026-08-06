@@ -76,6 +76,9 @@ from src.presentation.clinic.routes.clinic_routes import (
     router as clinic_router,
 )
 
+# -- Clinic Auth (multi-tenant login) --
+from src.presentation.clinic.routes.clinic_auth_routes import router as clinic_auth_router
+
 # -- Patient Engine --
 from src.presentation.patient.routes.patient_routes import (
     router as patient_router,
@@ -83,9 +86,16 @@ from src.presentation.patient.routes.patient_routes import (
 
 # -- Staff Dashboard (replaces Streamlit) --
 from src.presentation.staff.routes.staff_routes import router as staff_router
+from src.presentation.staff.routes.settings_routes import router as staff_settings_router
 
 # -- Smart OPD --
 from src.presentation.opd.routes.opd_routes import router as opd_router
+
+# -- Admin Panel (Super Admin + CEO) --
+from src.presentation.admin.routes.auth_routes import router as admin_auth_router
+from src.presentation.admin.routes.dashboard_routes import router as admin_dashboard_router
+from src.presentation.admin.routes.doctor_routes import router as admin_doctor_router
+from src.presentation.admin.routes.auth_routes import seed_default_admins
 
 
 # =========================================================================
@@ -144,6 +154,12 @@ from src.infrastructure.opd.models.opd_models import (  # noqa: F401
 )
 # Staff User model — multi-user auth (receptionists, doctors)
 from src.infrastructure.staff.models.staff_user_model import StaffUserModel  # noqa: F401
+# Admin User model — super_admin + ceo auth
+from src.infrastructure.identity.models.admin_user_model import AdminUserModel  # noqa: F401
+# Clinic model — multi-tenant core
+from src.infrastructure.clinic.models.clinic_model import ClinicModel  # noqa: F401
+# Staff PIN model — per-clinic role PINs
+from src.infrastructure.clinic.models.staff_pin_model import StaffPinModel  # noqa: F401
 
 
 # =========================================================================
@@ -173,7 +189,28 @@ async def lifespan(app: FastAPI):
     app.state.db_session = SessionLocal
 
     print(f"[GHOS] {APP_NAME} v{APP_VERSION} ready")
+
+    # Seed default admin accounts (super_admin + ceo) on first startup
+    try:
+        await seed_default_admins()
+    except Exception as e:
+        print(f"[GHOS] Admin seed skipped (may exist already): {e}")
+
+    # Start license expiry scheduler
+    try:
+        from src.infrastructure.clinic.services.license_scheduler import start_license_scheduler
+        start_license_scheduler()
+    except Exception as e:
+        print(f"[GHOS] License scheduler start failed: {e}")
+
     yield
+
+    # Stop scheduler on shutdown
+    try:
+        from src.infrastructure.clinic.services.license_scheduler import stop_license_scheduler
+        stop_license_scheduler()
+    except Exception:
+        pass
     print("[GHOS] Shutdown complete")
 
 
@@ -193,6 +230,19 @@ async def _migrate_missing_columns():
         ("opd_settings", "wa_doctor", "VARCHAR(20)", "' '"),
         ("opd_settings", "wa_dietitian", "VARCHAR(20)", "' '"),
         ("opd_settings", "doc_extra_quals", "TEXT", "' '"),
+        # Multi-tenant: add clinic_id to all tables
+        ("queue_entries", "clinic_id", "VARCHAR(36)", "NULL"),
+        ("patients", "clinic_id", "VARCHAR(36)", "NULL"),
+        ("opd_prescriptions", "clinic_id", "VARCHAR(36)", "NULL"),
+        ("opd_drug_history", "clinic_id", "VARCHAR(36)", "NULL"),
+        ("opd_templates", "clinic_id", "VARCHAR(36)", "NULL"),
+        ("opd_licenses", "clinic_id", "VARCHAR(36)", "NULL"),
+        ("opd_settings", "clinic_id", "VARCHAR(36)", "NULL"),
+        ("opd_specialty_upgrades", "clinic_id", "VARCHAR(36)", "NULL"),
+        ("opd_pending_scans", "clinic_id", "VARCHAR(36)", "NULL"),
+        ("staff_users", "clinic_id", "VARCHAR(36)", "NULL"),
+        # New tables that might need creation
+        ("clinic_staff_pins", "id", "INTEGER", "NULL"),  # will cause skip if table exists
     ]
 
     try:
@@ -259,14 +309,23 @@ app.include_router(experience_router)
 # Clinic Engine
 app.include_router(clinic_router)
 
+# Clinic Auth (multi-tenant login)
+app.include_router(clinic_auth_router)
+
 # Patient Engine
 app.include_router(patient_router)
 
 # Staff Dashboard (HTML, session auth)
 app.include_router(staff_router)
+app.include_router(staff_settings_router)
 
 # Smart OPD (HTML + API, session auth)
 app.include_router(opd_router)
+
+# Admin Panel (Super Admin + CEO)
+app.include_router(admin_auth_router)
+app.include_router(admin_dashboard_router)
+app.include_router(admin_doctor_router)
 
 # Serve static files from experience/pwa
 pwa_static = Path(__file__).parent / "src" / "experience" / "pwa"

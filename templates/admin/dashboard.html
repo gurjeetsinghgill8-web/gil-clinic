@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Dashboard — GIL CLINIC</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700&display=swap');
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        :root {
+            --bg: #f1f5f9;
+            --card: #ffffff;
+            --border: rgba(0,0,0,0.08);
+            --text: #1e293b;
+            --text-muted: #64748b;
+            --primary: #3b82f6;
+            --success: #22c55e;
+            --warning: #eab308;
+            --danger: #ef4444;
+            --radius: 12px;
+        }
+
+        body {
+            font-family: 'Inter', system-ui, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+        }
+
+        /* ── Top Bar ── */
+        .topbar {
+            background: #0f172a;
+            color: white;
+            padding: 14px 24px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .topbar .brand {
+            font-size: 18px;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .topbar .user-info {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            font-size: 14px;
+        }
+        .topbar .role-badge {
+            background: rgba(59,130,246,0.2);
+            color: #60a5fa;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+        .topbar .btn-logout {
+            background: rgba(239,68,68,0.15);
+            color: #f87171;
+            border: 1px solid rgba(239,68,68,0.3);
+            padding: 6px 14px;
+            border-radius: 6px;
+            text-decoration: none;
+            font-size: 13px;
+            font-weight: 500;
+            transition: all 0.2s;
+        }
+        .topbar .btn-logout:hover {
+            background: rgba(239,68,68,0.25);
+        }
+
+        /* ── Content ── */
+        .content {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 28px 24px;
+        }
+
+        .page-title {
+            font-size: 24px;
+            font-weight: 700;
+            margin-bottom: 6px;
+        }
+        .page-subtitle {
+            color: var(--text-muted);
+            font-size: 14px;
+            margin-bottom: 28px;
+        }
+
+        /* ── Stats Grid ── */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 16px;
+            margin-bottom: 28px;
+        }
+
+        .stat-card {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 20px 24px;
+            display: flex;
+            align-items: flex-start;
+            gap: 16px;
+            transition: box-shadow 0.2s;
+        }
+        .stat-card:hover {
+            box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+        }
+        .stat-icon {
+            font-size: 32px;
+            width: 48px;
+            height: 48px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 10px;
+            flex-shrink: 0;
+        }
+        .stat-icon.blue { background: rgba(59,130,246,0.12); }
+        .stat-icon.green { background: rgba(34,197,94,0.12); }
+        .stat-icon.yellow { background: rgba(234,179,8,0.12); }
+        .stat-icon.red { background: rgba(239,68,68,0.12); }
+        .stat-value {
+            font-size: 28px;
+            font-weight: 700;
+            line-height: 1;
+        }
+        .stat-label {
+            color: var(--text-muted);
+            font-size: 13px;
+            margin-top: 4px;
+        }
+
+        /* ── Action Cards ── */
+        .actions-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 16px;
+        }
+
+        .action-card {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 24px;
+            text-decoration: none;
+            color: var(--text);
+            transition: all 0.2s;
+            display: flex;
+            align-items: flex-start;
+            gap: 16px;
+        }
+        .action-card:hover {
+            box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+            border-color: var(--primary);
+            transform: translateY(-1px);
+        }
+        .action-card .ac-icon {
+            font-size: 28px;
+            width: 52px;
+            height: 52px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(59,130,246,0.08);
+            border-radius: 10px;
+            flex-shrink: 0;
+        }
+        .action-card h3 {
+            font-size: 15px;
+            font-weight: 600;
+            margin-bottom: 4px;
+        }
+        .action-card p {
+            color: var(--text-muted);
+            font-size: 13px;
+            line-height: 1.4;
+        }
+
+        /* ── Coming Soon ── */
+        .coming-soon {
+            opacity: 0.5;
+            pointer-events: none;
+        }
+    </style>
+</head>
+<body>
+    <!-- ── Top Bar ── -->
+    <div class="topbar">
+        <div class="brand">
+            🏥 GIL CLINIC
+            <span style="font-weight:400;font-size:13px;color:#94a3b8;">Admin Panel</span>
+        </div>
+        <div class="user-info">
+            <span>👤 {{ session.display_name or session.username }}</span>
+            <span class="role-badge">{{ session.role | replace('_', ' ') }}</span>
+            <a href="/admin/logout" class="btn-logout">🚪 Logout</a>
+        </div>
+    </div>
+
+    <!-- ── Main Content ── -->
+    <div class="content">
+        <h1 class="page-title">📊 Admin Dashboard</h1>
+        <p class="page-subtitle">Welcome back, {{ session.display_name or session.username }}. Here's your clinic network overview.</p>
+
+        <!-- Stats -->
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-icon blue">🏥</div>
+                <div>
+                    <div class="stat-value">{{ stats.total_clinics }}</div>
+                    <div class="stat-label">Total Clinics</div>
+                </div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-icon green">✅</div>
+                <div>
+                    <div class="stat-value">{{ stats.active_licenses }}</div>
+                    <div class="stat-label">Active Licenses</div>
+                </div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-icon yellow">⏰</div>
+                <div>
+                    <div class="stat-value">{{ stats.expiring_soon }}</div>
+                    <div class="stat-label">Expiring (30 days)</div>
+                </div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-icon red">🚫</div>
+                <div>
+                    <div class="stat-value">{{ stats.expired }}</div>
+                    <div class="stat-label">Expired</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Quick Actions -->
+        <h2 style="font-size:18px;font-weight:600;margin-bottom:16px;">⚡ Quick Actions</h2>
+        <div class="actions-grid">
+            <a href="/admin/onboard" class="action-card">
+                <div class="ac-icon">➕</div>
+                <div>
+                    <h3>Onboard New Doctor</h3>
+                    <p>Add a new clinic, auto-generate credentials and license.</p>
+                </div>
+            </a>
+            <a href="/admin/licenses" class="action-card">
+                <div class="ac-icon">📋</div>
+                <div>
+                    <h3>Manage Licenses</h3>
+                    <p>View, renew, or deactivate clinic licenses.</p>
+                </div>
+            </a>
+            <div class="action-card coming-soon">
+                <div class="ac-icon">📧</div>
+                <div>
+                    <h3>Bulk Email Credentials</h3>
+                    <p>Send login credentials to all doctors. (Coming soon)</p>
+                </div>
+            </div>
+            <div class="action-card coming-soon">
+                <div class="ac-icon">📈</div>
+                <div>
+                    <h3>Analytics Pro</h3>
+                    <p>Advanced reports and analytics. (Coming soon)</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

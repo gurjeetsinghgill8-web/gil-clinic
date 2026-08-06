@@ -180,7 +180,20 @@ regForm.addEventListener('submit', async function(e) {
       showToast('✅ ' + result.message, 'success');
       this.reset();
       document.querySelectorAll('input[name=service]:checked').forEach(c => c.checked = false);
-      setTimeout(() => window.location.reload(), 1500);
+
+      // Auto-open WhatsApp if phone provided and links returned
+      if (result.whatsapp && result.whatsapp.length > 0 && data.phone) {
+        const phone = data.phone;
+        // Open first WhatsApp link automatically
+        const first = result.whatsapp[0];
+        window.open(first.url, '_blank');
+        // If multiple services, open remaining after short delay
+        result.whatsapp.slice(1).forEach((w, i) => {
+          setTimeout(() => window.open(w.url, '_blank'), (i + 1) * 500);
+        });
+      }
+
+      setTimeout(() => window.location.reload(), 2000);
     } else {
       showToast('❌ ' + (result.error || 'Registration failed'), 'danger');
     }

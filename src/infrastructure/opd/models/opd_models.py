@@ -32,6 +32,9 @@ class OpdPrescriptionModel(Base):
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), primary_key=True, default=uuid7
     )
+    clinic_id: Mapped[str | None] = mapped_column(
+        String(36), nullable=True, index=True
+    )
     # Link to queue system's patient_id (e.g. "CQ-20260720-001")
     patient_id: Mapped[str] = mapped_column(String(30), nullable=False, index=True)
     patient_name: Mapped[str] = mapped_column(String(200), nullable=False, default="")
@@ -82,6 +85,9 @@ class DrugHistoryModel(Base):
     __tablename__ = "opd_drug_history"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    clinic_id: Mapped[str | None] = mapped_column(
+        String(36), nullable=True, index=True
+    )
     doctor_id: Mapped[str] = mapped_column(String(100), nullable=False, default="chief", index=True)
     drug_name: Mapped[str] = mapped_column(String(200), nullable=False)
     dose: Mapped[str] = mapped_column(String(100), nullable=False, default="")
@@ -102,6 +108,9 @@ class TemplateModel(Base):
     __tablename__ = "opd_templates"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    clinic_id: Mapped[str | None] = mapped_column(
+        String(36), nullable=True, index=True
+    )
     doctor_id: Mapped[str] = mapped_column(String(100), nullable=False, default="chief", index=True)
     category: Mapped[str] = mapped_column(String(20), nullable=False, default="Rx")  # Rx or Lab
     name: Mapped[str] = mapped_column(String(100), nullable=False)
@@ -126,6 +135,9 @@ class LicenseModel(Base):
     __tablename__ = "opd_licenses"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    clinic_id: Mapped[str | None] = mapped_column(
+        String(36), nullable=True, index=True
+    )
     doctor_id: Mapped[str] = mapped_column(String(100), unique=True, nullable=False)
     doctor_name: Mapped[str] = mapped_column(String(200), nullable=False, default="")
     doctor_email: Mapped[str] = mapped_column(String(200), nullable=False, default="")
@@ -152,6 +164,9 @@ class SettingsModel(Base):
     __tablename__ = "opd_settings"
 
     doctor_id: Mapped[str] = mapped_column(String(100), primary_key=True)
+    clinic_id: Mapped[str | None] = mapped_column(
+        String(36), nullable=True, index=True
+    )
     clinic_name: Mapped[str] = mapped_column(String(200), nullable=False, default="My Clinic")
     doc_name: Mapped[str] = mapped_column(String(200), nullable=False, default="Doctor")
     doc_subtitle: Mapped[str] = mapped_column(String(200), nullable=False, default="MBBS")
@@ -183,6 +198,9 @@ class SpecialtyUpgradeModel(Base):
     __tablename__ = "opd_specialty_upgrades"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    clinic_id: Mapped[str | None] = mapped_column(
+        String(36), nullable=True, index=True
+    )
     doctor_id: Mapped[str] = mapped_column(String(100), nullable=False, default="chief", index=True)
     date: Mapped[str] = mapped_column(String(30), nullable=False, default="")
     patient_name: Mapped[str] = mapped_column(String(200), nullable=False, default="")
@@ -208,6 +226,9 @@ class PendingScanModel(Base):
     __tablename__ = "opd_pending_scans"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    clinic_id: Mapped[str | None] = mapped_column(
+        String(36), nullable=True, index=True
+    )
     doctor_id: Mapped[str] = mapped_column(String(100), nullable=False, default="chief", index=True)
     uploaded_at: Mapped[str] = mapped_column(String(30), nullable=False, default="")
     image_b64: Mapped[str] = mapped_column(Text, nullable=False, default="")
