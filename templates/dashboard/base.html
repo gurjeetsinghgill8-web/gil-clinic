@@ -14,6 +14,9 @@
 </head>
 <body>
 
+<!-- Mobile Menu Toggle Button -->
+<button class="mobile-menu-toggle" onclick="document.getElementById('sidebar').classList.toggle('open')" aria-label="Menu">☰</button>
+
 <!-- Mobile Overlay -->
 <div id="sidebar-overlay"></div>
 
@@ -127,6 +130,14 @@
 // Auto-dismiss flash messages
 const fa = document.getElementById('flash-alert');
 if (fa) setTimeout(() => fa.style.display='none', 4000);
+
+// Mobile sidebar toggle
+const overlay = document.getElementById('sidebar-overlay');
+if (overlay) {
+  overlay.addEventListener('click', function() {
+    document.getElementById('sidebar').classList.remove('open');
+  });
+}
 </script>
 {% block extra_js %}{% endblock %}
 </body>
