@@ -54,7 +54,7 @@ print(f"[GHOS] ASYNC DB = {os.environ.get('GHOS_DB_URL_ASYNC', 'N/A')}")
 
 # ── App metadata ────────────────────────────────────────────────────────
 APP_NAME = "GHOS V2 — GIL CLINIC"
-APP_VERSION = "0.9.0"
+APP_VERSION = "2.0.0"
 APP_DESC = "Department Pilot — Reception → Queue → Technician → Patient PWA"
 
 
@@ -360,7 +360,7 @@ async def root():
 @app.get("/health", include_in_schema=False)
 async def health():
     """Healthcheck endpoint for Railway deployment container."""
-    return {"status": "ok", "build": "2026.08.02.v2", "timestamp": "2026-08-02T11:45:00Z"}
+    return {"status": "ok", "build": "2026.08.06.v2.0", "version": APP_VERSION, "timestamp": "2026-08-06T19:30:00Z"}
 
 
 # =========================================================================
