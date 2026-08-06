@@ -1,9 +1,12 @@
 # ─── Dockerfile for CardioQueue (FastAPI) ──────────────────────────────────────
 FROM python:3.11-slim
 
-ENV BUILD_CACHE_BUST="2026-08-06T19:00:00"
+ENV BUILD_CACHE_BUST="2026-08-06T19:15:00"
 
 WORKDIR /app
+
+# Force rebuild trigger — Multi-tenant v2.0 deployment
+RUN echo "BUILD: GIL CLINIC v2.0 — $(date)"
 
 # Install system dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
