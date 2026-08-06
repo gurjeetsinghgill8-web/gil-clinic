@@ -366,9 +366,17 @@ def _render_landing() -> str:
 
 
 @app.get("/clinic-portal", include_in_schema=False)
-async def clinic_portal():
-    """Redirect to clinic login page."""
-    return RedirectResponse("/staff/login")
+async def clinic_portal(request: Request, error: str = ""):
+    """Dedicated clinic login page — only username+password from admin."""
+    return HTMLResponse(content=_render_template("clinic_login.html", error=error))
+
+
+def _render_template(name: str, **context) -> str:
+    """Render a Jinja2 template from the templates directory."""
+    import jinja2
+    _loader = jinja2.FileSystemLoader(str(Path(__file__).parent / "templates"))
+    _env = jinja2.Environment(loader=_loader, auto_reload=True)
+    return _env.get_template(name).render(**context)
 
 
 @app.get("/health", include_in_schema=False)

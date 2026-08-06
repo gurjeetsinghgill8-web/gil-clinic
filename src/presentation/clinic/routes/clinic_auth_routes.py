@@ -68,7 +68,7 @@ async def clinic_login(
 
     if not username or not password:
         return HTMLResponse(
-            content=_render("dashboard/login.html", error="❌ Username and password required."),
+            content=_render("clinic_login.html", error="❌ Username and password required."),
             status_code=401,
         )
 
@@ -85,7 +85,7 @@ async def clinic_login(
             if not clinic:
                 logger.warning("Clinic login failed: unknown username '%s'", username)
                 return HTMLResponse(
-                    content=_render("dashboard/login.html", error="❌ Invalid username or password."),
+                    content=_render("clinic_login.html", error="❌ Invalid username or password."),
                     status_code=401,
                 )
 
@@ -105,7 +105,7 @@ async def clinic_login(
                 if not clinic.is_license_active:
                     return HTMLResponse(
                         content=_render(
-                            "dashboard/login.html",
+                            "clinic_login.html",
                             error=f"🚫 License expired ({clinic.license_expiry_date}). Contact admin for renewal.",
                         ),
                         status_code=401,
@@ -129,14 +129,14 @@ async def clinic_login(
                     clinic.clinic_password_hash.encode("utf-8"),
                 ):
                     return HTMLResponse(
-                        content=_render("dashboard/login.html", error="❌ Invalid username or password."),
+                        content=_render("clinic_login.html", error="❌ Invalid username or password."),
                         status_code=401,
                     )
             else:
                 # No password set — fallback to default "1234"
                 if password != "1234":
                     return HTMLResponse(
-                        content=_render("dashboard/login.html", error="❌ Invalid username or password."),
+                        content=_render("clinic_login.html", error="❌ Invalid username or password."),
                         status_code=401,
                     )
 
@@ -167,7 +167,7 @@ async def clinic_login(
     except Exception as e:
         logger.error("Clinic login error: %s", e)
         return HTMLResponse(
-            content=_render("dashboard/login.html", error="⚠️ System error. Please try again."),
+            content=_render("clinic_login.html", error="⚠️ System error. Please try again."),
             status_code=500,
         )
 
