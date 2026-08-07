@@ -256,6 +256,7 @@
         /* Loading spinner */
         .spinner { display: inline-block; width: 16px; height: 16px; border: 2px solid var(--border); border-top-color: var(--primary); border-radius: 50%; animation: spin 0.6s linear infinite; }
         @keyframes spin { to { transform: rotate(360deg); } }
+        @keyframes pulse-btn { 0%, 100% { box-shadow: 0 4px 14px rgba(5,150,105,0.35); } 50% { box-shadow: 0 4px 28px rgba(5,150,105,0.65); transform: scale(1.03); } }
 
         /* Scrollbar */
         ::-webkit-scrollbar { width: 6px; }
@@ -463,8 +464,8 @@
                     </div>
 
                     <!-- Native File Inputs (hidden via opacity for mobile compatibility) -->
-                    <input type="file" id="camera-file-input" accept="image/*" capture="environment" style="position:absolute;opacity:0;width:0;height:0;overflow:hidden;" onchange="handleCameraCapture(this)">
-                    <input type="file" id="gallery-file-input" accept="image/*,.pdf,.csv,.xlsx,.xls,application/pdf,text/csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" multiple style="position:absolute;opacity:0;width:0;height:0;overflow:hidden;" onchange="handleGalleryUpload(this)">
+                    <input type="file" id="camera-file-input" accept="image/*" capture="environment" style="position:fixed;top:-9999px;left:-9999px;width:1px;height:1px;opacity:0;" onchange="handleCameraCapture(this)">
+                    <input type="file" id="gallery-file-input" accept="image/*,.pdf,.csv,.xlsx,.xls,application/pdf,text/csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" multiple style="position:fixed;top:-9999px;left:-9999px;width:1px;height:1px;opacity:0;" onchange="handleGalleryUpload(this)">
 
                     <div class="flex gap-sm mb-sm" style="flex-wrap:wrap;">
                         <label for="camera-file-input" style="background:#7c3aed;color:white;font-weight:700;font-size:13px;padding:10px 18px;border:none;border-radius:8px;cursor:pointer;display:inline-flex;align-items:center;gap:8px;box-shadow:0 3px 10px rgba(124,58,237,0.25);">
@@ -474,6 +475,10 @@
                         <label for="gallery-file-input" style="background:#2563eb;color:white;font-weight:700;font-size:13px;padding:10px 18px;border:none;border-radius:8px;cursor:pointer;display:inline-flex;align-items:center;gap:8px;box-shadow:0 3px 10px rgba(37,99,235,0.25);">
                             <span style="font-size:18px;">🖼️</span> <strong>Upload from Gallery / Files</strong>
                         </label>
+
+                        <button id="quick-scan-process-btn" onclick="processQuickScansAuto()" style="display:none;background:linear-gradient(135deg,#059669,#10b981);color:white;font-weight:700;font-size:14px;padding:10px 22px;border:none;border-radius:8px;cursor:pointer;box-shadow:0 4px 14px rgba(5,150,105,0.35);animation:pulse-btn 1.8s infinite;">
+                            🔍 <strong>AI Process Prescription</strong>
+                        </button>
                     </div>
 
                     <div id="quick-scan-previews" class="flex flex-wrap gap-sm mb-sm"></div>
@@ -557,6 +562,16 @@
                             <span id="voice-status" class="text-sm text-muted" style="font-size:11px;margin-left:4px;"></span>
                         </label>
                         <textarea id="pt-complaints" rows="3" placeholder="Describe complaints..."></textarea>
+                    </div>
+
+                    <div class="form-group">
+                        <label>🩺 Diagnosis (AI-extracted or Manual)</label>
+                        <textarea id="pt-diagnosis" rows="2" placeholder="Diagnosis / Clinical Impression..."></textarea>
+                    </div>
+
+                    <div class="form-group">
+                        <label>📝 Advice / Lifestyle Notes</label>
+                        <textarea id="pt-advice" rows="2" placeholder="Diet, exercise, lifestyle advice..."></textarea>
                     </div>
 
                     <div class="form-group">
@@ -754,8 +769,8 @@
                     </div>
                     
                     <!-- Native File Inputs for Batch Tab -->
-                    <input type="file" id="batch-tab-camera" accept="image/*" capture="environment" style="position:absolute;opacity:0;width:0;height:0;overflow:hidden;" onchange="handleCameraCapture(this)">
-                    <input type="file" id="batch-tab-gallery" accept="image/*,.pdf,.csv,.xlsx,.xls,application/pdf,text/csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" multiple style="position:absolute;opacity:0;width:0;height:0;overflow:hidden;" onchange="handleGalleryUpload(this)">
+                    <input type="file" id="batch-tab-camera" accept="image/*" capture="environment" style="position:fixed;top:-9999px;left:-9999px;width:1px;height:1px;opacity:0;" onchange="handleCameraCapture(this)">
+                    <input type="file" id="batch-tab-gallery" accept="image/*,.pdf,.csv,.xlsx,.xls,application/pdf,text/csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" multiple style="position:fixed;top:-9999px;left:-9999px;width:1px;height:1px;opacity:0;" onchange="handleGalleryUpload(this)">
 
                     <div class="flex gap-sm mb-sm" style="flex-wrap:wrap;">
                         <label for="batch-tab-camera" style="background:#7c3aed;color:white;font-weight:700;font-size:13px;padding:10px 18px;border:none;border-radius:8px;cursor:pointer;display:inline-flex;align-items:center;gap:8px;">
@@ -1101,7 +1116,7 @@ function handleCameraCapture(input) {
     quickScanFiles = quickScanFiles.concat(newFiles);
     selectedScanFiles = quickScanFiles;
     renderQuickScanPreviews();
-    processQuickScansAuto();
+    // User must click "Process" button to start AI scan
 }
 
 function handleGalleryUpload(input) {
@@ -1110,7 +1125,7 @@ function handleGalleryUpload(input) {
     quickScanFiles = quickScanFiles.concat(newFiles);
     selectedScanFiles = quickScanFiles;
     renderQuickScanPreviews();
-    processQuickScansAuto();
+    // User must click "Process" button to start AI scan
 }
 
 function renderQuickScanPreviews() {
@@ -1142,8 +1157,16 @@ function renderQuickScanPreviews() {
         document.getElementById('scan-queue-status')
     ];
     statusEls.forEach(statusEl => {
-        if (statusEl) statusEl.textContent = `Ready to process ${quickScanFiles.length} photo(s) in sequential AI queue.`;
+        if (statusEl) statusEl.textContent = quickScanFiles.length > 0 
+            ? `📸 ${quickScanFiles.length} photo(s) ready — Click "🔍 AI Process Prescription" to extract data`
+            : '';
     });
+
+    // Show/hide the Process button
+    const processBtn = document.getElementById('quick-scan-process-btn');
+    if (processBtn) {
+        processBtn.style.display = quickScanFiles.length > 0 ? 'inline-flex' : 'none';
+    }
 }
 
 function removeQuickScanFile(index) {
@@ -1245,41 +1268,44 @@ async function processAllScansSequential(files, statusEl) {
 }
 
 function applyParsedDataToForm(p) {
-    if (p.patient_name && !document.getElementById('pt-name').value) {
-        document.getElementById('pt-name').value = p.patient_name;
+    // Safe helper: get element by id, return null if missing
+    const $ = (id) => document.getElementById(id);
+
+    if (p.patient_name && !$('pt-name')?.value) {
+        $('pt-name').value = p.patient_name;
     }
-    if (p.phone && !document.getElementById('pt-phone').value) {
-        document.getElementById('pt-phone').value = p.phone;
+    if (p.phone && !$('pt-phone')?.value) {
+        $('pt-phone').value = p.phone;
     }
-    if (p.age && !document.getElementById('pt-age').value) {
-        document.getElementById('pt-age').value = p.age;
+    if (p.age && !$('pt-age')?.value) {
+        $('pt-age').value = p.age;
     }
-    if (p.gender && !document.getElementById('pt-gender').value) {
-        document.getElementById('pt-gender').value = p.gender;
+    if (p.gender && !$('pt-gender')?.value) {
+        $('pt-gender').value = p.gender;
     }
     if (p.vitals) {
-        const cur = document.getElementById('pt-vitals').value;
-        document.getElementById('pt-vitals').value = cur ? cur + ' | ' + p.vitals : p.vitals;
+        const el = $('pt-vitals');
+        if (el) el.value = el.value ? el.value + ' | ' + p.vitals : p.vitals;
     }
-    if (p.complaints.length) {
-        const cur = document.getElementById('pt-complaints').value;
-        document.getElementById('pt-complaints').value = cur ? cur + '\n' + p.complaints.join('\n') : p.complaints.join('\n');
+    if (p.complaints && p.complaints.length) {
+        const el = $('pt-complaints');
+        if (el) el.value = el.value ? el.value + '\n' + p.complaints.join('\n') : p.complaints.join('\n');
     }
-    if (p.diagnosis.length) {
-        const cur = document.getElementById('pt-diagnosis').value;
-        document.getElementById('pt-diagnosis').value = cur ? cur + '\n' + p.diagnosis.join('\n') : p.diagnosis.join('\n');
+    if (p.diagnosis && p.diagnosis.length) {
+        const el = $('pt-diagnosis');
+        if (el) el.value = el.value ? el.value + '\n' + p.diagnosis.join('\n') : p.diagnosis.join('\n');
     }
-    if (p.medicines.length) {
-        const cur = document.getElementById('pt-medicines').value;
-        document.getElementById('pt-medicines').value = cur ? cur + '\n' + p.medicines.join('\n') : p.medicines.join('\n');
+    if (p.medicines && p.medicines.length) {
+        const el = $('pt-medicines');
+        if (el) el.value = el.value ? el.value + '\n' + p.medicines.join('\n') : p.medicines.join('\n');
     }
-    if (p.investigations.length) {
-        const cur = document.getElementById('pt-investigations').value;
-        document.getElementById('pt-investigations').value = cur ? cur + '\n' + p.investigations.join('\n') : p.investigations.join('\n');
+    if (p.investigations && p.investigations.length) {
+        const el = $('pt-investigations');
+        if (el) el.value = el.value ? el.value + ', ' + p.investigations.join(', ') : p.investigations.join(', ');
     }
-    if (p.advice.length) {
-        const cur = document.getElementById('pt-advice').value;
-        document.getElementById('pt-advice').value = cur ? cur + '\n' + p.advice.join('\n') : p.advice.join('\n');
+    if (p.advice && p.advice.length) {
+        const el = $('pt-advice');
+        if (el) el.value = el.value ? el.value + '\n' + p.advice.join('\n') : p.advice.join('\n');
     }
 
     if (typeof switchTab === 'function') switchTab('rx');
