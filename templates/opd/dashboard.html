@@ -691,10 +691,12 @@
                             <button class="btn btn-sm btn-ghost" onclick="sendToSpecialtyConsult()" style="background:rgba(139,92,246,0.12);border-color:#8b5cf6;color:#7c3aed;font-weight:600;" title="Get specialist opinion on this prescription">⚕️ Specialty Consult</button>
                             <span style="position:relative;display:inline-block;">
                                 <button class="btn btn-sm btn-ghost" onclick="toggleWhatsAppMenu()" style="background:rgba(37,211,102,0.12);border-color:#25D366;">📱 WhatsApp ▾</button>
-                                <div id="wa-menu" style="display:none;position:absolute;top:100%;right:0;background:var(--card);border:1px solid var(--border);border-radius:8px;z-index:200;min-width:180px;box-shadow:0 8px 30px rgba(0,0,0,0.15);margin-top:4px;">
-                                    <button class="btn btn-sm btn-ghost" onclick="shareWhatsApp('patient')" style="display:flex;width:100%;border-radius:0;border-bottom:1px solid var(--border);padding:10px 14px;">👤 Send to Patient</button>
-                                    <button class="btn btn-sm btn-ghost" onclick="shareWhatsApp('reception')" style="display:flex;width:100%;border-radius:0;border-bottom:1px solid var(--border);padding:10px 14px;">🏥 Send to Reception</button>
-                                    <button class="btn btn-sm btn-ghost" onclick="shareWhatsApp('doctor')" style="display:flex;width:100%;border-radius:0;border-bottom:1px solid var(--border);padding:10px 14px;">👨‍⚕️ Send to Doctor</button>
+                                <div id="wa-menu" style="display:none;position:absolute;bottom:100%;right:0;background:#fff;border:1px solid #cbd5e1;border-radius:8px;z-index:99999;min-width:200px;box-shadow:0 8px 30px rgba(0,0,0,0.2);margin-bottom:6px;max-height:300px;overflow-y:auto;">
+                                    <button class="btn btn-sm btn-ghost" onclick="shareWhatsApp('patient')" style="display:flex;width:100%;border-radius:0;border-bottom:1px solid #e2e8f0;padding:10px 14px;">👤 Send Rx to Patient</button>
+                                    <button class="btn btn-sm btn-ghost" onclick="shareWhatsApp('call-patient')" style="display:flex;width:100%;border-radius:0;border-bottom:1px solid #e2e8f0;padding:10px 14px;">🔔 Call Patient (Turn Ready)</button>
+                                    <button class="btn btn-sm btn-ghost" onclick="shareWhatsApp('report-ready')" style="display:flex;width:100%;border-radius:0;border-bottom:1px solid #e2e8f0;padding:10px 14px;">📋 Report Ready</button>
+                                    <button class="btn btn-sm btn-ghost" onclick="shareWhatsApp('reception')" style="display:flex;width:100%;border-radius:0;border-bottom:1px solid #e2e8f0;padding:10px 14px;">🏥 Send to Reception</button>
+                                    <button class="btn btn-sm btn-ghost" onclick="shareWhatsApp('doctor')" style="display:flex;width:100%;border-radius:0;border-bottom:1px solid #e2e8f0;padding:10px 14px;">👨‍⚕️ Send to Doctor</button>
                                     <button class="btn btn-sm btn-ghost" onclick="shareWhatsApp('manager')" style="display:flex;width:100%;border-radius:0;padding:10px 14px;">👔 Send to Manager</button>
                                 </div>
                             </span>
@@ -723,10 +725,10 @@
                     <div style="overflow-x:auto;">
                         <table>
                             <thead>
-                                <tr><th>#</th><th>Token</th><th>Patient</th><th>Age/Gender</th><th>Complaints</th><th>Wait</th><th>Visits</th><th>Action</th></tr>
+                                <tr><th>#</th><th>Token</th><th>Patient</th><th>Age/Gender</th><th>Complaints</th><th>Wait</th><th>Visits</th><th>Consult</th><th>📱 Call</th></tr>
                             </thead>
                             <tbody id="queue-body">
-                                <tr><td colspan="8" style="text-align:center;color:var(--text-muted);padding:32px;">Loading queue...</td></tr>
+                                <tr><td colspan="9" style="text-align:center;color:var(--text-muted);padding:32px;">Loading queue...</td></tr>
                             </tbody>
                         </table>
                     </div>
@@ -1443,7 +1445,8 @@ function shareWhatsApp(role) {
     const gender = document.getElementById('pt-gender').value;
     const vitals = document.getElementById('pt-vitals').value.trim();
     const complaints = document.getElementById('pt-complaints').value.trim();
-    const diagnosis = document.getElementById('rx-output').value.trim();
+    const diagnosis = document.getElementById('pt-diagnosis')?.value.trim() || document.getElementById('rx-output').value.trim();
+    const investigations = document.getElementById('pt-investigations').value.trim();
 
     if (!name) { showToast('Patient name required', 'error'); return; }
 
@@ -1458,12 +1461,27 @@ function shareWhatsApp(role) {
     switch(role) {
         case 'patient':
             number = phone;
-            msg = `📋 *Prescription for ${name}*\n` +
-                (age ? `👤 ${age}/${gender}\n` : '') +
+            msg = `📋 *GIL CLINIC — Prescription*\n\n👤 *${name}*` +
+                (age ? ` (${age}/${gender})` : '') +
+                (vitals ? `\n🩺 Vitals: ${vitals}` : '') +
+                (complaints ? `\n💬 Complaints: ${complaints}` : '') +
+                (diagnosis ? `\n\n🩺 *Diagnosis:* ${diagnosis}` : '') +
+                (rx ? `\n\n💊 *Medicines:*\n${rx.substring(0, 2000)}` : '') +
+                `\n\n— GIL CLINIC`;
+            break;
+        case 'call-patient':
+            // Call patient — their turn is ready
+            number = phone;
+            msg = `🔔 *GIL CLINIC*\n\nDear *${name}*,\n\nYour turn has come. Please come to the doctor's cabin.\n\n` +
                 (vitals ? `🩺 Vitals: ${vitals}\n` : '') +
-                (complaints ? `💬 ${complaints}\n` : '') +
-                `\n*Diagnosis:* ${diagnosis || 'N/A'}\n` +
-                `*Medicines:*\n${rx.substring(0, 2000)}\n\n— GIL CLINIC`;
+                `📍 GIL CLINIC\n\n— GIL CLINIC`;
+            break;
+        case 'report-ready':
+            // Report is ready for collection
+            number = phone;
+            msg = `📋 *GIL CLINIC*\n\nDear *${name}*,\n\nYour report is ready. Please come collect it from the clinic.\n\n` +
+                (investigations ? `🔬 Tests: ${investigations}\n` : '') +
+                `📍 GIL CLINIC\n\n— GIL CLINIC`;
             break;
         case 'reception':
             number = waReception;
@@ -1472,32 +1490,37 @@ function shareWhatsApp(role) {
                 (age ? `\n👤 ${age}/${gender}` : '') +
                 (vitals ? `\n🩺 ${vitals}` : '') +
                 (complaints ? `\n💬 ${complaints}` : '') +
-                `\n💰 Fee: ₹${document.getElementById('pt-fee').value || '0'}\n\n📋 ${diagnosis || 'Check-up'}`;
+                (diagnosis ? `\n🩺 Dx: ${diagnosis}` : '') +
+                `\n💰 Fee: ₹${document.getElementById('pt-fee').value || '0'}` +
+                `\n\n— GIL CLINIC`;
             break;
         case 'doctor':
             number = waDoctor;
-            msg = `👨‍⚕️ *Referral / Consultation*\n\n👤 *${name}*` +
-                (phone ? `\n📞 ${phone}` : '') +
-                (age ? `\n👤 ${age}/${gender}` : '') +
-                (vitals ? `\n🩺 ${vitals}` : '') +
-                (complaints ? `\n💬 ${complaints}` : '') +
-                `\n\n*My Prescription:*\n${rx.substring(0, 1500)}`;
+            msg = `👨‍⚕️ *Referral — ${name}*\n\n` +
+                (phone ? `📞 ${phone}\n` : '') +
+                (age ? `👤 ${age}/${gender}\n` : '') +
+                (vitals ? `🩺 ${vitals}\n` : '') +
+                (complaints ? `💬 ${complaints}\n` : '') +
+                (diagnosis ? `🩺 Dx: ${diagnosis}\n` : '') +
+                (rx ? `\n💊 Rx:\n${rx.substring(0, 1500)}` : '') +
+                `\n\n— GIL CLINIC`;
             break;
         case 'manager':
             number = waManager;
-            msg = `👔 *Daily OPD Update*\n\n👤 *${name}*` +
-                (phone ? `\n📞 ${phone}` : '') +
-                `\n💰 Fee: ₹${document.getElementById('pt-fee').value || '0'}` +
-                `\n📋 ${diagnosis || 'Check-up'}` +
+            msg = `👔 *OPD Update — ${name}*\n\n` +
+                (phone ? `📞 ${phone}\n` : '') +
+                (age ? `👤 ${age}/${gender}\n` : '') +
+                (diagnosis ? `🩺 Dx: ${diagnosis}\n` : '') +
+                `💰 Fee: ₹${document.getElementById('pt-fee').value || '0'}` +
                 `\n\n— GIL CLINIC`;
             break;
     }
 
     if (!number) {
-        if (role === 'reception') { showToast('Set Reception WhatsApp number in Settings', 'error'); return; }
-        if (role === 'manager') { showToast('Set Manager WhatsApp number in Settings', 'error'); return; }
-        if (role === 'doctor') { showToast('Set Doctor WhatsApp number in Settings', 'error'); return; }
-        if (role === 'patient') { showToast('Patient phone number not entered', 'error'); return; }
+        if (role === 'reception') { showToast('Set Reception WhatsApp number in OPD Settings', 'error'); return; }
+        if (role === 'manager') { showToast('Set Manager WhatsApp number in OPD Settings', 'error'); return; }
+        if (role === 'doctor') { showToast('Set Doctor WhatsApp number in OPD Settings', 'error'); return; }
+        if (role === 'patient' || role === 'call-patient' || role === 'report-ready') { showToast('Patient phone number not entered', 'error'); return; }
     }
 
     const sanitized = typeof sanitizePhoneNumber === 'function' ? sanitizePhoneNumber(number) : (number ? String(number).replace(/\D/g, '') : null);
@@ -1506,6 +1529,51 @@ function shareWhatsApp(role) {
     showToast(`📱 WhatsApp opened for ${role}`);
     waMenuOpen = false;
     document.getElementById('wa-menu').style.display = 'none';
+}
+
+// ── Quick WhatsApp Call Patient from Queue ──────────────────────────
+function callPatientWA(encodedName, phone, token) {
+    const name = decodeURIComponent(encodedName);
+    if (!name) { showToast('Patient name missing', 'error'); return; }
+    if (!phone) { showToast('Patient has no phone number on file', 'error'); return; }
+
+    // Show a simple prompt for procedure type
+    const procedure = prompt(
+        `📱 WhatsApp Call — ${name} (Token #${token})\n\n` +
+        `Type procedure or message:\n` +
+        `• ecg = Call for ECG\n` +
+        `• tmt = Call for TMT\n` +
+        `• xray = Call for X-Ray\n` +
+        `• blood = Call for Blood Test\n` +
+        `• report = Report Ready\n` +
+        `• medicine = Medicine Ready\n` +
+        `• turn = Your Turn (General)\n` +
+        `• Or type a custom message`,
+        'turn'
+    );
+
+    if (!procedure) return; // User cancelled
+
+    let msgTitle = '';
+    const proc = procedure.toLowerCase().trim();
+
+    switch(proc) {
+        case 'ecg': msgTitle = 'ECG Test'; break;
+        case 'tmt': msgTitle = 'TMT Test'; break;
+        case 'xray': msgTitle = 'X-Ray'; break;
+        case 'blood': msgTitle = 'Blood Test'; break;
+        case 'report': msgTitle = 'Report Ready — Please Collect'; break;
+        case 'medicine': msgTitle = 'Medicine Ready — Please Collect'; break;
+        case 'turn': msgTitle = 'Your Turn — Please Come'; break;
+        default: msgTitle = procedure; break;
+    }
+
+    const msg = `🔔 *GIL CLINIC*\n\nDear *${name}*,\n\n📌 *${msgTitle}*\n\nToken: #${token}\n📍 Please come to GIL CLINIC.\n\n— GIL CLINIC`;
+
+    const sanitized = typeof sanitizePhoneNumber === 'function' ? sanitizePhoneNumber(phone) : String(phone).replace(/\D/g, '');
+    const url = sanitized ? `https://wa.me/${sanitized}?text=${encodeURIComponent(msg)}` : `https://wa.me/?text=${encodeURIComponent(msg)}`;
+    window.open(url, '_blank');
+    showToast(`📱 Calling ${name} for ${msgTitle}`, 'success');
 }
 
 // ════════════════════════════════════════════════════════════════
@@ -2032,7 +2100,7 @@ function loadRoster(filter) {
 // ════════════════════════════════════════════════════════════════
 function loadQueuePatients() {
     const tbody = document.getElementById('queue-body');
-    tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:24px;">Loading...</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;padding:24px;">Loading...</td></tr>';
 
     fetch('/opd/api/queue-patients')
         .then(r => r.json())
@@ -2042,13 +2110,16 @@ function loadQueuePatients() {
 
             tbody.innerHTML = '';
             if (!patients.length) {
-                tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--text-muted);padding:32px;">✅ No patients waiting in OPD queue</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;color:var(--text-muted);padding:32px;">✅ No patients waiting in OPD queue</td></tr>';
                 return;
             }
 
             patients.forEach(p => {
                 const tr = document.createElement('tr');
                 tr.style.cursor = 'pointer';
+                const safeName = encodeURIComponent(p.patient_name || '');
+                const safeComplaints = encodeURIComponent(p.complaints || '');
+                const safePhone = p.phone || '';
                 tr.innerHTML = `
                     <td style="color:var(--text-muted);font-size:12px;">${p.created_at || ''}</td>
                     <td><strong>#${p.token_number}</strong></td>
@@ -2057,13 +2128,14 @@ function loadQueuePatients() {
                     <td class="text-muted">${(p.complaints || '').substring(0, 40)}</td>
                     <td style="color:${p.wait_minutes > 30 ? 'var(--warning)' : 'var(--text-muted)'}">${p.wait_minutes}m</td>
                     <td style="text-align:center;">${p.total_visits || 0}</td>
-                    <td><button class="btn btn-sm btn-primary" onclick="selectQueuePatient('${p.patient_id}', '${p.patient_uuid}', '${p.visit_id}', '${encodeURIComponent(p.patient_name)}', '${p.age}', '${p.gender}', '${p.phone || ''}', '${encodeURIComponent(p.complaints || '')}')">📝 Consult</button></td>
+                    <td><button class="btn btn-sm btn-primary" onclick="selectQueuePatient('${p.patient_id}', '${p.patient_uuid}', '${p.visit_id}', '${safeName}', '${p.age}', '${p.gender}', '${safePhone}', '${safeComplaints}')">📝 Consult</button></td>
+                    <td><button class="btn btn-sm" style="background:#25D366;color:white;font-weight:600;white-space:nowrap;" onclick="callPatientWA('${safeName}', '${safePhone}', '${p.token_number}')">📱 Call</button></td>
                 `;
                 tbody.appendChild(tr);
             });
         })
         .catch(e => {
-            tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--danger);padding:24px;">Error loading queue</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;color:var(--danger);padding:24px;">Error loading queue</td></tr>';
         });
 }
 

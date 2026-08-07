@@ -411,13 +411,30 @@ async def api_search_patients(request: Request, q: str = Query("")):
                 .limit(50)
             )
             seen = set()
-            for row in rows.scalars():
+            rx_rows = list(rows.scalars())
+
+            # Batch fetch patient info (age, gender) for OPD prescription patients
+            rx_patient_ids = list(set(r.patient_id for r in rx_rows if r.patient_id))
+            patient_map = {}
+            if rx_patient_ids:
+                p_rows = await session.execute(
+                    sa.select(PatientModel).where(PatientModel.patient_id.in_(rx_patient_ids))
+                )
+                for p in p_rows.scalars():
+                    patient_map[p.patient_id] = p
+
+            for row in rx_rows:
                 key = f"{row.patient_name}_{row.phone}"
                 if key not in seen:
                     seen.add(key)
+                    pt = patient_map.get(row.patient_id)
                     results.append({
                         "patient_name": row.patient_name,
                         "phone": row.phone,
+                        "patient_id": row.patient_id,
+                        "visit_id": row.visit_id or "",
+                        "age": pt.age if pt else "",
+                        "gender": pt.gender if pt else "",
                         "date": row.created_at.strftime("%Y-%m-%d %H:%M") if row.created_at else "",
                         "vitals": row.vitals,
                         "complaints": row.complaints,
@@ -425,6 +442,7 @@ async def api_search_patients(request: Request, q: str = Query("")):
                         "diagnosis": row.diagnosis,
                         "investigations": row.investigations,
                         "fee": row.fee,
+                        "source": "prescription",
                     })
 
             # Also search queue patients
