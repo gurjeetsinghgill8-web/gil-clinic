@@ -4127,9 +4127,30 @@ async function inkConvertToEMR() {
         return;
     }
 
+    // Ensure canvas is initialized
+    const canvas = document.getElementById('ink-canvas');
+    if (!canvas || canvas.width === 0) {
+        inkInit();
+        await new Promise(r => setTimeout(r, 300));
+    }
+
     const images = inkGetAllPagesAsImages();
     if (images.length === 0) {
-        showToast('Nothing written on the pad. Write a prescription first.', 'error');
+        showToast('Writing pad not ready. Click "✍️ Write Prescription by Hand" header to open it first.', 'error');
+        return;
+    }
+
+    // Quick check: is the canvas blank?
+    const ctx = canvas.getContext('2d');
+    const pixelData = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+    let hasContent = false;
+    for (let i = 0; i < pixelData.length; i += 40) { // sample every 10th pixel
+        if (pixelData[i] < 250 || pixelData[i+1] < 250 || pixelData[i+2] < 250) {
+            hasContent = true; break;
+        }
+    }
+    if (!hasContent) {
+        showToast('Canvas is empty! Write something on the pad first.', 'error');
         return;
     }
 
@@ -4147,13 +4168,35 @@ async function inkConvertToEMR() {
         for (let i = 0; i < totalPages; i++) {
             statusEl.innerHTML = `<span class="spinner"></span> AI reading page ${i + 1} of ${totalPages}...`;
 
-            const res = await fetch('/opd/api/handwriting-ocr', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ image: images[i] })
-            }).then(r => r.json());
+            const imageData = images[i];
+            console.log('Sending handwriting page ' + (i+1) + ', image size: ' + Math.round(imageData.length / 1024) + ' KB');
 
-            console.log('Handwriting OCR page ' + (i+1) + ' response:', res);
+            let res;
+            try {
+                const response = await fetch('/opd/api/handwriting-ocr', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ image: imageData }),
+                    credentials: 'same-origin',
+                });
+                console.log('Handwriting OCR response status:', response.status, response.statusText);
+
+                if (!response.ok) {
+                    const errText = await response.text();
+                    console.error('Handwriting OCR HTTP ' + response.status + ':', errText.substring(0, 300));
+                    throw new Error('Server returned ' + response.status + ': ' + (errText.substring(0, 100) || response.statusText));
+                }
+
+                res = await response.json();
+            } catch (fetchErr) {
+                console.error('Handwriting OCR fetch/parse error:', fetchErr);
+                statusEl.innerHTML = '❌ <b>Connection error.</b> Check: 1) Internet 2) Groq API key in Settings 3) Refresh page & re-login.';
+                showToast('Connection failed — check Groq API key in Settings', 'error');
+                if (convertBtn) { convertBtn.disabled = false; convertBtn.textContent = '🤖 Convert to Structured Rx (AI)'; }
+                return;
+            }
+
+            console.log('Handwriting OCR page ' + (i+1) + ' parsed:', res);
 
             if (res.ok && res.parsed) {
                 successPages++;
@@ -4233,12 +4276,16 @@ function toggleInkPad() {
         body.style.display = 'block';
         if (icon) icon.textContent = '▼';
         if (label) label.textContent = 'Click to collapse';
-        // Re-init canvas after showing (needs to recalculate size)
-        setTimeout(inkInit, 100);
+        // Wait for reflow, then init canvas
+        requestAnimationFrame(() => {
+            requestAnimationFrame(() => {
+                inkInit();
+            });
+        });
     } else {
         body.style.display = 'none';
         if (icon) icon.textContent = '▶';
-        if (label) label.textContent = 'Click to expand';
+        if (label) label.textContent = 'Click to open writing pad';
     }
 }
 
