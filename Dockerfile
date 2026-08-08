@@ -8,9 +8,11 @@ WORKDIR /app
 # Force rebuild trigger — Multi-tenant v2.0 deployment
 RUN echo "BUILD: GIL CLINIC v2.0 + EasyOCR — $(date)"
 
-# Install system dependencies
+# Install system dependencies + Tesseract OCR (for handwriting recognition)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
+    tesseract-ocr \
+    tesseract-ocr-eng \
     libgl1-mesa-glx \
     libglib2.0-0 \
     libsm6 \
@@ -21,12 +23,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # Install Python dependencies
 COPY requirements.txt .
-# Install CPU-only PyTorch first (smaller than full torch)
-RUN pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu
 RUN pip install --no-cache-dir -r requirements.txt
-
-# Pre-download EasyOCR model (English) during build
-RUN python -c "import easyocr; reader = easyocr.Reader(['en'], gpu=False, verbose=False); print('EasyOCR model downloaded OK')"
 
 # Copy application
 COPY . .

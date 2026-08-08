@@ -1740,12 +1740,12 @@ async def api_handwriting_ocr(request: Request):
             img = img.convert('RGB')
 
         # ══════════════════════════════════════════════════════════════
-        # STEP 1: EasyOCR — image → raw text (no API key needed)
+        # STEP 1: Tesseract OCR — image → raw text (no API key needed)
         # ══════════════════════════════════════════════════════════════
         from src.ai_engine.easyocr_handler import ocr_handwriting
 
         raw_ocr_text, ocr_error = ocr_handwriting(img)
-        logger.info("EasyOCR result: %d chars, error=%s",
+        logger.info("Tesseract OCR result: %d chars, error=%s",
                      len(raw_ocr_text) if raw_ocr_text else 0, ocr_error or "none")
 
         if not raw_ocr_text or len(raw_ocr_text.strip()) < 5:
@@ -1754,7 +1754,7 @@ async def api_handwriting_ocr(request: Request):
                 "parsed": {},
                 "raw": "",
                 "ocr_text": raw_ocr_text or "",
-                "ocr_method": "easyocr",
+                "ocr_method": "tesseract",
                 "error_hint": "no_text_found",
                 "message": "Could not detect handwriting. Write in larger, clearer letters. Only black/blue ink on white background works best."
             }
@@ -1789,7 +1789,7 @@ Rules:
             "parsed": parsed if isinstance(parsed, dict) else {},
             "raw": ai_text or "",
             "ocr_text": raw_ocr_text,
-            "ocr_method": "easyocr",
+            "ocr_method": "tesseract",
         }
 
     except Exception as e:

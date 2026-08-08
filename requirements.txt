@@ -49,9 +49,8 @@ groq>=1.0.0
 # Voice / Audio (optional)
 edge-tts>=6.0.0
 
-# OCR — EasyOCR for handwriting recognition (self-hosted, no API key needed)
-# torch CPU-only installed separately in Dockerfile for smaller image
-easyocr>=1.7.0
+# OCR — Tesseract for handwriting recognition (lightweight, via apt-get)
+pytesseract>=0.3.10
 
 # Supabase (optional — for cloud database mode)
 supabase>=2.0.0
