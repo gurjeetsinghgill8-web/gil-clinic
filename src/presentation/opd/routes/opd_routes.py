@@ -1719,7 +1719,7 @@ async def api_handwriting_ocr(request: Request):
         import base64 as b64_mod
         import io as io_mod
         from PIL import Image
-        from src.ai_engine.groq_client import call_groq_vision, parse_ai_json, call_groq
+        from src.ai_engine.groq_client import call_groq_vision, parse_ai_json, call_groq, call_groq_with_error
         from src.ai_engine.prompts import handwriting_ocr_prompt
 
         # Clean base64
@@ -1740,24 +1740,53 @@ async def api_handwriting_ocr(request: Request):
         elif img.mode != 'RGB':
             img = img.convert('RGB')
 
-        # Try 1: Vision model with handwriting prompt
+        # ── Check if Groq Vision is available ──
         prompt_text = handwriting_ocr_prompt()
-        raw_text = call_groq([prompt_text, img], temp=0.1, max_tokens=2000)
-        parsed = parse_ai_json(raw_text)
+        groq_vision_available = False
+        groq_key_check = os.getenv("GROQ_API_KEY") or ""
+        if groq_key_check and len(groq_key_check) > 10:
+            # Quick test: call Groq with a tiny text-only message to check connectivity
+            test_text, test_err = call_groq_with_error(
+                ["Say 'ok'"], temp=0.0, max_tokens=5
+            )
+            if test_text and "ok" in test_text.lower():
+                groq_vision_available = True
+            else:
+                logger.warning("Groq API unavailable: %s", test_err[:100] if test_err else "no response")
 
-        # Try 2: Text-only model fallback
-        if not parsed or not isinstance(parsed, dict) or len(parsed) == 0:
-            logger.info("Vision model returned non-JSON for handwriting, trying text model")
-            raw_text = call_groq([prompt_text], temp=0.2, max_tokens=2000)
-            parsed = parse_ai_json(raw_text)
+        if groq_vision_available:
+            # Groq is up — use vision model for handwriting
+            raw_text, vision_err = call_groq_with_error(
+                [prompt_text, img], temp=0.1, max_tokens=2000
+            )
+            parsed = parse_ai_json(raw_text) if raw_text else {}
+        else:
+            raw_text = ""
+            parsed = {}
+            vision_err = "Groq API unavailable — handwriting recognition requires Groq Vision"
 
-        # Try 3: Simpler prompt
+        # Try 2: Text-only model (won't see image, but may give template)
         if not parsed or not isinstance(parsed, dict) or len(parsed) == 0:
-            simple_prompt = """Read this handwritten prescription. Return ONLY valid JSON with these keys:
-{"vitals":"","complaints":"","diagnosis":"","medicines":"","investigations":"","advice":"","follow_up":""}
-Fill every field you can read. Medicines format: numbered list with drug+dose+frequency+duration."""
-            raw_text = call_groq([simple_prompt, img], temp=0.1, max_tokens=1500)
-            parsed = parse_ai_json(raw_text)
+            logger.info("Vision model unavailable or returned non-JSON, trying text-only")
+            txt_raw, _ = call_groq_with_error([prompt_text], temp=0.2, max_tokens=1000)
+            # Text model can't see image, so this is a lost cause for handwriting
+            # Just return the error clearly
+            pass
+
+        if not parsed or not isinstance(parsed, dict):
+            parsed = {}
+
+        # If Groq Vision was unavailable, tell the frontend clearly
+        if not groq_vision_available:
+            return {
+                "ok": True,
+                "parsed": {},
+                "raw": "",
+                "error_hint": "groq_vision_unavailable",
+                "message": "Groq Vision API is currently unavailable. Handwriting recognition needs Groq Vision. Your Groq API key may be invalid, expired, or out of credits. Please check OPD Settings → Groq API Key. DeepSeek (text-only) cannot process images."
+            }
+
+        return {"ok": True, "parsed": parsed, "raw": raw_text or ""}
 
     except Exception as e:
         logger.error("Handwriting OCR error: %s", e)

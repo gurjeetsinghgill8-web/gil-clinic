@@ -4199,6 +4199,14 @@ async function inkConvertToEMR() {
             console.log('Handwriting OCR page ' + (i+1) + ' parsed:', res);
 
             if (res.ok && res.parsed) {
+                // Check for error hint from backend
+                if (res.error_hint === 'groq_vision_unavailable') {
+                    statusEl.innerHTML = '⚠️ <b>Groq Vision API unavailable.</b> DeepSeek cannot process images. Check your Groq API key in Settings or try later.';
+                    showToast('Groq Vision needed for handwriting. Check API key.', 'error');
+                    if (convertBtn) { convertBtn.disabled = false; convertBtn.textContent = '🤖 Convert to Structured Rx (AI)'; }
+                    return;
+                }
+
                 successPages++;
                 const p = res.parsed;
                 // Merge: append new data to existing extracted data
