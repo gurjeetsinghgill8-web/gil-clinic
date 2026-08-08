@@ -557,64 +557,6 @@
                     <div id="quick-scan-status" class="text-sm" style="font-weight:600;color:#581c87;"></div>
                 </div>
 
-                <!-- ✍️ Digital Ink Prescription Writing Pad -->
-                <div class="card ink-pad-card mb-sm" style="padding:14px;" id="ink-pad-card">
-                    <div class="flex-between mb-sm" style="flex-wrap:wrap;gap:8px;cursor:pointer;" onclick="toggleInkPad()">
-                        <h4 style="margin:0;color:#6d28d9;font-size:15px;display:flex;align-items:center;gap:6px;">
-                            ✍️ Digital Prescription Pad <span id="ink-toggle-icon" style="font-size:12px;transition:transform 0.2s;">▼</span>
-                        </h4>
-                        <div style="display:flex;gap:4px;align-items:center;">
-                            <span style="font-size:10px;background:#ede9fe;color:#7c3aed;padding:3px 8px;border-radius:10px;font-weight:600;">🖊️ Stylus | Finger | Touch</span>
-                            <span style="font-size:10px;color:#7c3aed;" id="ink-collapse-label">Click to collapse</span>
-                        </div>
-                    </div>
-
-                    <div id="ink-pad-body">
-                        <!-- Toolbar -->
-                        <div class="ink-toolbar">
-                            <button class="ink-tool-btn active" id="ink-pen-btn" onclick="inkSetTool('pen')" title="Pen">🖊️</button>
-                            <button class="ink-tool-btn" id="ink-eraser-btn" onclick="inkSetTool('eraser')" title="Eraser">🧹</button>
-                            <span style="width:1px;height:24px;background:#d1d5db;margin:0 4px;"></span>
-                            <button class="ink-tool-btn" onclick="inkUndo()" title="Undo" id="ink-undo-btn" disabled>↩️</button>
-                            <button class="ink-tool-btn" onclick="inkRedo()" title="Redo" id="ink-redo-btn" disabled>↪️</button>
-                            <span style="width:1px;height:24px;background:#d1d5db;margin:0 4px;"></span>
-                            <!-- Color dots -->
-                            <span class="ink-color-dot active" style="background:#1e293b;" onclick="inkSetColor('#1e293b', this)" title="Black"></span>
-                            <span class="ink-color-dot" style="background:#2563eb;" onclick="inkSetColor('#2563eb', this)" title="Blue"></span>
-                            <span class="ink-color-dot" style="background:#dc2626;" onclick="inkSetColor('#dc2626', this)" title="Red"></span>
-                            <span class="ink-color-dot" style="background:#16a34a;" onclick="inkSetColor('#16a34a', this)" title="Green"></span>
-                            <span style="width:1px;height:24px;background:#d1d5db;margin:0 4px;"></span>
-                            <span style="font-size:11px;color:#6b7280;">Size:</span>
-                            <input type="range" class="ink-size-slider" id="ink-size-slider" min="1" max="12" value="3" oninput="inkSetSize(this.value)">
-                            <span id="ink-size-label" style="font-size:11px;color:#7c3aed;font-weight:600;min-width:20px;">3</span>
-                            <span style="width:1px;height:24px;background:#d1d5db;margin:0 4px;"></span>
-                            <button class="btn btn-sm btn-ghost" onclick="inkClearPage()" style="color:#ef4444;">🗑️ Clear Page</button>
-                            <button class="btn btn-sm btn-ghost" onclick="inkNewPage()" style="color:#7c3aed;">📄 + New Page</button>
-                        </div>
-
-                        <!-- Page Tabs -->
-                        <div class="ink-page-tabs mb-sm" id="ink-page-tabs">
-                            <span class="ink-page-tab active" data-page="0" onclick="inkSwitchPage(0)">Page 1</span>
-                        </div>
-
-                        <!-- Canvas -->
-                        <div class="ink-canvas-wrap" id="ink-canvas-wrap" style="width:100%;min-height:500px;height:65vh;max-height:750px;">
-                            <canvas id="ink-canvas"></canvas>
-                        </div>
-
-                        <!-- Action Buttons -->
-                        <div class="flex gap-sm mt-sm" style="flex-wrap:wrap;">
-                            <button class="btn btn-primary" onclick="inkSaveHandwriting()" style="background:#7c3aed;">
-                                💾 Save Handwriting
-                            </button>
-                            <button class="btn btn-warning" onclick="inkConvertToEMR()" style="background:linear-gradient(135deg,#f59e0b,#d97706);color:#fff;">
-                                🤖 Convert to Structured Rx (AI)
-                            </button>
-                            <span class="text-sm text-muted" id="ink-status" style="align-self:center;"></span>
-                        </div>
-                    </div>
-                </div>
-
                 <!-- Patient Search (hidden by default) -->
                 <div id="search-section" style="display:none;" class="card mb-sm">
                     <div class="card-title">Search Existing Patient</div>
@@ -731,6 +673,63 @@
                     <div class="form-group">
                         <label>Selected Investigations</label>
                         <input type="text" id="pt-investigations" placeholder="Selected tests appear here..." readonly>
+                    </div>
+
+                    <!-- ✍️ Digital Ink Prescription Writing Pad — Click to Open -->
+                    <div class="card ink-pad-card mb-sm" style="padding:14px;" id="ink-pad-card">
+                        <div class="flex-between mb-sm" style="flex-wrap:wrap;gap:8px;cursor:pointer;" onclick="toggleInkPad()">
+                            <h4 style="margin:0;color:#6d28d9;font-size:15px;display:flex;align-items:center;gap:6px;">
+                                ✍️ Write Prescription by Hand <span id="ink-toggle-icon" style="font-size:12px;transition:transform 0.2s;">▶</span>
+                            </h4>
+                            <div style="display:flex;gap:4px;align-items:center;">
+                                <span style="font-size:10px;background:#ede9fe;color:#7c3aed;padding:3px 8px;border-radius:10px;font-weight:600;">🖊️ Stylus | Finger | Touch</span>
+                                <span style="font-size:10px;color:#7c3aed;" id="ink-collapse-label">Click to open writing pad</span>
+                            </div>
+                        </div>
+
+                        <div id="ink-pad-body" style="display:none;">
+                            <!-- Toolbar -->
+                            <div class="ink-toolbar">
+                                <button class="ink-tool-btn active" id="ink-pen-btn" onclick="inkSetTool('pen')" title="Pen">🖊️</button>
+                                <button class="ink-tool-btn" id="ink-eraser-btn" onclick="inkSetTool('eraser')" title="Eraser">🧹</button>
+                                <span style="width:1px;height:24px;background:#d1d5db;margin:0 4px;"></span>
+                                <button class="ink-tool-btn" onclick="inkUndo()" title="Undo" id="ink-undo-btn" disabled>↩️</button>
+                                <button class="ink-tool-btn" onclick="inkRedo()" title="Redo" id="ink-redo-btn" disabled>↪️</button>
+                                <span style="width:1px;height:24px;background:#d1d5db;margin:0 4px;"></span>
+                                <span class="ink-color-dot active" style="background:#1e293b;" onclick="inkSetColor('#1e293b', this)" title="Black"></span>
+                                <span class="ink-color-dot" style="background:#2563eb;" onclick="inkSetColor('#2563eb', this)" title="Blue"></span>
+                                <span class="ink-color-dot" style="background:#dc2626;" onclick="inkSetColor('#dc2626', this)" title="Red"></span>
+                                <span class="ink-color-dot" style="background:#16a34a;" onclick="inkSetColor('#16a34a', this)" title="Green"></span>
+                                <span style="width:1px;height:24px;background:#d1d5db;margin:0 4px;"></span>
+                                <span style="font-size:11px;color:#6b7280;">Size:</span>
+                                <input type="range" class="ink-size-slider" id="ink-size-slider" min="1" max="12" value="3" oninput="inkSetSize(this.value)">
+                                <span id="ink-size-label" style="font-size:11px;color:#7c3aed;font-weight:600;min-width:20px;">3</span>
+                                <span style="width:1px;height:24px;background:#d1d5db;margin:0 4px;"></span>
+                                <button class="btn btn-sm btn-ghost" onclick="inkClearPage()" style="color:#ef4444;">🗑️ Clear Page</button>
+                                <button class="btn btn-sm btn-ghost" onclick="inkNewPage()" style="color:#7c3aed;">📄 + New Page</button>
+                            </div>
+
+                            <!-- Page Tabs -->
+                            <div class="ink-page-tabs mb-sm" id="ink-page-tabs">
+                                <span class="ink-page-tab active" data-page="0" onclick="inkSwitchPage(0)">Page 1</span>
+                            </div>
+
+                            <!-- Canvas -->
+                            <div class="ink-canvas-wrap" id="ink-canvas-wrap" style="width:100%;min-height:550px;height:70vh;max-height:800px;">
+                                <canvas id="ink-canvas"></canvas>
+                            </div>
+
+                            <!-- Action Buttons -->
+                            <div class="flex gap-sm mt-sm" style="flex-wrap:wrap;">
+                                <button class="btn btn-primary" onclick="inkSaveHandwriting()" style="background:#7c3aed;">
+                                    💾 Save Handwriting
+                                </button>
+                                <button class="btn btn-warning" onclick="inkConvertToEMR()" style="background:linear-gradient(135deg,#f59e0b,#d97706);color:#fff;">
+                                    🤖 Convert to Structured Rx (AI)
+                                </button>
+                                <span class="text-sm text-muted" id="ink-status" style="align-self:center;"></span>
+                            </div>
+                        </div>
                     </div>
 
                     <div class="card" style="margin-bottom:12px;padding:12px;background:var(--card-bg);border:1px solid var(--border);">
@@ -4057,7 +4056,6 @@ function inkGetAllPagesAsImages() {
     const canvas = document.getElementById('ink-canvas');
     if (!canvas) return images;
 
-    // Save current page first
     const ctx = canvas.getContext('2d');
     const currentImageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
     const page = inkState.pages[inkState.currentPage];
@@ -4065,26 +4063,26 @@ function inkGetAllPagesAsImages() {
         page.undoStack[page.undoStack.length - 1] = currentImageData;
     }
 
-    // Create temp canvas to render each page
+    // Use same resolution as main canvas for export
     const tempCanvas = document.createElement('canvas');
     tempCanvas.width = canvas.width;
     tempCanvas.height = canvas.height;
     const tempCtx = tempCanvas.getContext('2d');
 
     for (let i = 0; i < inkState.pages.length; i++) {
+        // White background first
+        tempCtx.fillStyle = '#ffffff';
+        tempCtx.fillRect(0, 0, tempCanvas.width, tempCanvas.height);
+        
         const p = inkState.pages[i];
         if (p.undoStack.length > 0) {
             tempCtx.putImageData(p.undoStack[p.undoStack.length - 1], 0, 0);
-        } else {
-            tempCtx.fillStyle = '#ffffff';
-            tempCtx.fillRect(0, 0, tempCanvas.width, tempCanvas.height);
         }
+        // Export as PNG (lossless, best for handwriting)
         images.push(tempCanvas.toDataURL('image/png'));
     }
 
-    // Restore current page
     inkRestoreSnapshot(currentImageData);
-
     return images;
 }
 

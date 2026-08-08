@@ -1719,7 +1719,7 @@ async def api_handwriting_ocr(request: Request):
         import base64 as b64_mod
         import io as io_mod
         from PIL import Image
-        from src.ai_engine.groq_client import call_groq_vision, parse_ai_json
+        from src.ai_engine.groq_client import call_groq_vision, parse_ai_json, call_groq
         from src.ai_engine.prompts import handwriting_ocr_prompt
 
         # Clean base64
@@ -1730,21 +1730,34 @@ async def api_handwriting_ocr(request: Request):
         image_bytes = b64_mod.b64decode(img_b64_clean)
         img = Image.open(io_mod.BytesIO(image_bytes))
 
-        # Run handwriting OCR with specialized prompt
-        messages = [handwriting_ocr_prompt(), img]
-        raw_text = call_groq_vision(img)
+        # Convert to RGB with white background
+        if img.mode in ('RGBA', 'LA', 'P'):
+            background = Image.new('RGB', img.size, (255, 255, 255))
+            if img.mode == 'P':
+                img = img.convert('RGBA')
+            background.paste(img, mask=img.split()[-1] if img.mode == 'RGBA' else None)
+            img = background
+        elif img.mode != 'RGB':
+            img = img.convert('RGB')
+
+        # Try 1: Vision model with handwriting prompt
+        prompt_text = handwriting_ocr_prompt()
+        raw_text = call_groq([prompt_text, img], temp=0.1, max_tokens=2000)
         parsed = parse_ai_json(raw_text)
 
-        # If direct vision call returned non-JSON, try with text prompt
-        if not parsed or not isinstance(parsed, dict):
-            from src.ai_engine.groq_client import call_groq
-            raw_text = call_groq(messages, temp=0.1, max_tokens=2000)
+        # Try 2: Text-only model fallback
+        if not parsed or not isinstance(parsed, dict) or len(parsed) == 0:
+            logger.info("Vision model returned non-JSON for handwriting, trying text model")
+            raw_text = call_groq([prompt_text], temp=0.2, max_tokens=2000)
             parsed = parse_ai_json(raw_text)
 
-        if not parsed or not isinstance(parsed, dict):
-            parsed = {}
-
-        return {"ok": True, "parsed": parsed, "raw": raw_text or ""}
+        # Try 3: Simpler prompt
+        if not parsed or not isinstance(parsed, dict) or len(parsed) == 0:
+            simple_prompt = """Read this handwritten prescription. Return ONLY valid JSON with these keys:
+{"vitals":"","complaints":"","diagnosis":"","medicines":"","investigations":"","advice":"","follow_up":""}
+Fill every field you can read. Medicines format: numbered list with drug+dose+frequency+duration."""
+            raw_text = call_groq([simple_prompt, img], temp=0.1, max_tokens=1500)
+            parsed = parse_ai_json(raw_text)
 
     except Exception as e:
         logger.error("Handwriting OCR error: %s", e)
