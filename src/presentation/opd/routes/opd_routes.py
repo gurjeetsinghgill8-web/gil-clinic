@@ -1740,56 +1740,68 @@ async def api_handwriting_ocr(request: Request):
             img = img.convert('RGB')
 
         # ══════════════════════════════════════════════════════════════
-        # STEP 1: Tesseract OCR — image → raw text (no API key needed)
+        # GROQ VISION — Same quality as smart-opd2 / Google Lens
         # ══════════════════════════════════════════════════════════════
-        from src.ai_engine.easyocr_handler import ocr_handwriting
+        ocr_prompt = """You are an expert AI reading a doctor's HANDWRITTEN prescription from a digital writing pad.
 
-        raw_ocr_text, ocr_error = ocr_handwriting(img)
-        logger.info("Tesseract OCR result: %d chars, error=%s",
-                     len(raw_ocr_text) if raw_ocr_text else 0, ocr_error or "none")
+Extract ALL clinical information CAREFULLY. Doctors write in shorthand — expand everything.
 
-        if not raw_ocr_text or len(raw_ocr_text.strip()) < 5:
+CRITICAL ABBREVIATIONS TO EXPAND:
+- DM = Diabetes Mellitus Type 2
+- HTN = Hypertension
+- CAD = Coronary Artery Disease, IHD = Ischemic Heart Disease
+- CKD = Chronic Kidney Disease, CHF = Congestive Heart Failure
+- COPD = Chronic Obstructive Pulmonary Disease
+- UTI = Urinary Tract Infection, URTI/LRTI = Upper/Lower Respiratory Tract Infection
+- OD = Once Daily, BD = Twice Daily, TDS = Thrice Daily, QID = Four times, HS = At bedtime, STAT = Immediately, SOS = As needed
+- BF/AC = Before Food, AF/PC = After Food, WF = With Food
+- x5d = for 5 days, x1w = for 1 week, x1m = for 1 month
+- Tab. = Tablet, Cap. = Capsule, Syp. = Syrup, Inj. = Injection
+- BP = Blood Pressure, HR = Heart Rate, FBS/PPBS = Fasting/Post Prandial Blood Sugar
+- CBC, LFT, KFT, TFT, HbA1c, Lipid, ECG, Echo, USG, X-ray, CXR, PFT
+
+RETURN ONLY valid JSON — no markdown, no explanation:
+{
+  "vitals": "BP, HR, sugar, weight, SpO2 etc",
+  "complaints": "chief complaints and history",
+  "diagnosis": "ALL diagnoses — expand ALL abbreviations to full clinical terms",
+  "medicines": "numbered list: 1. Tab. Metformin 500mg BD AF x 1m\\n2. Tab. Telma 40 OD BF x 1m",
+  "investigations": "comma-separated test names — expand abbreviations",
+  "advice": "lifestyle, diet, exercise advice",
+  "follow_up": "follow up timeline like '2 weeks' or '1 month'"
+}
+
+RULES:
+- Read EVERY word — don't skip anything
+- Expand ALL medical abbreviations
+- For EVERY medicine: include DRUG NAME + DOSE + FREQUENCY + TIMING + DURATION
+- If unsure about a word, put [best guess]
+- Return ONLY the JSON object — nothing else"""
+
+        # Try Groq Vision first (Google Lens quality)
+        raw_text, vision_err = call_groq_with_error(
+            [ocr_prompt, img], temp=0.0, max_tokens=2000
+        )
+        parsed = parse_ai_json(raw_text) if raw_text else {}
+
+        # If Groq Vision failed, try text-only model to structure (won't see image)
+        if not parsed or not isinstance(parsed, dict) or not any(parsed.values()):
+            logger.info("Groq Vision unavailable/empty, result keys: %s", list(parsed.keys()) if parsed else "none")
+            # Can't do handwriting without vision — return clear error
             return {
                 "ok": True,
                 "parsed": {},
-                "raw": "",
-                "ocr_text": raw_ocr_text or "",
-                "ocr_method": "tesseract",
-                "error_hint": "no_text_found",
-                "message": "Could not detect handwriting. Write in larger, clearer letters. Only black/blue ink on white background works best."
+                "raw": raw_text or "",
+                "ocr_method": "groq_vision",
+                "error_hint": "groq_unavailable" if not raw_text else "no_text_found",
+                "message": "Groq Vision API unavailable. Handwriting recognition needs Groq Vision. Please add a valid Groq API key in OPD Settings. Get free key: https://console.groq.com"
             }
-
-        # ══════════════════════════════════════════════════════════════
-        # STEP 2: AI text model — raw text → structured JSON
-        # Uses DeepSeek/Groq text model (NO vision needed)
-        # ══════════════════════════════════════════════════════════════
-        structuring_prompt = f"""You are a medical AI assistant. Convert the following OCR-extracted text from a doctor's handwritten prescription into structured JSON.
-
-OCR TEXT FROM HANDWRITING:
-{raw_ocr_text}
-
-Return ONLY valid JSON (no markdown, no explanation):
-{{"vitals":"BP, HR, sugar etc if found","complaints":"chief complaints","diagnosis":"diagnoses - expand abbreviations like DM→Diabetes Mellitus","medicines":"numbered list: 1. Drug Dose Freq x Duration","investigations":"comma-separated test names","advice":"lifestyle/diet advice","follow_up":"follow up timeline"}}
-
-Rules:
-- Expand ALL medical abbreviations (DM→Diabetes Mellitus Type 2, HTN→Hypertension, CAD→Coronary Artery Disease, etc.)
-- Extract EVERY drug with dose, frequency, duration
-- If a field is not found, use empty string ""
-- ONLY return JSON, nothing else"""
-
-        ai_text, ai_error = call_groq_with_error(
-            [structuring_prompt], temp=0.2, max_tokens=1500
-        )
-        parsed = parse_ai_json(ai_text) if ai_text else {}
-
-        logger.info("AI structuring result keys: %s", list(parsed.keys()) if parsed else "empty")
 
         return {
             "ok": True,
             "parsed": parsed if isinstance(parsed, dict) else {},
-            "raw": ai_text or "",
-            "ocr_text": raw_ocr_text,
-            "ocr_method": "tesseract",
+            "raw": raw_text or "",
+            "ocr_method": "groq_vision",
         }
 
     except Exception as e:

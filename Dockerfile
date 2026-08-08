@@ -8,10 +8,9 @@ WORKDIR /app
 # Force rebuild trigger — Multi-tenant v2.0 deployment
 RUN echo "BUILD: GIL CLINIC v2.0 + EasyOCR — $(date)"
 
-# Install system dependencies + Tesseract OCR (for handwriting recognition)
+# Install system dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
-    tesseract-ocr \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Python dependencies
