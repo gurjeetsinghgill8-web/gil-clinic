@@ -558,14 +558,14 @@
                 </div>
 
                 <!-- ✍️ Digital Ink Prescription Writing Pad -->
-                <div class="card ink-pad-card mb-sm" style="padding:14px;">
-                    <div class="flex-between mb-sm" style="flex-wrap:wrap;gap:8px;">
+                <div class="card ink-pad-card mb-sm" style="padding:14px;" id="ink-pad-card">
+                    <div class="flex-between mb-sm" style="flex-wrap:wrap;gap:8px;cursor:pointer;" onclick="toggleInkPad()">
                         <h4 style="margin:0;color:#6d28d9;font-size:15px;display:flex;align-items:center;gap:6px;">
-                            ✍️ Digital Prescription Pad
+                            ✍️ Digital Prescription Pad <span id="ink-toggle-icon" style="font-size:12px;transition:transform 0.2s;">▼</span>
                         </h4>
                         <div style="display:flex;gap:4px;align-items:center;">
-                            <span style="font-size:10px;background:#ede9fe;color:#7c3aed;padding:3px 8px;border-radius:10px;font-weight:600;">🖊️ Stylus/Finger/Touch</span>
-                            <button class="btn btn-sm btn-ghost" onclick="toggleInkPad()" style="font-size:11px;">📝 Show/Hide</button>
+                            <span style="font-size:10px;background:#ede9fe;color:#7c3aed;padding:3px 8px;border-radius:10px;font-weight:600;">🖊️ Stylus | Finger | Touch</span>
+                            <span style="font-size:10px;color:#7c3aed;" id="ink-collapse-label">Click to collapse</span>
                         </div>
                     </div>
 
@@ -598,7 +598,7 @@
                         </div>
 
                         <!-- Canvas -->
-                        <div class="ink-canvas-wrap" id="ink-canvas-wrap" style="width:100%;height:380px;">
+                        <div class="ink-canvas-wrap" id="ink-canvas-wrap" style="width:100%;min-height:500px;height:65vh;max-height:750px;">
                             <canvas id="ink-canvas"></canvas>
                         </div>
 
@@ -3802,7 +3802,7 @@ function inkInit() {
     const dpr = window.devicePixelRatio || 1;
     const rect = wrap.getBoundingClientRect();
     const w = rect.width;
-    const h = 380; // fixed height
+    const h = rect.height || 500;  // use actual div height, fallback 500px
 
     canvas.width = w * dpr;
     canvas.height = h * dpr;
@@ -3973,15 +3973,16 @@ function inkSetSize(size) {
 }
 
 function inkClearPage() {
-    if (!confirm('Clear this page? This cannot be undone.')) return;
     const canvas = document.getElementById('ink-canvas');
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
-    const w = canvas.width / (window.devicePixelRatio || 1);
-    const h = canvas.height / (window.devicePixelRatio || 1);
+    const dpr = window.devicePixelRatio || 1;
+    const w = canvas.width / dpr;
+    const h = canvas.height / dpr;
     ctx.fillStyle = '#ffffff';
     ctx.fillRect(0, 0, w, h);
     inkSaveSnapshot();
+    showToast('🗑️ Page cleared');
 }
 
 function inkNewPage() {
@@ -4101,18 +4102,24 @@ async function inkSaveHandwriting() {
     }
 
     const statusEl = document.getElementById('ink-status');
-    statusEl.innerHTML = '<span class="spinner"></span> Saving handwriting...';
+    statusEl.innerHTML = '<span class="spinner"></span> Saving handwriting to patient record...';
 
-    // Store images in hidden field or session — for now, append to complaints as note
     const complaintsField = document.getElementById('pt-complaints');
-    const note = `\n[📝 Handwritten Prescription — ${images.length} page(s) — ${new Date().toLocaleString()}]\n(Original handwriting saved to patient record)`;
-    complaintsField.value = complaintsField.value.trim() ? complaintsField.value + note : note.substring(1);
+    const existingComplaints = complaintsField.value.trim();
+    const timestamp = new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
+    const note = `\n\n[✍️ Handwritten Prescription — ${images.length} page(s) — ${timestamp}]`;
+    complaintsField.value = existingComplaints ? existingComplaints + note : note.substring(2);
 
-    statusEl.textContent = '✅ Handwriting saved to patient record!';
-    showToast(`✅ ${images.length} page(s) of handwriting saved!`);
+    // Store first page image for reference
+    const ptNameField = document.getElementById('pt-name');
+    if (ptNameField && images.length > 0) {
+        ptNameField.setAttribute('data-ink-image', images[0]);
+        ptNameField.setAttribute('data-ink-pages', String(images.length));
+    }
 
-    // TODO: In production, upload images to backend for permanent storage
-    // For now the images are base64 and can be sent via the scan-ai endpoint
+    statusEl.innerHTML = '✅ <b>Handwriting attached!</b> Save prescription to keep it permanently.';
+    showToast(`✅ ${images.length} page(s) saved! Click 💾 Save to keep permanently.`);
+    document.querySelector('#tab-rx .btn-success')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
 }
 
 async function inkConvertToEMR() {
@@ -4129,18 +4136,18 @@ async function inkConvertToEMR() {
     }
 
     const statusEl = document.getElementById('ink-status');
-    statusEl.innerHTML = '<span class="spinner"></span> AI reading your handwriting...';
+    const convertBtn = document.querySelector('#ink-pad-card .btn-warning');
 
-    let combinedParsed = {
-        patient_name: patientName,
-        phone: document.getElementById('pt-phone').value.trim(),
-        vitals: '', complaints: '', diagnosis: '', medicines: '', investigations: '', advice: '', follow_up: ''
-    };
+    statusEl.innerHTML = '<span class="spinner"></span> AI reading your handwriting...';
+    if (convertBtn) { convertBtn.disabled = true; convertBtn.textContent = '⏳ Processing...'; }
+
+    let extracted = { vitals: '', complaints: '', diagnosis: '', medicines: '', investigations: '', advice: '', follow_up: '' };
+    let totalPages = images.length;
+    let successPages = 0;
 
     try {
-        // Process each page sequentially through AI Vision OCR
-        for (let i = 0; i < images.length; i++) {
-            statusEl.innerHTML = `<span class="spinner"></span> AI reading page ${i + 1} of ${images.length}...`;
+        for (let i = 0; i < totalPages; i++) {
+            statusEl.innerHTML = `<span class="spinner"></span> AI reading page ${i + 1} of ${totalPages}...`;
 
             const res = await fetch('/opd/api/handwriting-ocr', {
                 method: 'POST',
@@ -4148,47 +4155,92 @@ async function inkConvertToEMR() {
                 body: JSON.stringify({ image: images[i] })
             }).then(r => r.json());
 
+            console.log('Handwriting OCR page ' + (i+1) + ' response:', res);
+
             if (res.ok && res.parsed) {
+                successPages++;
                 const p = res.parsed;
-                if (p.vitals) combinedParsed.vitals = combinedParsed.vitals ? combinedParsed.vitals + ' | ' + p.vitals : p.vitals;
-                if (p.complaints) combinedParsed.complaints = combinedParsed.complaints ? combinedParsed.complaints + '\n' + p.complaints : p.complaints;
-                if (p.diagnosis) combinedParsed.diagnosis = combinedParsed.diagnosis ? combinedParsed.diagnosis + '\n' + p.diagnosis : p.diagnosis;
-                if (p.medicines) combinedParsed.medicines = combinedParsed.medicines ? combinedParsed.medicines + '\n' + p.medicines : p.medicines;
-                if (p.investigations) combinedParsed.investigations = combinedParsed.investigations ? combinedParsed.investigations + ', ' + p.investigations : p.investigations;
-                if (p.advice) combinedParsed.advice = combinedParsed.advice ? combinedParsed.advice + '\n' + p.advice : p.advice;
-                if (p.follow_up) combinedParsed.follow_up = combinedParsed.follow_up ? combinedParsed.follow_up + ' | ' + p.follow_up : p.follow_up;
+                // Merge: append new data to existing extracted data
+                if (p.vitals) extracted.vitals = extracted.vitals ? extracted.vitals + ' | ' + p.vitals : p.vitals;
+                if (p.complaints) extracted.complaints = extracted.complaints ? extracted.complaints + '\n' + p.complaints : p.complaints;
+                if (p.diagnosis) extracted.diagnosis = extracted.diagnosis ? extracted.diagnosis + '\n' + p.diagnosis : p.diagnosis;
+                if (p.medicines) extracted.medicines = extracted.medicines ? extracted.medicines + '\n' + p.medicines : p.medicines;
+                if (p.investigations) extracted.investigations = extracted.investigations ? extracted.investigations + ', ' + p.investigations : p.investigations;
+                if (p.advice) extracted.advice = extracted.advice ? extracted.advice + '\n' + p.advice : p.advice;
+                if (p.follow_up) extracted.follow_up = extracted.follow_up ? extracted.follow_up + ' | ' + p.follow_up : p.follow_up;
+            } else {
+                console.warn('Handwriting OCR page ' + (i+1) + ' failed:', res.error || 'unknown');
             }
         }
 
-        // Populate the Rx form
-        if (combinedParsed.vitals) document.getElementById('pt-vitals').value = document.getElementById('pt-vitals').value || combinedParsed.vitals;
-        if (combinedParsed.complaints) document.getElementById('pt-complaints').value = document.getElementById('pt-complaints').value || combinedParsed.complaints;
-        if (combinedParsed.diagnosis) document.getElementById('pt-diagnosis').value = document.getElementById('pt-diagnosis').value || combinedParsed.diagnosis;
-        if (combinedParsed.medicines) document.getElementById('pt-medicines').value = document.getElementById('pt-medicines').value || combinedParsed.medicines;
-        if (combinedParsed.investigations) document.getElementById('pt-investigations').value = document.getElementById('pt-investigations').value || combinedParsed.investigations;
-        if (combinedParsed.advice) document.getElementById('pt-advice').value = document.getElementById('pt-advice').value || combinedParsed.advice;
-        if (combinedParsed.follow_up) {
-            // follow_up goes into the Rx output
+        // ── ALWAYS populate the form with extracted data (overwrite, don't skip) ──
+        let populated = [];
+        if (extracted.vitals) {
+            document.getElementById('pt-vitals').value = extracted.vitals;
+            populated.push('Vitals');
+        }
+        if (extracted.complaints) {
+            document.getElementById('pt-complaints').value = extracted.complaints;
+            populated.push('Complaints');
+        }
+        if (extracted.diagnosis) {
+            document.getElementById('pt-diagnosis').value = extracted.diagnosis;
+            populated.push('Diagnosis');
+        }
+        if (extracted.medicines) {
+            document.getElementById('pt-medicines').value = extracted.medicines;
+            populated.push('Medicines');
+        }
+        if (extracted.investigations) {
+            document.getElementById('pt-investigations').value = extracted.investigations;
+            populated.push('Investigations');
+        }
+        if (extracted.advice) {
+            document.getElementById('pt-advice').value = extracted.advice;
+            populated.push('Advice');
+        }
+        if (extracted.follow_up) {
             const rxOutput = document.getElementById('rx-output');
-            if (rxOutput && !rxOutput.value.includes('Follow-up:')) {
-                rxOutput.value = (rxOutput.value ? rxOutput.value + '\n' : '') + 'Follow-up: ' + combinedParsed.follow_up;
+            if (rxOutput) {
+                rxOutput.value = (rxOutput.value ? rxOutput.value + '\n' : '') + 'Follow-up: ' + extracted.follow_up;
             }
+            populated.push('Follow-up');
         }
 
-        statusEl.innerHTML = '✅ AI extracted prescription data! <b>Review before saving.</b>';
-        showToast('✅ Handwriting converted! Review the form fields before saving.');
+        if (populated.length > 0) {
+            statusEl.innerHTML = '✅ <b>AI extracted:</b> ' + populated.join(', ') + '. <b style="color:#dc2626;">Review before saving!</b>';
+            showToast('✅ ' + populated.length + ' fields populated! Review and Save.');
+            // Scroll to form so doctor can see populated fields
+            document.getElementById('pt-vitals').scrollIntoView({ behavior: 'smooth', block: 'center' });
+        } else {
+            statusEl.innerHTML = '⚠️ AI could not extract data. Try writing more clearly or use larger letters.';
+            showToast('No data extracted. Write more clearly.', 'error');
+        }
 
     } catch (err) {
         console.error('Handwriting OCR error:', err);
-        statusEl.textContent = '❌ AI recognition failed. Try again with clearer handwriting.';
-        showToast('AI recognition failed', 'error');
+        statusEl.textContent = '❌ AI recognition failed. Check your internet and Groq API key.';
+        showToast('AI recognition failed — check console', 'error');
+    } finally {
+        if (convertBtn) { convertBtn.disabled = false; convertBtn.textContent = '🤖 Convert to Structured Rx (AI)'; }
     }
 }
 
 function toggleInkPad() {
     const body = document.getElementById('ink-pad-body');
-    if (body) {
-        body.style.display = body.style.display === 'none' ? 'block' : 'none';
+    const icon = document.getElementById('ink-toggle-icon');
+    const label = document.getElementById('ink-collapse-label');
+    if (!body) return;
+    if (body.style.display === 'none') {
+        body.style.display = 'block';
+        if (icon) icon.textContent = '▼';
+        if (label) label.textContent = 'Click to collapse';
+        // Re-init canvas after showing (needs to recalculate size)
+        setTimeout(inkInit, 100);
+    } else {
+        body.style.display = 'none';
+        if (icon) icon.textContent = '▶';
+        if (label) label.textContent = 'Click to expand';
     }
 }
 
