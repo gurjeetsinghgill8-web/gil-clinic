@@ -28,8 +28,8 @@ DEEPSEEK_MODEL = os.getenv("DEEPSEEK_MODEL", "deepseek-chat")
 
 
 def _read_keys_from_file(filepath) -> dict:
-    """Read GROQ_KEY= and DEEPSEEK_KEY= from a file. Returns {groq: str, deepseek: str}."""
-    keys = {"groq": "", "deepseek": ""}
+    """Read GROQ_KEY=, DEEPSEEK_KEY=, GOOGLE_VISION_KEY= from a file."""
+    keys = {"groq": "", "deepseek": "", "google_vision": ""}
     try:
         if filepath.exists():
             for line in filepath.read_text().splitlines():
@@ -40,8 +40,9 @@ def _read_keys_from_file(filepath) -> dict:
                     keys["groq"] = line.split("=", 1)[1].strip().strip('"').strip("'")
                 elif line.startswith("DEEPSEEK_KEY="):
                     keys["deepseek"] = line.split("=", 1)[1].strip().strip('"').strip("'")
+                elif line.startswith("GOOGLE_VISION_KEY="):
+                    keys["google_vision"] = line.split("=", 1)[1].strip().strip('"').strip("'")
                 elif line.startswith("sk-") or line.startswith("gsk_"):
-                    # Unlabeled key — guess by prefix
                     if line.startswith("gsk_"):
                         keys["groq"] = line
                     elif line.startswith("sk-"):
@@ -99,6 +100,28 @@ def _get_deepseek_key() -> str:
     return ""
 
 
+def _get_google_vision_key() -> str:
+    """Get Google Cloud Vision API key from env var, secret.txt, or .env."""
+    key = os.getenv("GOOGLE_VISION_KEY", "")
+    if key and len(key.strip()) > 10:
+        return key.strip()
+
+    from pathlib import Path
+    root_dir = Path(__file__).parents[2]
+
+    keys = _read_keys_from_file(root_dir / "secret.txt")
+    if keys.get("google_vision") and len(keys["google_vision"]) > 10:
+        os.environ["GOOGLE_VISION_KEY"] = keys["google_vision"]
+        return keys["google_vision"]
+
+    keys = _read_keys_from_file(root_dir / ".env")
+    if keys.get("google_vision") and len(keys["google_vision"]) > 10:
+        os.environ["GOOGLE_VISION_KEY"] = keys["google_vision"]
+        return keys["google_vision"]
+
+    return ""
+
+
 # ════════════════════════════════════════════════════════════════════════════
 # RATE LIMIT GUARD — shared across both providers
 # ════════════════════════════════════════════════════════════════════════════
@@ -129,6 +152,8 @@ if not os.getenv("GROQ_API_KEY"):
     _get_api_key()
 if not os.getenv("DEEPSEEK_KEY"):
     _get_deepseek_key()
+if not os.getenv("GOOGLE_VISION_KEY"):
+    _get_google_vision_key()
 
 
 

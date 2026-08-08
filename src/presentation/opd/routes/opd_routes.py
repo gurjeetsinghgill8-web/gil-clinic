@@ -311,7 +311,7 @@ async def _get_settings(doctor_id: str) -> dict:
         "clinic_name": "My Clinic", "doc_name": "Doctor",
         "doc_subtitle": "MBBS", "doc_degree": "", "doc_reg_no": "",
         "doc_email": "", "doc_phone": "", "clinic_address": "",
-        "doc_extra_quals": "", "groq_api_key": "", "google_api_key": "",
+        "doc_extra_quals": "", "groq_api_key": "",
         "wa_reception": "", "wa_manager": "", "wa_doctor": "",
         "wa_dietitian": "",
     }
@@ -332,8 +332,7 @@ async def _get_settings(doctor_id: str) -> dict:
                     "doc_phone": s.doc_phone,
                     "clinic_address": s.clinic_address,
                     "doc_extra_quals": s.doc_extra_quals,
-                    "groq_api_key": s.groq_api_key,
-                    "google_api_key": getattr(s, 'google_api_key', '') or '',
+                    "groq_api_key": "•••••••• (in secret.txt)",
                     "wa_reception": s.wa_reception or "",
                     "wa_manager": s.wa_manager or "",
                     "wa_doctor": s.wa_doctor or "",
@@ -372,7 +371,7 @@ async def api_save_settings(request: Request):
 
             for key in ["clinic_name", "doc_name", "doc_subtitle", "doc_degree",
                          "doc_reg_no", "doc_email", "doc_phone", "clinic_address",
-                         "doc_extra_quals", "groq_api_key", "google_api_key",
+                         "doc_extra_quals", "groq_api_key",
                          "wa_reception", "wa_manager", "wa_doctor", "wa_dietitian"]:
                 if key in body:
                     setattr(s, key, str(body[key]))
@@ -1705,15 +1704,9 @@ async def api_handwriting_ocr(request: Request):
     if not image_b64:
         return {"ok": False, "error": "No handwriting image provided"}
 
-    # Load API keys (Groq + Google Vision)
+    # Load API keys from environment / secret.txt only (secure)
     groq_key = os.getenv("GROQ_API_KEY") or ""
-    google_key = os.getenv("GOOGLE_VISION_API_KEY") or ""
-    if not groq_key and doctor_id:
-        settings = await _get_settings(doctor_id)
-        groq_key = settings.get("groq_api_key") or ""
-        google_key = settings.get("google_api_key") or google_key
-    os.environ["GROQ_API_KEY"] = groq_key
-    os.environ["GOOGLE_VISION_API_KEY"] = google_key
+    google_key = os.getenv("GOOGLE_VISION_KEY") or ""
 
     try:
         import base64 as b64_mod
