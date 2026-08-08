@@ -244,3 +244,67 @@ class PendingScanModel(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
     )
+
+
+class LabReportModel(Base):
+    """AI Lab Intelligence — structured lab investigation records with OCR text,
+    abnormality flags, clinical interpretation, and longitudinal tracking.
+
+    Stores every investigation as structured data (image + OCR + values + AI insights).
+    Enables trend analysis across visits for chronic disease monitoring.
+    """
+
+    __tablename__ = "opd_lab_reports"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid7
+    )
+    clinic_id: Mapped[str | None] = mapped_column(
+        String(36), nullable=True, index=True
+    )
+    doctor_id: Mapped[str] = mapped_column(
+        String(100), nullable=False, default="chief", index=True
+    )
+
+    # Patient linkage
+    patient_id: Mapped[str] = mapped_column(String(50), nullable=True, index=True)
+    patient_name: Mapped[str] = mapped_column(String(200), nullable=False, default="")
+    phone: Mapped[str] = mapped_column(String(20), nullable=False, default="")
+
+    # Report metadata
+    report_date: Mapped[str] = mapped_column(String(30), nullable=False, default="")
+    report_type: Mapped[str] = mapped_column(
+        String(50), nullable=False, default="pathology"
+    )  # pathology / radiology / ecg / echo / pft / other
+
+    # Original document
+    source_image_b64: Mapped[str] = mapped_column(Text, nullable=False, default="")
+
+    # OCR & structured extraction
+    ocr_raw_text: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    structured_values: Mapped[str] = mapped_column(
+        Text, nullable=False, default="[]"
+    )  # JSON array: [{"name":"HbA1c","value":"8.4","unit":"%","ref_range":"<5.7","status":"HIGH"},...]
+
+    # AI Clinical Intelligence
+    ai_clinical_notes: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    ai_recommendations: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    ai_risk_flags: Mapped[str] = mapped_column(Text, nullable=False, default="")
+
+    # Investigation summary (comma-separated, for quick display in prescription form)
+    investigation_summary: Mapped[str] = mapped_column(Text, nullable=False, default="")
+
+    # Status
+    status: Mapped[str] = mapped_column(
+        String(20), nullable=False, default="active"
+    )  # active / archived
+
+    # Timestamps
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
+    )

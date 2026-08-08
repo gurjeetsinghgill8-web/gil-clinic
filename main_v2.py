@@ -151,6 +151,7 @@ from src.infrastructure.opd.models.opd_models import (  # noqa: F401
     SettingsModel,
     SpecialtyUpgradeModel,
     PendingScanModel,
+    LabReportModel,
 )
 # Staff User model — multi-user auth (receptionists, doctors)
 from src.infrastructure.staff.models.staff_user_model import StaffUserModel  # noqa: F401

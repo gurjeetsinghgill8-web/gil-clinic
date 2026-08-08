@@ -756,3 +756,238 @@ Day 6: [Brief menu variation]
 Day 7: [Brief menu variation]
 
 Follow-up in 2 weeks to review progress. Adjust protein/fiber based on tolerance and lab values."""
+
+
+# ════════════════════════════════════════════════════════════════════════════
+# AI LAB INTELLIGENCE PROMPTS — Lab Report OCR + Clinical Interpretation + Trends
+# ════════════════════════════════════════════════════════════════════════════
+
+def lab_report_ocr_prompt() -> str:
+    """
+    OCR prompt specialized for pathology / laboratory reports.
+    Extracts structured lab values as a JSON array with reference ranges
+    and auto-detected abnormality status.
+    """
+    return """You are a world-class Clinical Pathologist and Laboratory Medicine specialist AI.
+Analyze this laboratory/pathology report image CAREFULLY and extract ALL test parameters.
+
+CRITICAL INSTRUCTIONS:
+1. Read EVERY test name and value from the report
+2. For each test, identify: test name, numeric value, unit of measurement
+3. Compare each value against the reference range shown in the report
+4. Classify each value as: NORMAL, HIGH, LOW, or CRITICAL
+5. CRITICAL means severely abnormal — potentially life-threatening (e.g., Hb < 7, Creatinine > 5, K+ > 6.0, Glucose > 400)
+6. Include the EXACT reference range printed on the report
+7. If no reference range is printed, use standard clinical reference ranges for adults
+
+RETURN ONLY VALID JSON — no markdown, no code fences, no explanatory text. Pure JSON array:
+
+[
+  {
+    "name": "Hemoglobin",
+    "value": "12.5",
+    "unit": "g/dL",
+    "ref_range": "12.0-15.5",
+    "status": "NORMAL"
+  },
+  {
+    "name": "HbA1c",
+    "value": "8.4",
+    "unit": "%",
+    "ref_range": "<5.7",
+    "status": "HIGH"
+  },
+  {
+    "name": "Serum Creatinine",
+    "value": "2.8",
+    "unit": "mg/dL",
+    "ref_range": "0.6-1.2",
+    "status": "CRITICAL"
+  }
+]
+
+Common Indian lab test names to recognize:
+- CBC: Hemoglobin, TLC (WBC), Platelets, RBC, MCV, MCH, MCHC, RDW, Neutrophils, Lymphocytes, Eosinophils, Monocytes, Basophils, PCV/Hematocrit
+- Diabetes: Fasting Blood Sugar (FBS), Post Prandial Blood Sugar (PPBS), HbA1c (Glycated Hemoglobin), Random Blood Sugar (RBS), Urine Sugar
+- Kidney/Renal: Serum Creatinine, Blood Urea, BUN, Uric Acid, eGFR, Sodium, Potassium, Chloride, Calcium, Phosphorus, Urine Albumin, Urine Creatinine, ACR (Albumin-Creatinine Ratio), Microalbuminuria
+- Liver/LFT: Total Bilirubin, Direct Bilirubin, Indirect Bilirubin, SGOT (AST), SGPT (ALT), ALP (Alkaline Phosphatase), GGTP, Total Protein, Albumin, Globulin, A/G Ratio
+- Lipid Profile: Total Cholesterol, LDL Cholesterol, HDL Cholesterol, Triglycerides, VLDL, Non-HDL Cholesterol, TC/HDL Ratio
+- Thyroid: TSH, Free T3, Free T4, Total T3, Total T4, Anti-TPO, Anti-Thyroglobulin
+- Vitamins: Vitamin D (25-OH), Vitamin B12, Serum Folate, Vitamin B9
+- Iron Studies: Serum Iron, TIBC, Ferritin, Transferrin Saturation
+- Cardiac: Troponin I, Troponin T, CK-MB, CPK, NT-proBNP, hs-CRP
+- Coagulation: PT, INR, aPTT, Bleeding Time, Clotting Time
+- Urine: pH, Specific Gravity, Albumin, Sugar, Ketones, RBC, WBC, Pus Cells, Epithelial Cells, Casts, Crystals, Bacteria
+- Other: ESR, CRP, Uric Acid, Serum Amylase, Serum Lipase, RA Factor, ANA, PSA, CEA, CA-125
+
+RULES:
+- Extract ALL values visible — don't skip any
+- If a value looks like "<10" or ">500", include it exactly as written
+- If a test name is abbreviated (e.g., "S.Creat"), expand it to "Serum Creatinine"
+- If a value is reported as "Negative" or "Positive" or "Not Detected", include that text as the value
+- For multi-page reports, include ALL tests from ALL pages
+- Return ONLY the JSON array — NOTHING else"""
+
+
+def lab_clinical_interpretation_prompt(abnormal_values_json: str, patient_name: str = "",
+                                        patient_age: str = "", patient_gender: str = "") -> str:
+    """
+    AI clinical interpretation of abnormal lab values.
+    Generates: Key Abnormal Findings, Possible Clinical Concerns, Risk Flags.
+    Doctor-facing only — not for patient prescription.
+    """
+    patient_ctx = ""
+    if patient_name:
+        patient_ctx += f"\nPatient: {patient_name}"
+    if patient_age:
+        patient_ctx += f"\nAge: {patient_age}"
+    if patient_gender:
+        patient_ctx += f"\nGender: {patient_gender}"
+
+    return f"""You are a Senior Clinical Pathologist and Internal Medicine consultant with 20+ years of experience in an Indian tertiary care hospital.
+Analyze the following ABNORMAL laboratory findings and provide CLINICAL INTERPRETATION for a treating physician.
+
+{patient_ctx}
+
+ABNORMAL LABORATORY VALUES:
+{abnormal_values_json}
+
+YOUR TASK — Provide a comprehensive clinical interpretation in these EXACT 3 sections:
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🚨 KEY ABNORMAL FINDINGS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+List each abnormal parameter. Format each as:
+• [Test Name]: [Value] [Unit] — [HIGH/LOW/CRITICAL] (Ref: [Reference Range])
+Group by organ system (Hematology, Renal, Hepatic, Metabolic, Endocrine, Cardiac, etc.)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+⚠️ POSSIBLE CLINICAL CONCERNS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Based on the pattern of abnormalities, list possible clinical conditions.
+Each with a brief "why" explanation linking the lab finding to the condition.
+Format:
+1. [Condition Name] — [Brief explanation connecting the lab values to this condition]
+2. [Condition Name] — [Brief explanation]
+
+Consider:
+- Pattern recognition (multiple abnormalities pointing to one disease)
+- Common Indian disease patterns (Diabetes, Hypertension, CKD, Thyroid, Anemia, CAD, Dyslipidemia)
+- Drug-induced lab abnormalities (statins causing ↑LFT, ACEi causing ↑Creatinine, diuretics causing electrolyte imbalance)
+- Nutritional deficiencies common in India (Iron deficiency, B12 deficiency, Vitamin D deficiency)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🏷️ RISK FLAGS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Flag any CRITICAL or HIGH-RISK findings requiring immediate attention.
+Format each as:
+🔴 [RISK LEVEL]: [Finding] — [Recommended urgent action]
+🔶 [RISK LEVEL]: [Finding] — [Recommended action]
+🟡 [RISK LEVEL]: [Finding] — [Suggested monitoring]
+
+CRITICAL RULES:
+1. This is DOCTOR REFERENCE ONLY — not for patient
+2. Be CONCISE and ACTIONABLE — no paragraphs, no storytelling
+3. Consider Indian context — common infections (TB, Dengue, Malaria, Typhoid), nutritional patterns, genetic predispositions
+4. NEVER state a definitive diagnosis — use language like "suggests", "consistent with", "raises suspicion of"
+5. Include a DISCLAIMER line at the very end: "⚠️ AI-generated clinical observations are for physician review only and are not final diagnoses."
+6. Plain text only — no markdown, no asterisks for bold"""
+
+
+def lab_recommendations_prompt(abnormal_values_json: str, patient_name: str = "",
+                                existing_diagnosis: str = "") -> str:
+    """
+    AI follow-up test and monitoring recommendations based on abnormal lab values.
+    """
+    diag_ctx = f"\nExisting Diagnosis: {existing_diagnosis}" if existing_diagnosis else ""
+    patient_ctx = f"\nPatient: {patient_name}" if patient_name else ""
+
+    return f"""You are a Senior Clinical Pathologist advising a treating physician on appropriate follow-up investigations.
+
+{patient_ctx}{diag_ctx}
+
+ABNORMAL LABORATORY VALUES:
+{abnormal_values_json}
+
+YOUR TASK — Provide evidence-based follow-up test recommendations in these EXACT 2 sections:
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📋 SUGGESTED FOLLOW-UP INVESTIGATIONS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+For each abnormal finding, suggest appropriate follow-up tests.
+Format as numbered list:
+1. [Test Name] — [Clinical reason for ordering this test] — [Recommended timeline: STAT / 1 week / 1 month / 3 months]
+2. [Test Name] — [Clinical reason] — [Timeline]
+
+Prioritize:
+- STAT: Tests needed immediately for critical values
+- 1 week: Tests to confirm/refine the diagnosis
+- 1 month: Tests for monitoring treatment response
+- 3 months: Routine repeat testing for chronic conditions
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📊 MONITORING PLAN
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Suggest a monitoring schedule for chronic abnormalities.
+Format:
+• [Parameter]: Repeat every [X weeks/months] — [Reason]
+• [Parameter]: Repeat every [X weeks/months] — [Reason]
+
+Include:
+- Which tests need serial monitoring (trend tracking)
+- Target values / treatment goals for each parameter
+- When to refer to a specialist
+
+CRITICAL RULES:
+1. Use Indian-standard test names and availability
+2. Be practical — suggest tests available in Indian labs and diagnostic centers
+3. Consider cost-effectiveness — suggest cheaper alternatives where appropriate
+4. Plain text only — no markdown
+5. Include disclaimer: "⚠️ These are AI-generated suggestions for physician consideration only."
+6. NEVER recommend invasive tests without clear clinical justification"""
+
+
+# ════════════════════════════════════════════════════════════════════════════
+# LAB TREND ANALYSIS PROMPT
+# ════════════════════════════════════════════════════════════════════════════
+
+def lab_trend_prompt(patient_name: str, trend_data_json: str) -> str:
+    """
+    AI trend analysis for longitudinal lab tracking.
+    Analyzes whether parameters are improving, worsening, or stable over time.
+    """
+    return f"""You are a Clinical Data Analyst reviewing a patient's longitudinal laboratory trends.
+
+Patient: {patient_name}
+
+LONGITUDINAL LAB DATA (chronological):
+{trend_data_json}
+
+YOUR TASK — Analyze trends for each parameter:
+
+For each investigation parameter tracked over time, provide:
+
+1. TREND DIRECTION: ↑ Worsening / ↓ Improving / → Stable
+2. RATE OF CHANGE: Rapid / Gradual / Static
+3. CLINICAL SIGNIFICANCE: What does this trend suggest?
+4. ALERT: Flag if trend is concerning (rapid deterioration, approaching critical threshold)
+
+FORMAT per parameter:
+━━━ [Parameter Name] ━━━
+Direction: [↑/↓/→] [Worsening/Improving/Stable]
+Values: [date1]: [value1] → [date2]: [value2] → [date3]: [value3]
+Rate: [Rapid/Gradual/Static]
+Interpretation: [1-2 lines of clinical interpretation]
+Alert: [CONCERNING / MONITOR / STABLE]
+
+OVERALL SUMMARY at the end:
+- Which parameters are improving?
+- Which parameters are worsening?
+- Which parameters need immediate attention?
+- Overall disease control status (improving / stable / deteriorating)
+
+RULES:
+- Be CONCISE — one line per parameter trend
+- Plain text only
+- Include disclaimer: "⚠️ AI trend analysis — for physician review only."
+- If trend is clearly improving, acknowledge it (positive reinforcement for treatment adherence)"""

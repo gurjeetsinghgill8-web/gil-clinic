@@ -296,6 +296,29 @@
             font-size: 13px; padding: 12px 0;
         }
 
+        /* Lab Intelligence styles */
+        .lab-intel-section summary { list-style: none; }
+        .lab-intel-section summary::-webkit-details-marker { display: none; }
+        .lab-intel-section[open] summary { margin-bottom: 8px; }
+        .lab-status-badge {
+            display: inline-block; padding: 2px 10px; border-radius: 10px;
+            font-size: 11px; font-weight: 700;
+        }
+        .lab-status-normal { background: #dcfce7; color: #15803d; }
+        .lab-status-high { background: #fee2e2; color: #dc2626; }
+        .lab-status-low { background: #dbeafe; color: #2563eb; }
+        .lab-status-critical { background: #fce7f3; color: #be185d; border: 1px solid #ec4899; }
+        .lab-trend-up { color: #dc2626; font-weight: 700; }
+        .lab-trend-down { color: #16a34a; font-weight: 700; }
+        .lab-trend-stable { color: #64748b; }
+        .lab-trend-card {
+            padding: 10px 14px; border-radius: 8px; margin-bottom: 8px;
+            border: 1px solid var(--border); background: rgba(0,0,0,0.01);
+        }
+        .lab-trend-card.worsening { border-left: 3px solid #ef4444; }
+        .lab-trend-card.improving { border-left: 3px solid #22c55e; }
+        .lab-trend-card.stable { border-left: 3px solid #94a3b8; }
+
         /* Specialty checkboxes */
         .spec-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 8px; }
         .spec-item {
@@ -415,6 +438,7 @@
         <button class="nav-item" data-tab="queue"> <span class="icon">🚶</span> Queue <span id="queue-badge" style="background:#ef4444;color:#fff;font-size:10px;padding:1px 6px;border-radius:10px;margin-left:4px;">0</span></button>
         <button class="nav-item" data-tab="roster"> <span class="icon">📋</span> OPD Roster</button>
         <button class="nav-item" data-tab="batch"> <span class="icon">📸</span> Batch Scan</button>
+        <button class="nav-item" data-tab="lab-intel"> <span class="icon">🧪</span> Lab Intelligence</button>
         <button class="nav-item" data-tab="upgrade"> <span class="icon">⚕️</span> Specialty Upgrade</button>
         {% if is_chief %}
         <button class="nav-item" data-tab="starred"> <span class="icon">⭐</span> Starred</button>
@@ -787,6 +811,181 @@
                     <div id="scan-previews" class="flex flex-wrap gap-sm" style="margin-bottom:12px;"></div>
                     <div id="scan-queue-status" class="text-muted text-sm mb-sm" style="font-weight:600;"></div>
                     <button class="btn btn-primary" onclick="processAllScans()">🤖 AI Read All (1-by-1 Queue)</button>
+                </div>
+            </div>
+
+            <!-- ════════════════ TAB: LAB INTELLIGENCE ════════════════ -->
+            <div class="tab-content" id="tab-lab-intel">
+                <div class="flex-between mb-sm">
+                    <h2>🧪 AI Lab Intelligence Engine</h2>
+                    <div class="flex gap-sm" style="flex-wrap:wrap;">
+                        <button class="btn btn-ghost btn-sm" onclick="clearLabForm()">🔄 New Report</button>
+                        <button class="btn btn-ghost btn-sm" onclick="loadLabHistory()">📋 View History</button>
+                    </div>
+                </div>
+
+                <!-- Lab Report Upload Card -->
+                <div class="card mb-sm" style="background:linear-gradient(135deg, rgba(5,150,105,0.08), rgba(16,185,129,0.06));border:1.5px solid #10b981;border-radius:12px;padding:16px;">
+                    <div class="flex-between mb-sm" style="flex-wrap:wrap;gap:8px;">
+                        <h4 style="margin:0;color:#065f46;font-size:15px;display:flex;align-items:center;gap:6px;">
+                            🔬 Upload Laboratory Report (Pathology / Radiology / ECG / Echo)
+                        </h4>
+                        <span style="font-size:11px;background:#d1fae5;color:#065f46;padding:3px 10px;border-radius:12px;font-weight:700;">AI Clinical Intelligence</span>
+                    </div>
+                    <div style="font-size:12px;color:#047857;margin-bottom:12px;">
+                        Capture or upload lab reports — AI extracts structured values, detects abnormalities, and generates clinical insights for doctor review.
+                    </div>
+
+                    <!-- Hidden file inputs for Lab Intelligence -->
+                    <input type="file" id="lab-camera-input" accept="image/*" capture="environment" style="position:fixed;top:-9999px;left:-9999px;width:1px;height:1px;opacity:0;" onchange="handleLabCamera(this)">
+                    <input type="file" id="lab-gallery-input" accept="image/*,.pdf,application/pdf" multiple style="position:fixed;top:-9999px;left:-9999px;width:1px;height:1px;opacity:0;" onchange="handleLabGallery(this)">
+
+                    <div class="flex gap-sm mb-sm" style="flex-wrap:wrap;">
+                        <label for="lab-camera-input" style="background:#059669;color:white;font-weight:700;font-size:13px;padding:10px 18px;border:none;border-radius:8px;cursor:pointer;display:inline-flex;align-items:center;gap:8px;box-shadow:0 3px 10px rgba(5,150,105,0.25);">
+                            <span style="font-size:18px;">📷</span> <strong>Capture Lab Report</strong>
+                        </label>
+                        <label for="lab-gallery-input" style="background:#0284c7;color:white;font-weight:700;font-size:13px;padding:10px 18px;border:none;border-radius:8px;cursor:pointer;display:inline-flex;align-items:center;gap:8px;box-shadow:0 3px 10px rgba(2,132,199,0.25);">
+                            <span style="font-size:18px;">🖼️</span> <strong>Upload Report Image/PDF</strong>
+                        </label>
+                        <select id="lab-report-type" style="width:auto;padding:8px 14px;border:1px solid #10b981;border-radius:8px;font-size:13px;background:#f0fdf4;">
+                            <option value="pathology">🩸 Pathology</option>
+                            <option value="radiology">🩻 Radiology</option>
+                            <option value="ecg">💓 ECG</option>
+                            <option value="echo">🫀 Echo</option>
+                            <option value="pft">🫁 PFT</option>
+                            <option value="other">📋 Other</option>
+                        </select>
+                    </div>
+
+                    <div id="lab-file-previews" class="flex flex-wrap gap-sm mb-sm"></div>
+                    <div id="lab-upload-status" class="text-sm" style="font-weight:600;color:#065f46;"></div>
+                </div>
+
+                <!-- Patient Context -->
+                <div class="card mb-sm">
+                    <div class="card-title">👤 Patient Context</div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Patient Name *</label>
+                            <input type="text" id="lab-pt-name" placeholder="Patient name" oninput="autoLinkLabPatient()">
+                        </div>
+                        <div class="form-group">
+                            <label>Phone</label>
+                            <input type="text" id="lab-pt-phone" placeholder="10 digit">
+                        </div>
+                    </div>
+                    <div class="form-row-3">
+                        <div class="form-group">
+                            <label>Age</label>
+                            <input type="text" id="lab-pt-age" placeholder="Age" style="width:80px;">
+                        </div>
+                        <div class="form-group">
+                            <label>Gender</label>
+                            <select id="lab-pt-gender" style="width:120px;">
+                                <option value="">—</option>
+                                <option value="Male">Male</option>
+                                <option value="Female">Female</option>
+                                <option value="Other">Other</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Report Date</label>
+                            <input type="date" id="lab-report-date" style="width:160px;">
+                        </div>
+                    </div>
+
+                    <button id="lab-analyze-btn" class="btn btn-primary mt-sm" onclick="analyzeLabReport()" style="display:none;">
+                        🔬 Analyze Lab Report with AI
+                    </button>
+                    <span id="lab-analyze-status" class="text-sm text-muted" style="margin-left:12px;"></span>
+                </div>
+
+                <!-- Results Display -->
+                <div id="lab-results-section" style="display:none;">
+
+                    <!-- Structured Results Table -->
+                    <div class="card mb-sm">
+                        <div class="card-title">📊 Structured Lab Values</div>
+                        <div style="overflow-x:auto;">
+                            <table>
+                                <thead>
+                                    <tr><th>Test</th><th>Value</th><th>Unit</th><th>Reference Range</th><th>Status</th></tr>
+                                </thead>
+                                <tbody id="lab-results-body"></tbody>
+                            </table>
+                        </div>
+                        <div class="text-sm text-muted mt-sm">
+                            <span id="lab-total-tests">0</span> tests extracted | 
+                            <span id="lab-abnormal-count" style="color:#dc2626;">0 abnormal</span>
+                        </div>
+                    </div>
+
+                    <!-- Doctor Intelligence Panel -->
+                    <div class="card mb-sm" style="border:2px dashed #f59e0b;background:linear-gradient(135deg, rgba(245,158,11,0.03), rgba(217,119,6,0.02));border-radius:12px;padding:16px 20px;">
+                        <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;font-weight:700;color:#d97706;font-size:14px;">
+                            🧠 Doctor Intelligence Panel
+                            <span style="font-size:10px;color:#92400e;background:rgba(245,158,11,0.12);padding:3px 8px;border-radius:4px;font-weight:600;">⚠️ DOCTOR REFERENCE ONLY — Not for Patient</span>
+                        </div>
+
+                        <!-- 1. Key Abnormal Findings -->
+                        <details open class="lab-intel-section" style="margin-bottom:12px;padding:10px 12px;background:rgba(0,0,0,0.02);border-radius:8px;border-left:3px solid #ef4444;">
+                            <summary style="cursor:pointer;font-weight:700;font-size:13px;color:#dc2626;margin-bottom:8px;">
+                                🚨 Key Abnormal Findings
+                            </summary>
+                            <div id="lab-abnormal-findings" style="font-size:13px;line-height:1.7;white-space:pre-wrap;"></div>
+                        </details>
+
+                        <!-- 2. Possible Clinical Concerns -->
+                        <details open class="lab-intel-section" style="margin-bottom:12px;padding:10px 12px;background:rgba(0,0,0,0.02);border-radius:8px;border-left:3px solid #f59e0b;">
+                            <summary style="cursor:pointer;font-weight:700;font-size:13px;color:#d97706;margin-bottom:8px;">
+                                ⚠️ Possible Clinical Concerns
+                            </summary>
+                            <div id="lab-clinical-concerns" style="font-size:13px;line-height:1.7;white-space:pre-wrap;"></div>
+                        </details>
+
+                        <!-- 3. AI Suggestions Disclaimer -->
+                        <div style="background:rgba(245,158,11,0.08);border-radius:6px;padding:8px 12px;margin-bottom:12px;font-size:11px;color:#92400e;font-weight:600;text-align:center;">
+                            ⚠️ AI suggestions are for physician review and are not final diagnoses.
+                        </div>
+
+                        <!-- 4. Suggested Follow-up Tests -->
+                        <details open class="lab-intel-section" style="margin-bottom:12px;padding:10px 12px;background:rgba(0,0,0,0.02);border-radius:8px;border-left:3px solid #3b82f6;">
+                            <summary style="cursor:pointer;font-weight:700;font-size:13px;color:#2563eb;margin-bottom:8px;">
+                                📋 Suggested Follow-up Tests
+                            </summary>
+                            <div id="lab-recommendations" style="font-size:13px;line-height:1.7;white-space:pre-wrap;"></div>
+                        </details>
+
+                        <!-- 5. Risk Flags -->
+                        <details open class="lab-intel-section" style="margin-bottom:12px;padding:10px 12px;background:rgba(0,0,0,0.02);border-radius:8px;border-left:3px solid #7c3aed;">
+                            <summary style="cursor:pointer;font-weight:700;font-size:13px;color:#6d28d9;margin-bottom:8px;">
+                                🏷️ Risk Flags
+                            </summary>
+                            <div id="lab-risk-flags" style="font-size:13px;line-height:1.7;white-space:pre-wrap;"></div>
+                        </details>
+                    </div>
+
+                    <!-- Trend Dashboard -->
+                    <div class="card mb-sm">
+                        <div class="flex-between mb-sm">
+                            <div class="card-title" style="margin:0;">📈 Longitudinal Trend Dashboard</div>
+                            <button class="btn btn-sm btn-ghost" onclick="loadLabTrends()">🔄 Refresh Trends</button>
+                        </div>
+                        <div id="lab-trends-content" style="font-size:13px;line-height:1.8;"></div>
+                        <div id="lab-trends-status" class="text-muted text-sm" style="text-align:center;padding:20px;">
+                            Click "🔄 Refresh Trends" to load historical comparison
+                        </div>
+                    </div>
+
+                    <!-- Action Buttons -->
+                    <div class="flex gap-md mt-sm" style="flex-wrap:wrap;">
+                        <button class="btn btn-success" onclick="copyLabToInvestigations()">📋 Copy to Prescription Investigations</button>
+                        <button class="btn btn-ghost" onclick="switchTab('rx')">📝 Back to Prescription</button>
+                        <button class="btn btn-ghost" onclick="exportLabPdf()" style="color:#2563eb;">📄 Export Report</button>
+                    </div>
+
+                    <!-- Save confirmation -->
+                    <div class="text-sm text-muted mt-sm" id="lab-save-status"></div>
                 </div>
             </div>
 
@@ -3039,6 +3238,439 @@ function buildMedicinesText() {
     const textarea = document.getElementById('pt-medicines');
     textarea.value = lines.join('\n');
     showToast('✅ Medicine text generated!');
+}
+
+// ════════════════════════════════════════════════════════════════
+// TAB SWITCHING HELPER
+// ════════════════════════════════════════════════════════════════
+function switchTab(tabName) {
+    document.querySelectorAll('.nav-item').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+    const navBtn = document.querySelector(`.nav-item[data-tab="${tabName}"]`);
+    if (navBtn) navBtn.classList.add('active');
+    const tabContent = document.getElementById('tab-' + tabName);
+    if (tabContent) tabContent.classList.add('active');
+}
+
+// ════════════════════════════════════════════════════════════════
+// AI LAB INTELLIGENCE — Full Pipeline
+// ════════════════════════════════════════════════════════════════
+let labFiles = [];
+let currentLabReportId = null;
+let currentLabStructuredValues = [];
+
+function handleLabCamera(input) {
+    if (!input.files || input.files.length === 0) return;
+    const newFiles = Array.from(input.files);
+    labFiles = labFiles.concat(newFiles);
+    renderLabPreviews();
+}
+
+function handleLabGallery(input) {
+    if (!input.files || input.files.length === 0) return;
+    const newFiles = Array.from(input.files);
+    labFiles = labFiles.concat(newFiles);
+    renderLabPreviews();
+}
+
+function renderLabPreviews() {
+    const container = document.getElementById('lab-file-previews');
+    if (!container) return;
+    container.innerHTML = '';
+    labFiles.forEach((file, index) => {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            const div = document.createElement('div');
+            div.style.cssText = 'position:relative;width:100px;height:100px;border:1.5px solid #10b981;border-radius:8px;overflow:hidden;background:#d1fae5;';
+            div.innerHTML = `
+                <img src="${e.target.result}" style="width:100%;height:100%;object-fit:cover;">
+                <button type="button" onclick="removeLabFile(${index})" style="position:absolute;top:2px;right:2px;background:rgba(225,29,72,0.9);color:white;border:none;border-radius:50%;width:20px;height:20px;font-size:11px;cursor:pointer;display:flex;align-items:center;justify-content:center;">✕</button>
+                <div style="position:absolute;bottom:0;left:0;right:0;background:rgba(5,150,105,0.85);color:white;font-size:9px;padding:2px 4px;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${file.name}</div>
+            `;
+            container.appendChild(div);
+        };
+        reader.readAsDataURL(file);
+    });
+
+    const statusEl = document.getElementById('lab-upload-status');
+    const analyzeBtn = document.getElementById('lab-analyze-btn');
+    if (statusEl) {
+        statusEl.textContent = labFiles.length > 0
+            ? `📸 ${labFiles.length} report(s) ready — Click "🔬 Analyze Lab Report with AI" to process`
+            : '';
+    }
+    if (analyzeBtn) {
+        analyzeBtn.style.display = labFiles.length > 0 ? 'inline-flex' : 'none';
+    }
+}
+
+function removeLabFile(index) {
+    labFiles.splice(index, 1);
+    renderLabPreviews();
+}
+
+function autoLinkLabPatient() {
+    // Auto-fill patient context from current Rx form if on the Rx tab
+    const rxName = document.getElementById('pt-name');
+    const rxPhone = document.getElementById('pt-phone');
+    const rxAge = document.getElementById('pt-age');
+    const rxGender = document.getElementById('pt-gender');
+
+    if (rxName && rxName.value && !document.getElementById('lab-pt-name').value) {
+        document.getElementById('lab-pt-name').value = rxName.value;
+    }
+    if (rxPhone && rxPhone.value && !document.getElementById('lab-pt-phone').value) {
+        document.getElementById('lab-pt-phone').value = rxPhone.value;
+    }
+    if (rxAge && rxAge.value && !document.getElementById('lab-pt-age').value) {
+        document.getElementById('lab-pt-age').value = rxAge.value;
+    }
+    if (rxGender && rxGender.value && document.getElementById('lab-pt-gender').value === '') {
+        document.getElementById('lab-pt-gender').value = rxGender.value;
+    }
+    // Set report date to today
+    if (!document.getElementById('lab-report-date').value) {
+        document.getElementById('lab-report-date').value = new Date().toISOString().split('T')[0];
+    }
+}
+
+async function analyzeLabReport() {
+    const patientName = document.getElementById('lab-pt-name').value.trim();
+    if (!patientName) {
+        showToast('Patient name required', 'error');
+        return;
+    }
+    if (labFiles.length === 0) {
+        showToast('No report image selected', 'error');
+        return;
+    }
+
+    const statusEl = document.getElementById('lab-analyze-status');
+    const total = labFiles.length;
+
+    let combinedResults = {
+        structured_values: [],
+        ai_clinical_notes: '',
+        ai_recommendations: '',
+        ai_risk_flags: '',
+        investigation_summary: '',
+        patient_name: patientName,
+    };
+
+    for (let i = 0; i < total; i++) {
+        const file = labFiles[i];
+        const percent = Math.round(((i + 1) / total) * 100);
+        statusEl.innerHTML = `<span class="spinner"></span> Processing report ${i + 1} of ${total} (${percent}%) — <em>${file.name}</em>...`;
+
+        try {
+            const dataUrl = await readFileAsDataURL(file);
+            const res = await fetch('/opd/api/lab-report-analyze', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    image: dataUrl,
+                    patient_name: patientName,
+                    patient_id: _currentPatientId || '',
+                    phone: document.getElementById('lab-pt-phone').value.trim(),
+                    age: document.getElementById('lab-pt-age').value.trim(),
+                    gender: document.getElementById('lab-pt-gender').value,
+                    report_date: document.getElementById('lab-report-date').value || new Date().toISOString().split('T')[0],
+                    report_type: document.getElementById('lab-report-type').value,
+                })
+            }).then(r => r.json());
+
+            if (res.ok) {
+                // Merge structured values
+                if (res.structured_values && res.structured_values.length > 0) {
+                    combinedResults.structured_values = combinedResults.structured_values.concat(res.structured_values);
+                }
+                if (res.ai_clinical_notes) {
+                    combinedResults.ai_clinical_notes = (combinedResults.ai_clinical_notes ? combinedResults.ai_clinical_notes + '\n\n' : '') + res.ai_clinical_notes;
+                }
+                if (res.ai_recommendations) {
+                    combinedResults.ai_recommendations = (combinedResults.ai_recommendations ? combinedResults.ai_recommendations + '\n\n' : '') + res.ai_recommendations;
+                }
+                if (res.ai_risk_flags) {
+                    combinedResults.ai_risk_flags = (combinedResults.ai_risk_flags ? combinedResults.ai_risk_flags + '\n' : '') + res.ai_risk_flags;
+                }
+                if (res.investigation_summary) {
+                    combinedResults.investigation_summary = (combinedResults.investigation_summary ? combinedResults.investigation_summary + '; ' : '') + res.investigation_summary;
+                }
+                if (res.report_id) {
+                    currentLabReportId = res.report_id;
+                }
+            } else {
+                console.error('Lab analyze error on file', file.name, res.error);
+            }
+        } catch (err) {
+            console.error('Lab analyze error:', err);
+        }
+    }
+
+    statusEl.innerHTML = '';
+    currentLabStructuredValues = combinedResults.structured_values;
+
+    if (combinedResults.structured_values.length > 0) {
+        renderLabResults(combinedResults);
+        showToast(`✅ Lab report analyzed! ${combinedResults.structured_values.length} tests extracted.`);
+    } else {
+        showToast('⚠️ Could not extract lab values. Try a clearer image.', 'error');
+    }
+}
+
+function renderLabResults(data) {
+    const section = document.getElementById('lab-results-section');
+    section.style.display = 'block';
+
+    // Render structured values table
+    const tbody = document.getElementById('lab-results-body');
+    tbody.innerHTML = '';
+    let abnormalCount = 0;
+
+    data.structured_values.forEach(item => {
+        const status = item.status || 'NORMAL';
+        if (status !== 'NORMAL') abnormalCount++;
+
+        let statusBadge = '';
+        switch (status) {
+            case 'HIGH': statusBadge = '<span class="lab-status-badge lab-status-high">🔴 HIGH</span>'; break;
+            case 'LOW': statusBadge = '<span class="lab-status-badge lab-status-low">🔵 LOW</span>'; break;
+            case 'CRITICAL': statusBadge = '<span class="lab-status-badge lab-status-critical">🟣 CRITICAL</span>'; break;
+            default: statusBadge = '<span class="lab-status-badge lab-status-normal">🟢 NORMAL</span>';
+        }
+
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td><strong>${item.name || ''}</strong></td>
+            <td>${item.value || ''}</td>
+            <td>${item.unit || ''}</td>
+            <td style="font-size:12px;color:#64748b;">${item.ref_range || '—'}</td>
+            <td>${statusBadge}</td>
+        `;
+        tbody.appendChild(tr);
+    });
+
+    document.getElementById('lab-total-tests').textContent = `${data.structured_values.length} tests`;
+    document.getElementById('lab-abnormal-count').textContent = `${abnormalCount} abnormal`;
+
+    // Render AI Clinical Notes (split into sections)
+    const clinicalNotes = data.ai_clinical_notes || '';
+
+    // Extract sections using regex
+    const abnormalSection = extractSection(clinicalNotes, '🚨 KEY ABNORMAL FINDINGS', ['⚠️ POSSIBLE CLINICAL CONCERNS', '🏷️ RISK FLAGS']);
+    const clinicalSection = extractSection(clinicalNotes, '⚠️ POSSIBLE CLINICAL CONCERNS', ['🏷️ RISK FLAGS', '📋 SUGGESTED', '⚠️ AI-generated']);
+    const riskFlagsSection = extractSection(clinicalNotes, '🏷️ RISK FLAGS', ['⚠️ AI-generated', '📋 SUGGESTED']);
+
+    document.getElementById('lab-abnormal-findings').textContent = abnormalSection || 'No abnormal findings detected.';
+    document.getElementById('lab-clinical-concerns').textContent = clinicalSection || 'No specific clinical concerns identified.';
+    document.getElementById('lab-risk-flags').textContent = riskFlagsSection || data.ai_risk_flags || 'No risk flags.';
+
+    // Render recommendations
+    document.getElementById('lab-recommendations').textContent = data.ai_recommendations || 'No follow-up recommendations.';
+
+    // Scroll to results
+    section.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function extractSection(text, startMarker, endMarkers) {
+    if (!text) return '';
+    const startIdx = text.indexOf(startMarker);
+    if (startIdx === -1) return '';
+    let section = text.substring(startIdx + startMarker.length);
+    // Try each end marker
+    let endIdx = section.length;
+    for (const marker of endMarkers) {
+        const idx = section.indexOf(marker);
+        if (idx !== -1 && idx < endIdx) {
+            endIdx = idx;
+        }
+    }
+    return section.substring(0, endIdx).trim();
+}
+
+async function loadLabHistory() {
+    const patientName = document.getElementById('lab-pt-name').value.trim();
+    if (!patientName) {
+        showToast('Enter patient name first', 'error');
+        return;
+    }
+
+    const statusEl = document.getElementById('lab-trends-status');
+    statusEl.innerHTML = '<span class="spinner"></span> Loading lab history...';
+
+    try {
+        const res = await fetch(`/opd/api/lab-reports?patient_name=${encodeURIComponent(patientName)}`)
+            .then(r => r.json());
+
+        if (res.ok && res.reports && res.reports.length > 0) {
+            // Show latest report
+            const latest = res.reports[0];
+            currentLabStructuredValues = latest.structured_values || [];
+            currentLabReportId = latest.id;
+            renderLabResults({
+                structured_values: latest.structured_values || [],
+                ai_clinical_notes: latest.ai_clinical_notes || '',
+                ai_recommendations: latest.ai_recommendations || '',
+                ai_risk_flags: latest.ai_risk_flags || '',
+            });
+            statusEl.innerHTML = `✅ ${res.reports.length} report(s) found. Showing latest.`;
+            showToast(`${res.reports.length} lab report(s) loaded`);
+        } else {
+            statusEl.innerHTML = 'No previous lab reports found for this patient.';
+            showToast('No lab history found', 'error');
+        }
+    } catch (err) {
+        statusEl.innerHTML = '❌ Error loading history';
+        console.error(err);
+    }
+}
+
+async function loadLabTrends() {
+    const patientName = document.getElementById('lab-pt-name').value.trim();
+    const patientId = _currentPatientId || '';
+
+    if (!patientName && !patientId) {
+        document.getElementById('lab-trends-status').textContent = 'Enter patient name first';
+        return;
+    }
+
+    const statusEl = document.getElementById('lab-trends-status');
+    statusEl.innerHTML = '<span class="spinner"></span> Computing trends...';
+
+    try {
+        let url = '/opd/api/lab-trends?';
+        if (patientId) url += 'patient_id=' + encodeURIComponent(patientId);
+        else url += 'patient_name=' + encodeURIComponent(patientName);
+
+        const res = await fetch(url).then(r => r.json());
+
+        if (res.ok && res.trends && Object.keys(res.trends).length > 0) {
+            const content = document.getElementById('lab-trends-content');
+            content.innerHTML = '';
+
+            for (const [name, trend] of Object.entries(res.trends)) {
+                const dir = trend.direction || '→';
+                const trendClass = trend.trend === 'worsening' ? 'worsening' : (trend.trend === 'improving' ? 'improving' : 'stable');
+                const dirIcon = dir === '↑' ? `<span class="lab-trend-up">↑ ${trend.trend}</span>` :
+                                dir === '↓' ? `<span class="lab-trend-down">↓ ${trend.trend}</span>` :
+                                `<span class="lab-trend-stable">→ stable</span>`;
+
+                let valuesHtml = '';
+                if (trend.values && trend.values.length > 0) {
+                    valuesHtml = trend.values.map(v =>
+                        `<span style="margin:0 4px;">${v.date}: <strong>${v.value} ${v.unit || ''}</strong></span>`
+                    ).join(' → ');
+                }
+
+                let changeHtml = '';
+                if (trend.change_percent !== undefined) {
+                    changeHtml = ` <span style="font-size:11px;color:#64748b;">(${trend.change_percent}% change)</span>`;
+                }
+
+                content.innerHTML += `
+                    <div class="lab-trend-card ${trendClass}">
+                        <div style="display:flex;justify-content:space-between;align-items:center;">
+                            <strong>${name}</strong>
+                            <span>${dirIcon}${changeHtml}</span>
+                        </div>
+                        <div style="font-size:12px;color:#64748b;margin-top:4px;">${valuesHtml}</div>
+                        ${trend.message ? `<div style="font-size:11px;color:#94a3b8;margin-top:2px;">${trend.message}</div>` : ''}
+                    </div>
+                `;
+            }
+
+            statusEl.innerHTML = '';
+            showToast('Trends loaded!');
+        } else {
+            document.getElementById('lab-trends-content').innerHTML = '';
+            statusEl.textContent = 'Not enough data for trends. Upload more reports over time.';
+        }
+    } catch (err) {
+        statusEl.textContent = '❌ Error loading trends';
+        console.error(err);
+    }
+}
+
+function copyLabToInvestigations() {
+    if (!currentLabStructuredValues || currentLabStructuredValues.length === 0) {
+        showToast('No lab values to copy', 'error');
+        return;
+    }
+
+    // Build investigation string from abnormal values + all values
+    const lines = currentLabStructuredValues.map(item => {
+        const statusTag = item.status && item.status !== 'NORMAL' ? ` [${item.status}]` : '';
+        return `${item.name}: ${item.value} ${item.unit || ''}${statusTag}`;
+    });
+
+    // Populate the Rx form's investigations field
+    const invField = document.getElementById('pt-investigations');
+    if (invField) {
+        const existing = invField.value.trim();
+        invField.value = existing ? existing + '\n' + lines.join('\n') : lines.join('\n');
+    }
+
+    // Also append to complaints as clinical context
+    const complaintsField = document.getElementById('pt-complaints');
+    if (complaintsField) {
+        const labNote = '\n\n[Lab Report — ' + (document.getElementById('lab-report-date').value || 'today') + ']\n' + lines.join('\n');
+        complaintsField.value = complaintsField.value.trim() ? complaintsField.value + labNote : labNote.substring(2);
+    }
+
+    showToast('✅ Lab values copied to prescription form!');
+    // Switch to Rx tab
+    switchTab('rx');
+}
+
+function clearLabForm() {
+    labFiles = [];
+    currentLabReportId = null;
+    currentLabStructuredValues = [];
+    document.getElementById('lab-file-previews').innerHTML = '';
+    document.getElementById('lab-upload-status').textContent = '';
+    document.getElementById('lab-analyze-btn').style.display = 'none';
+    document.getElementById('lab-analyze-status').innerHTML = '';
+    document.getElementById('lab-results-section').style.display = 'none';
+    document.getElementById('lab-results-body').innerHTML = '';
+    document.getElementById('lab-trends-content').innerHTML = '';
+    document.getElementById('lab-trends-status').textContent = 'Click "🔄 Refresh Trends" to load historical comparison';
+    document.getElementById('lab-pt-name').value = '';
+    document.getElementById('lab-pt-phone').value = '';
+    document.getElementById('lab-pt-age').value = '';
+    document.getElementById('lab-pt-gender').value = '';
+    document.getElementById('lab-report-date').value = new Date().toISOString().split('T')[0];
+    showToast('Lab form cleared');
+}
+
+function exportLabPdf() {
+    if (!currentLabStructuredValues || currentLabStructuredValues.length === 0) {
+        showToast('No lab data to export', 'error');
+        return;
+    }
+
+    let text = 'LABORATORY REPORT\n';
+    text += '══════════════════\n\n';
+    text += 'Patient: ' + (document.getElementById('lab-pt-name').value || 'N/A') + '\n';
+    text += 'Date: ' + (document.getElementById('lab-report-date').value || 'N/A') + '\n\n';
+    text += 'TEST RESULTS:\n';
+    text += '──────────────────────────────────────────────\n';
+
+    currentLabStructuredValues.forEach(item => {
+        const status = item.status === 'NORMAL' ? '' : ` [${item.status}]`;
+        text += `${item.name}: ${item.value} ${item.unit || ''} (Ref: ${item.ref_range || 'N/A'})${status}\n`;
+    });
+
+    // Create a blob and download
+    const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `lab_report_${document.getElementById('lab-pt-name').value || 'patient'}_${new Date().toISOString().split('T')[0]}.txt`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    showToast('📄 Report exported!');
 }
 
 // ════════════════════════════════════════════════════════════════

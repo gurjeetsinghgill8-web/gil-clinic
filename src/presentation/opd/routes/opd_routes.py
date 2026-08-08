@@ -76,6 +76,7 @@ from src.shared.infrastructure.database import async_session_factory, get_sessio
 # ── OPD Models ───────────────────────────────────────────────────────────────
 from src.infrastructure.opd.models.opd_models import (
     DrugHistoryModel,
+    LabReportModel,
     LicenseModel,
     OpdPrescriptionModel,
     PendingScanModel,
@@ -1930,6 +1931,411 @@ async def api_approve_scan(request: Request):
         return {"ok": False, "error": str(e)}
 
 
+# ═══════════════════════════════════════════════════════════════════════════════
+# API: AI LAB INTELLIGENCE — Upload + OCR + Structured Extraction + Clinical Analysis
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@router.post("/api/lab-report-analyze", include_in_schema=False)
+async def api_lab_report_analyze(request: Request):
+    """Full AI Lab Intelligence pipeline:
+    1. Upload lab report image (camera/gallery/PDF)
+    2. OCR + structured extraction of lab values
+    3. Abnormality detection (HIGH/LOW/CRITICAL vs reference ranges)
+    4. Clinical interpretation (AI-generated observations)
+    5. Follow-up test recommendations
+    6. Save everything to opd_lab_reports table
+    """
+    sess = _require_opd_session(request)
+    doctor_id = sess.get("doctor_id", "")
+
+    try:
+        body = await request.json()
+    except Exception:
+        return {"ok": False, "error": "Invalid JSON"}
+
+    image_b64 = body.get("image", "")
+    patient_name = body.get("patient_name", "").strip()
+    patient_id = body.get("patient_id", "").strip()
+    phone = body.get("phone", "").strip()
+    report_date = body.get("report_date", datetime.date.today().isoformat())
+    report_type = body.get("report_type", "pathology")
+    patient_age = body.get("age", "")
+    patient_gender = body.get("gender", "")
+
+    if not image_b64:
+        return {"ok": False, "error": "No report image provided"}
+
+    if not patient_name:
+        return {"ok": False, "error": "Patient name required to save lab report"}
+
+    # Load Groq API key
+    groq_key = os.getenv("GROQ_API_KEY") or ""
+    if not groq_key and doctor_id:
+        settings = await _get_settings(doctor_id)
+        groq_key = settings.get("groq_api_key") or ""
+    if not groq_key:
+        return {"ok": False, "error": "Groq API key not configured. Add key in OPD Settings."}
+
+    os.environ["GROQ_API_KEY"] = groq_key
+
+    try:
+        import base64 as b64_mod
+        import io as io_mod
+        from PIL import Image
+        from src.ai_engine.groq_client import call_groq_vision, parse_ai_json, call_groq
+        from src.ai_engine.prompts import (
+            lab_report_ocr_prompt,
+            lab_clinical_interpretation_prompt,
+            lab_recommendations_prompt,
+        )
+
+        # ── Step 1: Decode image ──
+        img_b64_clean = image_b64
+        if "," in img_b64_clean:
+            img_b64_clean = img_b64_clean.split(",", 1)[1]
+
+        image_bytes = b64_mod.b64decode(img_b64_clean)
+        img = Image.open(io_mod.BytesIO(image_bytes))
+
+        # ── Step 2: OCR + Structured Extraction ──
+        messages = [lab_report_ocr_prompt(), img]
+        raw_ocr = call_groq_vision(img)
+        structured = parse_ai_json(raw_ocr)
+
+        if not structured or not isinstance(structured, list) or len(structured) == 0:
+            # Try with text-only fallback if vision model didn't return JSON
+            raw_text = call_groq(messages)
+            structured = parse_ai_json(raw_text)
+
+        if not structured or not isinstance(structured, list):
+            structured = []
+            logger.warning("Lab OCR failed to extract structured values")
+
+        # ── Step 3: Classify abnormalities ──
+        abnormal_items = []
+        investigation_names = []
+        for item in structured:
+            name = item.get("name", "")
+            status = item.get("status", "NORMAL")
+            if name:
+                investigation_names.append(f"{name}: {item.get('value','')} {item.get('unit','')} [{status}]")
+            if status in ("HIGH", "LOW", "CRITICAL"):
+                abnormal_items.append(item)
+
+        investigation_summary = "; ".join(investigation_names) if investigation_names else ""
+
+        # ── Step 4: Clinical Interpretation (only if abnormalities found) ──
+        ai_clinical_notes = ""
+        ai_risk_flags = ""
+        if abnormal_items:
+            abnormal_json = json.dumps(abnormal_items, indent=2)
+            clinical_prompt_text = lab_clinical_interpretation_prompt(
+                abnormal_json, patient_name, patient_age, patient_gender
+            )
+            clinical_notes = call_groq([clinical_prompt_text], temp=0.3, max_tokens=2000)
+            if clinical_notes:
+                ai_clinical_notes = clinical_notes
+                # Extract risk flags section
+                risk_match = re.search(
+                    r"🏷️ RISK FLAGS?\n?(.*?)(?=\n\s*(?:⚠️|$))",
+                    clinical_notes, re.DOTALL | re.IGNORECASE
+                )
+                if risk_match:
+                    ai_risk_flags = risk_match.group(1).strip()
+
+        # ── Step 5: Follow-up Recommendations ──
+        ai_recommendations = ""
+        if abnormal_items:
+            rec_prompt_text = lab_recommendations_prompt(
+                json.dumps(abnormal_items, indent=2), patient_name
+            )
+            recs = call_groq([rec_prompt_text], temp=0.3, max_tokens=1500)
+            if recs:
+                ai_recommendations = recs
+
+        # ── Step 6: Save to database ──
+        structured_json = json.dumps(structured, ensure_ascii=False)
+
+        async with async_session_factory() as session:
+            report = LabReportModel(
+                clinic_id=sess.get("clinic_id"),
+                doctor_id=doctor_id,
+                patient_id=patient_id,
+                patient_name=patient_name,
+                phone=phone,
+                report_date=report_date,
+                report_type=report_type,
+                source_image_b64=img_b64_clean,
+                ocr_raw_text=raw_ocr or "",
+                structured_values=structured_json,
+                ai_clinical_notes=ai_clinical_notes,
+                ai_recommendations=ai_recommendations,
+                ai_risk_flags=ai_risk_flags,
+                investigation_summary=investigation_summary,
+                status="active",
+            )
+            session.add(report)
+            await session.commit()
+            report_id = str(report.id)
+
+        return {
+            "ok": True,
+            "report_id": report_id,
+            "structured_values": structured,
+            "abnormal_count": len(abnormal_items),
+            "total_tests": len(structured),
+            "ai_clinical_notes": ai_clinical_notes,
+            "ai_recommendations": ai_recommendations,
+            "ai_risk_flags": ai_risk_flags,
+            "investigation_summary": investigation_summary,
+            "ocr_raw": raw_ocr or "",
+        }
+
+    except Exception as e:
+        logger.error("Lab report analyze error: %s", e)
+        return {"ok": False, "error": f"AI lab analysis failed: {str(e)}"}
+
+
+@router.get("/api/lab-reports", include_in_schema=False)
+async def api_get_lab_reports(
+    request: Request,
+    patient_name: str = Query(""),
+    patient_id: str = Query(""),
+):
+    """Get all lab reports for a patient. Search by name or patient_id."""
+    sess = _require_opd_session(request)
+    doctor_id = sess.get("doctor_id", "")
+
+    if not patient_name and not patient_id:
+        return {"ok": False, "error": "patient_name or patient_id required"}
+
+    try:
+        async with async_session_factory() as session:
+            query = sa.select(LabReportModel).where(
+                LabReportModel.status == "active"
+            )
+            if patient_id:
+                query = query.where(LabReportModel.patient_id == patient_id)
+            elif patient_name:
+                query = query.where(
+                    LabReportModel.patient_name.ilike(f"%{patient_name}%")
+                )
+            query = query.order_by(LabReportModel.created_at.desc())
+
+            rows = await session.execute(query)
+            results = []
+            for r in rows.scalars():
+                try:
+                    structured = json.loads(r.structured_values) if r.structured_values else []
+                except Exception:
+                    structured = []
+
+                results.append({
+                    "id": str(r.id),
+                    "patient_id": r.patient_id,
+                    "patient_name": r.patient_name,
+                    "report_date": r.report_date,
+                    "report_type": r.report_type,
+                    "structured_values": structured,
+                    "ai_clinical_notes": r.ai_clinical_notes,
+                    "ai_recommendations": r.ai_recommendations,
+                    "ai_risk_flags": r.ai_risk_flags,
+                    "investigation_summary": r.investigation_summary,
+                    "created_at": r.created_at.isoformat() if r.created_at else "",
+                })
+            return {"ok": True, "reports": results}
+    except Exception as e:
+        logger.error("Get lab reports error: %s", e)
+        return {"ok": False, "error": str(e)}
+
+
+@router.get("/api/lab-trends", include_in_schema=False)
+async def api_get_lab_trends(
+    request: Request,
+    patient_name: str = Query(""),
+    patient_id: str = Query(""),
+):
+    """Get longitudinal trend data for a patient's investigations.
+    Returns each parameter with all historical values for trend arrows.
+    """
+    sess = _require_opd_session(request)
+
+    if not patient_name and not patient_id:
+        return {"ok": False, "error": "patient_name or patient_id required"}
+
+    try:
+        async with async_session_factory() as session:
+            query = sa.select(LabReportModel).where(
+                LabReportModel.status == "active"
+            )
+            if patient_id:
+                query = query.where(LabReportModel.patient_id == patient_id)
+            else:
+                query = query.where(
+                    LabReportModel.patient_name.ilike(f"%{patient_name}%")
+                )
+            query = query.order_by(LabReportModel.report_date.asc())
+
+            rows = await session.execute(query)
+            reports = rows.scalars().all()
+
+            if not reports:
+                return {"ok": True, "trends": {}, "message": "No reports found"}
+
+            # Build trend map: { "HbA1c": [{"date":"2026-01","value":"8.2","unit":"%","status":"HIGH"}, ...] }
+            trend_map = {}
+            for r in reports:
+                try:
+                    structured = json.loads(r.structured_values) if r.structured_values else []
+                except Exception:
+                    continue
+
+                for item in structured:
+                    name = item.get("name", "")
+                    if not name:
+                        continue
+                    if name not in trend_map:
+                        trend_map[name] = []
+                    trend_map[name].append({
+                        "date": r.report_date,
+                        "value": item.get("value", ""),
+                        "unit": item.get("unit", ""),
+                        "status": item.get("status", "NORMAL"),
+                        "ref_range": item.get("ref_range", ""),
+                    })
+
+            # Compute trend direction
+            trend_results = {}
+            for name, values in trend_map.items():
+                if len(values) < 2:
+                    trend_results[name] = {
+                        "values": values,
+                        "direction": "→",
+                        "trend": "stable",
+                        "message": "Single reading — need more data for trend",
+                    }
+                    continue
+
+                # Compare first vs last value
+                try:
+                    first_val = float(values[0]["value"])
+                    last_val = float(values[-1]["value"])
+                except (ValueError, TypeError):
+                    trend_results[name] = {
+                        "values": values,
+                        "direction": "→",
+                        "trend": "stable",
+                        "message": "Non-numeric values — cannot compute trend",
+                    }
+                    continue
+
+                if last_val > first_val * 1.05:
+                    direction = "↑"
+                    trend = "worsening" if values[-1].get("status") in ("HIGH", "CRITICAL") else "increasing"
+                elif last_val < first_val * 0.95:
+                    direction = "↓"
+                    trend = "improving" if values[0].get("status") in ("HIGH", "CRITICAL") else "decreasing"
+                else:
+                    direction = "→"
+                    trend = "stable"
+
+                change_pct = abs((last_val - first_val) / first_val * 100) if first_val != 0 else 0
+                trend_results[name] = {
+                    "values": values,
+                    "direction": direction,
+                    "trend": trend,
+                    "change_percent": round(change_pct, 1),
+                    "first_value": values[0]["value"],
+                    "last_value": values[-1]["value"],
+                    "first_date": values[0]["date"],
+                    "last_date": values[-1]["date"],
+                }
+
+            return {"ok": True, "trends": trend_results}
+    except Exception as e:
+        logger.error("Get lab trends error: %s", e)
+        return {"ok": False, "error": str(e)}
+
+
+@router.get("/api/lab-abnormal", include_in_schema=False)
+async def api_get_lab_abnormal(
+    request: Request,
+    patient_name: str = Query(""),
+    patient_id: str = Query(""),
+    limit: int = Query(20),
+):
+    """Get latest abnormal findings for a patient (or all patients if no filter).
+    Returns only HIGH/LOW/CRITICAL values from the most recent reports.
+    """
+    sess = _require_opd_session(request)
+    doctor_id = sess.get("doctor_id", "")
+
+    try:
+        async with async_session_factory() as session:
+            query = sa.select(LabReportModel).where(
+                LabReportModel.status == "active"
+            )
+            if patient_id:
+                query = query.where(LabReportModel.patient_id == patient_id)
+            elif patient_name:
+                query = query.where(
+                    LabReportModel.patient_name.ilike(f"%{patient_name}%")
+                )
+            else:
+                # All patients for this doctor
+                query = query.where(LabReportModel.doctor_id == doctor_id)
+
+            query = query.order_by(LabReportModel.created_at.desc()).limit(limit)
+            rows = await session.execute(query)
+            reports = rows.scalars().all()
+
+            abnormal_findings = []
+            for r in reports:
+                try:
+                    structured = json.loads(r.structured_values) if r.structured_values else []
+                except Exception:
+                    continue
+
+                for item in structured:
+                    if item.get("status") in ("HIGH", "LOW", "CRITICAL"):
+                        abnormal_findings.append({
+                            "report_id": str(r.id),
+                            "patient_name": r.patient_name,
+                            "patient_id": r.patient_id,
+                            "report_date": r.report_date,
+                            "test_name": item.get("name", ""),
+                            "value": item.get("value", ""),
+                            "unit": item.get("unit", ""),
+                            "ref_range": item.get("ref_range", ""),
+                            "status": item.get("status", ""),
+                        })
+
+            return {"ok": True, "abnormal_findings": abnormal_findings}
+    except Exception as e:
+        logger.error("Get lab abnormal error: %s", e)
+        return {"ok": False, "error": str(e)}
+
+
+@router.delete("/api/lab-report/{report_id}", include_in_schema=False)
+async def api_delete_lab_report(request: Request, report_id: str):
+    """Archive (soft-delete) a lab report."""
+    sess = _require_opd_session(request)
+
+    try:
+        async with async_session_factory() as session:
+            row = await session.execute(
+                sa.select(LabReportModel).where(LabReportModel.id == report_id)
+            )
+            report = row.scalar_one_or_none()
+            if not report:
+                return {"ok": False, "error": "Lab report not found"}
+
+            report.status = "archived"
+            await session.commit()
+            return {"ok": True, "message": "Lab report archived"}
+    except Exception as e:
+        logger.error("Delete lab report error: %s", e)
+        return {"ok": False, "error": str(e)}
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
