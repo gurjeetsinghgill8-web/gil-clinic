@@ -177,6 +177,7 @@ class SettingsModel(Base):
     clinic_address: Mapped[str] = mapped_column(Text, nullable=False, default="")
     doc_extra_quals: Mapped[str] = mapped_column(Text, nullable=False, default="")
     groq_api_key: Mapped[str] = mapped_column(String(200), nullable=False, default="")
+    google_api_key: Mapped[str] = mapped_column(String(200), nullable=False, default="")
 
     # WhatsApp Jugaad — role-based numbers for one-click sharing
     wa_reception: Mapped[str] = mapped_column(String(20), nullable=False, default="")

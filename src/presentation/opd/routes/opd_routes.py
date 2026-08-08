@@ -311,7 +311,7 @@ async def _get_settings(doctor_id: str) -> dict:
         "clinic_name": "My Clinic", "doc_name": "Doctor",
         "doc_subtitle": "MBBS", "doc_degree": "", "doc_reg_no": "",
         "doc_email": "", "doc_phone": "", "clinic_address": "",
-        "doc_extra_quals": "", "groq_api_key": "",
+        "doc_extra_quals": "", "groq_api_key": "", "google_api_key": "",
         "wa_reception": "", "wa_manager": "", "wa_doctor": "",
         "wa_dietitian": "",
     }
@@ -333,6 +333,7 @@ async def _get_settings(doctor_id: str) -> dict:
                     "clinic_address": s.clinic_address,
                     "doc_extra_quals": s.doc_extra_quals,
                     "groq_api_key": s.groq_api_key,
+                    "google_api_key": getattr(s, 'google_api_key', '') or '',
                     "wa_reception": s.wa_reception or "",
                     "wa_manager": s.wa_manager or "",
                     "wa_doctor": s.wa_doctor or "",
@@ -371,7 +372,7 @@ async def api_save_settings(request: Request):
 
             for key in ["clinic_name", "doc_name", "doc_subtitle", "doc_degree",
                          "doc_reg_no", "doc_email", "doc_phone", "clinic_address",
-                         "doc_extra_quals", "groq_api_key",
+                         "doc_extra_quals", "groq_api_key", "google_api_key",
                          "wa_reception", "wa_manager", "wa_doctor", "wa_dietitian"]:
                 if key in body:
                     setattr(s, key, str(body[key]))
@@ -1687,11 +1688,10 @@ async def api_scan_ai(request: Request):
 
 @router.post("/api/handwriting-ocr", include_in_schema=False)
 async def api_handwriting_ocr(request: Request):
-    """Process handwritten prescription from Digital Ink Writing Pad via Groq Vision AI OCR.
-
-    Specialized for doctor handwriting recognition — extracts:
-    vitals, complaints, diagnosis, medicines, investigations, advice, follow_up.
-    Uses a dedicated medical handwriting prompt with abbreviation expansion.
+    """Process handwritten prescription from Digital Ink Writing Pad.
+    
+    Tries Groq Vision first (Google Lens quality), falls back to Google Cloud Vision.
+    Both give excellent handwriting recognition results.
     """
     sess = _require_opd_session(request)
     doctor_id = sess.get("doctor_id", "")
@@ -1705,15 +1705,15 @@ async def api_handwriting_ocr(request: Request):
     if not image_b64:
         return {"ok": False, "error": "No handwriting image provided"}
 
-    # Load Groq API key
+    # Load API keys (Groq + Google Vision)
     groq_key = os.getenv("GROQ_API_KEY") or ""
+    google_key = os.getenv("GOOGLE_VISION_API_KEY") or ""
     if not groq_key and doctor_id:
         settings = await _get_settings(doctor_id)
         groq_key = settings.get("groq_api_key") or ""
-    if not groq_key:
-        return {"ok": False, "error": "Groq API key not configured. Add key in OPD Settings."}
-
+        google_key = settings.get("google_api_key") or google_key
     os.environ["GROQ_API_KEY"] = groq_key
+    os.environ["GOOGLE_VISION_API_KEY"] = google_key
 
     try:
         import base64 as b64_mod
@@ -1740,68 +1740,83 @@ async def api_handwriting_ocr(request: Request):
             img = img.convert('RGB')
 
         # ══════════════════════════════════════════════════════════════
-        # GROQ VISION — Same quality as smart-opd2 / Google Lens
+        # STEP 1: Try Groq Vision (Google Lens quality, same as smart-opd2)
         # ══════════════════════════════════════════════════════════════
-        ocr_prompt = """You are an expert AI reading a doctor's HANDWRITTEN prescription from a digital writing pad.
+        parsed = {}
+        raw_text = ""
+        ocr_method = "none"
 
-Extract ALL clinical information CAREFULLY. Doctors write in shorthand — expand everything.
+        if groq_key and len(groq_key) > 10:
+            ocr_method = "groq_vision"
 
-CRITICAL ABBREVIATIONS TO EXPAND:
-- DM = Diabetes Mellitus Type 2
-- HTN = Hypertension
-- CAD = Coronary Artery Disease, IHD = Ischemic Heart Disease
-- CKD = Chronic Kidney Disease, CHF = Congestive Heart Failure
-- COPD = Chronic Obstructive Pulmonary Disease
-- UTI = Urinary Tract Infection, URTI/LRTI = Upper/Lower Respiratory Tract Infection
-- OD = Once Daily, BD = Twice Daily, TDS = Thrice Daily, QID = Four times, HS = At bedtime, STAT = Immediately, SOS = As needed
-- BF/AC = Before Food, AF/PC = After Food, WF = With Food
-- x5d = for 5 days, x1w = for 1 week, x1m = for 1 month
-- Tab. = Tablet, Cap. = Capsule, Syp. = Syrup, Inj. = Injection
-- BP = Blood Pressure, HR = Heart Rate, FBS/PPBS = Fasting/Post Prandial Blood Sugar
-- CBC, LFT, KFT, TFT, HbA1c, Lipid, ECG, Echo, USG, X-ray, CXR, PFT
+            ocr_prompt = """You are an expert AI reading a doctor's HANDWRITTEN prescription from a digital writing pad.
 
-RETURN ONLY valid JSON — no markdown, no explanation:
-{
-  "vitals": "BP, HR, sugar, weight, SpO2 etc",
-  "complaints": "chief complaints and history",
-  "diagnosis": "ALL diagnoses — expand ALL abbreviations to full clinical terms",
-  "medicines": "numbered list: 1. Tab. Metformin 500mg BD AF x 1m\\n2. Tab. Telma 40 OD BF x 1m",
-  "investigations": "comma-separated test names — expand abbreviations",
-  "advice": "lifestyle, diet, exercise advice",
-  "follow_up": "follow up timeline like '2 weeks' or '1 month'"
-}
+Extract ALL clinical information. Doctors write in shorthand — expand EVERYTHING.
 
-RULES:
-- Read EVERY word — don't skip anything
-- Expand ALL medical abbreviations
-- For EVERY medicine: include DRUG NAME + DOSE + FREQUENCY + TIMING + DURATION
-- If unsure about a word, put [best guess]
-- Return ONLY the JSON object — nothing else"""
+CRITICAL ABBREVIATIONS:
+- DM=Diabetes Mellitus Type 2, HTN=Hypertension, CAD=Coronary Artery Disease, IHD=Ischemic Heart Disease, CKD=Chronic Kidney Disease, CHF=Congestive Heart Failure, COPD=Chronic Obstructive Pulmonary Disease, UTI=Urinary Tract Infection
+- OD=Once Daily, BD=Twice Daily, TDS=Thrice Daily, QID=Four times, HS=At bedtime, STAT=Immediately, SOS=As needed
+- BF/AC=Before Food, AF/PC=After Food, x5d=for 5 days, x1w=for 1 week, x1m=for 1 month
+- Tab.=Tablet, Cap.=Capsule, Syp.=Syrup, Inj.=Injection
+- BP=Blood Pressure, HR=Heart Rate, FBS/PPBS=Blood Sugar, CBC/LFT/KFT/TFT/HbA1c=Lipid/ECG/Echo/USG/X-ray tests
 
-        # Try Groq Vision first (Google Lens quality)
-        raw_text, vision_err = call_groq_with_error(
-            [ocr_prompt, img], temp=0.0, max_tokens=2000
-        )
-        parsed = parse_ai_json(raw_text) if raw_text else {}
+Return ONLY valid JSON:
+{"vitals":"BP HR sugar etc","complaints":"chief complaints","diagnosis":"ALL diagnoses expanded","medicines":"1. Tab. Drug Dose Freq Timing x Duration\\n2. ...","investigations":"comma-separated tests","advice":"diet/lifestyle","follow_up":"timeline"}"""
+            raw_text, vision_err = call_groq_with_error(
+                [ocr_prompt, img], temp=0.0, max_tokens=2000
+            )
+            parsed = parse_ai_json(raw_text) if raw_text else {}
+            if parsed and isinstance(parsed, dict) and any(parsed.values()):
+                logger.info("Groq Vision success: %d keys", len(parsed))
+            else:
+                logger.info("Groq Vision empty, will try Google fallback")
+                parsed = {}
 
-        # If Groq Vision failed, try text-only model to structure (won't see image)
+        # ══════════════════════════════════════════════════════════════
+        # STEP 2: Fallback — Google Cloud Vision (also Google Lens quality)
+        # ══════════════════════════════════════════════════════════════
+        if (not parsed or not any(parsed.values())) and google_key and len(google_key) > 10:
+            logger.info("Trying Google Cloud Vision fallback...")
+            ocr_method = "google_vision"
+
+            from src.ai_engine.google_vision_handler import ocr_handwriting_google
+            google_text, google_err = ocr_handwriting_google(img, google_key)
+
+            if google_text and len(google_text.strip()) > 5:
+                # Use AI text model to structure Google's OCR output
+                struct_prompt = f"""Convert this OCR-extracted text from a doctor's handwritten prescription into structured JSON.
+
+OCR TEXT:
+{google_text}
+
+Return ONLY valid JSON:
+{{"vitals":"","complaints":"","diagnosis":"expand abbreviations","medicines":"numbered list with drug+dose+freq+duration","investigations":"comma-separated","advice":"","follow_up":""}}"""
+
+                ai_text, _ = call_groq_with_error([struct_prompt], temp=0.1, max_tokens=1500)
+                parsed = parse_ai_json(ai_text) if ai_text else {}
+                raw_text = ai_text or google_text
+                logger.info("Google Vision + AI structuring: %d keys", len(parsed) if parsed else 0)
+            else:
+                logger.info("Google Vision returned no text: %s", google_err or "empty")
+
+        # ══════════════════════════════════════════════════════════════
+        # Return result
+        # ══════════════════════════════════════════════════════════════
         if not parsed or not isinstance(parsed, dict) or not any(parsed.values()):
-            logger.info("Groq Vision unavailable/empty, result keys: %s", list(parsed.keys()) if parsed else "none")
-            # Can't do handwriting without vision — return clear error
             return {
                 "ok": True,
                 "parsed": {},
                 "raw": raw_text or "",
-                "ocr_method": "groq_vision",
-                "error_hint": "groq_unavailable" if not raw_text else "no_text_found",
-                "message": "Groq Vision API unavailable. Handwriting recognition needs Groq Vision. Please add a valid Groq API key in OPD Settings. Get free key: https://console.groq.com"
+                "ocr_method": ocr_method,
+                "error_hint": "no_text_found",
+                "message": "Could not read handwriting. Ensure: 1) Groq or Google API key in Settings 2) Clear handwriting with dark pen 3) Good lighting on the writing pad."
             }
 
         return {
             "ok": True,
             "parsed": parsed if isinstance(parsed, dict) else {},
             "raw": raw_text or "",
-            "ocr_method": "groq_vision",
+            "ocr_method": ocr_method,
         }
 
     except Exception as e:

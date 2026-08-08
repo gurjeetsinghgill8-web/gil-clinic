@@ -230,6 +230,7 @@ async def _migrate_missing_columns():
         ("opd_settings", "wa_manager", "VARCHAR(20)", "' '"),
         ("opd_settings", "wa_doctor", "VARCHAR(20)", "' '"),
         ("opd_settings", "wa_dietitian", "VARCHAR(20)", "' '"),
+        ("opd_settings", "google_api_key", "VARCHAR(200)", "' '"),
         ("opd_settings", "doc_extra_quals", "TEXT", "' '"),
         # Multi-tenant: add clinic_id to all tables
         ("queue_entries", "clinic_id", "VARCHAR(36)", "NULL"),
