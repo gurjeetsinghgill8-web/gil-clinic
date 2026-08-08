@@ -1719,8 +1719,7 @@ async def api_handwriting_ocr(request: Request):
         import base64 as b64_mod
         import io as io_mod
         from PIL import Image
-        from src.ai_engine.groq_client import call_groq_vision, parse_ai_json, call_groq, call_groq_with_error
-        from src.ai_engine.prompts import handwriting_ocr_prompt
+        from src.ai_engine.groq_client import call_groq_with_error, parse_ai_json
 
         # Clean base64
         img_b64_clean = image_b64
@@ -1730,7 +1729,7 @@ async def api_handwriting_ocr(request: Request):
         image_bytes = b64_mod.b64decode(img_b64_clean)
         img = Image.open(io_mod.BytesIO(image_bytes))
 
-        # Convert to RGB with white background
+        # Convert to RGB
         if img.mode in ('RGBA', 'LA', 'P'):
             background = Image.new('RGB', img.size, (255, 255, 255))
             if img.mode == 'P':
@@ -1740,53 +1739,58 @@ async def api_handwriting_ocr(request: Request):
         elif img.mode != 'RGB':
             img = img.convert('RGB')
 
-        # ── Check if Groq Vision is available ──
-        prompt_text = handwriting_ocr_prompt()
-        groq_vision_available = False
-        groq_key_check = os.getenv("GROQ_API_KEY") or ""
-        if groq_key_check and len(groq_key_check) > 10:
-            # Quick test: call Groq with a tiny text-only message to check connectivity
-            test_text, test_err = call_groq_with_error(
-                ["Say 'ok'"], temp=0.0, max_tokens=5
-            )
-            if test_text and "ok" in test_text.lower():
-                groq_vision_available = True
-            else:
-                logger.warning("Groq API unavailable: %s", test_err[:100] if test_err else "no response")
+        # ══════════════════════════════════════════════════════════════
+        # STEP 1: EasyOCR — image → raw text (no API key needed)
+        # ══════════════════════════════════════════════════════════════
+        from src.ai_engine.easyocr_handler import ocr_handwriting
 
-        if groq_vision_available:
-            # Groq is up — use vision model for handwriting
-            raw_text, vision_err = call_groq_with_error(
-                [prompt_text, img], temp=0.1, max_tokens=2000
-            )
-            parsed = parse_ai_json(raw_text) if raw_text else {}
-        else:
-            raw_text = ""
-            parsed = {}
-            vision_err = "Groq API unavailable — handwriting recognition requires Groq Vision"
+        raw_ocr_text, ocr_error = ocr_handwriting(img)
+        logger.info("EasyOCR result: %d chars, error=%s",
+                     len(raw_ocr_text) if raw_ocr_text else 0, ocr_error or "none")
 
-        # Try 2: Text-only model (won't see image, but may give template)
-        if not parsed or not isinstance(parsed, dict) or len(parsed) == 0:
-            logger.info("Vision model unavailable or returned non-JSON, trying text-only")
-            txt_raw, _ = call_groq_with_error([prompt_text], temp=0.2, max_tokens=1000)
-            # Text model can't see image, so this is a lost cause for handwriting
-            # Just return the error clearly
-            pass
-
-        if not parsed or not isinstance(parsed, dict):
-            parsed = {}
-
-        # If Groq Vision was unavailable, tell the frontend clearly
-        if not groq_vision_available:
+        if not raw_ocr_text or len(raw_ocr_text.strip()) < 5:
             return {
                 "ok": True,
                 "parsed": {},
                 "raw": "",
-                "error_hint": "groq_vision_unavailable",
-                "message": "Groq Vision API is currently unavailable. Handwriting recognition needs Groq Vision. Your Groq API key may be invalid, expired, or out of credits. Please check OPD Settings → Groq API Key. DeepSeek (text-only) cannot process images."
+                "ocr_text": raw_ocr_text or "",
+                "ocr_method": "easyocr",
+                "error_hint": "no_text_found",
+                "message": "Could not detect handwriting. Write in larger, clearer letters. Only black/blue ink on white background works best."
             }
 
-        return {"ok": True, "parsed": parsed, "raw": raw_text or ""}
+        # ══════════════════════════════════════════════════════════════
+        # STEP 2: AI text model — raw text → structured JSON
+        # Uses DeepSeek/Groq text model (NO vision needed)
+        # ══════════════════════════════════════════════════════════════
+        structuring_prompt = f"""You are a medical AI assistant. Convert the following OCR-extracted text from a doctor's handwritten prescription into structured JSON.
+
+OCR TEXT FROM HANDWRITING:
+{raw_ocr_text}
+
+Return ONLY valid JSON (no markdown, no explanation):
+{{"vitals":"BP, HR, sugar etc if found","complaints":"chief complaints","diagnosis":"diagnoses - expand abbreviations like DM→Diabetes Mellitus","medicines":"numbered list: 1. Drug Dose Freq x Duration","investigations":"comma-separated test names","advice":"lifestyle/diet advice","follow_up":"follow up timeline"}}
+
+Rules:
+- Expand ALL medical abbreviations (DM→Diabetes Mellitus Type 2, HTN→Hypertension, CAD→Coronary Artery Disease, etc.)
+- Extract EVERY drug with dose, frequency, duration
+- If a field is not found, use empty string ""
+- ONLY return JSON, nothing else"""
+
+        ai_text, ai_error = call_groq_with_error(
+            [structuring_prompt], temp=0.2, max_tokens=1500
+        )
+        parsed = parse_ai_json(ai_text) if ai_text else {}
+
+        logger.info("AI structuring result keys: %s", list(parsed.keys()) if parsed else "empty")
+
+        return {
+            "ok": True,
+            "parsed": parsed if isinstance(parsed, dict) else {},
+            "raw": ai_text or "",
+            "ocr_text": raw_ocr_text,
+            "ocr_method": "easyocr",
+        }
 
     except Exception as e:
         logger.error("Handwriting OCR error: %s", e)

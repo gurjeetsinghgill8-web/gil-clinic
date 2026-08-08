@@ -1,21 +1,32 @@
 # ─── Dockerfile for CardioQueue (FastAPI) ──────────────────────────────────────
 FROM python:3.11-slim
 
-ENV BUILD_CACHE_BUST="2026-08-08T13:30:00"
+ENV BUILD_CACHE_BUST="2026-08-08T19:45:00"
 
 WORKDIR /app
 
 # Force rebuild trigger — Multi-tenant v2.0 deployment
-RUN echo "BUILD: GIL CLINIC v2.0 — $(date)"
+RUN echo "BUILD: GIL CLINIC v2.0 + EasyOCR — $(date)"
 
 # Install system dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
+    libgl1-mesa-glx \
+    libglib2.0-0 \
+    libsm6 \
+    libxext6 \
+    libxrender-dev \
+    libgomp1 \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Python dependencies
 COPY requirements.txt .
+# Install CPU-only PyTorch first (smaller than full torch)
+RUN pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu
 RUN pip install --no-cache-dir -r requirements.txt
+
+# Pre-download EasyOCR model (English) during build
+RUN python -c "import easyocr; reader = easyocr.Reader(['en'], gpu=False, verbose=False); print('EasyOCR model downloaded OK')"
 
 # Copy application
 COPY . .

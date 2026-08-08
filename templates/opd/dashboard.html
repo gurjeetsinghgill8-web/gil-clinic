@@ -4163,10 +4163,11 @@ async function inkConvertToEMR() {
     let extracted = { vitals: '', complaints: '', diagnosis: '', medicines: '', investigations: '', advice: '', follow_up: '' };
     let totalPages = images.length;
     let successPages = 0;
+    let ocrMethod = '';
 
     try {
         for (let i = 0; i < totalPages; i++) {
-            statusEl.innerHTML = `<span class="spinner"></span> AI reading page ${i + 1} of ${totalPages}...`;
+            statusEl.innerHTML = `<span class="spinner"></span> EasyOCR reading page ${i + 1} of ${totalPages}... (self-hosted, no API key needed)`;
 
             const imageData = images[i];
             console.log('Sending handwriting page ' + (i+1) + ', image size: ' + Math.round(imageData.length / 1024) + ' KB');
@@ -4199,10 +4200,17 @@ async function inkConvertToEMR() {
             console.log('Handwriting OCR page ' + (i+1) + ' parsed:', res);
 
             if (res.ok && res.parsed) {
-                // Check for error hint from backend
+                // Track OCR method
+                if (res.ocr_method) ocrMethod = res.ocr_method;
+
+                // Check for error hints from backend
                 if (res.error_hint === 'groq_vision_unavailable') {
-                    statusEl.innerHTML = '⚠️ <b>Groq Vision API unavailable.</b> DeepSeek cannot process images. Check your Groq API key in Settings or try later.';
-                    showToast('Groq Vision needed for handwriting. Check API key.', 'error');
+                    statusEl.innerHTML = '⚠️ <b>Groq Vision unavailable.</b> EasyOCR self-hosted mode will be used instead.';
+                    // Don't return — fall through to EasyOCR path
+                }
+                if (res.error_hint === 'no_text_found') {
+                    statusEl.innerHTML = '⚠️ <b>No handwriting detected.</b> Write in larger, clearer letters with dark ink.';
+                    showToast('No handwriting found. Write bigger & clearer.', 'error');
                     if (convertBtn) { convertBtn.disabled = false; convertBtn.textContent = '🤖 Convert to Structured Rx (AI)'; }
                     return;
                 }
@@ -4257,7 +4265,8 @@ async function inkConvertToEMR() {
         }
 
         if (populated.length > 0) {
-            statusEl.innerHTML = '✅ <b>AI extracted:</b> ' + populated.join(', ') + '. <b style="color:#dc2626;">Review before saving!</b>';
+            const methodNote = ocrMethod === 'easyocr' ? ' (via EasyOCR + DeepSeek)' : '';
+            statusEl.innerHTML = '✅ <b>AI extracted:</b> ' + populated.join(', ') + methodNote + '. <b style="color:#dc2626;">Review before saving!</b>';
             showToast('✅ ' + populated.length + ' fields populated! Review and Save.');
             // Scroll to form so doctor can see populated fields
             document.getElementById('pt-vitals').scrollIntoView({ behavior: 'smooth', block: 'center' });

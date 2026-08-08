@@ -49,6 +49,10 @@ groq>=1.0.0
 # Voice / Audio (optional)
 edge-tts>=6.0.0
 
+# OCR — EasyOCR for handwriting recognition (self-hosted, no API key needed)
+# torch CPU-only installed separately in Dockerfile for smaller image
+easyocr>=1.7.0
+
 # Supabase (optional — for cloud database mode)
 supabase>=2.0.0
 httpx>=0.27.0
