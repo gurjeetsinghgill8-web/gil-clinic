@@ -991,3 +991,54 @@ RULES:
 - Plain text only
 - Include disclaimer: "⚠️ AI trend analysis — for physician review only."
 - If trend is clearly improving, acknowledge it (positive reinforcement for treatment adherence)"""
+
+
+# ════════════════════════════════════════════════════════════════════════════
+# DIGITAL INK HANDWRITING RECOGNITION PROMPT
+# ════════════════════════════════════════════════════════════════════════════
+
+def handwriting_ocr_prompt() -> str:
+    """
+    Specialized prompt for recognizing doctor's handwritten prescriptions
+    from the digital ink writing pad. Extracts structured clinical data
+    in the same format as the batch scan vision prompt.
+    """
+    return """You are a world-class AI Clinical Specialist reading a doctor's HANDWRITTEN prescription from a digital writing pad.
+The handwriting may include medical abbreviations, shorthand, and Indian drug names.
+
+Extract ALL clinical information from this handwritten prescription image.
+
+CRITICAL — Read EVERY word carefully. Doctors often write:
+- Drug names with abbreviations: "Tab. Telma 40 OD", "Cap. Omez D BD", "Syp. Ascoril D"
+- Diagnoses as abbreviations: "DM" = Diabetes Mellitus, "HTN" = Hypertension, "CAD" = Coronary Artery Disease, "CKD" = Chronic Kidney Disease, "CHF" = Congestive Heart Failure, "COPD" = Chronic Obstructive Pulmonary Disease, "IHD" = Ischemic Heart Disease, "UTI" = Urinary Tract Infection, "URTI" = Upper Respiratory Tract Infection, "LRTI" = Lower Respiratory Tract Infection
+- Vitals shorthand: "BP 140/90", "HR 72", "FBS 110", "PP 180", "SpO2 98%", "BMI 28"
+- Frequency abbreviations: OD = Once Daily, BD = Twice Daily, TDS = Thrice Daily, QID = Four times, HS = At bedtime, STAT = Immediately, SOS = As needed
+- Timing: "BF" = Before Food, "AF" = After Food, "WF" = With Food, "EMPTY" = Empty Stomach
+- Duration: "x 5d" = for 5 days, "x 1w" = for 1 week, "x 1m" = for 1 month
+- Investigations as shorthand: "CBC", "LFT", "KFT", "TFT", "HbA1c", "Lipid", "ECG", "Echo", "USG", "X-ray", "CXR", "PFT"
+- Advice shorthand: "DRINK MORE WATER", "WALK 30 MIN", "LOW SALT DIET", "AVOID OILY FOOD"
+
+Return in this EXACT JSON format (no markdown, no code fences, pure JSON):
+{
+  "patient_name": "name if written, else empty string",
+  "phone": "10 digit number if written, else empty string",
+  "age": "age if written, else empty string",
+  "gender": "Male/Female if written, else empty string",
+  "vitals": "BP, HR, sugar, weight, SpO2 etc — all vitals found",
+  "complaints": "chief complaints and history as written",
+  "diagnosis": "diagnoses — expand abbreviations like DM→Diabetes Mellitus Type 2, HTN→Hypertension",
+  "medicines": "COMPLETE list of all medicines with dose, frequency, duration. Format: 1. Tab. Metformin 500mg BD AF x 1m\\n2. Tab. Telma 40 OD BF x 1m",
+  "investigations": "comma-separated test names only. Expand abbreviations.",
+  "advice": "lifestyle, diet, exercise advice as written",
+  "follow_up": "follow up date or duration like '2 weeks' or '1 month'"
+}
+
+RULES:
+- Read ALL handwriting — don't skip anything
+- Expand all medical abbreviations to full clinical terms
+- Include EVERY drug name, dose, frequency, duration found
+- If you're unsure about a word, put your best guess in [brackets]
+- For blank/unreadable fields, use empty string ""
+- Prescriptions are typically structured: Vitals → Complaints → Diagnosis → Rx (medicines) → Investigations → Advice → Follow-up
+- Indian context: use Indian drug names and brands
+- Return ONLY valid JSON — nothing else"""

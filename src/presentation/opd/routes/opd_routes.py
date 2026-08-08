@@ -1685,6 +1685,72 @@ async def api_scan_ai(request: Request):
         return {"ok": False, "error": f"AI scan failed: {str(e)}"}
 
 
+@router.post("/api/handwriting-ocr", include_in_schema=False)
+async def api_handwriting_ocr(request: Request):
+    """Process handwritten prescription from Digital Ink Writing Pad via Groq Vision AI OCR.
+
+    Specialized for doctor handwriting recognition — extracts:
+    vitals, complaints, diagnosis, medicines, investigations, advice, follow_up.
+    Uses a dedicated medical handwriting prompt with abbreviation expansion.
+    """
+    sess = _require_opd_session(request)
+    doctor_id = sess.get("doctor_id", "")
+
+    try:
+        body = await request.json()
+    except Exception:
+        return {"ok": False, "error": "Invalid JSON"}
+
+    image_b64 = body.get("image", "")
+    if not image_b64:
+        return {"ok": False, "error": "No handwriting image provided"}
+
+    # Load Groq API key
+    groq_key = os.getenv("GROQ_API_KEY") or ""
+    if not groq_key and doctor_id:
+        settings = await _get_settings(doctor_id)
+        groq_key = settings.get("groq_api_key") or ""
+    if not groq_key:
+        return {"ok": False, "error": "Groq API key not configured. Add key in OPD Settings."}
+
+    os.environ["GROQ_API_KEY"] = groq_key
+
+    try:
+        import base64 as b64_mod
+        import io as io_mod
+        from PIL import Image
+        from src.ai_engine.groq_client import call_groq_vision, parse_ai_json
+        from src.ai_engine.prompts import handwriting_ocr_prompt
+
+        # Clean base64
+        img_b64_clean = image_b64
+        if "," in img_b64_clean:
+            img_b64_clean = img_b64_clean.split(",", 1)[1]
+
+        image_bytes = b64_mod.b64decode(img_b64_clean)
+        img = Image.open(io_mod.BytesIO(image_bytes))
+
+        # Run handwriting OCR with specialized prompt
+        messages = [handwriting_ocr_prompt(), img]
+        raw_text = call_groq_vision(img)
+        parsed = parse_ai_json(raw_text)
+
+        # If direct vision call returned non-JSON, try with text prompt
+        if not parsed or not isinstance(parsed, dict):
+            from src.ai_engine.groq_client import call_groq
+            raw_text = call_groq(messages, temp=0.1, max_tokens=2000)
+            parsed = parse_ai_json(raw_text)
+
+        if not parsed or not isinstance(parsed, dict):
+            parsed = {}
+
+        return {"ok": True, "parsed": parsed, "raw": raw_text or ""}
+
+    except Exception as e:
+        logger.error("Handwriting OCR error: %s", e)
+        return {"ok": False, "error": f"Handwriting recognition failed: {str(e)}"}
+
+
 @router.post("/api/save-rx", include_in_schema=False)
 async def api_save_rx(request: Request):
     """Save OPD Prescription to database and auto-update queue status for inter-department sync."""

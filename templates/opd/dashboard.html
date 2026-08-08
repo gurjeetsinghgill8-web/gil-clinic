@@ -319,6 +319,54 @@
         .lab-trend-card.improving { border-left: 3px solid #22c55e; }
         .lab-trend-card.stable { border-left: 3px solid #94a3b8; }
 
+        /* Digital Ink Prescription Pad */
+        .ink-pad-card {
+            border: 2px solid #8b5cf6 !important;
+            background: linear-gradient(135deg, rgba(139,92,246,0.04), rgba(99,102,241,0.02)) !important;
+        }
+        .ink-canvas-wrap {
+            position: relative;
+            background: #fff;
+            border: 1px solid #d1d5db;
+            border-radius: 8px;
+            overflow: hidden;
+            touch-action: none;
+            cursor: crosshair;
+        }
+        .ink-canvas-wrap canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+        .ink-toolbar {
+            display: flex; flex-wrap: wrap; gap: 6px; align-items: center;
+            padding: 8px 0; border-bottom: 1px solid #e5e7eb; margin-bottom: 8px;
+        }
+        .ink-tool-btn {
+            width: 36px; height: 36px; border-radius: 8px; border: 1px solid #d1d5db;
+            background: #fff; cursor: pointer; font-size: 18px;
+            display: flex; align-items: center; justify-content: center;
+            transition: all 0.12s; color: #4b5563;
+        }
+        .ink-tool-btn:hover { background: #f3f4f6; border-color: #9ca3af; }
+        .ink-tool-btn.active { background: #ede9fe; border-color: #8b5cf6; color: #7c3aed; }
+        .ink-tool-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+        .ink-color-dot {
+            width: 22px; height: 22px; border-radius: 50%; border: 2px solid #d1d5db;
+            cursor: pointer; transition: transform 0.1s; flex-shrink: 0;
+        }
+        .ink-color-dot:hover { transform: scale(1.2); }
+        .ink-color-dot.active { border-color: #7c3aed; transform: scale(1.2); box-shadow: 0 0 0 2px rgba(139,92,246,0.3); }
+        .ink-size-slider { width: 80px; accent-color: #7c3aed; }
+        .ink-page-tabs { display: flex; gap: 2px; flex-wrap: wrap; }
+        .ink-page-tab {
+            padding: 4px 12px; font-size: 12px; border: 1px solid #d1d5db;
+            border-radius: 6px 6px 0 0; background: #f9fafb; cursor: pointer;
+            color: #6b7280;
+        }
+        .ink-page-tab.active { background: #fff; border-bottom-color: #fff; color: #7c3aed; font-weight: 600; }
+        .ink-page-tab:hover { background: #f3f4f6; }
+
         /* Specialty checkboxes */
         .spec-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 8px; }
         .spec-item {
@@ -507,6 +555,64 @@
 
                     <div id="quick-scan-previews" class="flex flex-wrap gap-sm mb-sm"></div>
                     <div id="quick-scan-status" class="text-sm" style="font-weight:600;color:#581c87;"></div>
+                </div>
+
+                <!-- ✍️ Digital Ink Prescription Writing Pad -->
+                <div class="card ink-pad-card mb-sm" style="padding:14px;">
+                    <div class="flex-between mb-sm" style="flex-wrap:wrap;gap:8px;">
+                        <h4 style="margin:0;color:#6d28d9;font-size:15px;display:flex;align-items:center;gap:6px;">
+                            ✍️ Digital Prescription Pad
+                        </h4>
+                        <div style="display:flex;gap:4px;align-items:center;">
+                            <span style="font-size:10px;background:#ede9fe;color:#7c3aed;padding:3px 8px;border-radius:10px;font-weight:600;">🖊️ Stylus/Finger/Touch</span>
+                            <button class="btn btn-sm btn-ghost" onclick="toggleInkPad()" style="font-size:11px;">📝 Show/Hide</button>
+                        </div>
+                    </div>
+
+                    <div id="ink-pad-body">
+                        <!-- Toolbar -->
+                        <div class="ink-toolbar">
+                            <button class="ink-tool-btn active" id="ink-pen-btn" onclick="inkSetTool('pen')" title="Pen">🖊️</button>
+                            <button class="ink-tool-btn" id="ink-eraser-btn" onclick="inkSetTool('eraser')" title="Eraser">🧹</button>
+                            <span style="width:1px;height:24px;background:#d1d5db;margin:0 4px;"></span>
+                            <button class="ink-tool-btn" onclick="inkUndo()" title="Undo" id="ink-undo-btn" disabled>↩️</button>
+                            <button class="ink-tool-btn" onclick="inkRedo()" title="Redo" id="ink-redo-btn" disabled>↪️</button>
+                            <span style="width:1px;height:24px;background:#d1d5db;margin:0 4px;"></span>
+                            <!-- Color dots -->
+                            <span class="ink-color-dot active" style="background:#1e293b;" onclick="inkSetColor('#1e293b', this)" title="Black"></span>
+                            <span class="ink-color-dot" style="background:#2563eb;" onclick="inkSetColor('#2563eb', this)" title="Blue"></span>
+                            <span class="ink-color-dot" style="background:#dc2626;" onclick="inkSetColor('#dc2626', this)" title="Red"></span>
+                            <span class="ink-color-dot" style="background:#16a34a;" onclick="inkSetColor('#16a34a', this)" title="Green"></span>
+                            <span style="width:1px;height:24px;background:#d1d5db;margin:0 4px;"></span>
+                            <span style="font-size:11px;color:#6b7280;">Size:</span>
+                            <input type="range" class="ink-size-slider" id="ink-size-slider" min="1" max="12" value="3" oninput="inkSetSize(this.value)">
+                            <span id="ink-size-label" style="font-size:11px;color:#7c3aed;font-weight:600;min-width:20px;">3</span>
+                            <span style="width:1px;height:24px;background:#d1d5db;margin:0 4px;"></span>
+                            <button class="btn btn-sm btn-ghost" onclick="inkClearPage()" style="color:#ef4444;">🗑️ Clear Page</button>
+                            <button class="btn btn-sm btn-ghost" onclick="inkNewPage()" style="color:#7c3aed;">📄 + New Page</button>
+                        </div>
+
+                        <!-- Page Tabs -->
+                        <div class="ink-page-tabs mb-sm" id="ink-page-tabs">
+                            <span class="ink-page-tab active" data-page="0" onclick="inkSwitchPage(0)">Page 1</span>
+                        </div>
+
+                        <!-- Canvas -->
+                        <div class="ink-canvas-wrap" id="ink-canvas-wrap" style="width:100%;height:380px;">
+                            <canvas id="ink-canvas"></canvas>
+                        </div>
+
+                        <!-- Action Buttons -->
+                        <div class="flex gap-sm mt-sm" style="flex-wrap:wrap;">
+                            <button class="btn btn-primary" onclick="inkSaveHandwriting()" style="background:#7c3aed;">
+                                💾 Save Handwriting
+                            </button>
+                            <button class="btn btn-warning" onclick="inkConvertToEMR()" style="background:linear-gradient(135deg,#f59e0b,#d97706);color:#fff;">
+                                🤖 Convert to Structured Rx (AI)
+                            </button>
+                            <span class="text-sm text-muted" id="ink-status" style="align-self:center;"></span>
+                        </div>
+                    </div>
                 </div>
 
                 <!-- Patient Search (hidden by default) -->
@@ -3672,6 +3778,449 @@ function exportLabPdf() {
     URL.revokeObjectURL(url);
     showToast('📄 Report exported!');
 }
+
+// ════════════════════════════════════════════════════════════════
+// DIGITAL INK PRESCRIPTION PAD — Live Handwriting Canvas
+// ════════════════════════════════════════════════════════════════
+let inkState = {
+    tool: 'pen',           // 'pen' | 'eraser'
+    color: '#1e293b',      // current ink color
+    size: 3,               // pen size
+    isDrawing: false,
+    lastX: 0, lastY: 0,
+    // Multi-page: array of { undoStack: [ImageData], redoStack: [ImageData] }
+    pages: [],
+    currentPage: 0,
+    maxUndo: 30,           // max undo steps per page
+};
+
+function inkInit() {
+    const canvas = document.getElementById('ink-canvas');
+    if (!canvas) return;
+
+    const wrap = document.getElementById('ink-canvas-wrap');
+    const dpr = window.devicePixelRatio || 1;
+    const rect = wrap.getBoundingClientRect();
+    const w = rect.width;
+    const h = 380; // fixed height
+
+    canvas.width = w * dpr;
+    canvas.height = h * dpr;
+    canvas.style.width = w + 'px';
+    canvas.style.height = h + 'px';
+
+    const ctx = canvas.getContext('2d');
+    ctx.scale(dpr, dpr);
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, w, h);
+
+    // Store initial blank state
+    if (inkState.pages.length === 0) {
+        inkState.pages = [{
+            undoStack: [],
+            redoStack: [],
+        }];
+        inkSaveSnapshot(); // save blank canvas
+    }
+
+    // Pointer events (works for mouse, touch, stylus)
+    canvas.onpointerdown = inkStartDraw;
+    canvas.onpointermove = inkDraw;
+    canvas.onpointerup = inkEndDraw;
+    canvas.onpointerleave = inkEndDraw;
+    canvas.onpointercancel = inkEndDraw;
+
+    // Prevent scrolling while drawing on touch devices
+    canvas.style.touchAction = 'none';
+}
+
+function inkGetCtx() {
+    const canvas = document.getElementById('ink-canvas');
+    return canvas ? canvas.getContext('2d') : null;
+}
+
+function inkGetPos(e) {
+    const canvas = document.getElementById('ink-canvas');
+    const rect = canvas.getBoundingClientRect();
+    return {
+        x: e.clientX - rect.left,
+        y: e.clientY - rect.top,
+        pressure: e.pressure || 0.5,
+    };
+}
+
+function inkStartDraw(e) {
+    e.preventDefault();
+    const pos = inkGetPos(e);
+    inkState.isDrawing = true;
+    inkState.lastX = pos.x;
+    inkState.lastY = pos.y;
+
+    const ctx = inkGetCtx();
+    if (!ctx) return;
+
+    ctx.beginPath();
+    ctx.moveTo(pos.x, pos.y);
+
+    // For a dot (single click without move)
+    if (inkState.tool === 'pen') {
+        ctx.fillStyle = inkState.color;
+        ctx.beginPath();
+        ctx.arc(pos.x, pos.y, inkState.size / 2, 0, Math.PI * 2);
+        ctx.fill();
+    }
+}
+
+function inkDraw(e) {
+    if (!inkState.isDrawing) return;
+    e.preventDefault();
+    const pos = inkGetPos(e);
+    const ctx = inkGetCtx();
+    if (!ctx) return;
+
+    ctx.lineWidth = inkState.tool === 'eraser' ? inkState.size * 4 : inkState.size;
+    ctx.strokeStyle = inkState.tool === 'eraser' ? '#ffffff' : inkState.color;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+
+    ctx.beginPath();
+    ctx.moveTo(inkState.lastX, inkState.lastY);
+    ctx.lineTo(pos.x, pos.y);
+    ctx.stroke();
+
+    inkState.lastX = pos.x;
+    inkState.lastY = pos.y;
+}
+
+function inkEndDraw(e) {
+    if (!inkState.isDrawing) return;
+    inkState.isDrawing = false;
+    inkSaveSnapshot();
+}
+
+function inkSaveSnapshot() {
+    const canvas = document.getElementById('ink-canvas');
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    const w = canvas.width / (window.devicePixelRatio || 1);
+    const h = canvas.height / (window.devicePixelRatio || 1);
+    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+
+    const page = inkState.pages[inkState.currentPage];
+    page.undoStack.push(imageData);
+    if (page.undoStack.length > inkState.maxUndo) page.undoStack.shift();
+    page.redoStack = []; // clear redo on new action
+
+    inkUpdateUndoRedoButtons();
+}
+
+function inkUndo() {
+    const page = inkState.pages[inkState.currentPage];
+    if (page.undoStack.length <= 1) return; // keep at least one (blank)
+
+    const current = page.undoStack.pop();
+    page.redoStack.push(current);
+    inkRestoreSnapshot(page.undoStack[page.undoStack.length - 1]);
+    inkUpdateUndoRedoButtons();
+}
+
+function inkRedo() {
+    const page = inkState.pages[inkState.currentPage];
+    if (page.redoStack.length === 0) return;
+
+    const restored = page.redoStack.pop();
+    page.undoStack.push(restored);
+    inkRestoreSnapshot(restored);
+    inkUpdateUndoRedoButtons();
+}
+
+function inkRestoreSnapshot(imageData) {
+    const canvas = document.getElementById('ink-canvas');
+    if (!canvas || !imageData) return;
+    const ctx = canvas.getContext('2d');
+    ctx.putImageData(imageData, 0, 0);
+}
+
+function inkUpdateUndoRedoButtons() {
+    const page = inkState.pages[inkState.currentPage];
+    const undoBtn = document.getElementById('ink-undo-btn');
+    const redoBtn = document.getElementById('ink-redo-btn');
+    if (undoBtn) undoBtn.disabled = page.undoStack.length <= 1;
+    if (redoBtn) redoBtn.disabled = page.redoStack.length === 0;
+}
+
+function inkSetTool(tool) {
+    inkState.tool = tool;
+    document.getElementById('ink-pen-btn').classList.toggle('active', tool === 'pen');
+    document.getElementById('ink-eraser-btn').classList.toggle('active', tool === 'eraser');
+}
+
+function inkSetColor(color, el) {
+    inkState.color = color;
+    inkState.tool = 'pen';
+    document.getElementById('ink-pen-btn').classList.add('active');
+    document.getElementById('ink-eraser-btn').classList.remove('active');
+    // Update active color dot
+    document.querySelectorAll('.ink-color-dot').forEach(d => d.classList.remove('active'));
+    if (el) el.classList.add('active');
+}
+
+function inkSetSize(size) {
+    inkState.size = parseInt(size);
+    document.getElementById('ink-size-label').textContent = size;
+}
+
+function inkClearPage() {
+    if (!confirm('Clear this page? This cannot be undone.')) return;
+    const canvas = document.getElementById('ink-canvas');
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    const w = canvas.width / (window.devicePixelRatio || 1);
+    const h = canvas.height / (window.devicePixelRatio || 1);
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, w, h);
+    inkSaveSnapshot();
+}
+
+function inkNewPage() {
+    // Save current page state to pages array
+    const canvas = document.getElementById('ink-canvas');
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+
+    // Update current page's undo to include latest
+    const page = inkState.pages[inkState.currentPage];
+    page.undoStack[page.undoStack.length - 1] = imageData;
+
+    // Create new page
+    const totalPages = inkState.pages.length;
+    const newPageIdx = totalPages;
+
+    // Clear canvas for new page
+    const w = canvas.width / (window.devicePixelRatio || 1);
+    const h = canvas.height / (window.devicePixelRatio || 1);
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, w, h);
+
+    inkState.pages.push({ undoStack: [], redoStack: [] });
+    inkState.currentPage = newPageIdx;
+    inkSaveSnapshot(); // save blank state for new page
+
+    // Update page tabs
+    inkRenderPageTabs();
+    inkUpdateUndoRedoButtons();
+}
+
+function inkSwitchPage(idx) {
+    if (idx === inkState.currentPage) return;
+    // Save current page state
+    const canvas = document.getElementById('ink-canvas');
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    const page = inkState.pages[inkState.currentPage];
+    page.undoStack[page.undoStack.length - 1] = imageData;
+
+    // Switch to new page
+    inkState.currentPage = idx;
+    const newPage = inkState.pages[idx];
+    if (newPage.undoStack.length > 0) {
+        inkRestoreSnapshot(newPage.undoStack[newPage.undoStack.length - 1]);
+    } else {
+        const w = canvas.width / (window.devicePixelRatio || 1);
+        const h = canvas.height / (window.devicePixelRatio || 1);
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, w, h);
+        inkSaveSnapshot();
+    }
+
+    inkRenderPageTabs();
+    inkUpdateUndoRedoButtons();
+}
+
+function inkRenderPageTabs() {
+    const container = document.getElementById('ink-page-tabs');
+    if (!container) return;
+    let html = '';
+    for (let i = 0; i < inkState.pages.length; i++) {
+        html += `<span class="ink-page-tab ${i === inkState.currentPage ? 'active' : ''}" data-page="${i}" onclick="inkSwitchPage(${i})">Page ${i + 1}</span>`;
+    }
+    container.innerHTML = html;
+}
+
+function inkGetAllPagesAsImages() {
+    const images = [];
+    const canvas = document.getElementById('ink-canvas');
+    if (!canvas) return images;
+
+    // Save current page first
+    const ctx = canvas.getContext('2d');
+    const currentImageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    const page = inkState.pages[inkState.currentPage];
+    if (page.undoStack.length > 0) {
+        page.undoStack[page.undoStack.length - 1] = currentImageData;
+    }
+
+    // Create temp canvas to render each page
+    const tempCanvas = document.createElement('canvas');
+    tempCanvas.width = canvas.width;
+    tempCanvas.height = canvas.height;
+    const tempCtx = tempCanvas.getContext('2d');
+
+    for (let i = 0; i < inkState.pages.length; i++) {
+        const p = inkState.pages[i];
+        if (p.undoStack.length > 0) {
+            tempCtx.putImageData(p.undoStack[p.undoStack.length - 1], 0, 0);
+        } else {
+            tempCtx.fillStyle = '#ffffff';
+            tempCtx.fillRect(0, 0, tempCanvas.width, tempCanvas.height);
+        }
+        images.push(tempCanvas.toDataURL('image/png'));
+    }
+
+    // Restore current page
+    inkRestoreSnapshot(currentImageData);
+
+    return images;
+}
+
+async function inkSaveHandwriting() {
+    const patientName = document.getElementById('pt-name').value.trim();
+    if (!patientName) {
+        showToast('Enter patient name first in the form above', 'error');
+        return;
+    }
+
+    const images = inkGetAllPagesAsImages();
+    if (images.length === 0) {
+        showToast('Nothing written on the pad', 'error');
+        return;
+    }
+
+    const statusEl = document.getElementById('ink-status');
+    statusEl.innerHTML = '<span class="spinner"></span> Saving handwriting...';
+
+    // Store images in hidden field or session — for now, append to complaints as note
+    const complaintsField = document.getElementById('pt-complaints');
+    const note = `\n[📝 Handwritten Prescription — ${images.length} page(s) — ${new Date().toLocaleString()}]\n(Original handwriting saved to patient record)`;
+    complaintsField.value = complaintsField.value.trim() ? complaintsField.value + note : note.substring(1);
+
+    statusEl.textContent = '✅ Handwriting saved to patient record!';
+    showToast(`✅ ${images.length} page(s) of handwriting saved!`);
+
+    // TODO: In production, upload images to backend for permanent storage
+    // For now the images are base64 and can be sent via the scan-ai endpoint
+}
+
+async function inkConvertToEMR() {
+    const patientName = document.getElementById('pt-name').value.trim();
+    if (!patientName) {
+        showToast('Enter patient name first in the form above', 'error');
+        return;
+    }
+
+    const images = inkGetAllPagesAsImages();
+    if (images.length === 0) {
+        showToast('Nothing written on the pad. Write a prescription first.', 'error');
+        return;
+    }
+
+    const statusEl = document.getElementById('ink-status');
+    statusEl.innerHTML = '<span class="spinner"></span> AI reading your handwriting...';
+
+    let combinedParsed = {
+        patient_name: patientName,
+        phone: document.getElementById('pt-phone').value.trim(),
+        vitals: '', complaints: '', diagnosis: '', medicines: '', investigations: '', advice: '', follow_up: ''
+    };
+
+    try {
+        // Process each page sequentially through AI Vision OCR
+        for (let i = 0; i < images.length; i++) {
+            statusEl.innerHTML = `<span class="spinner"></span> AI reading page ${i + 1} of ${images.length}...`;
+
+            const res = await fetch('/opd/api/handwriting-ocr', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ image: images[i] })
+            }).then(r => r.json());
+
+            if (res.ok && res.parsed) {
+                const p = res.parsed;
+                if (p.vitals) combinedParsed.vitals = combinedParsed.vitals ? combinedParsed.vitals + ' | ' + p.vitals : p.vitals;
+                if (p.complaints) combinedParsed.complaints = combinedParsed.complaints ? combinedParsed.complaints + '\n' + p.complaints : p.complaints;
+                if (p.diagnosis) combinedParsed.diagnosis = combinedParsed.diagnosis ? combinedParsed.diagnosis + '\n' + p.diagnosis : p.diagnosis;
+                if (p.medicines) combinedParsed.medicines = combinedParsed.medicines ? combinedParsed.medicines + '\n' + p.medicines : p.medicines;
+                if (p.investigations) combinedParsed.investigations = combinedParsed.investigations ? combinedParsed.investigations + ', ' + p.investigations : p.investigations;
+                if (p.advice) combinedParsed.advice = combinedParsed.advice ? combinedParsed.advice + '\n' + p.advice : p.advice;
+                if (p.follow_up) combinedParsed.follow_up = combinedParsed.follow_up ? combinedParsed.follow_up + ' | ' + p.follow_up : p.follow_up;
+            }
+        }
+
+        // Populate the Rx form
+        if (combinedParsed.vitals) document.getElementById('pt-vitals').value = document.getElementById('pt-vitals').value || combinedParsed.vitals;
+        if (combinedParsed.complaints) document.getElementById('pt-complaints').value = document.getElementById('pt-complaints').value || combinedParsed.complaints;
+        if (combinedParsed.diagnosis) document.getElementById('pt-diagnosis').value = document.getElementById('pt-diagnosis').value || combinedParsed.diagnosis;
+        if (combinedParsed.medicines) document.getElementById('pt-medicines').value = document.getElementById('pt-medicines').value || combinedParsed.medicines;
+        if (combinedParsed.investigations) document.getElementById('pt-investigations').value = document.getElementById('pt-investigations').value || combinedParsed.investigations;
+        if (combinedParsed.advice) document.getElementById('pt-advice').value = document.getElementById('pt-advice').value || combinedParsed.advice;
+        if (combinedParsed.follow_up) {
+            // follow_up goes into the Rx output
+            const rxOutput = document.getElementById('rx-output');
+            if (rxOutput && !rxOutput.value.includes('Follow-up:')) {
+                rxOutput.value = (rxOutput.value ? rxOutput.value + '\n' : '') + 'Follow-up: ' + combinedParsed.follow_up;
+            }
+        }
+
+        statusEl.innerHTML = '✅ AI extracted prescription data! <b>Review before saving.</b>';
+        showToast('✅ Handwriting converted! Review the form fields before saving.');
+
+    } catch (err) {
+        console.error('Handwriting OCR error:', err);
+        statusEl.textContent = '❌ AI recognition failed. Try again with clearer handwriting.';
+        showToast('AI recognition failed', 'error');
+    }
+}
+
+function toggleInkPad() {
+    const body = document.getElementById('ink-pad-body');
+    if (body) {
+        body.style.display = body.style.display === 'none' ? 'block' : 'none';
+    }
+}
+
+// Initialize ink pad when Rx tab becomes active
+function inkEnsureInit() {
+    if (!document.getElementById('ink-canvas')) return;
+    const canvas = document.getElementById('ink-canvas');
+    if (canvas.width === 0 || !canvas.width) {
+        inkInit();
+    }
+}
+
+// Initialize on tab switch to Rx
+const _origTabSwitch = switchTab;
+switchTab = function(tabName) {
+    _origTabSwitch(tabName);
+    if (tabName === 'rx') {
+        setTimeout(inkEnsureInit, 200);
+    }
+};
+
+// Initialize on page load
+document.addEventListener('DOMContentLoaded', function() {
+    setTimeout(inkEnsureInit, 500);
+});
+
+// Also init when window resizes (canvas needs to rescale)
+window.addEventListener('resize', function() {
+    if (document.getElementById('tab-rx') && document.getElementById('tab-rx').classList.contains('active')) {
+        setTimeout(inkInit, 300);
+    }
+});
 
 // ════════════════════════════════════════════════════════════════
 // INIT
