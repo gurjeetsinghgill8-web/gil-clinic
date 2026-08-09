@@ -181,7 +181,7 @@ regForm.addEventListener('submit', async function(e) {
       this.reset();
       document.querySelectorAll('input[name=service]:checked').forEach(c => c.checked = false);
 
-      // Auto-open WhatsApp with SECURE tracking link (not /staff URL)
+      // Auto-open WhatsApp with token slip (no URLs in message)
       if (result.whatsapp && result.whatsapp.length > 0 && data.phone) {
         // Open first WhatsApp link automatically
         const first = result.whatsapp[0];
@@ -190,17 +190,6 @@ regForm.addEventListener('submit', async function(e) {
         result.whatsapp.slice(1).forEach((w, i) => {
           setTimeout(() => window.open(w.url, '_blank'), (i + 1) * 500);
         });
-      }
-
-      // Show tracking URL to staff for manual sharing
-      if (result.tracking_url) {
-        const alertEl = document.getElementById('register-alert');
-        alertEl.style.display = 'block';
-        alertEl.style.background = '#f0fff4';
-        alertEl.style.color = '#276749';
-        alertEl.style.border = '1px solid #9ae6b4';
-        alertEl.innerHTML = `🔗 <b>Patient Tracking Link:</b> <a href="${result.tracking_url}" target="_blank" style="color:#276749;word-break:break-all;">${result.tracking_url}</a>`;
-        setTimeout(() => { alertEl.style.display = 'none'; }, 20000);
       }
 
       setTimeout(() => window.location.reload(), 2500);

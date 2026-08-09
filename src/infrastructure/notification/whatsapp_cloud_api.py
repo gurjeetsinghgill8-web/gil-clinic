@@ -110,19 +110,18 @@ def build_patient_token_message(
 ) -> str:
     """Build WhatsApp message for patient token slip.
 
-    Args:
-        tracking_url: Secure public tracking URL e.g. /track/{token}.
-                      If empty, no tracking link is included.
+    SECURITY NOTE: No staff or tracking URLs are included in patient messages.
+    Patient receives only their basic token information.
+    tracking_url parameter is accepted but NOT used in the message (reserved for future opt-in).
     """
-    track_line = f"📱 Track your status:\n{tracking_url}\n\n" if tracking_url else ""
     return (
-        f"🏥 *{clinic_name} — Patient Token Slip*\n\n"
+        f"🏥 *{clinic_name}*\n\n"
+        f"✅ *Registration Confirmed*\n\n"
         f"👤 *Patient:* {patient_name}\n"
-        f"🎟️ *Token:* #{token_number}\n"
-        f"🩺 *Service:* {service}\n"
-        f"📌 *Status:* Registered & In Queue\n\n"
-        f"{track_line}"
-        f"— {clinic_name}"
+        f"🎟️ *Token No:* #{token_number}\n"
+        f"🩺 *Service:* {service}\n\n"
+        f"📌 Please wait for your token to be called.\n\n"
+        f"— {clinic_name} Reception"
     )
 
 
