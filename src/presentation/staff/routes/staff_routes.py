@@ -307,6 +307,7 @@ async def login_submit(
         max_age=SESSION_MAX_AGE,
         httponly=True,
         samesite="lax",
+        secure=True,
     )
     return resp
 
@@ -372,7 +373,10 @@ async def phone_login_submit(
 
 @router.get("/seed-staff", include_in_schema=False)
 async def seed_staff_users(request: Request):
-    """Create default staff users for testing."""
+    """Create default staff users for testing. ADMIN ONLY."""
+    sess = get_session(request)
+    if not sess or sess.get("role") not in ("admin", "Admin", "manager", "Manager"):
+        return RedirectResponse("/staff/login", status_code=302)
     try:
         from src.infrastructure.staff.models.staff_user_model import StaffUserModel
         import hashlib
@@ -485,13 +489,13 @@ async def _dept_page(request: Request, dept_key: str, active_page: str):
 
 
 @router.get("/ecg",  include_in_schema=False)
-async def ecg(request: Request):  return await _dept_page(request, "ECG",  "ecg")
+async def ecg(request: Request):  return RedirectResponse("/staff/home")  # DISABLED
 
 @router.get("/echo", include_in_schema=False)
-async def echo(request: Request): return await _dept_page(request, "Echo", "echo")
+async def echo(request: Request): return RedirectResponse("/staff/home")  # DISABLED
 
 @router.get("/tmt",  include_in_schema=False)
-async def tmt(request: Request):  return await _dept_page(request, "TMT",  "tmt")
+async def tmt(request: Request):  return RedirectResponse("/staff/home")  # DISABLED
 
 @router.get("/opd",  include_in_schema=False)
 async def opd(request: Request):  return await _dept_page(request, "OPD",  "opd")
@@ -514,36 +518,24 @@ async def doctor(request: Request):
 
 @router.get("/manager", include_in_schema=False)
 async def manager(request: Request):
-    sess = get_session(request)
-    if not sess:
-        return RedirectResponse("/staff/login")
-    return RedirectResponse("/api/v1/queue/manager-dashboard")
-
-
-# ── Billing ────────────────────────────────────────────────────────────────────
+    return RedirectResponse("/staff/home")  # DISABLED
 
 @router.get("/billing", include_in_schema=False)
 async def billing(request: Request):
-    sess = get_session(request)
-    if not sess:
-        return RedirectResponse("/staff/login")
-    return HTMLResponse(content=_render("dashboard/base.html",
-        request=request, active_page="billing", session_user=sess,
-    ))
-
-
-# ── TV Display ────────────────────────────────────────────────────────────────
+    return RedirectResponse("/staff/home")  # DISABLED
 
 @router.get("/tv", include_in_schema=False)
 async def tv_display(request: Request):
-    return RedirectResponse("/api/v1/queue/tv-display")
+    return RedirectResponse("/staff/home")  # DISABLED
 
 
-# ── Patient Status (NO LOGIN REQUIRED) ────────────────────────────────────────
+# ── Patient Status (REQUIRES LOGIN) ─────────────────────────────────────────
 
 @router.get("/patient-status", include_in_schema=False)
 async def patient_status(request: Request, q: str = Query("")):
     sess = get_session(request)
+    if not sess:
+        return RedirectResponse("/staff/login", status_code=302)
     patient_entries = []
     query = q.strip()
 
@@ -998,7 +990,10 @@ async def api_dietitian_settings(request: Request):
 
 @router.get("/seed", include_in_schema=False)
 async def seed_test_data(request: Request):
-    """Seed sample patients + queue entries for demo/testing."""
+    """Seed sample data. ADMIN ONLY."""
+    sess = get_session(request)
+    if not sess or sess.get("role") not in ("admin", "Admin", "manager", "Manager"):
+        return RedirectResponse("/staff/login", status_code=302)
     try:
         from src.infrastructure.patient.models.patient_model import PatientModel
         from src.infrastructure.queue.models.queue_entry_model import QueueEntryModel
