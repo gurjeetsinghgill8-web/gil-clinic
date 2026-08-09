@@ -122,6 +122,33 @@ def _get_google_vision_key() -> str:
     return ""
 
 
+def _get_gemini_key() -> str:
+    """Get Google Gemini API key from env var, secret.txt, or .env.
+    GEMINI_API_KEY=AIza... (from Google AI Studio: aistudio.google.com)
+    """
+    key = os.getenv("GEMINI_API_KEY", "")
+    if key and len(key.strip()) > 10:
+        return key.strip()
+
+    from pathlib import Path
+    root_dir = Path(__file__).parents[2]
+
+    for filename in ("secret.txt", ".env"):
+        try:
+            p = root_dir / filename
+            if p.exists():
+                for line in p.read_text().splitlines():
+                    line = line.strip()
+                    if line.startswith("GEMINI_API_KEY="):
+                        k = line.split("=", 1)[1].strip().strip('"').strip("'")
+                        if k and len(k) > 10:
+                            os.environ["GEMINI_API_KEY"] = k
+                            return k
+        except Exception:
+            pass
+    return ""
+
+
 # ════════════════════════════════════════════════════════════════════════════
 # RATE LIMIT GUARD — shared across both providers
 # ════════════════════════════════════════════════════════════════════════════
@@ -154,6 +181,8 @@ if not os.getenv("DEEPSEEK_KEY"):
     _get_deepseek_key()
 if not os.getenv("GOOGLE_VISION_KEY"):
     _get_google_vision_key()
+if not os.getenv("GEMINI_API_KEY"):
+    _get_gemini_key()
 
 
 
@@ -318,6 +347,145 @@ Return in this EXACT JSON format (no markdown, no code fences, pure JSON):
         image
     ]
     return call_groq(messages, model=DEFAULT_VISION_MODEL, temp=0.1, max_tokens=2500)
+
+
+# ════════════════════════════════════════════════════════════════════════════
+# GEMINI FLASH VISION — Primary handwriting OCR (no rate limit with paid key)
+# ════════════════════════════════════════════════════════════════════════════
+
+GEMINI_VISION_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent"
+
+def call_gemini_vision(image, context: str = "") -> tuple[str, str]:
+    """Call Google Gemini Flash Vision API for handwriting OCR.
+
+    Uses gemini-1.5-flash — excellent handwriting accuracy, ~₹0.02/image.
+    Free tier: 15 requests/minute (no API key cost needed for testing).
+
+    Args:
+        image: PIL Image object
+        context: optional context hint
+    Returns:
+        (response_text, error_message)
+    """
+    gemini_key = _get_gemini_key()
+    if not gemini_key:
+        return "", "GEMINI_API_KEY not configured"
+
+    try:
+        buf = io.BytesIO()
+        if image.mode in ('RGBA', 'LA', 'P'):
+            bg = __import__('PIL.Image', fromlist=['Image']).Image.new('RGB', image.size, (255, 255, 255))
+            if image.mode == 'P':
+                image = image.convert('RGBA')
+            bg.paste(image, mask=image.split()[-1] if image.mode in ('RGBA', 'LA') else None)
+            image = bg
+        elif image.mode != 'RGB':
+            image = image.convert('RGB')
+        image.save(buf, format='JPEG', quality=90)
+        img_b64 = base64.b64encode(buf.getvalue()).decode()
+
+        prompt_text = (
+            "You are a world-class AI Clinical Specialist reading handwritten doctor prescriptions.\n"
+            "Extract ALL clinical information from this image.\n\n"
+            "CRITICAL ABBREVIATIONS to expand:\n"
+            "DM=Diabetes Mellitus, HTN=Hypertension, CAD=Coronary Artery Disease, IHD=Ischemic Heart Disease, "
+            "CKD=Chronic Kidney Disease, COPD=Chronic Obstructive Pulmonary Disease, UTI=Urinary Tract Infection\n"
+            "OD=Once Daily, BD=Twice Daily, TDS=Thrice Daily, QID=Four times daily, HS=At bedtime, SOS=As needed\n"
+            "BF/AC=Before Food, AF/PC=After Food, Tab.=Tablet, Cap.=Capsule, Syp.=Syrup, Inj.=Injection\n\n"
+            "Return ONLY valid JSON (no markdown, no code fences):\n"
+            '{"vitals":"BP HR sugar weight etc","complaints":"chief complaints","diagnosis":"ALL diagnoses expanded",'
+            '"medicines":"1. Tab. Drug Dose Freq Timing x Duration\\n2. ...","investigations":"comma-separated tests",'
+            '"advice":"diet/lifestyle advice","follow_up":"next visit timeline"}'
+            + (f"\n\nContext: {context}" if context else "")
+        )
+
+        payload = {
+            "contents": [{
+                "parts": [
+                    {"text": prompt_text},
+                    {"inline_data": {"mime_type": "image/jpeg", "data": img_b64}},
+                ]
+            }],
+            "generationConfig": {
+                "temperature": 0.0,
+                "maxOutputTokens": 2000,
+            }
+        }
+
+        resp = requests.post(
+            f"{GEMINI_VISION_URL}?key={gemini_key}",
+            json=payload,
+            timeout=30,
+        )
+
+        if resp.status_code == 429:
+            return "", "Gemini rate limited (429) — try again in a moment"
+        if resp.status_code == 400:
+            err = resp.json().get("error", {}).get("message", "Bad request")
+            return "", f"Gemini error: {err}"
+        if not resp.ok:
+            return "", f"Gemini HTTP {resp.status_code}"
+
+        data = resp.json()
+        candidates = data.get("candidates", [])
+        if not candidates:
+            return "", "Gemini returned no candidates"
+        parts = candidates[0].get("content", {}).get("parts", [])
+        text = "".join(p.get("text", "") for p in parts).strip()
+        logger.info("Gemini Vision extracted %d chars", len(text))
+        return sanitize_output(text), ""
+
+    except requests.exceptions.Timeout:
+        return "", "Gemini timeout"
+    except Exception as e:
+        logger.error("Gemini Vision error: %s", e)
+        return "", str(e)
+
+
+def call_vision_with_fallback(image, context: str = "") -> tuple[str, str, str]:
+    """Smart vision OCR: tries Gemini → Groq Vision → Google Vision in priority order.
+
+    Returns:
+        (response_text, error_message, provider_used)
+        provider_used: "gemini" | "groq_vision" | "google_vision" | "none"
+
+    Priority:
+        1. Gemini Flash (best quality, ₹0.02/image, no hard daily limit)
+        2. Groq Vision (good quality, 1000/day free limit shared)
+        3. Google Cloud Vision (85-90%, 1000/month free, needs structuring)
+    """
+    # ── 1. Try Gemini Flash ──────────────────────────────────────────────────
+    gemini_key = _get_gemini_key()
+    if gemini_key:
+        text, err = call_gemini_vision(image, context=context)
+        if text and len(text.strip()) > 5:
+            logger.info("Vision OCR: Gemini Flash success (%d chars)", len(text))
+            return text, "", "gemini"
+        logger.info("Gemini unavailable (%s), trying Groq Vision...", err[:60] if err else "empty")
+
+    # ── 2. Try Groq Vision (Llama-4 Scout) ──────────────────────────────────
+    groq_key = _get_api_key()
+    if groq_key:
+        text = call_groq_vision(image, context=context)
+        if text and len(text.strip()) > 5:
+            logger.info("Vision OCR: Groq Vision success (%d chars)", len(text))
+            return text, "", "groq_vision"
+        logger.info("Groq Vision empty, trying Google Vision...")
+
+    # ── 3. Try Google Cloud Vision ───────────────────────────────────────────
+    google_key = _get_google_vision_key()
+    if google_key:
+        try:
+            from src.ai_engine.google_vision_handler import ocr_handwriting_google
+            text, err = ocr_handwriting_google(image, google_key)
+            if text and len(text.strip()) > 5:
+                logger.info("Vision OCR: Google Vision success (%d chars)", len(text))
+                return text, "", "google_vision"
+            logger.info("Google Vision empty (%s)", err or "no text")
+        except Exception as ge:
+            logger.error("Google Vision import error: %s", ge)
+
+    return "", "All vision providers unavailable or returned empty results", "none"
 
 
 def parse_ai_json(text: str) -> dict:

@@ -1634,13 +1634,12 @@ async def api_get_scans(request: Request):
 
 @router.post("/api/scan-ai", include_in_schema=False)
 async def api_scan_ai(request: Request):
-    """Process uploaded handwritten prescription image via Groq Vision AI OCR.
+    """Process uploaded handwritten prescription image via multi-provider Vision OCR.
 
-    Loads Groq API key from environment OR per-doctor OPD settings.
-    Handles base64 images from camera snap or gallery upload.
+    Provider priority: Gemini Flash → Groq Vision → Google Cloud Vision.
+    Whichever is configured and available is used automatically.
     """
     sess = _require_opd_session(request)
-    doctor_id = sess.get("doctor_id", "")
 
     try:
         body = await request.json()
@@ -1651,22 +1650,11 @@ async def api_scan_ai(request: Request):
     if not image_b64:
         return {"ok": False, "error": "No image provided"}
 
-    # Load Groq API key — check env first, then doctor's settings
-    groq_key = os.getenv("GROQ_API_KEY") or ""
-    if not groq_key and doctor_id:
-        settings = await _get_settings(doctor_id)
-        groq_key = settings.get("groq_api_key") or ""
-    if not groq_key:
-        return {"ok": False, "error": "Groq API key not configured. Add key in OPD Settings."}
-
-    # Temporarily set for groq_client
-    os.environ["GROQ_API_KEY"] = groq_key
-
     try:
         import base64
         import io
         from PIL import Image
-        from src.ai_engine.groq_client import call_groq_vision, parse_ai_json
+        from src.ai_engine.groq_client import call_vision_with_fallback, parse_ai_json
 
         # Remove data:image/... header if present
         if "," in image_b64:
@@ -1674,26 +1662,30 @@ async def api_scan_ai(request: Request):
 
         image_bytes = base64.b64decode(image_b64)
         img = Image.open(io.BytesIO(image_bytes))
+        if img.mode not in ('RGB', 'L'):
+            img = img.convert('RGB')
 
-        # Vision OCR execution
-        raw_text = call_groq_vision(img)
+        raw_text, err, provider = call_vision_with_fallback(img)
+        if not raw_text:
+            return {"ok": False, "error": err or "No text extracted from image",
+                    "hint": "Add GEMINI_API_KEY or GOOGLE_VISION_KEY in .env on Railway"}
+
         parsed = parse_ai_json(raw_text)
-
-        return {"ok": True, "parsed": parsed, "raw": raw_text}
+        return {"ok": True, "parsed": parsed, "raw": raw_text, "provider": provider}
     except Exception as e:
         logger.error("Scan AI processing error: %s", e)
         return {"ok": False, "error": f"AI scan failed: {str(e)}"}
 
 
+
 @router.post("/api/handwriting-ocr", include_in_schema=False)
 async def api_handwriting_ocr(request: Request):
     """Process handwritten prescription from Digital Ink Writing Pad.
-    
-    Tries Groq Vision first (Google Lens quality), falls back to Google Cloud Vision.
-    Both give excellent handwriting recognition results.
+
+    Provider priority: Gemini Flash (primary) → Groq Vision → Google Cloud Vision.
+    No configuration needed — just add the API key to Railway env vars.
     """
-    sess = _require_opd_session(request)
-    doctor_id = sess.get("doctor_id", "")
+    _require_opd_session(request)
 
     try:
         body = await request.json()
@@ -1704,15 +1696,11 @@ async def api_handwriting_ocr(request: Request):
     if not image_b64:
         return {"ok": False, "error": "No handwriting image provided"}
 
-    # Load API keys from environment / secret.txt only (secure)
-    groq_key = os.getenv("GROQ_API_KEY") or ""
-    google_key = os.getenv("GOOGLE_VISION_KEY") or ""
-
     try:
         import base64 as b64_mod
         import io as io_mod
         from PIL import Image
-        from src.ai_engine.groq_client import call_groq_with_error, parse_ai_json
+        from src.ai_engine.groq_client import call_vision_with_fallback, call_groq_with_error, parse_ai_json
 
         # Clean base64
         img_b64_clean = image_b64
@@ -1722,99 +1710,67 @@ async def api_handwriting_ocr(request: Request):
         image_bytes = b64_mod.b64decode(img_b64_clean)
         img = Image.open(io_mod.BytesIO(image_bytes))
 
-        # Convert to RGB
+        # Normalise to RGB
         if img.mode in ('RGBA', 'LA', 'P'):
             background = Image.new('RGB', img.size, (255, 255, 255))
             if img.mode == 'P':
                 img = img.convert('RGBA')
-            background.paste(img, mask=img.split()[-1] if img.mode == 'RGBA' else None)
+            background.paste(img, mask=img.split()[-1] if img.mode in ('RGBA', 'LA') else None)
             img = background
         elif img.mode != 'RGB':
             img = img.convert('RGB')
 
-        # ══════════════════════════════════════════════════════════════
-        # STEP 1: Try Groq Vision (Google Lens quality, same as smart-opd2)
-        # ══════════════════════════════════════════════════════════════
-        parsed = {}
-        raw_text = ""
-        ocr_method = "none"
+        # ── Smart multi-provider OCR (Gemini → Groq → Google) ─────────────
+        raw_text, ocr_err, provider = call_vision_with_fallback(img)
 
-        if groq_key and len(groq_key) > 10:
-            ocr_method = "groq_vision"
+        if not raw_text or len(raw_text.strip()) < 5:
+            # If Google Vision returned plain text (not JSON), structure it with text AI
+            return {
+                "ok": True,
+                "parsed": {},
+                "raw": "",
+                "ocr_method": provider,
+                "error_hint": "no_text_found",
+                "message": "Could not read handwriting. Tips: 1) Write clearly with dark pen on white background  2) Ensure good lighting  3) Hold camera steady  4) Add GEMINI_API_KEY to Railway for best results."
+            }
 
-            ocr_prompt = """You are an expert AI reading a doctor's HANDWRITTEN prescription from a digital writing pad.
-
-Extract ALL clinical information. Doctors write in shorthand — expand EVERYTHING.
-
-CRITICAL ABBREVIATIONS:
-- DM=Diabetes Mellitus Type 2, HTN=Hypertension, CAD=Coronary Artery Disease, IHD=Ischemic Heart Disease, CKD=Chronic Kidney Disease, CHF=Congestive Heart Failure, COPD=Chronic Obstructive Pulmonary Disease, UTI=Urinary Tract Infection
-- OD=Once Daily, BD=Twice Daily, TDS=Thrice Daily, QID=Four times, HS=At bedtime, STAT=Immediately, SOS=As needed
-- BF/AC=Before Food, AF/PC=After Food, x5d=for 5 days, x1w=for 1 week, x1m=for 1 month
-- Tab.=Tablet, Cap.=Capsule, Syp.=Syrup, Inj.=Injection
-- BP=Blood Pressure, HR=Heart Rate, FBS/PPBS=Blood Sugar, CBC/LFT/KFT/TFT/HbA1c=Lipid/ECG/Echo/USG/X-ray tests
-
-Return ONLY valid JSON:
-{"vitals":"BP HR sugar etc","complaints":"chief complaints","diagnosis":"ALL diagnoses expanded","medicines":"1. Tab. Drug Dose Freq Timing x Duration\\n2. ...","investigations":"comma-separated tests","advice":"diet/lifestyle","follow_up":"timeline"}"""
-            raw_text, vision_err = call_groq_with_error(
-                [ocr_prompt, img], temp=0.0, max_tokens=2000
-            )
-            parsed = parse_ai_json(raw_text) if raw_text else {}
-            if parsed and isinstance(parsed, dict) and any(parsed.values()):
-                logger.info("Groq Vision success: %d keys", len(parsed))
-            else:
-                logger.info("Groq Vision empty, will try Google fallback")
-                parsed = {}
-
-        # ══════════════════════════════════════════════════════════════
-        # STEP 2: Fallback — Google Cloud Vision (also Google Lens quality)
-        # ══════════════════════════════════════════════════════════════
-        if (not parsed or not any(parsed.values())) and google_key and len(google_key) > 10:
-            logger.info("Trying Google Cloud Vision fallback...")
-            ocr_method = "google_vision"
-
-            from src.ai_engine.google_vision_handler import ocr_handwriting_google
-            google_text, google_err = ocr_handwriting_google(img, google_key)
-
-            if google_text and len(google_text.strip()) > 5:
-                # Use AI text model to structure Google's OCR output
-                struct_prompt = f"""Convert this OCR-extracted text from a doctor's handwritten prescription into structured JSON.
+        # If provider is google_vision, raw_text is plain text — structure it with AI
+        if provider == "google_vision":
+            struct_prompt = f"""Convert this OCR-extracted text from a doctor's handwritten prescription into structured JSON.
 
 OCR TEXT:
-{google_text}
+{raw_text}
 
 Return ONLY valid JSON:
 {{"vitals":"","complaints":"","diagnosis":"expand abbreviations","medicines":"numbered list with drug+dose+freq+duration","investigations":"comma-separated","advice":"","follow_up":""}}"""
+            ai_text, _ = call_groq_with_error([struct_prompt], temp=0.1, max_tokens=1500)
+            parsed = parse_ai_json(ai_text) if ai_text else {}
+            raw_text = ai_text or raw_text
+        else:
+            parsed = parse_ai_json(raw_text)
 
-                ai_text, _ = call_groq_with_error([struct_prompt], temp=0.1, max_tokens=1500)
-                parsed = parse_ai_json(ai_text) if ai_text else {}
-                raw_text = ai_text or google_text
-                logger.info("Google Vision + AI structuring: %d keys", len(parsed) if parsed else 0)
-            else:
-                logger.info("Google Vision returned no text: %s", google_err or "empty")
-
-        # ══════════════════════════════════════════════════════════════
-        # Return result
-        # ══════════════════════════════════════════════════════════════
         if not parsed or not isinstance(parsed, dict) or not any(parsed.values()):
             return {
                 "ok": True,
                 "parsed": {},
-                "raw": raw_text or "",
-                "ocr_method": ocr_method,
-                "error_hint": "no_text_found",
-                "message": "Could not read handwriting. Ensure: 1) Groq or Google API key in Settings 2) Clear handwriting with dark pen 3) Good lighting on the writing pad."
+                "raw": raw_text,
+                "ocr_method": provider,
+                "error_hint": "parse_failed",
+                "message": f"OCR read text ({provider}) but could not parse structure. Raw text returned."
             }
 
         return {
             "ok": True,
-            "parsed": parsed if isinstance(parsed, dict) else {},
-            "raw": raw_text or "",
-            "ocr_method": ocr_method,
+            "parsed": parsed,
+            "raw": raw_text,
+            "ocr_method": provider,
         }
 
     except Exception as e:
         logger.error("Handwriting OCR error: %s", e)
         return {"ok": False, "error": f"Handwriting recognition failed: {str(e)}"}
+
+
 
 
 @router.post("/api/save-rx", include_in_schema=False)
