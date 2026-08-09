@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Track Your Status — GIL Clinic</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --green:   #22c55e;
+      --orange:  #f97316;
+      --blue:    #3b82f6;
+      --purple:  #8b5cf6;
+      --gray:    #6b7280;
+      --bg:      #f1f5f9;
+      --card:    #ffffff;
+      --border:  #e2e8f0;
+      --text:    #1e293b;
+      --muted:   #64748b;
+    }
+
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: var(--bg);
+      min-height: 100vh;
+      color: var(--text);
+    }
+
+    /* ── Header ── */
+    .header {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      padding: 20px 20px 28px;
+      text-align: center;
+      position: relative;
+    }
+    .header-icon { font-size: 32px; margin-bottom: 6px; }
+    .header h1 { font-size: 20px; font-weight: 800; letter-spacing: -0.3px; }
+    .header p  { font-size: 13px; opacity: 0.85; margin-top: 3px; }
+
+    /* ── Wave divider ── */
+    .wave {
+      display: block;
+      margin-top: -2px;
+      fill: var(--bg);
+    }
+
+    /* ── Container ── */
+    .container {
+      max-width: 420px;
+      margin: 0 auto;
+      padding: 0 16px 40px;
+    }
+
+    /* ── Patient card ── */
+    .patient-card {
+      background: var(--card);
+      border-radius: 20px;
+      padding: 20px;
+      margin-top: -16px;
+      box-shadow: 0 4px 24px rgba(0,0,0,0.08);
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+    .patient-avatar {
+      width: 54px; height: 54px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #667eea, #764ba2);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 22px; color: white; font-weight: 700;
+      flex-shrink: 0;
+    }
+    .patient-name { font-size: 18px; font-weight: 700; line-height: 1.2; }
+    .patient-id   { font-size: 12px; color: var(--muted); margin-top: 3px; }
+
+    /* ── Section label ── */
+    .section-label {
+      font-size: 11px; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 0.8px; color: var(--muted);
+      margin: 20px 0 10px;
+    }
+
+    /* ── Test cards ── */
+    .test-card {
+      background: var(--card);
+      border-radius: 16px;
+      padding: 16px;
+      margin-bottom: 10px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      border-left: 4px solid transparent;
+    }
+    .test-card.waiting    { border-left-color: #94a3b8; }
+    .test-card.called     { border-left-color: var(--blue); }
+    .test-card.in_progress{ border-left-color: var(--orange); }
+    .test-card.completed, .test-card.report_ready, .test-card.delivered
+                          { border-left-color: var(--green); }
+
+    .test-icon-wrap {
+      width: 44px; height: 44px; border-radius: 12px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 20px; flex-shrink: 0;
+    }
+    .test-icon-wrap.waiting     { background: #f1f5f9; }
+    .test-icon-wrap.called      { background: #dbeafe; }
+    .test-icon-wrap.in_progress { background: #ffedd5; }
+    .test-icon-wrap.done        { background: #dcfce7; }
+
+    .test-info { flex: 1; min-width: 0; }
+    .test-service { font-size: 16px; font-weight: 700; }
+    .test-token   { font-size: 12px; color: var(--muted); margin-top: 2px; }
+
+    /* ── Status badge ── */
+    .badge {
+      display: inline-flex; align-items: center; gap: 5px;
+      font-size: 11px; font-weight: 700; padding: 4px 10px;
+      border-radius: 100px; text-transform: uppercase; letter-spacing: 0.5px;
+      white-space: nowrap;
+    }
+    .badge.waiting     { background: #f1f5f9; color: #475569; }
+    .badge.called      { background: #dbeafe; color: #1d4ed8; }
+    .badge.in_progress { background: #ffedd5; color: #c2410c; }
+    .badge.done        { background: #dcfce7; color: #15803d; }
+
+    /* ── Wait time ── */
+    .wait-time {
+      font-size: 11px; color: var(--muted); margin-top: 4px;
+    }
+
+    /* ── All done banner ── */
+    .done-banner {
+      background: linear-gradient(135deg, #dcfce7, #bbf7d0);
+      border: 1.5px solid #86efac;
+      border-radius: 16px;
+      padding: 20px;
+      text-align: center;
+      margin-top: 8px;
+    }
+    .done-banner .icon { font-size: 36px; margin-bottom: 8px; }
+    .done-banner h3    { font-size: 17px; font-weight: 700; color: #15803d; }
+    .done-banner p     { font-size: 13px; color: #166534; margin-top: 4px; line-height: 1.5; }
+
+    /* ── Pending banner ── */
+    .pending-banner {
+      background: #fffbeb;
+      border: 1.5px solid #fde68a;
+      border-radius: 16px;
+      padding: 16px;
+      text-align: center;
+      margin-top: 8px;
+      font-size: 13px; color: #92400e;
+    }
+
+    /* ── Refresh note ── */
+    .refresh-note {
+      text-align: center;
+      font-size: 11px;
+      color: var(--muted);
+      margin-top: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 5px;
+    }
+    .refresh-dot {
+      width: 7px; height: 7px; border-radius: 50%;
+      background: var(--green);
+      animation: pulse 2s infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50%       { opacity: 0.5; transform: scale(0.7); }
+    }
+
+    /* ── Empty state ── */
+    .empty-state {
+      background: var(--card);
+      border-radius: 20px;
+      padding: 40px 20px;
+      text-align: center;
+      margin-top: 20px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+    }
+    .empty-state .icon { font-size: 48px; margin-bottom: 12px; }
+    .empty-state h3    { font-size: 16px; font-weight: 700; color: var(--text); }
+    .empty-state p     { font-size: 13px; color: var(--muted); margin-top: 6px; line-height: 1.6; }
+
+    /* ── Footer ── */
+    .footer {
+      text-align: center;
+      margin-top: 24px;
+      font-size: 11px;
+      color: var(--muted);
+      line-height: 1.8;
+    }
+    .footer a { color: #667eea; text-decoration: none; }
+  </style>
+</head>
+<body>
+
+  <!-- Header -->
+  <div class="header">
+    <div class="header-icon">💓</div>
+    <h1>GIL Clinic</h1>
+    <p>Live Queue Status</p>
+  </div>
+  <svg class="wave" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1440 40" preserveAspectRatio="none" height="28">
+    <path d="M0,20 C360,40 1080,0 1440,20 L1440,40 L0,40 Z"/>
+  </svg>
+
+  <div class="container">
+
+    <!-- Patient Identity Card -->
+    <div class="patient-card">
+      <div class="patient-avatar">{{ (patient_name or patient_id)[0] | upper }}</div>
+      <div>
+        <div class="patient-name">{{ patient_name or patient_id }}</div>
+        <div class="patient-id">Patient ID: {{ patient_id }}</div>
+      </div>
+    </div>
+
+    {% if patient_entries %}
+
+      <div class="section-label">Today's Tests</div>
+
+      {% set done_entries = patient_entries | selectattr('status', 'in', ['COMPLETED', 'REPORT_READY', 'DELIVERED']) | list %}
+      {% set pending_entries = patient_entries | rejectattr('status', 'in', ['COMPLETED', 'REPORT_READY', 'DELIVERED']) | list %}
+
+      {% for entry in patient_entries %}
+        {% set s = entry.status | lower | replace(' ', '_') %}
+        {% set is_done = entry.status in ['COMPLETED', 'REPORT_READY', 'DELIVERED'] %}
+        {% set is_active = entry.status == 'IN_PROGRESS' %}
+        {% set is_called = entry.status == 'CALLED' %}
+        <div class="test-card {{ s if s in ['waiting','called','in_progress','completed','report_ready','delivered'] else 'waiting' }}">
+          <!-- Icon -->
+          <div class="test-icon-wrap {{ 'done' if is_done else ('in_progress' if is_active else ('called' if is_called else 'waiting')) }}">
+            {% if is_done %}✅{% elif is_active %}🔄{% elif is_called %}📢{% else %}⏳{% endif %}
+          </div>
+
+          <!-- Info -->
+          <div class="test-info">
+            <div class="test-service">{{ entry.service_code or entry.department }}</div>
+            <div class="test-token">Token #{{ entry.token_number }}</div>
+            {% if entry.status == 'WAITING' and entry.wait_minutes is defined %}
+            <div class="wait-time">⏱ Waiting ~{{ entry.wait_minutes }} min</div>
+            {% endif %}
+          </div>
+
+          <!-- Badge -->
+          <div>
+            <span class="badge {{ 'done' if is_done else ('in_progress' if is_active else ('called' if is_called else 'waiting')) }}">
+              {% if is_done %}✅ Done{% elif is_active %}🔄 Active{% elif is_called %}📢 Called{% else %}⏳ Waiting{% endif %}
+            </span>
+          </div>
+        </div>
+      {% endfor %}
+
+      <!-- Summary Banner -->
+      {% if done_entries | length == patient_entries | length %}
+      <div class="done-banner">
+        <div class="icon">🎉</div>
+        <h3>All Tests Complete!</h3>
+        <p>Please collect your reports<br>from the Reception desk.</p>
+      </div>
+      {% else %}
+      <div class="pending-banner">
+        ⏳ {{ pending_entries | length }} test(s) still in queue. Please wait for your turn.
+      </div>
+      {% endif %}
+
+      <!-- Auto-refresh indicator -->
+      <div class="refresh-note">
+        <div class="refresh-dot"></div>
+        Auto-refreshing every 30 seconds
+      </div>
+
+    {% else %}
+      <!-- No entries found -->
+      <div class="empty-state">
+        <div class="icon">🔍</div>
+        <h3>No Tests Found Today</h3>
+        <p>Your registration may still be<br>processing, or today's tests<br>may have concluded.</p>
+        <p style="margin-top:10px;">Please contact Reception for help.</p>
+      </div>
+    {% endif %}
+
+    <!-- Footer — NO staff links -->
+    <div class="footer">
+      <div>💓 GIL Clinic — CardioQueue</div>
+      <div style="margin-top:4px;">For help, contact Reception</div>
+    </div>
+
+  </div><!-- /container -->
+
+  <script>
+    // Auto-refresh every 30 seconds
+    setTimeout(() => location.reload(), 30000);
+  </script>
+</body>
+</html>

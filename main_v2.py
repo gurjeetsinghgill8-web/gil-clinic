@@ -34,7 +34,8 @@ if str(_src) not in sys.path:
 # ═════════════════════════════════════════════════════════════════════════
 
 # Dev mode bypass — allows API access without JWT during development
-os.environ.setdefault("GHOS_DEV_AUTH_BYPASS", "true")
+# SECURITY: Default is "false". Set GHOS_DEV_AUTH_BYPASS=true only in local .env for development.
+os.environ.setdefault("GHOS_DEV_AUTH_BYPASS", "false")
 
 # Detect database URL (default: SQLite for dev)
 _DB_URL = os.getenv("GHOS_DB_URL", "sqlite:///./ghos_dev.db")
@@ -84,8 +85,9 @@ from src.presentation.patient.routes.patient_routes import (
     router as patient_router,
 )
 
-# -- Staff Dashboard (replaces Streamlit) --
+# -- Staff Dashboard (HTML, session auth) --
 from src.presentation.staff.routes.staff_routes import router as staff_router
+from src.presentation.staff.routes.staff_routes import public_router as patient_track_router
 from src.presentation.staff.routes.settings_routes import router as staff_settings_router
 
 # -- Smart OPD --
@@ -319,6 +321,9 @@ app.include_router(patient_router)
 # Staff Dashboard (HTML, session auth)
 app.include_router(staff_router)
 app.include_router(staff_settings_router)
+
+# Public Patient Tracking — NO login required, clean URL: /track/{token}
+app.include_router(patient_track_router)
 
 # Smart OPD (HTML + API, session auth)
 app.include_router(opd_router)

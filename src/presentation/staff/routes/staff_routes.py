@@ -60,6 +60,28 @@ _signer = URLSafeTimedSerializer(SECRET_KEY)
 SESSION_COOKIE = "gc_session"
 SESSION_MAX_AGE = 60 * 60 * 12  # 12 hours
 
+# ── Public Patient Tracking Token (no login required) ────────────────────────
+# Uses URLSafeSerializer (not timed) — token encodes patient_id, signed with SECRET_KEY.
+# Patient receives this in WhatsApp: /track/<token>
+from itsdangerous import URLSafeSerializer
+_track_signer = URLSafeSerializer(SECRET_KEY, salt="patient-public-track-v1")
+
+APP_BASE_URL = os.getenv("APP_BASE_URL", "https://cardioqueue-production.up.railway.app")
+
+
+def make_tracking_token(patient_id: str) -> str:
+    """Create a signed public tracking token for a patient."""
+    return _track_signer.dumps({"pid": patient_id})
+
+
+def decode_tracking_token(token: str) -> Optional[str]:
+    """Decode a public tracking token. Returns patient_id or None if invalid."""
+    try:
+        data = _track_signer.loads(token)
+        return data.get("pid")
+    except Exception:
+        return None
+
 # Simple PIN auth — role → PIN map
 # In production: load from database; for clinic this is sufficient
 STAFF_PINS: dict[str, str] = {
@@ -259,6 +281,9 @@ async def _get_stats(request: Request) -> dict:
 # ── Router ─────────────────────────────────────────────────────────────────────
 router = APIRouter(prefix="/staff", tags=["Staff Dashboard"])
 
+# Public router — no /staff prefix, for patient-facing routes (/track/{token})
+public_router = APIRouter(tags=["Patient Tracking"])
+
 
 @router.get("/", include_in_schema=False)
 async def staff_root(request: Request):
@@ -294,9 +319,9 @@ async def login_submit(
     if not expected_pin:
         expected_pin = "1234"
 
-    # Allow expected_pin or default '1234' for staff roles
+    # Strict PIN check — only the configured PIN for this role is accepted
     user_pin = pin.strip()
-    if user_pin != expected_pin and user_pin != "1234":
+    if user_pin != expected_pin:
         return HTMLResponse(content=_render("dashboard/login.html", request=request, error="❌ Wrong PIN. Please try again."))
 
     token = create_session(role=role, name=name or role)
@@ -656,6 +681,8 @@ async def staff_register_patient(request: Request):
                     entries_created.append({"service": code, "token": token})
                 await session.commit()
                 # Generate WhatsApp notification data
+                tracking_token = make_tracking_token(patient_id)
+                tracking_url = f"{APP_BASE_URL}/track/{tracking_token}"
                 whatsapp_links = []
                 if phone:
                     from src.infrastructure.notification.whatsapp_cloud_api import (
@@ -663,15 +690,19 @@ async def staff_register_patient(request: Request):
                     )
                     for entry in entries_created:
                         msg = build_patient_token_message(
-                            patient_name, str(entry["token"]), entry["service"]
+                            patient_name, str(entry["token"]), entry["service"],
+                            tracking_url=tracking_url,
                         )
                         whatsapp_links.append({
                             "service": entry["service"],
                             "token": entry["token"],
                             "url": build_wa_me_url(phone, msg),
                         })
-                return {"ok": True, "patient_id": patient_id, "visit_id": visit_id, "entries": entries_created,
-                        "whatsapp": whatsapp_links,
+                tracking_token = make_tracking_token(patient_id)
+                tracking_url = f"{APP_BASE_URL}/track/{tracking_token}"
+                return {"ok": True, "patient_id": patient_id, "visit_id": visit_id,
+                        "entries": entries_created, "whatsapp": whatsapp_links,
+                        "tracking_url": tracking_url,
                         "message": f"{patient_name} — new test(s) added"}
 
             # ── New patient — create patient + queue entries ──
@@ -734,6 +765,8 @@ async def staff_register_patient(request: Request):
 
             await session.commit()
             # Generate WhatsApp notification data
+            tracking_token = make_tracking_token(patient_id)
+            tracking_url = f"{APP_BASE_URL}/track/{tracking_token}"
             whatsapp_links = []
             if phone:
                 from src.infrastructure.notification.whatsapp_cloud_api import (
@@ -741,15 +774,19 @@ async def staff_register_patient(request: Request):
                 )
                 for entry in entries_created:
                     msg = build_patient_token_message(
-                        name, str(entry["token"]), entry["service"]
+                        name, str(entry["token"]), entry["service"],
+                        tracking_url=tracking_url,
                     )
                     whatsapp_links.append({
                         "service": entry["service"],
                         "token": entry["token"],
                         "url": build_wa_me_url(phone, msg),
                     })
-            return {"ok": True, "patient_id": patient_id, "visit_id": visit_id, "entries": entries_created,
-                    "whatsapp": whatsapp_links,
+            tracking_token = make_tracking_token(patient_id)
+            tracking_url = f"{APP_BASE_URL}/track/{tracking_token}"
+            return {"ok": True, "patient_id": patient_id, "visit_id": visit_id,
+                    "entries": entries_created, "whatsapp": whatsapp_links,
+                    "tracking_url": tracking_url,
                     "message": f"{name} registered! Patient ID: {patient_id}"}
 
     except Exception as exc:
@@ -983,6 +1020,73 @@ async def api_dietitian_settings(request: Request):
     except Exception:
         pass
     return {"wa_reception": "", "wa_manager": "", "wa_doctor": "", "wa_dietitian": ""}
+
+
+# ── Public Patient Tracking (NO LOGIN REQUIRED) ───────────────────────────────
+# This is the safe URL to send patients via WhatsApp: /track/{token}
+# Shows only: Name, Token, Service, Status. No staff UI.
+
+@public_router.get("/track/{public_token}", include_in_schema=False)
+async def public_patient_track(request: Request, public_token: str):
+    """Public patient status tracking — no login required.
+
+    Decodes signed token → patient_id → fetches today's queue entries.
+    Renders a clean minimal page with NO staff sidebar or navigation.
+    """
+    patient_id = decode_tracking_token(public_token)
+    if not patient_id:
+        return HTMLResponse(content=_render_track_error("Invalid or expired tracking link."), status_code=400)
+
+    # Fetch all queue entries for this patient today
+    try:
+        all_entries = await _get_queue(request)
+        patient_entries = [
+            e for e in all_entries
+            if e.get("patient_id") == patient_id
+        ]
+    except Exception:
+        patient_entries = []
+
+    patient_name = patient_entries[0].get("patient_name", patient_id) if patient_entries else patient_id
+
+    return HTMLResponse(content=_render("patient_track.html",
+        request=request,
+        patient_name=patient_name,
+        patient_id=patient_id,
+        patient_entries=patient_entries,
+        tracking_token=public_token,
+    ))
+
+
+def _render_track_error(msg: str) -> str:
+    """Render a minimal error page for invalid tracking links."""
+    return f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Invalid Link — GIL Clinic</title>
+  <style>
+    body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+           background: #f7fafc; display: flex; align-items: center;
+           justify-content: center; min-height: 100vh; margin: 0; }}
+    .box {{ background: white; border-radius: 16px; padding: 40px; text-align: center;
+            box-shadow: 0 4px 24px rgba(0,0,0,0.08); max-width: 340px; width: 90%; }}
+    .icon {{ font-size: 48px; margin-bottom: 16px; }}
+    h2 {{ color: #c53030; margin: 0 0 8px; font-size: 20px; }}
+    p {{ color: #718096; font-size: 14px; line-height: 1.6; }}
+    a {{ color: #667eea; text-decoration: none; font-weight: 600; }}
+  </style>
+</head>
+<body>
+  <div class="box">
+    <div class="icon">🔗</div>
+    <h2>Invalid Link</h2>
+    <p>{msg}</p>
+    <p style="margin-top:16px;">Please contact GIL Clinic reception for a new tracking link.</p>
+  </div>
+</body>
+</html>"""
 
 
 # ── Seed Data (one-time test data for Railway) ─────────────────────────────────
