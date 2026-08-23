@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="hi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🏥 CardioQueue — GIL CLINIC Operations Manual</title>
+    <style>
+        :root {
+            --primary: #667eea;
+            --primary-dark: #764ba2;
+            --text-main: #2d3748;
+            --text-muted: #718096;
+            --bg-light: #f7fafc;
+            --border: #e2e8f0;
+            --accent: #ed8936;
+        }
+        body {
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            line-height: 1.7;
+            max-width: 850px;
+            margin: 40px auto;
+            padding: 24px;
+            color: var(--text-main);
+            background-color: #ffffff;
+        }
+        .header {
+            text-align: center;
+            border-bottom: 3px solid var(--primary);
+            padding-bottom: 24px;
+            margin-bottom: 40px;
+        }
+        .header h1 {
+            margin: 0;
+            font-size: 2.2rem;
+            color: var(--primary-dark);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+        }
+        .header p {
+            margin: 8px 0 0 0;
+            font-size: 1.1rem;
+            color: var(--text-muted);
+        }
+        h2 {
+            color: var(--text-main);
+            font-size: 1.5rem;
+            margin-top: 40px;
+            border-bottom: 2px solid var(--border);
+            padding-bottom: 8px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        h3 {
+            color: var(--primary-dark);
+            font-size: 1.2rem;
+            margin-top: 24px;
+        }
+        code {
+            background-color: var(--bg-light);
+            padding: 3px 6px;
+            border-radius: 6px;
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 0.9em;
+            color: #d53f8c;
+            border: 1px solid var(--border);
+        }
+        pre {
+            background-color: var(--bg-light);
+            padding: 16px;
+            border-radius: 8px;
+            border: 1px solid var(--border);
+            overflow-x: auto;
+            margin: 16px 0;
+        }
+        pre code {
+            background-color: transparent;
+            padding: 0;
+            border: none;
+            color: var(--text-main);
+            font-size: 0.9em;
+        }
+        .alert {
+            background: #ebf8ff;
+            border-left: 4px solid #3182ce;
+            padding: 16px;
+            border-radius: 0 8px 8px 0;
+            margin: 20px 0;
+        }
+        .alert-warning {
+            background: #fffaf0;
+            border-left: 4px solid var(--accent);
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 24px 0;
+        }
+        th, td {
+            border: 1px solid var(--border);
+            padding: 12px 16px;
+            text-align: left;
+        }
+        th {
+            background-color: var(--bg-light);
+            color: var(--text-main);
+            font-weight: 600;
+        }
+        tr:nth-child(even) {
+            background-color: #fafbfe;
+        }
+        .no-print-btn {
+            display: inline-block;
+            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+            color: white;
+            padding: 12px 24px;
+            text-decoration: none;
+            border-radius: 8px;
+            font-weight: 600;
+            border: none;
+            cursor: pointer;
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.25);
+            transition: all 0.2s ease;
+        }
+        .no-print-btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 6px 16px rgba(102, 126, 234, 0.35);
+        }
+        .action-bar {
+            display: flex;
+            justify-content: flex-end;
+            margin-bottom: 20px;
+        }
+        @media print {
+            body {
+                margin: 20px;
+                font-size: 11pt;
+            }
+            .no-print {
+                display: none !important;
+            }
+            .header h1 {
+                color: #000000;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="action-bar no-print">
+        <button class="no-print-btn" onclick="window.print()">🖨️ Save as PDF / Print Manual</button>
+    </div>
+
+    <div class="header">
+        <h1>🏥 CardioQueue — GIL CLINIC</h1>
+        <p>User Manual & Operations Guide • User Copy</p>
+    </div>
+
+    <h2>🗄️ 1. Database & Coordination Modes</h2>
+    <p>CardioQueue has <strong>two database options</strong> depending on how your clinic staff connects their mobile phones:</p>
+    
+    <h3>Mode A: Local SQLite Mode (100% Free, Default)</h3>
+    <ul>
+        <li><strong>What it does:</strong> Saves all patient and test records locally in a file named <code>cardioqueue.db</code> on your clinic's main laptop. No online database setup is required.</li>
+        <li><strong>How to coordinate staff on their mobiles:</strong>
+            <ol>
+                <li>Open a terminal on your clinic's laptop and start Streamlit (<code>python -m streamlit run app.py</code>).</li>
+                <li>To let the receptionist, Bablu (technician), and the doctor access the app on their mobile phones using their SIM card internet data, install a free tunneling tool like <strong>ngrok</strong> or <strong>localtunnel</strong> on the laptop:
+                    <pre><code># Install localtunnel globally via npm (if you have Node.js)
+npm install -g localtunnel
+lt --port 8501</code></pre>
+                </li>
+                <li>Localtunnel will generate a public URL (e.g., <code>https://gil-clinic.loca.lt</code>).</li>
+                <li>Share this link with your staff. They can open it on their mobile phone browsers using cellular SIM data. Any change they make will automatically update the central database!</li>
+            </ol>
+        </li>
+    </ul>
+
+    <h3>Mode B: Supabase Cloud Mode (Free Tier Online Database)</h3>
+    <ul>
+        <li><strong>What it does:</strong> Connects to a free online database on Supabase.</li>
+        <li><strong>When to use:</strong> If you prefer not to keep the clinic laptop running a tunneling tool, and want a database hosted in the cloud.</li>
+        <li><strong>How to configure:</strong>
+            <ol>
+                <li>Go to <a href="https://supabase.com" target="_blank">supabase.com</a> and create a free project.</li>
+                <li>Run the SQL schema in the SQL Editor from <code>supabase_schema.sql</code>.</li>
+                <li>Copy your project URL and anon public key into your <code>.env</code> file.</li>
+            </ol>
+        </li>
+    </ul>
+
+    <h2>💻 2. Local Environment Configuration</h2>
+    <p>Open the <code>.env</code> file in a text editor to configure passwords and notification recipients:</p>
+    <pre><code># 1. Staff Passwords (for logging in to their respective roles)
+RECEPTION_PASS=recep123
+ECG_PASS=ecg123
+ECHO_PASS=echo123
+TMT_PASS=tmt123
+DOCTOR_PASS=doc123
+
+# 2. Staff Phone Numbers (10-digit Indian numbers to receive WhatsApp alerts)
+DOCTOR_MOBILE=9876543210
+BABLU_MOBILE=9876543211</code></pre>
+
+    <h2>🚀 3. How to Run the App Locally</h2>
+    <p>Ensure Python is installed, then run:</p>
+    <pre><code># Navigate to the project folder
+cd "C:\Users\pc\Desktop\gurjas ai\GIL CLINIC"
+
+# Install required packages
+pip install -r requirements.txt
+
+# Run the Streamlit application
+python -m streamlit run app.py</code></pre>
+    <p>The app will open at: <strong><code>http://localhost:8501</code></strong>.</p>
+
+    <h2>📋 4. Clinic Workflows & Staff Roles</h2>
+    
+    <h3>1. Receptionist (OPD & Entry)</h3>
+    <ul>
+        <li><strong>Register New Patient:</strong> Enters patient details, mobile number, age, gender, and selects tests.</li>
+        <li><strong>Prints Token:</strong> Click <strong>Print Token</strong> to print the receipt or display the unique patient <strong>QR Code</strong>.</li>
+        <li><strong>Automatic WhatsApp Notification:</strong> When saved, the system automatically runs a background task on the laptop to send a WhatsApp message to the patient (token details), the Doctor (new registration alert), and Bablu (diagnostics alert).</li>
+    </ul>
+
+    <h3>2. Technicians (Bablu - ECG / Echo / TMT)</h3>
+    <ul>
+        <li><strong>Queue Management:</strong> Bablu logs in on his mobile phone using his password (<code>ecg123</code>/<code>echo123</code>/<code>tmt123</code>).</li>
+        <li><strong>Call Patient:</strong> Bablu clicks <strong>🔵 Call Patient</strong>. The clinic laptop immediately sends a WhatsApp to the patient telling them to proceed to the room.</li>
+        <li><strong>Complete Test:</strong> Once done, Bablu clicks <strong>✅ Complete</strong>. The system notifies the patient via WhatsApp that their test is complete.</li>
+    </ul>
+
+    <h3>3. Doctor (Report Generation & Delivery)</h3>
+    <ul>
+        <li><strong>Pending Reports:</strong> Displays completed tests awaiting report approval.</li>
+        <li><strong>Mark Report Ready:</strong> Click <strong>📋 Report Ready</strong>. The system automatically updates the status and sends a WhatsApp to the patient to collect their report from the counter.</li>
+        <li><strong>Mark Delivered:</strong> Once handed over, click <strong>📄 Delivered</strong>.</li>
+    </ul>
+
+    <h2>📱 5. Free WhatsApp Web Automation Setup</h2>
+    <p>To make the WhatsApp notifications work:</p>
+    <ol>
+        <li><strong>Clinic Laptop Setup:</strong> Keep a Chrome browser window open on the clinic laptop, go to <a href="https://web.whatsapp.com" target="_blank">web.whatsapp.com</a>, and log in using the clinic's dedicated Android phone (linked device QR code).</li>
+        <li><strong>Background Automation:</strong> The app has an asynchronous background queue thread. When anyone performs an action, the Streamlit app on the clinic laptop puts the message in the queue. The background thread sequentially opens a Chrome tab, types the message on WhatsApp Web, presses Enter, and closes the tab after sending.</li>
+    </ol>
+
+    <h2>📱 6. Pure PWA + Google Sheets Shared Cloud Backend Setup (Mobile-first)</h2>
+    <div class="alert">
+        <strong>💡 Multi-Device Free Cloud Sync:</strong> CardioQueue includes a mobile-optimized Pure PWA (Progressive Web App) that allows all clinic staff to sync their devices in real-time using a free Google Sheets cloud backend (no VPS or server setup cost!).
+    </div>
+
+    <h3>Step 1: Google Sheet Banao (Create Google Sheet)</h3>
+    <ol>
+        <li>Open Chrome on your computer or mobile and go to: <strong><a href="https://sheets.new" target="_blank">https://sheets.new</a></strong></li>
+        <li>Name the sheet <strong>"CardioQueue"</strong> (at the top left). This sheet will act as your cloud database.</li>
+    </ol>
+
+    <h3>Step 2: Apps Script code Lagao (Add Apps Script)</h3>
+    <ol>
+        <li>Inside the Google Sheet, go to <strong>Extensions</strong> -> <strong>Apps Script</strong> (or the ⋮ menu on mobile).</li>
+        <li>Delete any default code.</li>
+        <li>Open the local file <code>pwa/google-apps-script/Code.gs</code>, copy all its contents, and paste it into the script editor.</li>
+        <li>Save the script (Ctrl+S / Save icon) and name it <strong>"CardioQueue Backend"</strong>.</li>
+    </ol>
+
+    <h3>Step 3: Web App Deploy Karo (Deploy Web App)</h3>
+    <ol>
+        <li>Click the <strong>Deploy</strong> button -> <strong>New Deployment</strong>.</li>
+        <li>Select type: <strong>Web App</strong> (click the gear icon).</li>
+        <li>Set the following configurations:
+            <ul>
+                <li><strong>Execute as:</strong> "Me (your-email@gmail.com)"</li>
+                <li><strong>Who has access:</strong> <strong>"Anyone"</strong> (This is crucial for mobile sync).</li>
+            </ul>
+        </li>
+        <li>Click <strong>Deploy</strong>, choose your Google account, and click <strong>Allow</strong> for permissions.</li>
+        <li><strong>Copy the Web App URL</strong> displayed (e.g., <code>https://script.google.com/macros/s/abc123.../exec</code>).</li>
+    </ol>
+
+    <h3>Step 4: Link URL in PWA (PWA Setup)</h3>
+    <ol>
+        <li>Open the PWA link on your mobile phone:  
+            👉 <strong><a href="https://gurjeetsinghgill8-web.github.io/gil-clinic/pwa/index.html" target="_blank">https://gurjeetsinghgill8-web.github.io/gil-clinic/pwa/index.html</a></strong></li>
+        <li>Login with any role (Reception, Doctor, etc.).</li>
+        <li>Click the <strong>⚙️ Settings</strong> icon in the bottom navigation.</li>
+        <li>Paste the copied Web App URL into the <strong>Google Apps Script URL</strong> field.</li>
+        <li>Click <strong>Save URL</strong> and click <strong>Test Connection</strong> (It should show "✅ Connected!").</li>
+        <li><em>Repeat this on all staff phones. The URL is saved permanently on each phone, so you only need to enter it once!</em></li>
+    </ol>
+
+    <h3>Step 5: Start using (Real-time Sync)</h3>
+    <ul>
+        <li>Now, when the receptionist registers a patient on their phone, the data is pushed to Google Sheets and instantly polled by the doctor's and technicians' phones (refreshes every 5 seconds).</li>
+        <li>Patients can scan the QR code printed on their token to check their estimated waiting time and status live on their own phones!</li>
+    </ul>
+
+</body>
+</html>

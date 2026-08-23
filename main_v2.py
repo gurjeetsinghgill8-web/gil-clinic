@@ -385,6 +385,27 @@ def _render_template(name: str, **context) -> str:
     return _env.get_template(name).render(**context)
 
 
+@app.get("/presentation", include_in_schema=False)
+@app.get("/presentation.html", include_in_schema=False)
+@app.get("/deck", include_in_schema=False)
+async def presentation():
+    """Master Presentation & Executive Concept Note (32 Slides)."""
+    p_path = Path(__file__).parent / "CardioQueue_Master_Presentation.html"
+    if p_path.exists():
+        return HTMLResponse(content=p_path.read_text(encoding="utf-8"))
+    return HTMLResponse(content=_render_template("presentation.html"))
+
+
+@app.get("/manual", include_in_schema=False)
+@app.get("/user-manual", include_in_schema=False)
+async def user_manual():
+    """CardioQueue Operations & User Manual."""
+    m_path = Path(__file__).parent / "USER_MANUAL.html"
+    if m_path.exists():
+        return HTMLResponse(content=m_path.read_text(encoding="utf-8"))
+    return HTMLResponse(content=_render_template("manual.html"))
+
+
 @app.get("/health", include_in_schema=False)
 async def health():
     """Healthcheck endpoint for Railway deployment container."""

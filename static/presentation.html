@@ -1,0 +1,2516 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CardioQueue / GHOS — Master Presentation & Executive Concept Note</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-primary: #0b0f19;
+      --bg-secondary: #111827;
+      --bg-card: rgba(17, 24, 39, 0.85);
+      --bg-card-hover: rgba(31, 41, 55, 0.95);
+      --border-color: rgba(255, 255, 255, 0.1);
+      --border-highlight: rgba(59, 130, 246, 0.4);
+      --text-primary: #f9fafb;
+      --text-secondary: #9ca3af;
+      --text-muted: #6b7280;
+      --accent-blue: #3b82f6;
+      --accent-cyan: #06b6d4;
+      --accent-indigo: #6366f1;
+      --accent-emerald: #10b981;
+      --accent-amber: #f59e0b;
+      --accent-rose: #f43f5e;
+      --accent-purple: #a855f7;
+      --gradient-primary: linear-gradient(135deg, #3b82f6 0%, #06b6d4 100%);
+      --gradient-ai: linear-gradient(135deg, #8b5cf6 0%, #ec4899 100%);
+      --gradient-card: linear-gradient(180deg, rgba(30, 41, 59, 0.7) 0%, rgba(15, 23, 42, 0.8) 100%);
+      --shadow-subtle: 0 10px 30px -10px rgba(0, 0, 0, 0.5);
+      --shadow-glow: 0 0 40px rgba(59, 130, 246, 0.15);
+      --radius-sm: 8px;
+      --radius-md: 14px;
+      --radius-lg: 20px;
+      --radius-xl: 28px;
+      --font-main: 'Plus Jakarta Sans', sans-serif;
+      --font-mono: 'JetBrains Mono', monospace;
+    }
+
+    [data-theme="light"] {
+      --bg-primary: #f8fafc;
+      --bg-secondary: #f1f5f9;
+      --bg-card: rgba(255, 255, 255, 0.9);
+      --bg-card-hover: #ffffff;
+      --border-color: rgba(0, 0, 0, 0.08);
+      --border-highlight: rgba(37, 99, 235, 0.3);
+      --text-primary: #0f172a;
+      --text-secondary: #475569;
+      --text-muted: #94a3b8;
+      --gradient-card: linear-gradient(180deg, rgba(255, 255, 255, 0.95) 0%, rgba(248, 250, 252, 0.95) 100%);
+      --shadow-subtle: 0 10px 25px -5px rgba(0, 0, 0, 0.05);
+      --shadow-glow: 0 0 35px rgba(37, 99, 235, 0.1);
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    body {
+      font-family: var(--font-main);
+      background-color: var(--bg-primary);
+      color: var(--text-primary);
+      line-height: 1.6;
+      min-height: 100vh;
+      overflow-x: hidden;
+      display: flex;
+      flex-direction: column;
+      transition: background-color 0.3s ease, color 0.3s ease;
+    }
+
+    /* Top Navigation Bar */
+    header.deck-header {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 68px;
+      background: rgba(11, 15, 25, 0.85);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border-bottom: 1px solid var(--border-color);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 28px;
+      z-index: 1000;
+      transition: background 0.3s ease;
+    }
+    [data-theme="light"] header.deck-header {
+      background: rgba(248, 250, 252, 0.85);
+    }
+
+    .brand-section {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+    .brand-logo {
+      width: 38px;
+      height: 38px;
+      background: var(--gradient-primary);
+      border-radius: var(--radius-sm);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-weight: 800;
+      font-size: 18px;
+      box-shadow: 0 4px 12px rgba(59, 130, 246, 0.35);
+    }
+    .brand-title {
+      font-size: 17px;
+      font-weight: 700;
+      letter-spacing: -0.3px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .brand-badge {
+      font-size: 11px;
+      text-transform: uppercase;
+      font-weight: 700;
+      padding: 3px 8px;
+      border-radius: 20px;
+      background: rgba(59, 130, 246, 0.15);
+      color: var(--accent-cyan);
+      border: 1px solid rgba(6, 182, 212, 0.3);
+      letter-spacing: 0.5px;
+    }
+
+    .deck-controls {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .btn-nav {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      color: var(--text-primary);
+      padding: 8px 14px;
+      border-radius: var(--radius-sm);
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.2s ease;
+    }
+    .btn-nav:hover {
+      background: var(--bg-card-hover);
+      border-color: var(--border-highlight);
+      transform: translateY(-1px);
+    }
+    .btn-nav.active-btn {
+      background: var(--accent-blue);
+      color: #ffffff;
+      border-color: var(--accent-blue);
+      box-shadow: 0 4px 14px rgba(59, 130, 246, 0.3);
+    }
+    .btn-icon {
+      width: 36px;
+      height: 36px;
+      padding: 0;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 50%;
+    }
+
+    .slide-indicator {
+      font-family: var(--font-mono);
+      font-size: 13px;
+      color: var(--text-secondary);
+      padding: 6px 12px;
+      background: rgba(0, 0, 0, 0.2);
+      border-radius: 20px;
+      border: 1px solid var(--border-color);
+    }
+    [data-theme="light"] .slide-indicator {
+      background: rgba(0, 0, 0, 0.04);
+    }
+
+    /* Progress Tracker */
+    .progress-bar-container {
+      position: fixed;
+      top: 68px;
+      left: 0;
+      width: 100%;
+      height: 3px;
+      background: rgba(255, 255, 255, 0.05);
+      z-index: 999;
+    }
+    .progress-bar {
+      height: 100%;
+      width: 3.33%;
+      background: var(--gradient-primary);
+      transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      box-shadow: 0 0 10px rgba(6, 182, 212, 0.5);
+    }
+
+    /* Main Container */
+    main.deck-container {
+      margin-top: 71px;
+      padding: 32px 40px 100px;
+      max-width: 1360px;
+      width: 100%;
+      margin-left: auto;
+      margin-right: auto;
+      flex: 1;
+      position: relative;
+    }
+
+    /* Slide Frame */
+    .slide-wrapper {
+      display: none;
+      animation: fadeInSlide 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    }
+    .slide-wrapper.active {
+      display: block;
+    }
+
+    @keyframes fadeInSlide {
+      from {
+        opacity: 0;
+        transform: translateY(14px) scale(0.995);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+      }
+    }
+
+    /* Slide Header */
+    .slide-meta {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 24px;
+      border-bottom: 1px solid var(--border-color);
+      padding-bottom: 16px;
+    }
+    .slide-category {
+      font-size: 13px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 1.2px;
+      color: var(--accent-cyan);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .slide-category::before {
+      content: '';
+      display: inline-block;
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--accent-cyan);
+      box-shadow: 0 0 8px var(--accent-cyan);
+    }
+    .slide-tag {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      color: var(--text-muted);
+      background: rgba(255, 255, 255, 0.05);
+      padding: 4px 10px;
+      border-radius: 6px;
+    }
+
+    .slide-title-box {
+      margin-bottom: 30px;
+    }
+    .slide-title {
+      font-size: 34px;
+      font-weight: 800;
+      letter-spacing: -0.8px;
+      line-height: 1.25;
+      color: var(--text-primary);
+      margin-bottom: 10px;
+    }
+    .slide-subtitle {
+      font-size: 17px;
+      color: var(--text-secondary);
+      max-width: 900px;
+      line-height: 1.5;
+    }
+
+    /* Cards & Layouts */
+    .grid-2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 24px;
+    }
+    .grid-3 {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 22px;
+    }
+    .grid-4 {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 20px;
+    }
+    .grid-3-2 {
+      display: grid;
+      grid-template-columns: 1.4fr 1fr;
+      gap: 26px;
+    }
+
+    .card {
+      background: var(--gradient-card);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-lg);
+      padding: 26px;
+      box-shadow: var(--shadow-subtle);
+      position: relative;
+      overflow: hidden;
+      backdrop-filter: blur(12px);
+      transition: all 0.25s ease;
+    }
+    .card:hover {
+      border-color: var(--border-highlight);
+      transform: translateY(-2px);
+      box-shadow: var(--shadow-glow);
+    }
+
+    .card-accent-blue {
+      border-top: 3px solid var(--accent-blue);
+    }
+    .card-accent-emerald {
+      border-top: 3px solid var(--accent-emerald);
+    }
+    .card-accent-purple {
+      border-top: 3px solid var(--accent-purple);
+    }
+    .card-accent-amber {
+      border-top: 3px solid var(--accent-amber);
+    }
+    .card-accent-rose {
+      border-top: 3px solid var(--accent-rose);
+    }
+
+    .card-header {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      margin-bottom: 16px;
+    }
+    .card-icon {
+      width: 44px;
+      height: 44px;
+      border-radius: var(--radius-md);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 22px;
+      background: rgba(59, 130, 246, 0.12);
+      color: var(--accent-cyan);
+      border: 1px solid rgba(59, 130, 246, 0.25);
+    }
+    .card-title {
+      font-size: 19px;
+      font-weight: 700;
+      color: var(--text-primary);
+      letter-spacing: -0.3px;
+    }
+    .card-desc {
+      font-size: 14.5px;
+      color: var(--text-secondary);
+      line-height: 1.6;
+    }
+
+    /* Highlight Banner */
+    .banner {
+      background: linear-gradient(135deg, rgba(37, 99, 235, 0.15) 0%, rgba(6, 182, 212, 0.15) 100%);
+      border: 1px solid rgba(59, 130, 246, 0.3);
+      border-radius: var(--radius-lg);
+      padding: 24px 30px;
+      margin-bottom: 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 20px;
+    }
+    .banner-content h4 {
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--text-primary);
+      margin-bottom: 6px;
+    }
+    .banner-content p {
+      font-size: 14px;
+      color: var(--text-secondary);
+    }
+
+    /* Key Metrics */
+    .metric-box {
+      text-align: center;
+      padding: 20px;
+      background: rgba(0, 0, 0, 0.25);
+      border-radius: var(--radius-md);
+      border: 1px solid var(--border-color);
+    }
+    [data-theme="light"] .metric-box {
+      background: rgba(0, 0, 0, 0.03);
+    }
+    .metric-value {
+      font-size: 36px;
+      font-weight: 800;
+      font-family: var(--font-mono);
+      color: var(--accent-cyan);
+      margin-bottom: 4px;
+    }
+    .metric-label {
+      font-size: 12.5px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      color: var(--text-secondary);
+    }
+
+    /* Bullet List with Custom Icons */
+    .feature-list {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      margin-top: 14px;
+    }
+    .feature-list li {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      font-size: 14.5px;
+      color: var(--text-secondary);
+    }
+    .feature-list li strong {
+      color: var(--text-primary);
+    }
+    .bullet-icon {
+      color: var(--accent-emerald);
+      flex-shrink: 0;
+      margin-top: 3px;
+      font-size: 15px;
+    }
+    .bullet-icon.red {
+      color: var(--accent-rose);
+    }
+    .bullet-icon.blue {
+      color: var(--accent-blue);
+    }
+
+    /* Tables */
+    .table-container {
+      width: 100%;
+      overflow-x: auto;
+      border-radius: var(--radius-md);
+      border: 1px solid var(--border-color);
+      background: var(--bg-card);
+    }
+    table.data-table {
+      width: 100%;
+      border-collapse: collapse;
+      text-align: left;
+      font-size: 14px;
+    }
+    table.data-table th {
+      background: rgba(0, 0, 0, 0.35);
+      color: var(--text-primary);
+      font-weight: 700;
+      padding: 14px 18px;
+      border-bottom: 1px solid var(--border-color);
+      letter-spacing: 0.3px;
+    }
+    [data-theme="light"] table.data-table th {
+      background: rgba(0, 0, 0, 0.05);
+    }
+    table.data-table td {
+      padding: 14px 18px;
+      border-bottom: 1px solid var(--border-color);
+      color: var(--text-secondary);
+    }
+    table.data-table tr:last-child td {
+      border-bottom: none;
+    }
+    table.data-table tr:hover td {
+      background: rgba(255, 255, 255, 0.02);
+    }
+    .tag-success {
+      display: inline-block;
+      padding: 4px 10px;
+      border-radius: 12px;
+      background: rgba(16, 185, 129, 0.15);
+      color: #34d399;
+      font-weight: 600;
+      font-size: 12px;
+      border: 1px solid rgba(16, 185, 129, 0.3);
+    }
+    .tag-danger {
+      display: inline-block;
+      padding: 4px 10px;
+      border-radius: 12px;
+      background: rgba(244, 63, 94, 0.15);
+      color: #fb7185;
+      font-weight: 600;
+      font-size: 12px;
+      border: 1px solid rgba(244, 63, 94, 0.3);
+    }
+    .tag-warning {
+      display: inline-block;
+      padding: 4px 10px;
+      border-radius: 12px;
+      background: rgba(245, 158, 11, 0.15);
+      color: #fbbf24;
+      font-weight: 600;
+      font-size: 12px;
+      border: 1px solid rgba(245, 158, 11, 0.3);
+    }
+
+    /* Workflow Diagram Box */
+    .flow-chain {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 20px;
+      background: rgba(0, 0, 0, 0.3);
+      border-radius: var(--radius-lg);
+      border: 1px solid var(--border-color);
+      margin: 20px 0;
+      overflow-x: auto;
+    }
+    [data-theme="light"] .flow-chain {
+      background: rgba(0, 0, 0, 0.03);
+    }
+    .flow-node {
+      flex: 1;
+      min-width: 140px;
+      text-align: center;
+      padding: 16px 12px;
+      background: var(--bg-card);
+      border: 1px solid var(--border-highlight);
+      border-radius: var(--radius-md);
+      box-shadow: var(--shadow-subtle);
+    }
+    .flow-node-title {
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--text-primary);
+      margin-bottom: 4px;
+    }
+    .flow-node-subtitle {
+      font-size: 11px;
+      color: var(--text-muted);
+    }
+    .flow-arrow {
+      color: var(--accent-cyan);
+      font-size: 20px;
+      font-weight: bold;
+    }
+
+    /* Code / Terminal Block */
+    .code-box {
+      font-family: var(--font-mono);
+      background: #05070d;
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-md);
+      padding: 18px;
+      font-size: 13px;
+      color: #38bdf8;
+      overflow-x: auto;
+      line-height: 1.6;
+    }
+    .code-box .comment {
+      color: #64748b;
+    }
+    .code-box .highlight {
+      color: #f43f5e;
+      font-weight: 600;
+    }
+    .code-box .green {
+      color: #4ade80;
+    }
+
+    /* Bottom Fixed Action Footer */
+    footer.deck-footer {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      height: 64px;
+      background: rgba(11, 15, 25, 0.9);
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+      border-top: 1px solid var(--border-color);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 32px;
+      z-index: 1000;
+    }
+    [data-theme="light"] footer.deck-footer {
+      background: rgba(248, 250, 252, 0.9);
+    }
+
+    .footer-left {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+    .footer-tip {
+      font-size: 12.5px;
+      color: var(--text-muted);
+    }
+    kbd {
+      background: rgba(255, 255, 255, 0.1);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: var(--text-primary);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+    }
+
+    .footer-right {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    /* Drawer / Table of Contents Modal */
+    .drawer-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.7);
+      backdrop-filter: blur(8px);
+      z-index: 2000;
+      display: none;
+      opacity: 0;
+      transition: opacity 0.3s ease;
+    }
+    .drawer-overlay.open {
+      display: flex;
+      opacity: 1;
+    }
+    .drawer-content {
+      width: 480px;
+      max-width: 90vw;
+      background: var(--bg-secondary);
+      height: 100vh;
+      margin-left: auto;
+      border-left: 1px solid var(--border-color);
+      padding: 28px;
+      display: flex;
+      flex-direction: column;
+      box-shadow: -10px 0 40px rgba(0, 0, 0, 0.5);
+      animation: slideInDrawer 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    @keyframes slideInDrawer {
+      from { transform: translateX(100%); }
+      to { transform: translateX(0); }
+    }
+    .drawer-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 20px;
+      padding-bottom: 16px;
+      border-bottom: 1px solid var(--border-color);
+    }
+    .drawer-header h3 {
+      font-size: 20px;
+      font-weight: 700;
+    }
+    .drawer-list {
+      flex: 1;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      padding-right: 6px;
+    }
+    .drawer-item {
+      padding: 12px 16px;
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-sm);
+      color: var(--text-secondary);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 13.5px;
+      transition: all 0.2s ease;
+    }
+    .drawer-item:hover {
+      background: var(--bg-card-hover);
+      border-color: var(--border-highlight);
+      color: var(--text-primary);
+      transform: translateX(4px);
+    }
+    .drawer-item.active {
+      border-color: var(--accent-blue);
+      background: rgba(59, 130, 246, 0.15);
+      color: #60a5fa;
+      font-weight: 600;
+    }
+    .drawer-index {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    /* Print Styles for PDF Generation */
+    @media print {
+      header.deck-header,
+      footer.deck-footer,
+      .progress-bar-container,
+      .drawer-overlay {
+        display: none !important;
+      }
+      body {
+        background: #ffffff !important;
+        color: #000000 !important;
+      }
+      main.deck-container {
+        margin: 0 !important;
+        padding: 0 !important;
+        max-width: 100% !important;
+      }
+      .slide-wrapper {
+        display: block !important;
+        page-break-after: always;
+        padding: 40px;
+        min-height: 100vh;
+      }
+      .card {
+        background: #ffffff !important;
+        border: 1px solid #e2e8f0 !important;
+        box-shadow: none !important;
+        color: #000000 !important;
+      }
+      .slide-title {
+        color: #0f172a !important;
+      }
+      .slide-subtitle, .card-desc, .feature-list li {
+        color: #334155 !important;
+      }
+      .metric-box {
+        background: #f1f5f9 !important;
+        border: 1px solid #cbd5e1 !important;
+      }
+      .metric-value {
+        color: #0284c7 !important;
+      }
+      .code-box {
+        background: #f8fafc !important;
+        color: #0f172a !important;
+        border: 1px solid #e2e8f0 !important;
+      }
+      table.data-table th {
+        background: #f1f5f9 !important;
+        color: #0f172a !important;
+      }
+      table.data-table td {
+        color: #334155 !important;
+      }
+    }
+
+    @media (max-width: 900px) {
+      .grid-2, .grid-3, .grid-4, .grid-3-2 {
+        grid-template-columns: 1fr;
+      }
+      .deck-header {
+        padding: 0 16px;
+      }
+      main.deck-container {
+        padding: 20px 16px 90px;
+      }
+      .slide-title {
+        font-size: 26px;
+      }
+      .flow-chain {
+        flex-direction: column;
+      }
+      .flow-arrow {
+        transform: rotate(90deg);
+      }
+    }
+  </style>
+</head>
+<body data-theme="dark">
+
+  <!-- Header -->
+  <header class="deck-header">
+    <div class="brand-section">
+      <div class="brand-logo">CQ</div>
+      <div>
+        <div class="brand-title">
+          CardioQueue <span style="color:var(--text-muted); font-weight:400;">/</span> GHOS
+          <span class="brand-badge">Enterprise v2.0</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="deck-controls">
+      <button class="btn-nav" id="btn-executive" onclick="toggleExecutiveMode()">
+        ⚡ Executive Brief (2-Min Pitch)
+      </button>
+      <button class="btn-nav" id="btn-toc" onclick="toggleDrawer()">
+        📑 Index (32 Slides)
+      </button>
+      <button class="btn-nav btn-icon" title="Toggle Theme" onclick="toggleTheme()">
+        🌓
+      </button>
+      <button class="btn-nav btn-icon" title="Print to PDF" onclick="window.print()">
+        🖨️
+      </button>
+      <button class="btn-nav btn-icon" title="Toggle Fullscreen" onclick="toggleFullScreen()">
+        ⛶
+      </button>
+    </div>
+  </header>
+
+  <!-- Progress Bar -->
+  <div class="progress-bar-container">
+    <div class="progress-bar" id="progressBar"></div>
+  </div>
+
+  <!-- Main Slide Deck Container -->
+  <main class="deck-container" id="slideDeck">
+
+    <!-- ==================== SLIDE 01: COVER & TITLE ==================== -->
+    <section class="slide-wrapper active" data-slide="1">
+      <div class="slide-meta">
+        <span class="slide-category">System Presentation & Master Blueprint</span>
+        <span class="slide-tag">CardioQueue OS • GIL Clinic</span>
+      </div>
+      <div class="card" style="padding: 50px 40px; text-align: center; margin-bottom: 28px; background: radial-gradient(circle at 50% 0%, rgba(59, 130, 246, 0.15), transparent 70%), var(--gradient-card);">
+        <div style="display:inline-block; padding: 6px 16px; border-radius: 30px; background: rgba(59, 130, 246, 0.15); border: 1px solid rgba(59, 130, 246, 0.3); color: var(--accent-cyan); font-weight: 700; font-size: 13px; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 20px;">
+          Next-Generation Healthcare Operating System
+        </div>
+        <h1 style="font-size: 46px; font-weight: 800; letter-spacing: -1px; line-height: 1.15; margin-bottom: 16px; background: linear-gradient(135deg, #ffffff 0%, #93c5fd 50%, #38bdf8 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">
+          CardioQueue & GHOS v2.0
+        </h1>
+        <p style="font-size: 20px; color: var(--text-secondary); max-width: 840px; margin: 0 auto 30px; font-weight: 400;">
+          The Unified Patient Flow, Multi-Specialty Clinical Copilot & Zero-Waiting Diagnostic Operating System for Clinics, Hospitals & Polyclinics.
+        </p>
+        <div style="display: flex; justify-content: center; gap: 16px; flex-wrap: wrap;">
+          <button class="btn-nav active-btn" style="padding: 12px 24px; font-size: 15px;" onclick="nextSlide()">
+            Explore Full Presentation (32 Slides) →
+          </button>
+          <a href="https://cardioqueue-production.up.railway.app/" target="_blank" class="btn-nav" style="padding: 12px 24px; font-size: 15px; text-decoration: none;">
+            🌐 Open Live Cloud Application ↗
+          </a>
+        </div>
+      </div>
+
+      <div class="grid-4">
+        <div class="metric-box">
+          <div class="metric-value">0 min</div>
+          <div class="metric-label">Patient Reception Queue</div>
+        </div>
+        <div class="metric-box">
+          <div class="metric-value">30 sec</div>
+          <div class="metric-label">AI Prescription Generation</div>
+        </div>
+        <div class="metric-box">
+          <div class="metric-value">100%</div>
+          <div class="metric-label">Zero-Cost Offline Capable</div>
+        </div>
+        <div class="metric-box">
+          <div class="metric-value">50+</div>
+          <div class="metric-label">Multi-Clinic Fleet Scale</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== SLIDE 02: EXECUTIVE CONCEPT NOTE ==================== -->
+    <section class="slide-wrapper" data-slide="2">
+      <div class="slide-meta">
+        <span class="slide-category">Executive Concept Note & Strategic Overview</span>
+        <span class="slide-tag">Institutional Briefing for Healthcare Boards & Investors</span>
+      </div>
+      <div class="slide-title-box">
+        <h2 class="slide-title">Executive Summary & Product Concept Note</h2>
+        <p class="slide-subtitle">
+          A high-level synthesis addressing core healthcare operational bottlenecks, the architectural solution, and radical ROI advantages.
+        </p>
+      </div>
+
+      <div class="grid-3" style="margin-bottom: 24px;">
+        <div class="card card-accent-rose">
+          <div class="card-header">
+            <div class="card-icon" style="background:rgba(244,63,94,0.15); color:var(--accent-rose); border-color:rgba(244,63,94,0.3);">⚠️</div>
+            <div>
+              <div class="card-title">1. Identify Problem</div>
+              <div style="font-size:12px; color:var(--text-muted);">The Clinic Chaos Bottleneck</div>
+            </div>
+          </div>
+          <p class="card-desc">
+            Traditional clinics suffer from <strong>overcrowded waiting rooms</strong>, disjointed departmental testing (ECG, Echo, TMT, Labs), manual paperwork, slow prescription typing, and expensive SaaS subscriptions (Rs. 4,000-15,000/mo) with zero data privacy.
+          </p>
+        </div>
+
+        <div class="card card-accent-blue">
+          <div class="card-header">
+            <div class="card-icon">💡</div>
+            <div>
+              <div class="card-title">2. Suggest Solution</div>
+              <div style="font-size:12px; color:var(--text-muted);">The Patient Flow OS Paradigm</div>
+            </div>
+          </div>
+          <p class="card-desc">
+            <strong>"Register Once, Track Everywhere"</strong>. A local-first, zero-app PWA where patients scan a QR token to get live smartphone wait times and browser vibrate alerts. Doctors get voice-to-Rx AI and multi-specialist diagnostic upgrades.
+          </p>
+        </div>
+
+        <div class="card card-accent-emerald">
+          <div class="card-header">
+            <div class="card-icon" style="background:rgba(16,185,129,0.15); color:var(--accent-emerald); border-color:rgba(16,185,129,0.3);">🚀</div>
+            <div>
+              <div class="card-title">3. Salient Benefits</div>
+              <div style="font-size:12px; color:var(--text-muted);">10x Speed, Zero API Overhead</div>
+            </div>
+          </div>
+          <p class="card-desc">
+            Reduces patient waiting time by <strong>70%</strong>, cuts doctor clinical documentation to <strong>30 seconds</strong>, sends free automated WhatsApp updates, and operates on any laptop, tablet, or mobile with zero expensive third-party fees.
+          </p>
+        </div>
+      </div>
+
+      <div class="banner">
+        <div class="banner-content">
+          <h4>🔥 Highlight: Inter-Speciality Consulting Tool for Medicos</h4>
+          <p>Enables general physicians and sub-specialists to instantly generate peer-reviewed, guideline-compliant treatment protocols across Cardiology, Nephrology, Neurology, and Endocrinology in real-time.</p>
+        </div>
+        <button class="btn-nav active-btn" onclick="goToSlide(5)">View Speciality Tool →</button>
+      </div>
+    </section>
+
+    <!-- ==================== SLIDE 03: THE PROBLEM STATEMENT ==================== -->
+    <section class="slide-wrapper" data-slide="3">
+      <div class="slide-meta">
+        <span class="slide-category">Problem Analysis</span>
+        <span class="slide-tag">Healthcare Inefficiencies & Operational Losses</span>
+      </div>
+      <div class="slide-title-box">
+        <h2 class="slide-title">The 6 Silent Killers of Modern Clinic & OPD Operations</h2>
+        <p class="slide-subtitle">
+          Why Indian & global OPDs lose up to 40% patient satisfaction and 3+ doctor hours daily.
+        </p>
+      </div>
+
+      <div class="grid-3">
+        <div class="card">
+          <div class="card-header">
+            <div class="card-icon" style="color:var(--accent-rose);">⏳</div>
+            <div class="card-title">1. Crowded Waiting Halls</div>
+          </div>
+          <p class="card-desc">Patients anxiously gather outside doctor doors asking <em>"Mera number kab aayega?"</em>, creating immense front-desk agitation and infection risks.</p>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <div class="card-icon" style="color:var(--accent-amber);">📝</div>
+            <div class="card-title">2. Manual Typing Friction</div>
+          </div>
+          <p class="card-desc">Doctors spend 60% of consultation time typing drug names and symptoms into clunky software instead of making eye contact and diagnosing patients.</p>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <div class="card-icon" style="color:var(--accent-purple);">🔄</div>
+            <div class="card-title">3. Department Misalignment</div>
+          </div>
+          <p class="card-desc">Technicians (ECG, Echo, TMT, Labs) work in silos. Patients get lost walking between rooms with no unified sequencing or real-time calling mechanism.</p>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <div class="card-icon" style="color:var(--accent-cyan);">💸</div>
+            <div class="card-title">4. SaaS API Cost Traps</div>
+          </div>
+          <p class="card-desc">Practo and enterprise HMIS charge exorbitant per-SMS, per-WhatsApp, and monthly doctor fees that bleed independent polyclinics and diagnostic chains.</p>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <div class="card-icon" style="color:var(--accent-blue);">🌐</div>
+            <div class="card-title">5. Internet Failure Halts</div>
+          </div>
+          <p class="card-desc">When broadband goes down, 99% of cloud-only systems freeze. Clinics cannot register patients, print tokens, or prescribe medications.</p>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <div class="card-icon" style="color:var(--accent-emerald);">🔒</div>
+            <div class="card-title">6. Loss of Data Privacy</div>
+          </div>
+          <p class="card-desc">Commercial platforms monetize patient clinical records, sell leads to pharma competitors, and lock clinic owners out of raw patient databases.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== SLIDE 04: THE SOLUTION PARADIGM ==================== -->
+    <section class="slide-wrapper" data-slide="4">
+      <div class="slide-meta">
+        <span class="slide-category">Solution Blueprint</span>
+        <span class="slide-tag">CardioQueue & GHOS Operating Architecture</span>
+      </div>
+      <div class="slide-title-box">
+        <h2 class="slide-title">The Solution: An Autonomous Patient Flow Operating System</h2>
+        <p class="slide-subtitle">
+          Eliminating patient confusion and automating clinical delivery through Clean Architecture and Edge Intelligence.
+        </p>
+      </div>
+
+      <div class="flow-chain">
+        <div class="flow-node">
+          <div class="flow-node-title">1. Single Entry</div>
+          <div class="flow-node-subtitle">Reception registers patient in 10s & prints QR Token</div>
+        </div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-node">
+          <div class="flow-node-title">2. Real-Time Routing</div>
+          <div class="flow-node-subtitle">Auto-queued in ECG, Echo, TMT, Lab & Doctor queues</div>
+        </div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-node">
+          <div class="flow-node-title">3. Zero-App Patient Mobile</div>
+          <div class="flow-node-subtitle">Live queue position, wait estimate & vibrate buzzers</div>
+        </div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-node">
+          <div class="flow-node-title">4. AI Clinical Copilot</div>
+          <div class="flow-node-subtitle">Voice-to-Rx + Speciality Upgrade Diagnosis</div>
+        </div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-node">
+          <div class="flow-node-title">5. Auto Delivery</div>
+          <div class="flow-node-subtitle">Instant WhatsApp Rx, billing & pharmacy dispatch</div>
+        </div>
+      </div>
+
+      <div class="grid-2" style="margin-top: 24px;">
+        <div class="card card-accent-blue">
+          <h4 style="font-size:18px; margin-bottom:12px; color:var(--accent-cyan);">🏛️ Local-First Reliability</h4>
+          <p class="card-desc">
+            Operates directly on the clinic’s laptop (SQLite / Local FastAPI) without mandatory internet connection. Even if broadband disconnects, internal queues, receipt printing, and clinical records never stop.
+          </p>
+        </div>
+        <div class="card card-accent-emerald">
+          <h4 style="font-size:18px; margin-bottom:12px; color:var(--accent-emerald);">📲 Zero App Installation</h4>
+          <p class="card-desc">
+            Patients do NOT need to download an app from Play Store. Scanning the paper QR code opens a lightweight Progressive Web App that works on any Android or iPhone instantly.
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== SLIDE 05: INTER-SPECIALITY CONSULTING TOOL ==================== -->
+    <section class="slide-wrapper" data-slide="5">
+      <div class="slide-meta">
+        <span class="slide-category">Clinical Intelligence Module</span>
+        <span class="slide-tag">For Medicos & Cross-Specialty Practice</span>
+      </div>
+      <div class="slide-title-box">
+        <h2 class="slide-title">Inter-Speciality Consulting Tool for Medicos</h2>
+        <p class="slide-subtitle">
+          Empowering doctors to practice multi-disciplinary precision medicine with evidence-based AI specialist co-consultations.
+        </p>
+      </div>
+
+      <div class="grid-3-2">
+        <div class="card card-accent-purple">
+          <div class="card-header">
+            <div class="card-icon" style="background:rgba(168,85,247,0.15); color:var(--accent-purple); border-color:rgba(168,85,247,0.3);">🧠</div>
+            <div>
+              <div class="card-title">How Inter-Speciality Copilot Works</div>
+              <div style="font-size:12px; color:var(--text-muted);">Groq LLaMA-3.3 70B Medical Tuning</div>
+            </div>
+          </div>
+          <p class="card-desc" style="margin-bottom:14px;">
+            A General Physician or Cardiologist treating a complex multi-morbid patient (e.g. Heart Failure + CKD Stage 3 + Type 2 Diabetes) can trigger cross-specialty intelligence with one click:
+          </p>
+          <ul class="feature-list">
+            <li><span class="bullet-icon blue">✦</span> <strong>Cardiology ↔ Nephrology:</strong> Auto-calculates eGFR dose adjustments for SGLT2i, ACEi, and ARNi to prevent acute renal injury.</li>
+            <li><span class="bullet-icon blue">✦</span> <strong>Cardiology ↔ Endocrinology:</strong> Recommends optimal anti-diabetic regimens with proven MACE (Major Adverse Cardiac Events) reduction.</li>
+            <li><span class="bullet-icon blue">✦</span> <strong>Drug Interaction Guard:</strong> Flags lethal QT-prolonging drug combinations (e.g., Amiodarone + Fluconazole / Azithromycin).</li>
+            <li><span class="bullet-icon blue">✦</span> <strong>Evidence Citation:</strong> Displays exact ESC, ACC/AHA, KDIGO, and ADA guideline backing for every drug recommendation.</li>
+          </ul>
+        </div>
+
+        <div class="card" style="display:flex; flex-direction:column; justify-content:space-between;">
+          <div>
+            <h4 style="font-size:16px; font-weight:700; margin-bottom:10px; color:var(--accent-cyan);">🔬 Multi-Specialty Coverage</h4>
+            <div style="display:flex; flex-wrap:wrap; gap:8px; margin-bottom:16px;">
+              <span class="tag-success">Cardiology</span>
+              <span class="tag-success">Nephrology</span>
+              <span class="tag-success">Endocrinology</span>
+              <span class="tag-success">Neurology</span>
+              <span class="tag-success">Pulmonology</span>
+              <span class="tag-success">Gastroenterology</span>
+              <span class="tag-success">Orthopedics</span>
+              <span class="tag-success">Dermatology</span>
+            </div>
+            <div class="code-box">
+              <span class="comment">// Sample Inter-Specialty Upgrade Output</span><br>
+              <span class="green">Diagnosis:</span> Post-MI HFpEF + CKD IIIb<br>
+              <span class="highlight">Alert:</span> Reduce Metformin to 500mg BD<br>
+              <span class="green">Add:</span> Empagliflozin 10mg OD (EMPEROR-Preserved)<br>
+              <span class="green">Safety:</span> Serum K+ & Creatinine in 14 days
+            </div>
+          </div>
+          <div style="margin-top:14px; font-size:12px; color:var(--text-muted);">
+            ⭐ Doctor can star recommendations into their personal medical knowledge repository.
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== SLIDE 06: HARNESS ENGINEERING ARCHITECTURE ==================== -->
+    <section class="slide-wrapper" data-slide="6">
+      <div class="slide-meta">
+        <span class="slide-category">System Architecture</span>
+        <span class="slide-tag">Domain-Driven Design (DDD) & Clean Architecture</span>
+      </div>
+      <div class="slide-title-box">
+        <h2 class="slide-title">Harness Engineering: Zero Spaghetti, Maximum Stability</h2>
+        <p class="slide-subtitle">
+          Built on a rock-solid separation of UI, business use cases, domain entities, and infrastructure.
+        </p>
+      </div>
+
+      <div class="grid-2">
+        <div class="card card-accent-blue">
+          <div class="card-header">
+            <div class="card-icon">🏗️</div>
+            <div class="card-title">Clean 4-Layer Architecture</div>
+          </div>
+          <ul class="feature-list">
+            <li><span class="bullet-icon">1</span> <strong>Presentation Layer (UI/PWA):</strong> HTML5, CSS3, Vanilla JS fetch calls. Fast, lightweight, zero framework bloat.</li>
+            <li><span class="bullet-icon">2</span> <strong>API Gateway (FastAPI):</strong> Async Python REST endpoints with strict Pydantic validation & JWT tokens.</li>
+            <li><span class="bullet-icon">3</span> <strong>Harness Layer (Use Cases):</strong> Encapsulates all business rules (`RegisterPatientUseCase`, `CallQueueUseCase`, `GenerateBillUseCase`).</li>
+            <li><span class="bullet-icon">4</span> <strong>Domain & Persistence:</strong> Pure entities and swappable repositories (SQLite for local, PostgreSQL for cloud).</li>
+          </ul>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <div class="card-icon" style="color:var(--accent-emerald);">⚡</div>
+            <div class="card-title">Why Traditional Systems Break vs GHOS</div>
+          </div>
+          <div class="table-container" style="margin-top:10px;">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Traditional HMIS</th>
+                  <th>CardioQueue / GHOS</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>UI directly queries DB tables</td>
+                  <td>Strict Use Case Harness Pattern</td>
+                </tr>
+                <tr>
+                  <td>Modifying 1 button breaks billing</td>
+                  <td>Isolated, decoupled modules</td>
+                </tr>
+                <tr>
+                  <td>Heavy Angular/React loading lag</td>
+                  <td>Instant sub-50ms PWA renders</td>
+                </tr>
+                <tr>
+                  <td>Requires full-time IT admin</td>
+                  <td>Zero-maintenance self-healing</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== SLIDE 07: ROLE-BASED IDENTITY & PIN AUTH ==================== -->
+    <section class="slide-wrapper" data-slide="7">
+      <div class="slide-meta">
+        <span class="slide-category">Identity & Security</span>
+        <span class="slide-tag">Multi-Role Granular Access Control</span>
+      </div>
+      <div class="slide-title-box">
+        <h2 class="slide-title">Multi-Tenant Identity & Lightning PIN Authentication</h2>
+        <p class="slide-subtitle">
+          Designed for high-speed clinic environments where staff share tablets and workstations.
+        </p>
+      </div>
+
+      <div class="grid-4">
+        <div class="card">
+          <div style="font-size:28px; margin-bottom:8px;">👩‍💼</div>
+          <h4 style="font-size:16px; font-weight:700;">Receptionist</h4>
+          <span class="tag-success" style="margin:6px 0;">PIN: 1001</span>
+          <p style="font-size:13px; color:var(--text-secondary);">Patient registration, token printing, initial triage, and fee billing receipt generation.</p>
+        </div>
+
+        <div class="card">
+          <div style="font-size:28px; margin-bottom:8px;">👨‍⚕️</div>
+          <h4 style="font-size:16px; font-weight:700;">Doctor / Consultant</h4>
+          <span class="tag-success" style="margin:6px 0;">PIN: 5554</span>
+          <p style="font-size:13px; color:var(--text-secondary);">Voice-to-Rx OPD, patient medical history, AI specialist consultations, and report sign-off.</p>
+        </div>
+
+        <div class="card">
+          <div style="font-size:28px; margin-bottom:8px;">🔬</div>
+          <h4 style="font-size:16px; font-weight:700;">Diagnostic Techs</h4>
+          <span class="tag-success" style="margin:6px 0;">PIN: 2001</span>
+          <p style="font-size:13px; color:var(--text-secondary);">Department queues (ECG, Echo, TMT, Labs), patient calling, and report completion status.</p>
+        </div>
+
+        <div class="card">
+          <div style="font-size:28px; margin-bottom:8px;">🛡️</div>
+          <h4 style="font-size:16px; font-weight:700;">Clinic Admin / Super</h4>
+          <span class="tag-success" style="margin:6px 0;">PIN: 9999</span>
+          <p style="font-size:13px; color:var(--text-secondary);">Doctor licensing, revenue analytics, staff management, and system-wide configurations.</p>
+        </div>
+      </div>
+
+      <div class="banner" style="margin-top:24px;">
+        <div class="banner-content">
+          <h4>🔒 Multi-Doctor License Isolation</h4>
+          <p>Each doctor in a polyclinic has their own isolated `doctor_id`. Doctor A cannot see Doctor B's patient records or prescriptions unless explicitly shared.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== SLIDE 08: SMART OPD & VOICE-TO-RX ==================== -->
+    <section class="slide-wrapper" data-slide="8">
+      <div class="slide-meta">
+        <span class="slide-category">Clinical Workflow</span>
+        <span class="slide-tag">Voice AI & Rapid Prescription Engine</span>
+      </div>
+      <div class="slide-title-box">
+        <h2 class="slide-title">Smart OPD: 30-Second Prescription with Voice-to-Rx</h2>
+        <p class="slide-subtitle">
+          Talk naturally in Hindi, Punjabi, or English — AI structures the clinical prescription automatically.
+        </p>
+      </div>
+
+      <div class="grid-2">
+        <div class="card card-accent-blue">
+          <h4 style="font-size:18px; margin-bottom:12px; color:var(--accent-cyan);">🎙️ Voice Dictation (OpenAI Whisper / Groq)</h4>
+          <p class="card-desc">
+            Doctor presses the mic and speaks: <em>"Patient presents with chest tightness on exertion for 2 weeks, BP 140/90, Pulse 78. Start Tab Telmisartan 40mg OD, Tab Rosuvastatin 10mg HS, advise ECG and 2D Echo."</em>
+          </p>
+          <div class="code-box" style="margin-top:14px;">
+            <span class="green">Complaints:</span> Chest tightness on exertion (2 wks)<br>
+            <span class="green">Vitals:</span> BP 140/90 mmHg | Pulse 78 bpm<br>
+            <span class="green">Rx:</span> 1. Tab Telmisartan 40mg (1-0-0) x 30 days<br>
+            &nbsp;&nbsp;&nbsp;&nbsp;2. Tab Rosuvastatin 10mg (0-0-1) x 30 days<br>
+            <span class="green">Investigations:</span> 12-Lead ECG, 2D Echocardiography
+          </div>
+        </div>
+
+        <div class="card card-accent-emerald">
+          <h4 style="font-size:18px; margin-bottom:12px; color:var(--accent-emerald);">⚡ Smart Autocomplete & Rx Templates</h4>
+          <ul class="feature-list">
+            <li><span class="bullet-icon">✦</span> <strong>Dynamic Drug Learning:</strong> The system remembers the doctor's favorite brands, dosages, and timings with frequency weighting.</li>
+            <li><span class="bullet-icon">✦</span> <strong>1-Click Disease Templates:</strong> Instant pre-sets for Hypertension, Diabetes, ACS, Stable Angina, CKD, and COPD.</li>
+            <li><span class="bullet-icon">✦</span> <strong>Instant Print & WhatsApp:</strong> Generates crisp header-ready PDF with clinic watermark and sends copy to patient's WhatsApp.</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== SLIDE 09: AI SPECIALIST DIAGNOSTIC UPGRADE ==================== -->
+    <section class="slide-wrapper" data-slide="9">
+      <div class="slide-meta">
+        <span class="slide-category">Clinical Intelligence</span>
+        <span class="slide-tag">Evidence-Based Treatment Optimizer</span>
+      </div>
+      <div class="slide-title-box">
+        <h2 class="slide-title">AI Specialist Upgrade: Elevating Everyday Consultations</h2>
+        <p class="slide-subtitle">
+          Turn any standard prescription into a gold-standard tertiary care treatment plan.
+        </p>
+      </div>
+
+      <div class="grid-3">
+        <div class="card card-accent-purple">
+          <div class="card-header">
+            <div class="card-icon" style="color:var(--accent-purple);">📈</div>
+            <div class="card-title">Guideline Adherence</div>
+          </div>
+          <p class="card-desc">Cross-checks patient vitals and existing prescription against latest ESC, ACC, and AHA guidelines to ensure no critical therapy is missed (e.g. Quadruple Therapy for HFrEF).</p>
+        </div>
+
+        <div class="card card-accent-rose">
+          <div class="card-header">
+            <div class="card-icon" style="color:var(--accent-rose);">🛡️</div>
+            <div class="card-title">Contraindication Shield</div>
+          </div>
+          <p class="card-desc">Instantly alerts doctor if a prescribed beta-blocker is risky in severe asthma, or if NSAIDs threaten an elderly patient with borderline creatinine.</p>
+        </div>
+
+        <div class="card card-accent-amber">
+          <div class="card-header">
+            <div class="card-icon" style="color:var(--accent-amber);">💡</div>
+            <div class="card-title">Smart Investigation Suggestions</div>
+          </div>
+          <p class="card-desc">Suggests high-yield diagnostic tests that may have been overlooked (e.g. Serum Ferritin & Iron studies in heart failure, Serum Uric Acid in uncontrolled HTN).</p>
+        </div>
+      </div>
+
+      <div class="banner" style="margin-top:24px;">
+        <div class="banner-content">
+          <h4>🌟 Starred Clinical Memory System</h4>
+          <p>Doctors can bookmark rare cases, complex multi-drug upgrades, and diagnostic breakthroughs into a personal search-indexed knowledge base for future reference.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== SLIDE 10: LAB SCANNER & VISION OCR ==================== -->
+    <section class="slide-wrapper" data-slide="10">
+      <div class="slide-meta">
+        <span class="slide-category">Diagnostic Automation</span>
+        <span class="slide-tag">Groq Vision & Multimodal OCR Engine</span>
+      </div>
+      <div class="slide-title-box">
+        <h2 class="slide-title">Lab Scanner: Instant Extraction of Physical Reports & Trends</h2>
+        <p class="slide-subtitle">
+          Snap a photo of old paper lab reports — AI digitizes values, flags abnormalities, and trends metrics.
+        </p>
+      </div>
+
+      <div class="grid-2">
+        <div class="card">
+          <h4 style="font-size:18px; margin-bottom:12px; color:var(--accent-cyan);">📸 Batch Report Ingestion</h4>
+          <ul class="feature-list">
+            <li><span class="bullet-icon">✦</span> <strong>Multi-Page Camera & File Upload:</strong> Receptionist or doctor photographs lab slips, CBC, Lipid Profile, LFT, KFT, or ECG strips.</li>
+            <li><span class="bullet-icon">✦</span> <strong>Vision OCR Digitization:</strong> High-speed multimodal LLM parses handwritten and printed lab parameters with unit standardization.</li>
+            <li><span class="bullet-icon">✦</span> <strong>Abnormal Value Tagging:</strong> Instantly highlights high Troponin-I, low Hb, elevated Creatinine, or abnormal LDL in bold red alerts.</li>
+          </ul>
+        </div>
+
+        <div class="card card-accent-emerald">
+          <h4 style="font-size:18px; margin-bottom:12px; color:var(--accent-emerald);">📊 Longitudinal Patient Tracking</h4>
+          <p class="card-desc">
+            Historical values are automatically plotted on trend graphs (e.g. HbA1c progression across 12 months, Creatinine clearance trajectory) so the doctor can evaluate treatment efficacy in 3 seconds.
+          </p>
+          <div class="code-box" style="margin-top:14px;">
+            <span class="comment">// Extracted Lab Summary Example</span><br>
+            • HbA1c: <span class="highlight">9.2% (High)</span> [Previous: 8.1%]<br>
+            • Serum Creatinine: <span class="green">1.1 mg/dL (Normal)</span><br>
+            • Total Cholesterol: <span class="highlight">245 mg/dL (High)</span><br>
+            • LVEF (Echo): <span class="green">55% (Preserved)</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== SLIDE 11: MULTI-DEPARTMENT QUEUE ENGINE ==================== -->
+    <section class="slide-wrapper" data-slide="11">
+      <div class="slide-meta">
+        <span class="slide-category">Queue Orchestration</span>
+        <span class="slide-tag">Real-Time Multi-Department Flow</span>
+      </div>
+      <div class="slide-title-box">
+        <h2 class="slide-title">Multi-Department Queue Engine: Zero Chaos, Full Sync</h2>
+        <p class="slide-subtitle">
+          Synchronizing Doctor OPD, ECG, Echo, TMT, Holter, ABPM, Radiology & Pathology.
+        </p>
+      </div>
+
+      <div class="grid-4" style="margin-bottom:20px;">
+        <div class="card card-accent-blue">
+          <div style="font-size:24px; margin-bottom:6px;">📈 ECG Queue</div>
+          <p style="font-size:13px; color:var(--text-secondary);">12-Lead ECG triage queue with emergency priority bump for acute chest pain.</p>
+        </div>
+        <div class="card card-accent-emerald">
+          <div style="font-size:24px; margin-bottom:6px;">🫀 Echo Queue</div>
+          <p style="font-size:13px; color:var(--text-secondary);">2D / 3D Echocardiography room tracking with sonographer workflow sync.</p>
+        </div>
+        <div class="card card-accent-amber">
+          <div style="font-size:24px; margin-bottom:6px;">🏃 TMT Queue</div>
+          <p style="font-size:13px; color:var(--text-secondary);">Treadmill Stress Test scheduling with pre-test BP/ECG clearance gates.</p>
+        </div>
+        <div class="card card-accent-purple">
+          <div style="font-size:24px; margin-bottom:6px;">⏱️ Holter / ABPM</div>
+          <p style="font-size:13px; color:var(--text-secondary);">Device attachment, 24-hr monitoring tracking, and device return alerts.</p>
+        </div>
+      </div>
+
+      <div class="banner">
+        <div class="banner-content">
+          <h4>🔄 Intelligent Parallel Routing</h4>
+          <p>If a patient requires both Blood Tests and an Echo, the system directs them to the blood collection counter first while their Echo queue number advances, eliminating dead waiting time!</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== SLIDE 12: ZERO-APP PATIENT EXPERIENCE ==================== -->
+    <section class="slide-wrapper" data-slide="12">
+      <div class="slide-meta">
+        <span class="slide-category">Patient Experience</span>
+        <span class="slide-tag">QR Mobile Live Tracker & Browser Alerts</span>
+      </div>
+      <div class="slide-title-box">
+        <h2 class="slide-title">Zero-App Patient Mobile: "दवाखाने में कोई लाइन नहीं"</h2>
+        <p class="slide-subtitle">
+          Freedom for patients to sit in their car, cafeteria, or nearby park without losing their turn.
+        </p>
+      </div>
+
+      <div class="grid-3">
+        <div class="card">
+          <div class="card-header">
+            <div class="card-icon">📱</div>
+            <div class="card-title">1. Scan Paper QR</div>
+          </div>
+          <p class="card-desc">Token receipt printed at reception contains a dynamic QR code. Patient scans it with any smartphone camera — no login, no password, no app install.</p>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <div class="card-icon" style="color:var(--accent-cyan);">⏳</div>
+            <div class="card-title">2. Live Wait Tracker</div>
+          </div>
+          <p class="card-desc">Patient sees: <em>"3 patients ahead of you. Estimated wait: 12 minutes. Doctor currently seeing Token #14."</em> Status updates in real-time every 5 seconds.</p>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <div class="card-icon" style="color:var(--accent-rose);">🔔</div>
+            <div class="card-title">3. Vibrate & Sound Alert</div>
+          </div>
+          <p class="card-desc">When staff clicks <strong>"Call Patient"</strong>, the patient's phone screen flashes green, plays a gentle chime, and vibrates: <em>"Please proceed to Room 2."</em></p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== SLIDE 13: DIGITAL WAITING ROOM & TV DISPLAY ==================== -->
+    <section class="slide-wrapper" data-slide="13">
+      <div class="slide-meta">
+        <span class="slide-category">Waiting Room Infrastructure</span>
+        <span class="slide-tag">Smart TV Display Board & Voice Calling</span>
+      </div>
+      <div class="slide-title-box">
+        <h2 class="slide-title">Digital Waiting Room: Real-Time TV Board & Voice Calling</h2>
+        <p class="slide-subtitle">
+          Transform ordinary waiting areas into airport-grade, serene digital lounges.
+        </p>
+      </div>
+
+      <div class="grid-2">
+        <div class="card card-accent-blue">
+          <h4 style="font-size:18px; margin-bottom:12px; color:var(--accent-cyan);">📺 High-Definition TV Display Board</h4>
+          <ul class="feature-list">
+            <li><span class="bullet-icon">✦</span> <strong>Multi-Department Split Screen:</strong> Displays active tokens for Doctor OPD, ECG Room, Echo Room, and Billing Counter simultaneously.</li>
+            <li><span class="bullet-icon">✦</span> <strong>Plug-and-Play URL:</strong> Open `http://clinic-tv/` on any Smart TV browser, Amazon Fire Stick, or Android TV.</li>
+            <li><span class="bullet-icon">✦</span> <strong>Clinic Branding & Health Tips:</strong> Custom banner running health awareness videos and clinic announcements between token updates.</li>
+          </ul>
+        </div>
+
+        <div class="card card-accent-emerald">
+          <h4 style="font-size:18px; margin-bottom:12px; color:var(--accent-emerald);">🔊 Multilingual Voice Calling (TTS)</h4>
+          <p class="card-desc">
+            Automated synthesized voice announces called tokens in clear audio:
+          </p>
+          <div class="code-box" style="margin-top:14px;">
+            📢 <em>"Token Number 18, Mr. Ramesh Kumar, please proceed to Echo Room 1."</em><br>
+            📢 <em>"टोकन नंबर 18, कृपया इको रूम 1 में पधारें।"</em>
+          </div>
+          <p style="font-size:13px; color:var(--text-muted); margin-top:12px;">
+            Eliminates staff shouting names down the hallway and ensures elderly patients never miss their turn.
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== SLIDE 14: ZERO-COST MULTI-CHANNEL COMMUNICATION ==================== -->
+    <section class="slide-wrapper" data-slide="14">
+      <div class="slide-meta">
+        <span class="slide-category">Communication Automation</span>
+        <span class="slide-tag">Zero-Cost WhatsApp Web & Meta Cloud API</span>
+      </div>
+      <div class="slide-title-box">
+        <h2 class="slide-title">Zero-Cost Multi-Channel Communication Layer</h2>
+        <p class="slide-subtitle">
+          Automated WhatsApp messages sent at zero per-message cost through background browser automation or Cloud API.
+        </p>
+      </div>
+
+      <div class="grid-3">
+        <div class="card">
+          <div class="card-header">
+            <div class="card-icon">1️⃣</div>
+            <div class="card-title">Token Issued Alert</div>
+          </div>
+          <p class="card-desc">Instantly sends token number, department breakdown, and personal live tracking link to patient upon registration.</p>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <div class="card-icon">2️⃣</div>
+            <div class="card-title">Turn Approaching</div>
+          </div>
+          <p class="card-desc">Sends a reminder when 1 patient remains ahead so they can return to the room door without being rushed.</p>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <div class="card-icon">3️⃣</div>
+            <div class="card-title">Report & Rx Ready</div>
+          </div>
+          <p class="card-desc">PDF prescription and lab report link delivered straight to their WhatsApp chat with digital doctor stamp.</p>
+        </div>
+      </div>
+
+      <div class="banner" style="margin-top:24px;">
+        <div class="banner-content">
+          <h4>💰 Save Rs. 20,000 to 50,000 Monthly on SMS & WhatsApp Gateways</h4>
+          <p>Unlike third-party software that charges Rs. 0.50 - Rs. 1.50 per notification, CardioQueue's WhatsApp automation runs directly via the clinic's linked WhatsApp Web session with 100% deliverability.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== SLIDE 15: SMART BILLING & GST ENGINE ==================== -->
+    <section class="slide-wrapper" data-slide="15">
+      <div class="slide-meta">
+        <span class="slide-category">Revenue & Finance</span>
+        <span class="slide-tag">Automated Billing, Discounts & Audit</span>
+      </div>
+      <div class="slide-title-box">
+        <h2 class="slide-title">Smart Billing, Invoicing & GST Engine</h2>
+        <p class="slide-subtitle">
+          Prevent revenue leakage, handle complex service bundles, and generate thermal receipts in 2 seconds.
+        </p>
+      </div>
+
+      <div class="grid-3">
+        <div class="card card-accent-blue">
+          <h4 style="font-size:16px; font-weight:700; margin-bottom:8px;">💳 Multi-Mode Payments</h4>
+          <p class="card-desc">Accept Cash, UPI (Dynamic QR on bill), Credit/Debit Card, and Insurance TPA with instant receipt reconciliation.</p>
+        </div>
+        <div class="card card-accent-emerald">
+          <h4 style="font-size:16px; font-weight:700; margin-bottom:8px;">📦 Health Check Packages</h4>
+          <p class="card-desc">1-click billing for packages (e.g. <em>Executive Cardiac Check: Consultation + ECG + Echo + Lipid + Blood Sugar</em>).</p>
+        </div>
+        <div class="card card-accent-purple">
+          <h4 style="font-size:16px; font-weight:700; margin-bottom:8px;">🧾 Thermal & A4 Printing</h4>
+          <p class="card-desc">Direct support for 58mm / 80mm ESC/POS thermal receipt printers and standard A4/A5 laser invoices.</p>
+        </div>
+      </div>
+
+      <div class="card" style="margin-top:20px;">
+        <h4 style="font-size:16px; font-weight:700; margin-bottom:10px; color:var(--accent-cyan);">📊 Automated Daily Cash Register & Reconciliation</h4>
+        <p class="card-desc">
+          At the end of each shift, the system generates a tamper-proof financial summary: Total Collections, Cash in Drawer, UPI receipts, Discounts granted, and pending dues with 1-click WhatsApp daily ledger to clinic owners.
+        </p>
+      </div>
+    </section>
+
+    <!-- ==================== SLIDE 16: PHARMACY & INVENTORY MANAGEMENT ==================== -->
+    <section class="slide-wrapper" data-slide="16">
+      <div class="slide-meta">
+        <span class="slide-category">Supply Chain & Pharmacy</span>
+        <span class="slide-tag">Batch Tracking & Auto Stock Depletion</span>
+      </div>
+      <div class="slide-title-box">
+        <h2 class="slide-title">Pharmacy & Diagnostic Inventory Engine</h2>
+        <p class="slide-subtitle">
+          Real-time stock deduction from doctor prescriptions and predictive reorder alerts.
+        </p>
+      </div>
+
+      <div class="grid-2">
+        <div class="card">
+          <h4 style="font-size:18px; margin-bottom:12px; color:var(--accent-cyan);">💊 Internal Pharmacy Dispensing</h4>
+          <ul class="feature-list">
+            <li><span class="bullet-icon">✦</span> <strong>Auto-Populated Prescriptions:</strong> When doctor signs off Rx, the pharmacy counter screen automatically loads medicines and dosages.</li>
+            <li><span class="bullet-icon">✦</span> <strong>FEFO (First-Expiry-First-Out):</strong> Automatically selects medication batches with closest expiration dates to prevent expired stock write-offs.</li>
+            <li><span class="bullet-icon">✦</span> <strong>Substitute Suggestions:</strong> Instantly suggests generic and brand alternatives if exact prescribed molecule brand is out of stock.</li>
+          </ul>
+        </div>
+
+        <div class="card card-accent-amber">
+          <h4 style="font-size:18px; margin-bottom:12px; color:var(--accent-amber);">📦 Diagnostic Consumable Tracking</h4>
+          <ul class="feature-list">
+            <li><span class="bullet-icon">✦</span> <strong>ECG Paper & Electrodes:</strong> Automatically tracks rolls and leads consumed per completed test.</li>
+            <li><span class="bullet-icon">✦</span> <strong>Echo Ultrasound Gel & Sanitizers:</strong> Depletion algorithms estimate consumable spend per patient.</li>
+            <li><span class="bullet-icon">✦</span> <strong>Low Stock Threshold Alerts:</strong> Triggers WhatsApp alerts to store manager when reagents or medications drop below safety buffer.</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== SLIDE 17: MULTI-TENANT ENTERPRISE CLOUD ==================== -->
+    <section class="slide-wrapper" data-slide="17">
+      <div class="slide-meta">
+        <span class="slide-category">Enterprise & Fleet Control</span>
+        <span class="slide-tag">50+ Clinic Central Super Admin</span>
+      </div>
+      <div class="slide-title-box">
+        <h2 class="slide-title">Multi-Tenant Fleet Control: 50+ Clinics on 1 Platform</h2>
+        <p class="slide-subtitle">
+          Designed for diagnostic chains, hospital networks, and medical franchisees.
+        </p>
+      </div>
+
+      <div class="grid-3">
+        <div class="card">
+          <div class="card-header">
+            <div class="card-icon">🏢</div>
+            <div class="card-title">Instant Onboarding</div>
+          </div>
+          <p class="card-desc">Super admin can onboard a new clinic branch or doctor in 60 seconds with auto-generated credentials, license keys, and isolated database schemas.</p>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <div class="card-icon" style="color:var(--accent-cyan);">📊</div>
+            <div class="card-title">Fleet-Wide Analytics</div>
+          </div>
+          <p class="card-desc">Compare patient footfalls, diagnostic test volumes, revenue metrics, and average doctor consultation times across all hospital branches in real-time.</p>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <div class="card-icon" style="color:var(--accent-emerald);">🔑</div>
+            <div class="card-title">Automated Licensing</div>
+          </div>
+          <p class="card-desc">Built-in APScheduler manages monthly/annual software license expirations with automated 3-day grace period warnings and remote toggle.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== SLIDE 18: TRIPLE-TIER DATA PERSISTENCE ==================== -->
+    <section class="slide-wrapper" data-slide="18">
+      <div class="slide-meta">
+        <span class="slide-category">Data Resilience</span>
+        <span class="slide-tag">Hybrid Offline & Cloud Architecture</span>
+      </div>
+      <div class="slide-title-box">
+        <h2 class="slide-title">Triple-Tier Data Persistence: Zero Downtime Guarantee</h2>
+        <p class="slide-subtitle">
+          The only healthcare system combining local SQLite speed with Supabase Cloud and Google Sheets backup.
+        </p>
+      </div>
+
+      <div class="grid-3">
+        <div class="card card-accent-blue">
+          <div class="card-header">
+            <div class="card-icon">1️⃣</div>
+            <div class="card-title">Tier 1: Local SQLite</div>
+          </div>
+          <p class="card-desc"><strong>Sub-5ms response time.</strong> WAL (Write-Ahead Logging) mode ensures zero corruption even during sudden clinic power outages or computer restarts.</p>
+        </div>
+
+        <div class="card card-accent-emerald">
+          <div class="card-header">
+            <div class="card-icon">2️⃣</div>
+            <div class="card-title">Tier 2: Supabase Cloud</div>
+          </div>
+          <p class="card-desc"><strong>Global cloud sync.</strong> Encrypted PostgreSQL backup allowing doctors to review clinic stats, pending reports, and revenue from home on their phone.</p>
+        </div>
+
+        <div class="card card-accent-purple">
+          <div class="card-header">
+            <div class="card-icon">3️⃣</div>
+            <div class="card-title">Tier 3: Google Sheets</div>
+          </div>
+          <p class="card-desc"><strong>Free serverless backup.</strong> Auto-syncs patient rosters and financial summaries to a private Google Sheet via Apps Script without server maintenance fees.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== SLIDE 19: HARDWARE & DEPLOYMENT TOPOLOGY ==================== -->
+    <section class="slide-wrapper" data-slide="19">
+      <div class="slide-meta">
+        <span class="slide-category">Infrastructure & Deployment</span>
+        <span class="slide-tag">Zero Expensive Server Requirements</span>
+      </div>
+      <div class="slide-title-box">
+        <h2 class="slide-title">Hardware Flexibility: Run on Anything from a Laptop to Cloud</h2>
+        <p class="slide-subtitle">
+          No mandatory Rs. 1,00,000 server racks. Deploy in 5 minutes on existing clinic computers.
+        </p>
+      </div>
+
+      <div class="grid-3">
+        <div class="card">
+          <h4 style="font-size:16px; font-weight:700; color:var(--accent-cyan); margin-bottom:8px;">💻 Setup A: Single Clinic Laptop</h4>
+          <p class="card-desc">Runs locally on the reception or doctor Windows/Mac laptop. Staff connect their phones via clinic Wi-Fi or free LocalTunnel.</p>
+          <span class="tag-success" style="margin-top:10px;">Setup Cost: ₹0</span>
+        </div>
+
+        <div class="card">
+          <h4 style="font-size:16px; font-weight:700; color:var(--accent-emerald); margin-bottom:8px;">🐳 Setup B: Docker Local Appliance</h4>
+          <p class="card-desc">Containerized one-click installer (`docker-compose.local.yml`) with automated backups, local Redis caching, and health self-checks.</p>
+          <span class="tag-success" style="margin-top:10px;">High Reliability</span>
+        </div>
+
+        <div class="card">
+          <h4 style="font-size:16px; font-weight:700; color:var(--accent-purple); margin-bottom:8px;">☁️ Setup C: Cloud VPS / Railway</h4>
+          <p class="card-desc">Hosted on high-speed Railway.app / AWS / DigitalOcean cloud infrastructure with SSL HTTPS certificates and custom domain binding.</p>
+          <span class="tag-success" style="margin-top:10px;">Multi-Branch Fleet</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== SLIDE 20: END-TO-END PATIENT JOURNEY ==================== -->
+    <section class="slide-wrapper" data-slide="20">
+      <div class="slide-meta">
+        <span class="slide-category">Workflow Simulation</span>
+        <span class="slide-tag">Step-by-Step Experience Mapping</span>
+      </div>
+      <div class="slide-title-box">
+        <h2 class="slide-title">End-to-End Patient Flow Simulation</h2>
+        <p class="slide-subtitle">
+          How a 62-year-old cardiac patient experiences GIL Clinic with CardioQueue.
+        </p>
+      </div>
+
+      <div class="flow-chain" style="margin-bottom:20px;">
+        <div class="flow-node">
+          <div class="flow-node-title">09:00 AM</div>
+          <div class="flow-node-subtitle">Arrives & registers at desk. Gets Token #12 + WhatsApp alert.</div>
+        </div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-node">
+          <div class="flow-node-title">09:05 AM</div>
+          <div class="flow-node-subtitle">Sits in cafe. Checks phone tracker: "2 ahead for ECG".</div>
+        </div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-node">
+          <div class="flow-node-title">09:12 AM</div>
+          <div class="flow-node-subtitle">Phone buzzes: "Proceed to ECG Room". Test completed.</div>
+        </div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-node">
+          <div class="flow-node-title">09:25 AM</div>
+          <div class="flow-node-subtitle">Doctor consultation. Voice-to-Rx creates plan in 30s.</div>
+        </div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-node">
+          <div class="flow-node-title">09:35 AM</div>
+          <div class="flow-node-subtitle">Collects medicines from pharmacy. Departs happy!</div>
+        </div>
+      </div>
+
+      <div class="banner">
+        <div class="banner-content">
+          <h4>⏱️ Total Time Saved: 75 Minutes per Patient Visit</h4>
+          <p>Traditional clinics take 110-150 minutes for registration, testing, and consultation. CardioQueue cuts the entire visit to under 35 minutes.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== SLIDE 21: DOCTOR WORKFLOW TRANSFORMATION ==================== -->
+    <section class="slide-wrapper" data-slide="21">
+      <div class="slide-meta">
+        <span class="slide-category">Doctor Productivity</span>
+        <span class="slide-tag">Saving 4.5 Hours Daily on Admin Burden</span>
+      </div>
+      <div class="slide-title-box">
+        <h2 class="slide-title">Doctor's Command Center: Less Admin, More Medicine</h2>
+        <p class="slide-subtitle">
+          Eliminate burnout with a single-screen cockpit built by doctors for doctors.
+        </p>
+      </div>
+
+      <div class="grid-3">
+        <div class="card">
+          <h4 style="font-size:16px; font-weight:700; margin-bottom:8px;">👀 360° Patient Timeline</h4>
+          <p class="card-desc">See previous visit dates, vitals trajectories, past medications, and lab reports on one clean screen without clicking through 10 menus.</p>
+        </div>
+
+        <div class="card">
+          <h4 style="font-size:16px; font-weight:700; margin-bottom:8px;">⚡ 1-Click Test Ordering</h4>
+          <p class="card-desc">Prescribe diagnostic tests with one click. Patient is instantly inserted into technician queues with automated preparation instructions.</p>
+        </div>
+
+        <div class="card">
+          <h4 style="font-size:16px; font-weight:700; margin-bottom:8px;">📋 Instant Report Sign-Off</h4>
+          <p class="card-desc">Review ECG traces and Echo measurements, attach pre-formatted medical interpretations, and digitally approve reports with 1 click.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== SLIDE 22: TECHNICIAN & NURSING WORKFLOW ==================== -->
+    <section class="slide-wrapper" data-slide="22">
+      <div class="slide-meta">
+        <span class="slide-category">Paramedical Operations</span>
+        <span class="slide-tag">Technicians, Sonographers & Nurses</span>
+      </div>
+      <div class="slide-title-box">
+        <h2 class="slide-title">Technician & Nurse Workflow: Dedicated Mobile Console</h2>
+        <p class="slide-subtitle">
+          Empower diagnostic staff with simple touch-optimized queues on their own smartphones.
+        </p>
+      </div>
+
+      <div class="grid-2">
+        <div class="card card-accent-blue">
+          <h4 style="font-size:18px; margin-bottom:12px; color:var(--accent-cyan);">📱 Bablu / Technician Mobile Portal</h4>
+          <ul class="feature-list">
+            <li><span class="bullet-icon">1</span> <strong>Live Waiting Queue:</strong> Technician sees exactly who is next with token numbers and patient names.</li>
+            <li><span class="bullet-icon">2</span> <strong>🔵 Call Patient:</strong> Pressing "Call" triggers the waiting room TV board, voice announcement, and patient mobile buzzer.</li>
+            <li><span class="bullet-icon">3</span> <strong>✅ Mark Complete:</strong> Once the ECG or Echo is finished, tapping complete alerts the doctor that results are ready.</li>
+          </ul>
+        </div>
+
+        <div class="card card-accent-emerald">
+          <h4 style="font-size:18px; margin-bottom:12px; color:var(--accent-emerald);">🛡️ Zero Verbal Miscommunication</h4>
+          <p class="card-desc">
+            Technicians no longer have to walk to the reception counter to ask <em>"ECG kiski karni hai?"</em> or shout into the lobby. Every action is logged with timestamped accountability.
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== SLIDE 23: RECEPTION & FRONT-DESK WORKFLOW ==================== -->
+    <section class="slide-wrapper" data-slide="23">
+      <div class="slide-meta">
+        <span class="slide-category">Front-Desk Operations</span>
+        <span class="slide-tag">Reception Load Elimination</span>
+      </div>
+      <div class="slide-title-box">
+        <h2 class="slide-title">Reception Desk: 10-Second Patient Check-in</h2>
+        <p class="slide-subtitle">
+          Turn an overburdened front desk into a calm, frictionless reception experience.
+        </p>
+      </div>
+
+      <div class="grid-3">
+        <div class="card">
+          <h4 style="font-size:16px; font-weight:700; margin-bottom:8px;">🔍 Smart Mobile Search</h4>
+          <p class="card-desc">Type the last 4 digits of a patient's mobile number to autofill their complete medical history, previous visits, and demographics.</p>
+        </div>
+
+        <div class="card">
+          <h4 style="font-size:16px; font-weight:700; margin-bottom:8px;">🖨️ Auto Token & Bill Print</h4>
+          <p class="card-desc">Prints thermal token with doctor name, room number, queue sequence, and QR tracking code in 2 seconds flat.</p>
+        </div>
+
+        <div class="card">
+          <h4 style="font-size:16px; font-weight:700; margin-bottom:8px;">📵 Zero Repetitive Enquiries</h4>
+          <p class="card-desc">Patients track everything on their own phone, eliminating 90% of <em>"Kitni der lagegi?"</em> queries at the front desk counter.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== SLIDE 24: COMPETITOR COMPARISON ==================== -->
+    <section class="slide-wrapper" data-slide="24">
+      <div class="slide-meta">
+        <span class="slide-category">Market Comparison</span>
+        <span class="slide-tag">CardioQueue vs Practo, DocPulse & Legacy HMIS</span>
+      </div>
+      <div class="slide-title-box">
+        <h2 class="slide-title">The Unfair Advantage: Why CardioQueue Outperforms the Market</h2>
+        <p class="slide-subtitle">
+          A definitive feature-by-feature comparison against legacy commercial software.
+        </p>
+      </div>
+
+      <div class="table-container">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Feature / Metric</th>
+              <th>CardioQueue / GHOS</th>
+              <th>Practo / DocPulse</th>
+              <th>Legacy HMIS (Akhil/Attune)</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>Architecture</strong></td>
+              <td><span class="tag-success">Local-First PWA + Clean DDD</span></td>
+              <td><span class="tag-warning">Monolithic Cloud Only</span></td>
+              <td><span class="tag-danger">Old On-Premise Client-Server</span></td>
+            </tr>
+            <tr>
+              <td><strong>Offline Resilience</strong></td>
+              <td><span class="tag-success">100% Functional Without Internet</span></td>
+              <td><span class="tag-danger">Completely Dies Offline</span></td>
+              <td><span class="tag-warning">Local DB Only (No Mobile Sync)</span></td>
+            </tr>
+            <tr>
+              <td><strong>Patient Mobile Queue</strong></td>
+              <td><span class="tag-success">Zero-App QR Scan + Vibrate</span></td>
+              <td><span class="tag-danger">Requires App Download & Login</span></td>
+              <td><span class="tag-danger">None (Paper Slips Only)</span></td>
+            </tr>
+            <tr>
+              <td><strong>AI Voice-to-Rx Copilot</strong></td>
+              <td><span class="tag-success">Built-in Multimodal Voice AI</span></td>
+              <td><span class="tag-danger">Manual Keyboard Typing</span></td>
+              <td><span class="tag-danger">Rigid Static Forms</span></td>
+            </tr>
+            <tr>
+              <td><strong>Inter-Speciality Consulting</strong></td>
+              <td><span class="tag-success">Real-Time Evidence AI Upgrades</span></td>
+              <td><span class="tag-danger">None</span></td>
+              <td><span class="tag-danger">None</span></td>
+            </tr>
+            <tr>
+              <td><strong>WhatsApp / SMS Costs</strong></td>
+              <td><span class="tag-success">₹0 Free Automation</span></td>
+              <td><span class="tag-danger">₹0.50 - ₹1.50 per SMS/Msg</span></td>
+              <td><span class="tag-danger">Third-Party Gateway Subscriptions</span></td>
+            </tr>
+            <tr>
+              <td><strong>Data Ownership</strong></td>
+              <td><span class="tag-success">100% Owned by Clinic</span></td>
+              <td><span class="tag-danger">Vendor Monetizes Leads</span></td>
+              <td><span class="tag-warning">Complex DB Backups</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ==================== SLIDE 25: FINANCIAL ROI & CLINIC ECONOMICS ==================== -->
+    <section class="slide-wrapper" data-slide="25">
+      <div class="slide-meta">
+        <span class="slide-category">Business Case & ROI</span>
+        <span class="slide-tag">Quantifiable Financial Returns for Clinic Owners</span>
+      </div>
+      <div class="slide-title-box">
+        <h2 class="slide-title">Financial ROI: Payback in 14 Days</h2>
+        <p class="slide-subtitle">
+          How CardioQueue increases clinic profitability by 30% while eliminating IT costs.
+        </p>
+      </div>
+
+      <div class="grid-3">
+        <div class="card card-accent-emerald">
+          <div class="metric-value">+40%</div>
+          <div class="metric-label">More Patients per OPD Session</div>
+          <p class="card-desc" style="margin-top:10px;">Cutting consultation documentation from 6 minutes to 30 seconds enables doctors to see 15-25 additional patients per day without fatigue.</p>
+        </div>
+
+        <div class="card card-accent-blue">
+          <div class="metric-value">₹35k</div>
+          <div class="metric-label">Monthly SaaS & API Savings</div>
+          <p class="card-desc" style="margin-top:10px;">Zero vendor licensing per doctor seat, zero WhatsApp API billing, and zero paid database servers.</p>
+        </div>
+
+        <div class="card card-accent-purple">
+          <div class="metric-value">98%</div>
+          <div class="metric-label">Patient Retention Rate</div>
+          <p class="card-desc" style="margin-top:10px;">Patients love the respectful, zero-crowding digital waiting room and recommend the clinic to friends and family.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== SLIDE 26: SECURITY & DATA SOVEREIGNTY ==================== -->
+    <section class="slide-wrapper" data-slide="26">
+      <div class="slide-meta">
+        <span class="slide-category">Security & Compliance</span>
+        <span class="slide-tag">HIPAA, DISHA & Data Privacy</span>
+      </div>
+      <div class="slide-title-box">
+        <h2 class="slide-title">Data Sovereignty & Compliance: Bank-Grade Privacy</h2>
+        <p class="slide-subtitle">
+          Your patient clinical records never leave your control.
+        </p>
+      </div>
+
+      <div class="grid-2">
+        <div class="card">
+          <h4 style="font-size:18px; margin-bottom:12px; color:var(--accent-cyan);">🛡️ Compliance & Standards</h4>
+          <ul class="feature-list">
+            <li><span class="bullet-icon">✦</span> <strong>DISHA (India) & HIPAA Ready:</strong> End-to-end encrypted storage of clinical records and demographic data.</li>
+            <li><span class="bullet-icon">✦</span> <strong>Immutable Audit Trail:</strong> Every action (who viewed, edited, printed, or deleted a record) is permanently logged with timestamps.</li>
+            <li><span class="bullet-icon">✦</span> <strong>Zero Lead Selling:</strong> 100% guarantee that patient phone numbers and health conditions are never marketed or shared.</li>
+          </ul>
+        </div>
+
+        <div class="card card-accent-emerald">
+          <h4 style="font-size:18px; margin-bottom:12px; color:var(--accent-emerald);">💾 Automated Multi-Destination Backup</h4>
+          <ul class="feature-list">
+            <li><span class="bullet-icon">✦</span> <strong>Encrypted Daily Local Snapshot:</strong> Stored on clinic hard disk with automated timestamping.</li>
+            <li><span class="bullet-icon">✦</span> <strong>Encrypted Cloud Sync:</strong> Optional real-time replication to doctor's private cloud bucket.</li>
+            <li><span class="bullet-icon">✦</span> <strong>1-Click CSV/PDF Export:</strong> Doctors can export their full clinic patient base at any time in open formats.</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== SLIDE 27: USER MANUAL & OPERATIONS SOP ==================== -->
+    <section class="slide-wrapper" data-slide="27">
+      <div class="slide-meta">
+        <span class="slide-category">Staff Training & Operations</span>
+        <span class="slide-tag">5-Minute Quick-Start Guide</span>
+      </div>
+      <div class="slide-title-box">
+        <h2 class="slide-title">User Manual & Operational SOP for Hospital Staff</h2>
+        <p class="slide-subtitle">
+          Zero steep learning curves — staff become productive within 5 minutes of training.
+        </p>
+      </div>
+
+      <div class="grid-3">
+        <div class="card">
+          <h4 style="font-size:16px; font-weight:700; margin-bottom:8px;">1. Receptionist SOP</h4>
+          <ol style="margin-left:18px; font-size:13.5px; color:var(--text-secondary); line-height:1.7;">
+            <li>Open laptop browser & enter PIN <code>1001</code>.</li>
+            <li>Enter mobile, name, age & select tests.</li>
+            <li>Click <strong>"Save & Print Token"</strong>.</li>
+            <li>Hand receipt to patient & instruct to scan QR.</li>
+          </ol>
+        </div>
+
+        <div class="card">
+          <h4 style="font-size:16px; font-weight:700; margin-bottom:8px;">2. Technician SOP</h4>
+          <ol style="margin-left:18px; font-size:13.5px; color:var(--text-secondary); line-height:1.7;">
+            <li>Open PWA on mobile & enter PIN <code>2001</code>.</li>
+            <li>Click <strong>"🔵 Call Patient"</strong> on top token.</li>
+            <li>Conduct ECG / Echo / TMT procedure.</li>
+            <li>Click <strong>"✅ Complete"</strong> to notify doctor.</li>
+          </ol>
+        </div>
+
+        <div class="card">
+          <h4 style="font-size:16px; font-weight:700; margin-bottom:8px;">3. Doctor SOP</h4>
+          <ol style="margin-left:18px; font-size:13.5px; color:var(--text-secondary); line-height:1.7;">
+            <li>Login with Doctor PIN <code>5554</code>.</li>
+            <li>Click patient name from active queue.</li>
+            <li>Press <strong>🎙️ Mic</strong> to dictate prescription.</li>
+            <li>Click <strong>"Sign & Send WhatsApp"</strong>.</li>
+          </ol>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== SLIDE 28: FUTURE ROADMAP & HORIZONS ==================== -->
+    <section class="slide-wrapper" data-slide="28">
+      <div class="slide-meta">
+        <span class="slide-category">Product Evolution</span>
+        <span class="slide-tag">Next-Gen Capabilities in Development</span>
+      </div>
+      <div class="slide-title-box">
+        <h2 class="slide-title">Future Horizons: The Next Frontier for GHOS</h2>
+        <p class="slide-subtitle">
+          Expanding from clinic operating system to an AI-driven global healthcare mesh.
+        </p>
+      </div>
+
+      <div class="grid-3">
+        <div class="card card-accent-blue">
+          <h4 style="font-size:16px; font-weight:700; margin-bottom:8px;">🇮🇳 ABHA / NDHM Integration</h4>
+          <p class="card-desc">Direct linkage with India's Ayushman Bharat Digital Mission for 1-click ABHA card creation and consent-based health record exchange.</p>
+        </div>
+
+        <div class="card card-accent-emerald">
+          <h4 style="font-size:16px; font-weight:700; margin-bottom:8px;">📡 Direct IoT Device Sync</h4>
+          <p class="card-desc">Bluetooth & DICOM auto-ingestion from GE / Philips ECG machines and Ultrasound devices straight into patient electronic medical records.</p>
+        </div>
+
+        <div class="card card-accent-purple">
+          <h4 style="font-size:16px; font-weight:700; margin-bottom:8px;">🌐 Multi-Hospital AI Mesh</h4>
+          <p class="card-desc">Federated AI learning across 100+ hospitals to identify regional cardiac disease trends, antibiotic resistance, and outbreak clusters.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== SLIDE 29: ENTERPRISE R&D BUDGETING & PROJECT VALUATION ==================== -->
+    <section class="slide-wrapper" data-slide="29">
+      <div class="slide-meta">
+        <span class="slide-category">Capital Economics & Software Asset Valuation</span>
+        <span class="slide-tag">Enterprise Build Cost & Domain IP Appraisal</span>
+      </div>
+      <div class="slide-title-box">
+        <h2 class="slide-title">Enterprise Build Cost Projection & Asset Valuation</h2>
+        <p class="slide-subtitle">
+          Standard industry capital, engineering staffing, and clinical domain advisory required to build this system from scratch.
+        </p>
+      </div>
+
+      <div class="grid-2" style="margin-bottom: 24px;">
+        <div class="card card-accent-rose">
+          <div class="card-header">
+            <div class="card-icon" style="background:rgba(244,63,94,0.15); color:var(--accent-rose); border-color:rgba(244,63,94,0.3);">💼</div>
+            <div>
+              <div class="card-title">Standard Industry Engineering & Domain Budget</div>
+              <div style="font-size:12px; color:var(--text-muted);">8 to 12 Months Dedicated Enterprise Development Cycle</div>
+            </div>
+          </div>
+          <div class="table-container" style="margin-top:10px;">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Staffing / Domain Role</th>
+                  <th>Duration</th>
+                  <th>Market Cost</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><strong>Senior Interventional Cardiologist & Medical Director</strong><br><span style="font-size:11.5px; color:var(--text-muted);">Clinical Protocol Validation, Diagnostic Queue Logic & Risk Audits</span></td>
+                  <td>8 Months</td>
+                  <td>₹24,00,000</td>
+                </tr>
+                <tr>
+                  <td><strong>Lead Full-Stack / DDD Software Architect</strong><br><span style="font-size:11.5px; color:var(--text-muted);">FastAPI, Clean Architecture, Harness Layer, Micro-Engines</span></td>
+                  <td>8 Months</td>
+                  <td>₹20,00,000</td>
+                </tr>
+                <tr>
+                  <td><strong>Senior AI & Multimodal LLM Systems Engineer</strong><br><span style="font-size:11.5px; color:var(--text-muted);">Groq LLaMA-3.3 70B Tuning, Whisper Voice-to-Rx, Vision OCR</span></td>
+                  <td>6 Months</td>
+                  <td>₹15,00,000</td>
+                </tr>
+                <tr>
+                  <td><strong>Real-Time Mobile PWA & WebSockets Engineer</strong><br><span style="font-size:11.5px; color:var(--text-muted);">Zero-App QR Protocol, Browser Vibrate API, Token Board Sync</span></td>
+                  <td>6 Months</td>
+                  <td>₹10,50,000</td>
+                </tr>
+                <tr>
+                  <td><strong>Hospital DevOps, DISHA/HIPAA & Appliance Engineer</strong><br><span style="font-size:11.5px; color:var(--text-muted);">On-Premise Docker Appliances, Data Encryption, Automated Failover</span></td>
+                  <td>5 Months</td>
+                  <td>₹6,50,000</td>
+                </tr>
+                <tr>
+                  <td><strong>QA, Clinical Pilot Bench Testing & Hardware Integration</strong><br><span style="font-size:11.5px; color:var(--text-muted);">Thermal Printers, Multi-Device Polling & Live Traffic Simulation</span></td>
+                  <td>4 Months</td>
+                  <td>₹4,00,000</td>
+                </tr>
+                <tr style="background: rgba(244,63,94,0.08); font-weight: bold;">
+                  <td colspan="2"><strong>Total Enterprise R&D Project Value:</strong></td>
+                  <td style="color:var(--accent-rose); font-size:16px;">₹80,00,000 – ₹1,10,00,000 ($95k - $130k)</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="card card-accent-emerald">
+          <div class="card-header">
+            <div class="card-icon" style="background:rgba(16,185,129,0.15); color:var(--accent-emerald); border-color:rgba(16,185,129,0.3);">🏛️</div>
+            <div>
+              <div class="card-title">Commercial Asset Advantage for Clients</div>
+              <div style="font-size:12px; color:var(--text-muted);">Zero R&D Lag • Pre-Built & Production Validated</div>
+            </div>
+          </div>
+          <ul class="feature-list">
+            <li><span class="bullet-icon">✦</span> <strong>Immediate Turnkey Deployment:</strong> Bypasses 12+ months of risky software development and clinical debugging.</li>
+            <li><span class="bullet-icon">✦</span> <strong>Battle-Tested in Real Cardiac Clinical Flow:</strong> Developed with direct cardiology expertise, ensuring zero clinical workflow mismatches.</li>
+            <li><span class="bullet-icon">✦</span> <strong>High-Performance 2026 AI Stack:</strong> Native integration with frontier AI models (Groq LLaMA-3.3, Whisper Voice AI, OpenAI GPT-4o).</li>
+            <li><span class="bullet-icon">✦</span> <strong>Zero Ongoing Dependency:</strong> Full data sovereignty and zero expensive vendor API lock-ins.</li>
+          </ul>
+          <div class="metric-box" style="margin-top:16px; background:rgba(16,185,129,0.1); border-color:rgba(16,185,129,0.3);">
+            <div class="metric-value" style="color:var(--accent-emerald);">₹80,00,000+</div>
+            <div class="metric-label">Appraised Enterprise IP Replacement Valuation</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== SLIDE 30: MARKET CASE STUDIES & COMPETITOR SPEND ==================== -->
+    <section class="slide-wrapper" data-slide="30">
+      <div class="slide-meta">
+        <span class="slide-category">Market Case Studies & Capital Comparison</span>
+        <span class="slide-tag">How VC-Funded Titans Burned Crores & Still Lag Behind</span>
+      </div>
+      <div class="slide-title-box">
+        <h2 class="slide-title">Market Case Studies: Hundreds of Crores Burned vs CardioQueue</h2>
+        <p class="slide-subtitle">
+          Why multi-million dollar venture capital failed to solve core clinic flow — and how CardioQueue outperforms them.
+        </p>
+      </div>
+
+      <div class="grid-3" style="margin-bottom: 22px;">
+        <div class="card">
+          <div class="card-header">
+            <div class="card-icon" style="color:var(--accent-rose);">📉</div>
+            <div>
+              <div class="card-title">Practo Ray</div>
+              <div style="font-size:12px; color:var(--text-muted);">$230M+ (₹1,900+ Cr Raised)</div>
+            </div>
+          </div>
+          <p class="card-desc">
+            Spent hundreds of crores on sales reps. Result: A rigid SaaS requiring constant internet. Charges ₹1,500-₹4,000/doctor/month + per-SMS costs, while monetizing clinic patient leads to show competitor doctors.
+          </p>
+          <span class="tag-danger" style="margin-top:10px;">❌ No Offline • ❌ No AI Copilot</span>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <div class="card-icon" style="color:var(--accent-amber);">📉</div>
+            <div>
+              <div class="card-title">DocPulse / Qikwell</div>
+              <div style="font-size:12px; color:var(--text-muted);">₹50+ Crores Expended</div>
+            </div>
+          </div>
+          <p class="card-desc">
+            Traditional cloud appointment book. No multi-room diagnostic queue coordination (ECG $\leftrightarrow$ Echo $\leftrightarrow$ TMT), no instant browser vibrate buzzer for patients, and zero clinical voice-to-Rx dictation.
+          </p>
+          <span class="tag-warning" style="margin-top:10px;">❌ Clunky Flow • ❌ No Vibrate QR</span>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <div class="card-icon" style="color:var(--accent-purple);">📉</div>
+            <div>
+              <div class="card-title">Legacy HMIS (Akhil / Attune)</div>
+              <div style="font-size:12px; color:var(--text-muted);">₹15L - ₹35L Upfront per Hospital</div>
+            </div>
+          </div>
+          <p class="card-desc">
+            Bulky Windows 98-style desktop forms. Requires 3-week staff training. Charges ₹3-5 Lakhs annual AMC. Zero mobile PWA for technicians, zero WhatsApp integration, and zero cross-specialty AI upgrades.
+          </p>
+          <span class="tag-danger" style="margin-top:10px;">❌ Obsolete UI • ❌ Huge AMC</span>
+        </div>
+      </div>
+
+      <div class="banner">
+        <div class="banner-content">
+          <h4>💡 The CardioQueue Advantage: Doctor-Architected Agentic Engineering</h4>
+          <p>By eliminating legacy bloat and building directly with 2026 agentic AI, local-first SQLite/FastAPI, and zero-app mobile PWAs, CardioQueue delivers a 10x faster, zero-cost, privacy-first system that legacy giants cannot match without rewriting their entire codebase from scratch!</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== SLIDE 31: MARKETING & COMMERCIAL PLAYBOOK ==================== -->
+    <section class="slide-wrapper" data-slide="31">
+      <div class="slide-meta">
+        <span class="slide-category">Commercialization & Go-To-Market</span>
+        <span class="slide-tag">Marketing Strategy for Consultants & Distributors</span>
+      </div>
+      <div class="slide-title-box">
+        <h2 class="slide-title">Marketing & Packaging Playbook for Consultants</h2>
+        <p class="slide-subtitle">
+          Strategic positioning to close private clinics, polyclinics, and diagnostic center deals.
+        </p>
+      </div>
+
+      <div class="grid-3">
+        <div class="card">
+          <h4 style="font-size:16px; font-weight:700; color:var(--accent-cyan); margin-bottom:8px;">🎯 Target Persona 1: Polyclinics</h4>
+          <p class="card-desc"><strong>Pitch:</strong> Eliminate front-desk receptionist chaos, enable 5-10 doctors to share diagnostic machines smoothly, and offer private branding.</p>
+        </div>
+
+        <div class="card">
+          <h4 style="font-size:16px; font-weight:700; color:var(--accent-emerald); margin-bottom:8px;">🎯 Target Persona 2: Cardiology Centers</h4>
+          <p class="card-desc"><strong>Pitch:</strong> Multi-room diagnostic queue (ECG, Echo, TMT, Holter) with Inter-Speciality AI upgrade that boosts diagnostic revenue.</p>
+        </div>
+
+        <div class="card">
+          <h4 style="font-size:16px; font-weight:700; color:var(--accent-purple); margin-bottom:8px;">🎯 Target Persona 3: Diagnostic Chains</h4>
+          <p class="card-desc"><strong>Pitch:</strong> Zero monthly per-SMS costs, 100% offline-resilient local appliances, and multi-tenant central analytics.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== SLIDE 32: CONCLUSION & LIVE DEMO ==================== -->
+    <section class="slide-wrapper" data-slide="32">
+      <div class="slide-meta">
+        <span class="slide-category">Conclusion & Call to Action</span>
+        <span class="slide-tag">Ready for Live Pilot & Commercial Deployment</span>
+      </div>
+      <div class="card" style="padding: 50px 40px; text-align: center; margin-bottom: 24px; background: radial-gradient(circle at 50% 0%, rgba(16, 185, 129, 0.15), transparent 70%), var(--gradient-card);">
+        <h2 style="font-size: 38px; font-weight: 800; margin-bottom: 16px;">
+          Experience the Future of Patient Flow Today
+        </h2>
+        <p style="font-size: 18px; color: var(--text-secondary); max-width: 800px; margin: 0 auto 30px;">
+          CardioQueue & GHOS is fully built, field-tested, and ready for production deployment across healthcare networks.
+        </p>
+        <div style="display: flex; justify-content: center; gap: 16px; flex-wrap: wrap;">
+          <a href="https://cardioqueue-production.up.railway.app/" target="_blank" class="btn-nav active-btn" style="padding: 14px 28px; font-size: 16px; text-decoration: none;">
+            🚀 Open Live Cloud Application ↗
+          </a>
+          <button class="btn-nav" style="padding: 14px 28px; font-size: 16px;" onclick="window.print()">
+            📄 Download / Print PDF Presentation
+          </button>
+        </div>
+      </div>
+
+      <div class="grid-3">
+        <div class="metric-box">
+          <div style="font-size:14px; font-weight:700; color:var(--text-primary); margin-bottom:4px;">Live Railway Cloud URL</div>
+          <a href="https://cardioqueue-production.up.railway.app/" target="_blank" style="color:var(--accent-cyan); font-size:13px; text-decoration:none;">cardioqueue-production.up.railway.app ↗</a>
+        </div>
+        <div class="metric-box">
+          <div style="font-size:14px; font-weight:700; color:var(--text-primary); margin-bottom:4px;">Lead Architect & Developer</div>
+          <div style="color:var(--text-secondary); font-size:13px; font-weight:600;">Dr. Gurjeet Singh Gill</div>
+        </div>
+        <div class="metric-box">
+          <div style="font-size:14px; font-weight:700; color:var(--text-primary); margin-bottom:4px;">Clinical Pilot Facility</div>
+          <div style="color:var(--text-secondary); font-size:13px;">GIL Clinic & Cardiology Centre</div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Table of Contents Drawer Modal -->
+  <div class="drawer-overlay" id="drawerOverlay" onclick="closeDrawer(event)">
+    <div class="drawer-content" onclick="event.stopPropagation()">
+      <div class="drawer-header">
+        <h3>Presentation Slides (32)</h3>
+        <button class="btn-nav btn-icon" onclick="toggleDrawer()">✕</button>
+      </div>
+      <div class="drawer-list" id="drawerList">
+        <!-- Dynamically Generated Slide Links -->
+      </div>
+    </div>
+  </div>
+
+  <!-- Bottom Navigation Bar -->
+  <footer class="deck-footer">
+    <div class="footer-left">
+      <span class="slide-indicator" id="slideNumberDisplay">Page 01 of 32</span>
+      <span class="footer-tip">Navigate with <kbd>←</kbd> <kbd>→</kbd> or <kbd>Space</kbd> | Press <kbd>F</kbd> for Fullscreen</span>
+    </div>
+
+    <div class="footer-right">
+      <button class="btn-nav" id="btn-prev" onclick="prevSlide()" title="Previous Slide">
+        ← Previous
+      </button>
+      <button class="btn-nav active-btn" id="btn-next" onclick="nextSlide()" title="Next Slide">
+        Next →
+      </button>
+    </div>
+  </footer>
+
+  <!-- Script Logic -->
+  <script>
+    const totalSlides = 32;
+    let currentSlide = 1;
+    let isExecutiveMode = false;
+
+    const slideTitles = [
+      "1. Title & High-Level System Identity",
+      "2. Executive Concept Note & 2-Minute Pitch",
+      "3. The 6 Silent Killers of Clinic Operations",
+      "4. The Solution: Autonomous Patient Flow OS",
+      "5. Inter-Speciality Consulting Tool for Medicos",
+      "6. Harness Engineering Architecture (Clean DDD)",
+      "7. Multi-Tenant Identity & PIN Authentication",
+      "8. Smart OPD: 30-Second Voice-to-Rx Engine",
+      "9. AI Specialist Diagnostic Upgrade Engine",
+      "10. Lab Scanner: Instant OCR & Trends",
+      "11. Multi-Department Queue Engine (ECG/Echo/TMT)",
+      "12. Zero-App Patient Mobile Experience",
+      "13. Digital Waiting Room & TV Display Board",
+      "14. Zero-Cost Multi-Channel Communication",
+      "15. Smart Billing, Invoicing & GST Engine",
+      "16. Pharmacy & Diagnostic Inventory Engine",
+      "17. Multi-Tenant Enterprise Fleet Control",
+      "18. Triple-Tier Data Persistence (SQLite/Supabase)",
+      "19. Hardware Flexibility & Deployment Topology",
+      "20. End-to-End Patient Flow Simulation",
+      "21. Doctor's Command Center & Efficiency",
+      "22. Technician & Nurse Workflow Console",
+      "23. Reception Desk: 10-Second Check-in",
+      "24. Competitor Matrix: CardioQueue vs Market",
+      "25. Financial ROI & Clinic Economics",
+      "26. Security, Compliance & Data Sovereignty",
+      "27. User Manual & Operational Staff SOP",
+      "28. Future Horizons: ABHA & IoT Device Sync",
+      "29. Software Build Cost Breakdown & Valuation",
+      "30. Market Case Studies: Competitor Burn vs CQ",
+      "31. Marketing Playbook for Consultants",
+      "32. Conclusion, Live Demo & Contacts"
+    ];
+
+    function initDeck() {
+      renderDrawerList();
+      showSlide(currentSlide);
+
+      // Keyboard Listeners
+      document.addEventListener('keydown', (e) => {
+        if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+        if (e.key === 'ArrowRight' || e.key === ' ' || e.key === 'PageDown') {
+          e.preventDefault();
+          nextSlide();
+        } else if (e.key === 'ArrowLeft' || e.key === 'PageUp') {
+          e.preventDefault();
+          prevSlide();
+        } else if (e.key.toLowerCase() === 'f') {
+          toggleFullScreen();
+        } else if (e.key === 'Escape') {
+          closeDrawer();
+        }
+      });
+    }
+
+    function showSlide(index) {
+      if (index < 1) index = 1;
+      if (index > totalSlides) index = totalSlides;
+      currentSlide = index;
+
+      // Update Slides Visibility
+      const slides = document.querySelectorAll('.slide-wrapper');
+      slides.forEach(slide => {
+        const slideNum = parseInt(slide.getAttribute('data-slide'), 10);
+        if (slideNum === currentSlide) {
+          slide.classList.add('active');
+        } else {
+          slide.classList.remove('active');
+        }
+      });
+
+      // Update Progress Bar
+      const progressPercent = (currentSlide / totalSlides) * 100;
+      document.getElementById('progressBar').style.width = progressPercent + '%';
+
+      // Update Indicator
+      const numStr = currentSlide < 10 ? '0' + currentSlide : currentSlide;
+      document.getElementById('slideNumberDisplay').innerText = `Page ${numStr} of ${totalSlides}`;
+
+      // Update Drawer Active Item
+      document.querySelectorAll('.drawer-item').forEach((item, idx) => {
+        if (idx + 1 === currentSlide) {
+          item.classList.add('active');
+          item.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        } else {
+          item.classList.remove('active');
+        }
+      });
+
+      // Scroll to top
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    function nextSlide() {
+      if (isExecutiveMode && currentSlide === 2) {
+        showSlide(1);
+      } else if (currentSlide < totalSlides) {
+        showSlide(currentSlide + 1);
+      }
+    }
+
+    function prevSlide() {
+      if (currentSlide > 1) {
+        showSlide(currentSlide - 1);
+      }
+    }
+
+    function goToSlide(index) {
+      showSlide(index);
+      closeDrawer();
+    }
+
+    function toggleExecutiveMode() {
+      isExecutiveMode = !isExecutiveMode;
+      const btn = document.getElementById('btn-executive');
+      if (isExecutiveMode) {
+        btn.classList.add('active-btn');
+        btn.innerText = "⚡ Executive Mode ON (Slides 1-2)";
+        goToSlide(1);
+      } else {
+        btn.classList.remove('active-btn');
+        btn.innerText = "⚡ Executive Brief (2-Min Pitch)";
+      }
+    }
+
+    function toggleDrawer() {
+      const overlay = document.getElementById('drawerOverlay');
+      overlay.classList.toggle('open');
+    }
+
+    function closeDrawer() {
+      document.getElementById('drawerOverlay').classList.remove('open');
+    }
+
+    function renderDrawerList() {
+      const listContainer = document.getElementById('drawerList');
+      listContainer.innerHTML = '';
+      slideTitles.forEach((title, idx) => {
+        const slideIndex = idx + 1;
+        const item = document.createElement('div');
+        item.className = `drawer-item ${slideIndex === currentSlide ? 'active' : ''}`;
+        item.onclick = () => goToSlide(slideIndex);
+        item.innerHTML = `
+          <span>${title}</span>
+          <span class="drawer-index">${slideIndex < 10 ? '0' + slideIndex : slideIndex}</span>
+        `;
+        listContainer.appendChild(item);
+      });
+    }
+
+    function toggleTheme() {
+      const body = document.body;
+      const current = body.getAttribute('data-theme');
+      body.setAttribute('data-theme', current === 'dark' ? 'light' : 'dark');
+    }
+
+    function toggleFullScreen() {
+      if (!document.fullscreenElement) {
+        document.documentElement.requestFullscreen().catch(err => console.log(err));
+      } else {
+        if (document.exitFullscreen) {
+          document.exitFullscreen();
+        }
+      }
+    }
+
+    // Initialize on load
+    document.addEventListener('DOMContentLoaded', initDeck);
+  </script>
+</body>
+</html>
