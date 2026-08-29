@@ -70,6 +70,12 @@ Oracle VM पर deploy script आपके repo से code clone करता 
 
 ## PART 3 — Cloudflare Tunnel (patients घर से भी link खोलें, ₹0)
 
+**Quick start (pehle se ready):** `START_TUNNEL.bat` double-click करें — tunnel खुद चलेगा,
+trycloudflare.com URL `.env` के `APP_BASE_URL` में खुद set हो जाएगा (server restart की ज़रूरत नहीं)।
+Patient tracking links उसी public URL से जाएँगी। `cloudflared.exe` पहले से project folder में है।
+
+Quick tunnel का URL हर restart पर बदलता है — permanent ke liye neeche steps:
+
 VM/laptop के port 8000 को बिना IP खोले public HTTPS URL देना हो तो:
 
 1. Laptop या VM पर: [cloudflared download](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/)

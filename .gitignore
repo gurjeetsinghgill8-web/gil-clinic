@@ -31,6 +31,9 @@ track_debug.log
 Thumbs.db
 nul
 
+# Cloudflare tunnel binary (bada 54MB — GitHub par nahi)
+cloudflared.exe
+
 # ZCode
 .zcode/
 

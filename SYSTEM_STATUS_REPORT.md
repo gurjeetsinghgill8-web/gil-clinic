@@ -77,8 +77,13 @@
 | Test suite (सारे fixes prove) | ✅ **64/64 passed** |
 | GitHub push (cloud deploy का Step 0) | ✅ **Pushed** — commit `a030084` |
 | Local server live | ✅ `http://localhost:8000` (health 200 OK, LAN: `http://192.168.31.238:8000`) |
+| **Patient public link (Cloudflare Tunnel)** | ✅ **LIVE:** `https://rio-minerals-rim-skills.trycloudflare.com` — patients ghar se khol sakte hain |
+| Tracking link logic | ✅ Fix: public `APP_BASE_URL` set ho to WAHI patient link mein jata hai (staff LAN/localhost se kholen tab bhi) + `.env` har request par dobara padha jata hai (tunnel URL badle to restart nahi chahiye) |
+| Tunnel helper | ✅ `start_tunnel.py` + `START_TUNNEL.bat` — double-click se tunnel chalu, URL khud `.env` mein set |
 | Data backup | ✅ `backups/2026-08-29_210555` |
 | Secret files gitignore में | ✅ `.env`, `*.db`, `secret.txt`, `admin_credentials.txt` — कोई patient data/key push नहीं हुआ |
 
 **अब 24/7 cloud के लिए सिर्फ एक मैनुअल step बाकी (मैं नहीं कर सकता — card चाहिए):**
-`CLOUD_DEPLOY_GUIDE.md` → Oracle Cloud signup (Part 1) या Google e2-micro (Part 2) → VM पर `deploy_oracle.sh` चलाना → बस। Code तैयार है, script तैयार है, सब push हो चुका है।
+`CLOUD_DEPLOY_GUIDE.md` Part 1 → Oracle Cloud signup (card verify, ₹0 charge) → VM बन जाए तो मुझे बताएँ: **VM का Public IP + SSH private key** — मैं `deploy_oracle.sh` चलाकर सब set कर दूँगा। Code तैयार है, script तैयार है, सब push हो चुका है।
+
+**Tunnel note:** Quick tunnel का URL हर restart पर बदलता है — `START_TUNNEL.bat` दोबारा चलाने पर नया URL अपने आप `.env` में set हो जाता है (server restart की ज़रूरत नहीं)। Permanent URL Oracle VM (public IP) से मिलेगा।

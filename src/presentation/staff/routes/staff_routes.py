@@ -69,7 +69,9 @@ SESSION_MAX_AGE = 60 * 60 * 12  # 12 hours
 from itsdangerous import URLSafeSerializer
 _track_signer = URLSafeSerializer(SECRET_KEY, salt="patient-public-track-v1")
 
-APP_BASE_URL = os.getenv("APP_BASE_URL", "http://localhost:8000")
+def _app_base_url() -> str:
+    """APP_BASE_URL re-read every call — tunnel URL badle to restart ki zaroorat nahi."""
+    return os.getenv("APP_BASE_URL", "http://localhost:8000")
 
 
 def make_tracking_token(patient_id: str) -> str:
@@ -875,17 +877,22 @@ async def staff_register_patient(request: Request):
 def _tracking_base(request: Request) -> str:
     """Base URL for patient tracking links.
 
-    Uses the Host header of the current request (LAN IP / domain / tunnel URL)
-    so the patient's phone can actually open the link. Falls back to
-    APP_BASE_URL only when the staff browser itself is on localhost.
+    Priority:
+      1. APP_BASE_URL — jab wo public URL par set ho (tunnel/VM/domain).
+         Staff LAN IP se app kholein tab bhi patient ko public link milega.
+      2. Host header of the current request — jab staff public URL se
+         directly app khole (APP_BASE_URL set nahi ho).
     """
+    cfg = _app_base_url().strip().rstrip("/")
+    if cfg and not cfg.startswith("http://localhost") and not cfg.startswith("http://127."):
+        return cfg
     try:
         base = str(request.base_url).rstrip("/")
-        if base and not base.startswith("http://localhost") and not base.startswith("http://127."):
+        if base:
             return base
     except Exception:
         pass
-    return APP_BASE_URL
+    return "http://localhost:8000"
 
 
 async def _next_token(session, service_code: str, date_prefix: str) -> int:
