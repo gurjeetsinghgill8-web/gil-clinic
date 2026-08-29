@@ -1,0 +1,18 @@
+# PA Whitelist Request — copy-paste ready (pythonanywhere.com → Help → Send feedback)
+# Subject: Allowlist request for GIL CLINIC (hospital app) - free account gillhopitalsoftware1
+#
+Hello,
+
+Our free-tier web app (https://gillhopitalsoftware1.pythonanywhere.com) is a small
+hospital/clinic system. It needs outbound HTTPS access to these standard API hosts
+(all are regular HTTPS API calls with API keys - no raw sockets, no arbitrary ports):
+
+1. api.groq.com            -> AI chat + handwriting OCR (Groq API)
+2. graph.facebook.com      -> WhatsApp Cloud API (patient notifications)
+3. generativelanguage.googleapis.com -> Gemini AI (OCR)
+4. vision.googleapis.com   -> Google Vision OCR
+5. api.openai.com          -> optional AI provider
+6. api.anthropic.com       -> optional AI provider
+
+Please add these to the allowlist for my free account.
+Thank you!

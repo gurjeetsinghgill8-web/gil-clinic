@@ -25,6 +25,7 @@ backups/
 *.log
 .deps_installed
 track_debug.log
+pa_data_upload.zip
 
 # OS
 .DS_Store
