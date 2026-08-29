@@ -29,6 +29,18 @@ Oracle VM पर deploy script आपके repo से code clone करता 
 2. Source CIDR `0.0.0.0/0`, Protocol **TCP**, Destination Port **8000** → Save
 
 ### Step 3: Deploy (5 मिनट)
+
+**⭐ Easy way (recommended — एक ही command, sab automatic):**
+1. Downloaded private key ko project folder mein `gil-clinic-key.key` नाम से save करें
+2. Laptop par (PowerShell):
+   ```
+   .\deploy_remote.ps1 -VmIp <VM-PUBLIC-IP> -KeyPath .\gil-clinic-key.key
+   ```
+   Script खुद: SSH test → `deploy_oracle.sh` upload + चलाना → health check → admin credentials laptop पर save
+3. Browser में खोलें: `http://<VM-PUBLIC-IP>:8000` ✅
+4. Backup laptop पर लाने के लिए (हफ्ते में एक बार): `.\deploy_remote.ps1 -VmIp <VM-PUBLIC-IP> -KeyPath .\gil-clinic-key.key -Mode PullBackup`
+
+**Manual way (backup):**
 1. अपने laptop पर: downloaded private key को `gil-clinic-key.key` नाम से save करें
 2. SSH करें:
    ```

@@ -84,6 +84,10 @@
 | Secret files gitignore में | ✅ `.env`, `*.db`, `secret.txt`, `admin_credentials.txt` — कोई patient data/key push नहीं हुआ |
 
 **अब 24/7 cloud के लिए सिर्फ एक मैनुअल step बाकी (मैं नहीं कर सकता — card चाहिए):**
-`CLOUD_DEPLOY_GUIDE.md` Part 1 → Oracle Cloud signup (card verify, ₹0 charge) → VM बन जाए तो मुझे बताएँ: **VM का Public IP + SSH private key** — मैं `deploy_oracle.sh` चलाकर सब set कर दूँगा। Code तैयार है, script तैयार है, सब push हो चुका है।
+`CLOUD_DEPLOY_GUIDE.md` Part 1 → Oracle Cloud signup (card verify, ₹0 charge) → VM बन जाए तो **2 option:**
+1. **Easy:** laptop par `.\deploy_remote.ps1 -VmIp <IP> -KeyPath .\gil-clinic-key.key` — sab automatic (deploy + health check + credentials pull)
+2. Ya mujhe **VM का Public IP + SSH private key** do — main khud deploy kar dunga
+
+Code तैयार है, script तैयार है, सब push हो चुका है।
 
 **Tunnel note:** Quick tunnel का URL हर restart पर बदलता है — `START_TUNNEL.bat` दोबारा चलाने पर नया URL अपने आप `.env` में set हो जाता है (server restart की ज़रूरत नहीं)। Permanent URL Oracle VM (public IP) से मिलेगा।
