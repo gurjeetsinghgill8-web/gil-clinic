@@ -732,7 +732,7 @@ function generateDietPlan() {
   status.textContent = 'AI is creating a clinical diet plan...';
       output.textContent = '⏳\n\nAnalyzing patient profile...\nCalculating nutritional requirements (IFCT/NIN/ICMR)...\nCreating personalized clinical meal plan...';
 
-	  fetch('/staff/api/diet-plan', {
+	  aiFetch('/staff/api/diet-plan', {
     method: 'POST',
     headers: {'Content-Type': 'application/json'},
     body: JSON.stringify(data),

@@ -90,7 +90,19 @@ from src.infrastructure.patient.models.patient_model import PatientModel
 from src.infrastructure.queue.models.queue_entry_model import QueueEntryModel
 
 # ── AI Engine ────────────────────────────────────────────────────────────────
-from src.ai_engine.groq_client import call_groq, call_groq_vision, parse_ai_json
+from src.ai_engine.groq_client import parse_ai_json  # noqa: F401 (legacy parser reuse)
+from src.ai_engine.provider_router import (
+    ai_config_summary,
+    decrypt_key,
+    encrypt_key,
+    is_key_set,
+    mask_value,
+    route_chat,
+    route_transcribe,
+    route_vision,
+    sanitize_output,
+)
+from src.ai_engine.usage import log_ai_usage
 from src.ai_engine.prompts import (
     gp_prompt_assistant, gp_prompt_suggest, gp_prompt_followup,
     specialty_prompt, drug_review_prompt, cme_prompt, research_prompt,
@@ -305,13 +317,26 @@ async def opd_dashboard(request: Request, tab: str = "rx"):
 # API: SETTINGS
 # ═══════════════════════════════════════════════════════════════════════════════
 
-async def _get_settings(doctor_id: str) -> dict:
-    """Get settings for a doctor — returns defaults if not found."""
+_PROVIDER_FIELDS = ["groq_api_key", "openai_api_key", "anthropic_api_key", "deepseek_api_key", "gemini_api_key"]
+
+
+async def _get_settings(doctor_id: str, masked: bool = True) -> dict:
+    """Get settings for a doctor — returns defaults if not found.
+
+    masked=True  → keys returned as '••••••••' for the UI (never raw).
+    masked=False → raw stored values (possibly encrypted) for the AI router.
+    """
     defaults = {
         "clinic_name": "My Clinic", "doc_name": "Doctor",
         "doc_subtitle": "MBBS", "doc_degree": "", "doc_reg_no": "",
         "doc_email": "", "doc_phone": "", "clinic_address": "",
         "doc_extra_quals": "", "groq_api_key": "",
+        "ai_mode": "auto", "ai_model": "",
+        "openai_api_key": "", "anthropic_api_key": "",
+        "deepseek_api_key": "", "gemini_api_key": "",
+        "has_groq": False, "has_openai": False, "has_anthropic": False,
+        "has_deepseek": False, "has_gemini": False,
+        "clinic_id": "",
         "wa_reception": "", "wa_manager": "", "wa_doctor": "",
         "wa_dietitian": "",
     }
@@ -322,6 +347,13 @@ async def _get_settings(doctor_id: str) -> dict:
             )
             s = row.scalar_one_or_none()
             if s:
+                key_fields = {
+                    "groq_api_key": s.groq_api_key,
+                    "openai_api_key": getattr(s, "openai_api_key", ""),
+                    "anthropic_api_key": getattr(s, "anthropic_api_key", ""),
+                    "deepseek_api_key": getattr(s, "deepseek_api_key", ""),
+                    "gemini_api_key": getattr(s, "gemini_api_key", ""),
+                }
                 return {
                     "clinic_name": s.clinic_name,
                     "doc_name": s.doc_name,
@@ -332,7 +364,19 @@ async def _get_settings(doctor_id: str) -> dict:
                     "doc_phone": s.doc_phone,
                     "clinic_address": s.clinic_address,
                     "doc_extra_quals": s.doc_extra_quals,
-                    "groq_api_key": "•••••••• (in secret.txt)",
+                    "groq_api_key": mask_value(key_fields["groq_api_key"]) if masked else key_fields["groq_api_key"],
+                    "openai_api_key": mask_value(key_fields["openai_api_key"]) if masked else key_fields["openai_api_key"],
+                    "anthropic_api_key": mask_value(key_fields["anthropic_api_key"]) if masked else key_fields["anthropic_api_key"],
+                    "deepseek_api_key": mask_value(key_fields["deepseek_api_key"]) if masked else key_fields["deepseek_api_key"],
+                    "gemini_api_key": mask_value(key_fields["gemini_api_key"]) if masked else key_fields["gemini_api_key"],
+                    "has_groq": is_key_set(key_fields["groq_api_key"]),
+                    "has_openai": is_key_set(key_fields["openai_api_key"]),
+                    "has_anthropic": is_key_set(key_fields["anthropic_api_key"]),
+                    "has_deepseek": is_key_set(key_fields["deepseek_api_key"]),
+                    "has_gemini": is_key_set(key_fields["gemini_api_key"]),
+                    "ai_mode": getattr(s, "ai_mode", "auto") or "auto",
+                    "ai_model": getattr(s, "ai_model", "") or "",
+                    "clinic_id": s.clinic_id or "",
                     "wa_reception": s.wa_reception or "",
                     "wa_manager": s.wa_manager or "",
                     "wa_doctor": s.wa_doctor or "",
@@ -341,6 +385,14 @@ async def _get_settings(doctor_id: str) -> dict:
     except Exception:
         pass
     return defaults
+
+
+async def _ai_settings_for(doctor_id: str) -> dict:
+    """Settings dict with RAW (encrypted) key values — for provider_router."""
+    return await _get_settings(doctor_id, masked=False)
+
+
+_MASK_PLACEHOLDERS = {"", "••••••••", "********", "****"}
 
 
 @router.get("/api/settings", include_in_schema=False)
@@ -371,15 +423,97 @@ async def api_save_settings(request: Request):
 
             for key in ["clinic_name", "doc_name", "doc_subtitle", "doc_degree",
                          "doc_reg_no", "doc_email", "doc_phone", "clinic_address",
-                         "doc_extra_quals", "groq_api_key",
+                         "doc_extra_quals",
                          "wa_reception", "wa_manager", "wa_doctor", "wa_dietitian"]:
                 if key in body:
                     setattr(s, key, str(body[key]))
+
+            # AI mode + optional model override
+            if "ai_mode" in body:
+                mode = str(body["ai_mode"]).strip().lower()
+                if mode not in ("auto", "puter", "off"):
+                    mode = "auto"
+                setattr(s, "ai_mode", mode)
+            if "ai_model" in body:
+                setattr(s, "ai_model", str(body["ai_model"]).strip())
+
+            # Provider keys — encrypt at rest. Mask/empty values are ignored
+            # (keeps the existing key); clear_<provider> flags remove a key.
+            for fld in _PROVIDER_FIELDS:
+                provider = fld.replace("_api_key", "")
+                if body.get(f"clear_{provider}"):
+                    setattr(s, fld, "")
+                    continue
+                val = str(body.get(fld, "") or "").strip()
+                if not val or val in _MASK_PLACEHOLDERS or val.startswith("enc:v1:"):
+                    continue
+                setattr(s, fld, encrypt_key(val))
 
             await session.commit()
         return {"ok": True}
     except Exception as e:
         return {"ok": False, "error": str(e)}
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# API: AI PROVIDER CONFIG + USAGE (Puter gateway & metering)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@router.get("/api/ai-config", include_in_schema=False)
+async def api_ai_config(request: Request):
+    """Public (secret-free) AI config for the browser gateway."""
+    sess = _require_opd_session(request)
+    settings = await _ai_settings_for(sess["doctor_id"])
+    summary = ai_config_summary(settings)
+    summary["usage_this_month"] = await _usage_count(sess["doctor_id"], days=30)
+    summary["usage_today"] = await _usage_count(sess["doctor_id"], days=1)
+    summary["puter_connected"] = True  # client verifies with puter.auth locally
+    return summary
+
+
+async def _usage_count(doctor_id: str, days: int = 30) -> int:
+    try:
+        from src.infrastructure.opd.models.ai_usage_model import AIUsageModel
+        async with async_session_factory() as session:
+            since = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(days=days)
+            result = await session.execute(
+                sa.select(sa.func.count()).select_from(AIUsageModel).where(
+                    AIUsageModel.doctor_id == doctor_id,
+                    AIUsageModel.created_at >= since,
+                )
+            )
+            return int(result.scalar() or 0)
+    except Exception:
+        return 0
+
+
+@router.post("/api/ai-usage", include_in_schema=False)
+async def api_ai_usage_post(request: Request):
+    """Browser gateway logs Puter-side AI calls here for per-clinic metering."""
+    sess = _require_opd_session(request)
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    await log_ai_usage(
+        clinic_id=body.get("clinic_id") or sess.get("clinic_id"),
+        doctor_id=sess["doctor_id"],
+        feature=str(body.get("feature") or "browser-ai")[:50],
+        provider=str(body.get("provider") or "puter")[:40],
+        model=str(body.get("model") or "")[:100],
+        success=bool(body.get("success", True)),
+        error=str(body.get("error") or "")[:500],
+    )
+    return {"ok": True}
+
+
+@router.get("/api/ai-usage", include_in_schema=False)
+async def api_ai_usage_get(request: Request):
+    sess = _require_opd_session(request)
+    return {
+        "usage_this_month": await _usage_count(sess["doctor_id"], days=30),
+        "usage_today": await _usage_count(sess["doctor_id"], days=1),
+    }
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -796,6 +930,32 @@ async def _learn_drugs(rx_text: str, doctor_id: str):
 # API: PRESCRIPTION
 # ═══════════════════════════════════════════════════════════════════════════════
 
+def _puter_text_or_none(body: dict) -> Optional[str]:
+    """Return browser-side Puter AI text if present in the request body."""
+    for k in ("puter_result", "puter_ocr_result"):
+        v = body.get(k)
+        if isinstance(v, str) and v.strip():
+            return v.strip()
+    return None
+
+
+async def _log_ai(settings: dict, doctor_id: str, feature: str, provider: str,
+                  model: str = "", success: bool = True, usage: Optional[dict] = None,
+                  error: str = "") -> None:
+    usage = usage or {}
+    await log_ai_usage(
+        clinic_id=settings.get("clinic_id"),
+        doctor_id=doctor_id,
+        feature=feature,
+        provider=provider,
+        model=model,
+        success=success,
+        prompt_tokens=int(usage.get("prompt_tokens") or 0),
+        completion_tokens=int(usage.get("completion_tokens") or 0),
+        error=error,
+    )
+
+
 @router.post("/api/generate-rx", include_in_schema=False)
 async def api_generate_rx(request: Request):
     sess = _require_opd_session(request)
@@ -817,7 +977,7 @@ async def api_generate_rx(request: Request):
     if not patient_name:
         return {"ok": False, "error": "Patient name required"}
 
-    settings = await _get_settings(doctor_id)
+    settings = await _ai_settings_for(doctor_id)
 
     # Choose prompt mode based on whether AI should suggest drugs
     if allow_suggest_drugs:
@@ -841,24 +1001,27 @@ async def api_generate_rx(request: Request):
             doctor_medicines=doctor_medicines,
         )
 
-    # Call Groq
-    groq_key = os.getenv("GROQ_API_KEY") or settings.get("groq_api_key") or ""
-    if not groq_key:
-        return {"ok": False, "error": "Groq API key not configured. Set in Settings."}
+    # ── Browser-side Puter result (user-pays) or server-side BYOK routing ──
+    puter_text = _puter_text_or_none(body)
+    if puter_text:
+        result, provider, model_used, usage = sanitize_output(puter_text), "puter", settings.get("ai_model") or "puter", {}
+    else:
+        routed = route_chat(settings, [prompt], feature="generate-rx", temp=0.3, max_tokens=4000)
+        if routed.get("puter_needed"):
+            return {"ok": False, "code": routed["code"], "prompt": routed["prompt"], "model": routed["model"]}
+        result, provider, model_used, usage = routed.get("text") or "", routed.get("provider") or "", routed.get("model") or "", routed.get("usage") or {}
+        if not result:
+            await _log_ai(settings, doctor_id, "generate-rx", provider or "none", model_used, success=False, error=routed.get("error") or "")
+            return {"ok": False, "error": routed.get("error") or "AI Generation failed. Clinic owner: Settings → AI Provider."}
 
-    os.environ["GROQ_API_KEY"] = groq_key
-    result = call_groq([prompt], temp=0.3)
-
-    if not result:
-        return {"ok": False, "error": "AI Generation failed. Check API key."}
+    await _log_ai(settings, doctor_id, "generate-rx", provider, model_used, success=True, usage=usage)
 
     # Post-process: strip Investigations section if doctor unchecked the toggle
     if not include_investigations:
-        import re
         result = re.sub(r'\n\s*Investigations:.*?(?=\n\s*(?:Advice|Follow-up|$))', '', result, flags=re.DOTALL | re.IGNORECASE)
         result = re.sub(r'\n\s*Investigations needed:.*?(?=\n\s*(?:Advice|Follow-up|$))', '', result, flags=re.DOTALL | re.IGNORECASE)
 
-    return {"ok": True, "prescription": result, "mode": "suggest" if allow_suggest_drugs else "assistant"}
+    return {"ok": True, "prescription": result, "mode": "suggest" if allow_suggest_drugs else "assistant", "provider": provider}
 
 
 @router.post("/api/generate-followup-rx", include_in_schema=False)
@@ -882,7 +1045,7 @@ async def api_generate_followup_rx(request: Request):
     if not patient_name:
         return {"ok": False, "error": "Patient name required"}
 
-    settings = await _get_settings(doctor_id)
+    settings = await _ai_settings_for(doctor_id)
 
     prompt = gp_prompt_followup(
         patient_name=patient_name,
@@ -895,17 +1058,21 @@ async def api_generate_followup_rx(request: Request):
         past_advice=past_advice,
     )
 
-    groq_key = os.getenv("GROQ_API_KEY") or settings.get("groq_api_key") or ""
-    if not groq_key:
-        return {"ok": False, "error": "Groq API key not configured. Set in Settings."}
+    puter_text = _puter_text_or_none(body)
+    if puter_text:
+        result, provider, model_used, usage = sanitize_output(puter_text), "puter", settings.get("ai_model") or "puter", {}
+    else:
+        routed = route_chat(settings, [prompt], feature="generate-followup-rx", temp=0.3, max_tokens=4000)
+        if routed.get("puter_needed"):
+            return {"ok": False, "code": routed["code"], "prompt": routed["prompt"], "model": routed["model"]}
+        result, provider, model_used, usage = routed.get("text") or "", routed.get("provider") or "", routed.get("model") or "", routed.get("usage") or {}
+        if not result:
+            await _log_ai(settings, doctor_id, "generate-followup-rx", provider or "none", model_used, success=False, error=routed.get("error") or "")
+            return {"ok": False, "error": routed.get("error") or "AI Generation failed. Clinic owner: Settings → AI Provider."}
 
-    os.environ["GROQ_API_KEY"] = groq_key
-    result = call_groq([prompt], temp=0.3)
+    await _log_ai(settings, doctor_id, "generate-followup-rx", provider, model_used, success=True, usage=usage)
 
-    if not result:
-        return {"ok": False, "error": "AI Generation failed. Check API key."}
-
-    return {"ok": True, "prescription": result, "mode": "followup"}
+    return {"ok": True, "prescription": result, "mode": "followup", "provider": provider}
 
 
 @router.post("/api/optimize-rx", include_in_schema=False)
@@ -923,11 +1090,7 @@ async def api_optimize_rx(request: Request):
     if not prescription.strip():
         return {"ok": False, "error": "No prescription to optimize"}
 
-    settings = await _get_settings(doctor_id)
-    groq_key = os.getenv("GROQ_API_KEY") or settings.get("groq_api_key") or ""
-    if not groq_key:
-        return {"ok": False, "error": "Groq API key not configured. Set in Settings."}
-    os.environ["GROQ_API_KEY"] = groq_key
+    settings = await _ai_settings_for(doctor_id)
 
     from src.ai_engine.prompts import optimize_prompt
     prompt = optimize_prompt(
@@ -939,11 +1102,21 @@ async def api_optimize_rx(request: Request):
         include_investigations=body.get("include_investigations", True),
     )
 
-    result = call_groq([prompt], temp=0.2, max_tokens=3000)
-    if not result:
-        return {"ok": False, "error": "Optimization failed. Check API key or try again."}
+    puter_text = _puter_text_or_none(body)
+    if puter_text:
+        result, provider, model_used, usage = sanitize_output(puter_text), "puter", settings.get("ai_model") or "puter", {}
+    else:
+        routed = route_chat(settings, [prompt], feature="optimize-rx", temp=0.2, max_tokens=3000)
+        if routed.get("puter_needed"):
+            return {"ok": False, "code": routed["code"], "prompt": routed["prompt"], "model": routed["model"]}
+        result, provider, model_used, usage = routed.get("text") or "", routed.get("provider") or "", routed.get("model") or "", routed.get("usage") or {}
+        if not result:
+            await _log_ai(settings, doctor_id, "optimize-rx", provider or "none", model_used, success=False, error=routed.get("error") or "")
+            return {"ok": False, "error": routed.get("error") or "Optimization failed. Clinic owner: Settings → AI Provider."}
 
-    return {"ok": True, "prescription": result}
+    await _log_ai(settings, doctor_id, "optimize-rx", provider, model_used, success=True, usage=usage)
+
+    return {"ok": True, "prescription": result, "provider": provider}
 
 
 @router.post("/api/clinical-support", include_in_schema=False)
@@ -957,11 +1130,7 @@ async def api_clinical_support(request: Request):
     except Exception:
         return {"ok": False, "error": "Invalid JSON"}
 
-    settings = await _get_settings(doctor_id)
-    groq_key = os.getenv("GROQ_API_KEY") or settings.get("groq_api_key") or ""
-    if not groq_key:
-        return {"ok": False, "error": "Groq API key not configured."}
-    os.environ["GROQ_API_KEY"] = groq_key
+    settings = await _ai_settings_for(doctor_id)
 
     from src.ai_engine.prompts import clinical_support_prompt
     prompt = clinical_support_prompt(
@@ -973,11 +1142,21 @@ async def api_clinical_support(request: Request):
         current_investigations=body.get("investigations", ""),
     )
 
-    result = call_groq([prompt], temp=0.3, max_tokens=3000)
-    if not result:
-        return {"ok": False, "error": "Clinical support generation failed."}
+    puter_text = _puter_text_or_none(body)
+    if puter_text:
+        result, provider, model_used, usage = sanitize_output(puter_text), "puter", settings.get("ai_model") or "puter", {}
+    else:
+        routed = route_chat(settings, [prompt], feature="clinical-support", temp=0.3, max_tokens=3000)
+        if routed.get("puter_needed"):
+            return {"ok": False, "code": routed["code"], "prompt": routed["prompt"], "model": routed["model"]}
+        result, provider, model_used, usage = routed.get("text") or "", routed.get("provider") or "", routed.get("model") or "", routed.get("usage") or {}
+        if not result:
+            await _log_ai(settings, doctor_id, "clinical-support", provider or "none", model_used, success=False, error=routed.get("error") or "")
+            return {"ok": False, "error": routed.get("error") or "Clinical support generation failed."}
 
-    return {"ok": True, "support": result}
+    await _log_ai(settings, doctor_id, "clinical-support", provider, model_used, success=True, usage=usage)
+
+    return {"ok": True, "support": result, "provider": provider}
 
 
 @router.post("/api/drug-review", include_in_schema=False)
@@ -994,42 +1173,56 @@ async def api_drug_review(request: Request):
     vitals = body.get("vitals", "")
     prescription = body.get("prescription", "")
 
-    settings = await _get_settings(sess["doctor_id"])
-    groq_key = os.getenv("GROQ_API_KEY") or settings.get("groq_api_key") or ""
-    if not groq_key:
-        return {"ok": False, "error": "Groq API key not configured."}
-    os.environ["GROQ_API_KEY"] = groq_key
+    settings = await _ai_settings_for(sess["doctor_id"])
 
     prompt = drug_review_prompt(vitals=vitals, prescription=prescription)
-    result = call_groq([prompt], temp=0.3)
-    return {"ok": bool(result), "review": result or "Failed to generate."}
+
+    puter_text = _puter_text_or_none(body)
+    if puter_text:
+        result, provider, model_used, usage = sanitize_output(puter_text), "puter", settings.get("ai_model") or "puter", {}
+    else:
+        routed = route_chat(settings, [prompt], feature="drug-review", temp=0.3, max_tokens=4000)
+        if routed.get("puter_needed"):
+            return {"ok": False, "code": routed["code"], "prompt": routed["prompt"], "model": routed["model"]}
+        result, provider, model_used, usage = routed.get("text") or "", routed.get("provider") or "", routed.get("model") or "", routed.get("usage") or {}
+        if not result:
+            await _log_ai(settings, sess["doctor_id"], "drug-review", provider or "none", model_used, success=False, error=routed.get("error") or "")
+            return {"ok": False, "error": routed.get("error") or "Drug review failed."}
+
+    await _log_ai(settings, sess["doctor_id"], "drug-review", provider, model_used, success=True, usage=usage)
+    return {"ok": True, "review": result, "provider": provider}
 
 
 @router.post("/api/transcribe", include_in_schema=False)
 async def api_transcribe(request: Request):
-    """Transcribe audio complaints using Groq Whisper API."""
+    """Transcribe audio complaints — clinic BYOK providers, Puter (browser), or system fallback."""
     sess = _require_opd_session(request)
     doctor_id = sess["doctor_id"]
 
-    settings = await _get_settings(doctor_id)
-    groq_key = os.getenv("GROQ_API_KEY") or settings.get("groq_api_key") or ""
-    if not groq_key:
-        return {"ok": False, "error": "Groq API key not configured."}
-    os.environ["GROQ_API_KEY"] = groq_key
+    settings = await _ai_settings_for(doctor_id)
 
     try:
         form = await request.form()
+        puter_result = str(form.get("puter_result") or "").strip()
+        if puter_result:
+            await _log_ai(settings, doctor_id, "transcribe", "puter", settings.get("ai_model") or "puter", success=True)
+            return {"ok": True, "text": puter_result}
+
         audio_file = form.get("audio")
         if not audio_file:
             return {"ok": False, "error": "No audio file"}
         audio_bytes = await audio_file.read()
         filename = audio_file.filename or "audio.webm"
 
-        from src.ai_engine.groq_client import call_whisper
-        text = call_whisper(audio_bytes, filename)
+        routed = route_transcribe(settings, audio_bytes, filename, feature="transcribe")
+        if routed.get("puter_needed"):
+            return {"ok": False, "code": routed["code"]}
+        text = routed.get("text") or ""
         if text:
+            await _log_ai(settings, doctor_id, "transcribe", routed.get("provider") or "", routed.get("model") or "", success=True)
             return {"ok": True, "text": text}
-        return {"ok": False, "error": "Transcription failed"}
+        await _log_ai(settings, doctor_id, "transcribe", routed.get("provider") or "none", routed.get("model") or "", success=False, error=routed.get("error") or "")
+        return {"ok": False, "error": routed.get("error") or "Transcription failed. Clinic owner: Settings → AI Provider."}
     except Exception as e:
         logger.error("Transcribe error: %s", e)
         return {"ok": False, "error": str(e)}
@@ -1050,15 +1243,24 @@ async def api_cme(request: Request):
     if not topic:
         return {"ok": False, "error": "Topic required."}
 
-    settings = await _get_settings(sess["doctor_id"])
-    groq_key = os.getenv("GROQ_API_KEY") or settings.get("groq_api_key") or ""
-    if not groq_key:
-        return {"ok": False, "error": "Groq API key not configured."}
-    os.environ["GROQ_API_KEY"] = groq_key
+    settings = await _ai_settings_for(sess["doctor_id"])
 
     prompt = cme_prompt(topic)
-    result = call_groq([prompt], temp=0.3)
-    return {"ok": bool(result), "content": result or "Failed to generate."}
+
+    puter_text = _puter_text_or_none(body)
+    if puter_text:
+        result, provider, model_used, usage = sanitize_output(puter_text), "puter", settings.get("ai_model") or "puter", {}
+    else:
+        routed = route_chat(settings, [prompt], feature="cme", temp=0.3, max_tokens=4000)
+        if routed.get("puter_needed"):
+            return {"ok": False, "code": routed["code"], "prompt": routed["prompt"], "model": routed["model"]}
+        result, provider, model_used, usage = routed.get("text") or "", routed.get("provider") or "", routed.get("model") or "", routed.get("usage") or {}
+        if not result:
+            await _log_ai(settings, sess["doctor_id"], "cme", provider or "none", model_used, success=False, error=routed.get("error") or "")
+            return {"ok": False, "error": routed.get("error") or "CME generation failed."}
+
+    await _log_ai(settings, sess["doctor_id"], "cme", provider, model_used, success=True, usage=usage)
+    return {"ok": True, "content": result, "provider": provider}
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -1449,14 +1651,38 @@ async def api_specialty_upgrade(request: Request):
     if not patient_name or not original_rx or not specialty_keys:
         return {"ok": False, "error": "Patient name, prescription, and specialties required."}
 
-    settings = await _get_settings(doctor_id)
-    groq_key = os.getenv("GROQ_API_KEY") or settings.get("groq_api_key") or ""
-    if not groq_key:
-        return {"ok": False, "error": "Groq API key not configured."}
-    os.environ["GROQ_API_KEY"] = groq_key
+    settings = await _ai_settings_for(doctor_id)
 
     results = []
+    puter_text = _puter_text_or_none(body)
+    puter_spec = str(body.get("puter_specialty") or "")
+
+    # ── Save a browser-side Puter result for its specialty, if any ──
+    if puter_text and puter_spec:
+        up_id = None
+        try:
+            async with async_session_factory() as session:
+                upgrade = SpecialtyUpgradeModel(
+                    doctor_id=doctor_id,
+                    date=datetime.datetime.now().strftime("%Y-%m-%d %H:%M"),
+                    patient_name=patient_name,
+                    vitals=vitals,
+                    original_rx=original_rx,
+                    specialty=puter_spec,
+                    upgraded_rx=sanitize_output(puter_text),
+                    evidence="AI Generated (Puter)",
+                )
+                session.add(upgrade)
+                await session.commit()
+                up_id = upgrade.id
+        except Exception:
+            up_id = None
+        results.append({"specialty": puter_spec, "content": sanitize_output(puter_text), "id": up_id})
+        await _log_ai(settings, doctor_id, "specialty-upgrade", "puter", settings.get("ai_model") or "puter", success=True)
+
     for key in specialty_keys:
+        if puter_text and puter_spec and key == puter_spec:
+            continue  # already saved above
         spec_data = SPECIALTIES.get(key)
         if not spec_data:
             continue
@@ -1469,33 +1695,43 @@ async def api_specialty_upgrade(request: Request):
             specialty_data=spec_data,
         )
 
-        result_text = call_groq([prompt], temp=0.2)
+        routed = route_chat(settings, [prompt], feature="specialty-upgrade", temp=0.2, max_tokens=4000)
+        if routed.get("puter_needed"):
+            return {"ok": False, "code": routed["code"], "prompt": routed["prompt"],
+                    "model": routed["model"], "puter_specialty": key, "partial_results": results}
+        result_text = routed.get("text") or ""
+        provider = routed.get("provider") or ""
+        model_used = routed.get("model") or ""
+        usage = routed.get("usage") or {}
+        if not result_text:
+            await _log_ai(settings, doctor_id, "specialty-upgrade", provider or "none", model_used, success=False, error=routed.get("error") or "")
+            continue
+        await _log_ai(settings, doctor_id, "specialty-upgrade", provider, model_used, success=True, usage=usage)
 
-        if result_text:
-            # Save upgrade
-            try:
-                async with async_session_factory() as session:
-                    upgrade = SpecialtyUpgradeModel(
-                        doctor_id=doctor_id,
-                        date=datetime.datetime.now().strftime("%Y-%m-%d %H:%M"),
-                        patient_name=patient_name,
-                        vitals=vitals,
-                        original_rx=original_rx,
-                        specialty=key,
-                        upgraded_rx=result_text,
-                        evidence="AI Generated",
-                    )
-                    session.add(upgrade)
-                    await session.commit()
-                    up_id = upgrade.id
-            except Exception:
-                up_id = None
+        # Save upgrade
+        try:
+            async with async_session_factory() as session:
+                upgrade = SpecialtyUpgradeModel(
+                    doctor_id=doctor_id,
+                    date=datetime.datetime.now().strftime("%Y-%m-%d %H:%M"),
+                    patient_name=patient_name,
+                    vitals=vitals,
+                    original_rx=original_rx,
+                    specialty=key,
+                    upgraded_rx=result_text,
+                    evidence="AI Generated",
+                )
+                session.add(upgrade)
+                await session.commit()
+                up_id = upgrade.id
+        except Exception:
+            up_id = None
 
-            results.append({
-                "specialty": key,
-                "content": result_text,
-                "id": up_id,
-            })
+        results.append({
+            "specialty": key,
+            "content": result_text,
+            "id": up_id,
+        })
 
     return {"ok": True, "results": results}
 
@@ -1636,10 +1872,11 @@ async def api_get_scans(request: Request):
 async def api_scan_ai(request: Request):
     """Process uploaded handwritten prescription image via multi-provider Vision OCR.
 
-    Provider priority: Gemini Flash → Groq Vision → Google Cloud Vision.
-    Whichever is configured and available is used automatically.
+    BYOK: clinic's own vision keys (Gemini → OpenAI → Groq → Anthropic) — clinic pays.
+    Puter mode: browser calls puter.ai.img2txt (user-pays) and re-posts the text.
     """
     sess = _require_opd_session(request)
+    doctor_id = sess["doctor_id"]
 
     try:
         body = await request.json()
@@ -1650,11 +1887,18 @@ async def api_scan_ai(request: Request):
     if not image_b64:
         return {"ok": False, "error": "No image provided"}
 
+    settings = await _ai_settings_for(doctor_id)
+
+    puter_text = _puter_text_or_none(body)
+    if puter_text:
+        parsed = parse_ai_json(puter_text)
+        await _log_ai(settings, doctor_id, "scan-ai", "puter", settings.get("ai_model") or "puter", success=True)
+        return {"ok": True, "parsed": parsed, "raw": puter_text, "provider": "puter"}
+
     try:
         import base64
         import io
         from PIL import Image
-        from src.ai_engine.groq_client import call_vision_with_fallback, parse_ai_json
 
         # Remove data:image/... header if present
         if "," in image_b64:
@@ -1665,11 +1909,18 @@ async def api_scan_ai(request: Request):
         if img.mode not in ('RGB', 'L'):
             img = img.convert('RGB')
 
-        raw_text, err, provider = call_vision_with_fallback(img)
-        if not raw_text:
-            return {"ok": False, "error": err or "No text extracted from image",
-                    "hint": "Add GEMINI_API_KEY or GOOGLE_VISION_KEY in .env on Railway"}
+        routed = route_vision(settings, img, feature="scan-ai")
+        if routed.get("puter_needed"):
+            return {"ok": False, "code": routed["code"], "prompt": routed["prompt"], "model": routed["model"]}
 
+        raw_text = routed.get("text") or ""
+        provider = routed.get("provider") or ""
+        if not raw_text:
+            await _log_ai(settings, doctor_id, "scan-ai", provider or "none", routed.get("model") or "", success=False, error=routed.get("error") or "")
+            return {"ok": False, "error": routed.get("error") or "No text extracted from image",
+                    "hint": "Clinic owner: Settings → AI Provider → add a vision key (Gemini/OpenAI/Groq)."}
+
+        await _log_ai(settings, doctor_id, "scan-ai", provider, routed.get("model") or "", success=True, usage=routed.get("usage") or {})
         parsed = parse_ai_json(raw_text)
         return {"ok": True, "parsed": parsed, "raw": raw_text, "provider": provider}
     except Exception as e:
@@ -1677,15 +1928,15 @@ async def api_scan_ai(request: Request):
         return {"ok": False, "error": f"AI scan failed: {str(e)}"}
 
 
-
 @router.post("/api/handwriting-ocr", include_in_schema=False)
 async def api_handwriting_ocr(request: Request):
     """Process handwritten prescription from Digital Ink Writing Pad.
 
-    Provider priority: Gemini Flash (primary) → Groq Vision → Google Cloud Vision.
-    No configuration needed — just add the API key to Railway env vars.
+    BYOK: clinic's own vision keys — clinic pays. Puter mode: browser-side
+    puter.ai.img2txt (user-pays) → structure hop → re-post result.
     """
-    _require_opd_session(request)
+    sess = _require_opd_session(request)
+    doctor_id = sess["doctor_id"]
 
     try:
         body = await request.json()
@@ -1696,13 +1947,37 @@ async def api_handwriting_ocr(request: Request):
     if not image_b64:
         return {"ok": False, "error": "No handwriting image provided"}
 
+    settings = await _ai_settings_for(doctor_id)
+
+    def _finish_parsed(parsed: dict, raw: str, provider: str, success: bool = True):
+        return {
+            "ok": True,
+            "parsed": parsed,
+            "raw": raw,
+            "ocr_method": provider,
+        }
+
     try:
         import base64 as b64_mod
         import io as io_mod
         from PIL import Image
-        from src.ai_engine.groq_client import call_vision_with_fallback, call_groq_with_error, parse_ai_json
 
-        # Clean base64
+        # ── Browser-side Puter hops ──
+        # 1) puter_ocr_result: raw OCR text from puter.ai.img2txt
+        # 2) puter_result: structured JSON from a puter.ai.chat structuring hop
+        puter_structured = body.get("puter_result")
+        puter_ocr = body.get("puter_ocr_result")
+        if puter_structured or puter_ocr:
+            raw_text = str(puter_structured or puter_ocr or "").strip()
+            parsed = parse_ai_json(raw_text)
+            if puter_structured or (parsed and isinstance(parsed, dict) and any(parsed.values())):
+                await _log_ai(settings, doctor_id, "handwriting-ocr", "puter", settings.get("ai_model") or "puter", success=True)
+                return _finish_parsed(parsed, raw_text, "puter")
+            # Plain OCR text — ask the browser to structure it via Puter chat
+            struct_prompt = _struct_prompt(raw_text)
+            return {"ok": False, "code": "PUTER_CHAT", "prompt": struct_prompt, "model": settings.get("ai_model") or "gpt-4o-mini"}
+
+        # ── Server-side path: decode image ──
         img_b64_clean = image_b64
         if "," in img_b64_clean:
             img_b64_clean = img_b64_clean.split(",", 1)[1]
@@ -1720,34 +1995,41 @@ async def api_handwriting_ocr(request: Request):
         elif img.mode != 'RGB':
             img = img.convert('RGB')
 
-        # ── Smart multi-provider OCR (Gemini → Groq → Google) ─────────────
-        raw_text, ocr_err, provider = call_vision_with_fallback(img)
+        # ── Route through clinic's own vision providers ──
+        routed = route_vision(settings, img, feature="handwriting-ocr")
+        if routed.get("puter_needed"):
+            return {"ok": False, "code": routed["code"], "prompt": routed["prompt"], "model": routed["model"]}
+
+        raw_text = routed.get("text") or ""
+        provider = routed.get("provider") or ""
+        model_used = routed.get("model") or ""
 
         if not raw_text or len(raw_text.strip()) < 5:
-            # If Google Vision returned plain text (not JSON), structure it with text AI
+            await _log_ai(settings, doctor_id, "handwriting-ocr", provider or "none", model_used, success=False, error=routed.get("error") or "")
             return {
                 "ok": True,
                 "parsed": {},
                 "raw": "",
                 "ocr_method": provider,
                 "error_hint": "no_text_found",
-                "message": "Could not read handwriting. Tips: 1) Write clearly with dark pen on white background  2) Ensure good lighting  3) Hold camera steady  4) Add GEMINI_API_KEY to Railway for best results."
+                "message": "Could not read handwriting. Tips: 1) Write clearly with dark pen on white background  2) Ensure good lighting  3) Hold camera steady  4) Clinic owner: Settings → AI Provider → add a vision key."
             }
 
-        # If provider is google_vision, raw_text is plain text — structure it with AI
-        if provider == "google_vision":
-            struct_prompt = f"""Convert this OCR-extracted text from a doctor's handwritten prescription into structured JSON.
+        parsed = parse_ai_json(raw_text)
 
-OCR TEXT:
-{raw_text}
-
-Return ONLY valid JSON:
-{{"vitals":"","complaints":"","diagnosis":"expand abbreviations","medicines":"numbered list with drug+dose+freq+duration","investigations":"comma-separated","advice":"","follow_up":""}}"""
-            ai_text, _ = call_groq_with_error([struct_prompt], temp=0.1, max_tokens=1500)
+        # Plain OCR text (no JSON) — structure it with the clinic's text provider
+        if not parsed or not isinstance(parsed, dict) or not any(parsed.values()):
+            struct_prompt = _struct_prompt(raw_text)
+            struct_routed = route_chat(settings, [struct_prompt], feature="handwriting-ocr-struct", temp=0.1, max_tokens=1500)
+            if struct_routed.get("puter_needed"):
+                await _log_ai(settings, doctor_id, "handwriting-ocr", provider, model_used, success=True)
+                return {"ok": False, "code": struct_routed["code"], "prompt": struct_routed["prompt"], "model": struct_routed["model"]}
+            ai_text = struct_routed.get("text") or ""
             parsed = parse_ai_json(ai_text) if ai_text else {}
             raw_text = ai_text or raw_text
+            await _log_ai(settings, doctor_id, "handwriting-ocr", struct_routed.get("provider") or provider, struct_routed.get("model") or model_used, success=True, usage=struct_routed.get("usage") or {})
         else:
-            parsed = parse_ai_json(raw_text)
+            await _log_ai(settings, doctor_id, "handwriting-ocr", provider, model_used, success=True, usage=routed.get("usage") or {})
 
         if not parsed or not isinstance(parsed, dict) or not any(parsed.values()):
             return {
@@ -1759,16 +2041,22 @@ Return ONLY valid JSON:
                 "message": f"OCR read text ({provider}) but could not parse structure. Raw text returned."
             }
 
-        return {
-            "ok": True,
-            "parsed": parsed,
-            "raw": raw_text,
-            "ocr_method": provider,
-        }
+        return _finish_parsed(parsed, raw_text, provider)
 
     except Exception as e:
         logger.error("Handwriting OCR error: %s", e)
         return {"ok": False, "error": f"Handwriting recognition failed: {str(e)}"}
+
+
+def _struct_prompt(raw_text: str) -> str:
+    """Structuring prompt for plain OCR text → Rx JSON."""
+    return f"""Convert this OCR-extracted text from a doctor's handwritten prescription into structured JSON.
+
+OCR TEXT:
+{raw_text}
+
+Return ONLY valid JSON:
+{{"vitals":"","complaints":"","diagnosis":"expand abbreviations","medicines":"numbered list with drug+dose+freq+duration","investigations":"comma-separated","advice":"","follow_up":""}}"""
 
 
 
@@ -1827,10 +2115,21 @@ async def api_save_rx(request: Request):
 
 @router.post("/api/transcribe", include_in_schema=False)
 async def api_transcribe_audio(request: Request):
-    """Transcribe doctor consultation voice dictation using Groq Whisper API (EkaScribe style)."""
+    """Transcribe doctor consultation voice dictation (EkaScribe style).
+
+    BYOK: clinic's own audio providers (Groq/OpenAI/Gemini) — clinic pays.
+    Puter mode: browser-side puter.ai.speech2txt (user-pays).
+    """
     sess = _require_opd_session(request)
+    doctor_id = sess["doctor_id"]
+    settings = await _ai_settings_for(doctor_id)
     try:
         form = await request.form()
+        puter_result = str(form.get("puter_result") or "").strip()
+        if puter_result:
+            await _log_ai(settings, doctor_id, "transcribe", "puter", settings.get("ai_model") or "puter", success=True)
+            return {"ok": True, "text": puter_result}
+
         audio_file = form.get("audio")
         if not audio_file:
             return {"ok": False, "error": "No audio file provided"}
@@ -1838,12 +2137,15 @@ async def api_transcribe_audio(request: Request):
         audio_bytes = await audio_file.read()
         filename = getattr(audio_file, "filename", "audio.webm") or "audio.webm"
 
-        from src.ai_engine.groq_client import call_whisper
-        transcription = call_whisper(audio_bytes, filename=filename)
-
+        routed = route_transcribe(settings, audio_bytes, filename, feature="transcribe")
+        if routed.get("puter_needed"):
+            return {"ok": False, "code": routed["code"]}
+        transcription = routed.get("text") or ""
         if not transcription:
-            return {"ok": False, "error": "Transcription empty or failed"}
+            await _log_ai(settings, doctor_id, "transcribe", routed.get("provider") or "none", routed.get("model") or "", success=False, error=routed.get("error") or "")
+            return {"ok": False, "error": routed.get("error") or "Transcription empty or failed"}
 
+        await _log_ai(settings, doctor_id, "transcribe", routed.get("provider") or "", routed.get("model") or "", success=True)
         return {"ok": True, "text": transcription}
     except Exception as e:
         logger.error("Voice transcription error: %s", e)
@@ -2032,6 +2334,10 @@ async def api_lab_report_analyze(request: Request):
     4. Clinical interpretation (AI-generated observations)
     5. Follow-up test recommendations
     6. Save everything to opd_lab_reports table
+
+    BYOK: clinic's own keys pay for vision + text calls.
+    Puter mode: browser hops (img2txt → structure chat → interpretation chat
+    → recommendations chat) — all billed to the clinic's Puter account.
     """
     sess = _require_opd_session(request)
     doctor_id = sess.get("doctor_id", "")
@@ -2049,57 +2355,85 @@ async def api_lab_report_analyze(request: Request):
     report_type = body.get("report_type", "pathology")
     patient_age = body.get("age", "")
     patient_gender = body.get("gender", "")
+    stage = str(body.get("stage") or "")
 
-    if not image_b64:
+    if not image_b64 and stage not in ("interpretation", "recommendations"):
         return {"ok": False, "error": "No report image provided"}
 
     if not patient_name:
         return {"ok": False, "error": "Patient name required to save lab report"}
 
-    # Load Groq API key
-    groq_key = os.getenv("GROQ_API_KEY") or ""
-    if not groq_key and doctor_id:
-        settings = await _get_settings(doctor_id)
-        groq_key = settings.get("groq_api_key") or ""
-    if not groq_key:
-        return {"ok": False, "error": "Groq API key not configured. Add key in OPD Settings."}
-
-    os.environ["GROQ_API_KEY"] = groq_key
+    settings = await _ai_settings_for(doctor_id)
 
     try:
         import base64 as b64_mod
         import io as io_mod
         from PIL import Image
-        from src.ai_engine.groq_client import call_groq_vision, parse_ai_json, call_groq
         from src.ai_engine.prompts import (
             lab_report_ocr_prompt,
             lab_clinical_interpretation_prompt,
             lab_recommendations_prompt,
         )
 
-        # ── Step 1: Decode image ──
         img_b64_clean = image_b64
         if "," in img_b64_clean:
             img_b64_clean = img_b64_clean.split(",", 1)[1]
 
-        image_bytes = b64_mod.b64decode(img_b64_clean)
-        img = Image.open(io_mod.BytesIO(image_bytes))
+        puter_text = _puter_text_or_none(body)
+        puter_ocr = body.get("puter_ocr_result")
 
-        # ── Step 2: OCR + Structured Extraction ──
-        messages = [lab_report_ocr_prompt(), img]
-        raw_ocr = call_groq_vision(img)
-        structured = parse_ai_json(raw_ocr)
+        # ═══ Step 2: OCR + Structured Extraction ═══
+        structured: list = []
+        raw_ocr: str = ""
 
-        if not structured or not isinstance(structured, list) or len(structured) == 0:
-            # Try with text-only fallback if vision model didn't return JSON
-            raw_text = call_groq(messages)
-            structured = parse_ai_json(raw_text)
+        if stage in ("interpretation", "recommendations"):
+            # Later hops: lab data already structured and saved — rebuild from
+            # the body snapshot the gateway echoed back.
+            structured = json.loads(body.get("_structured") or "[]")
+            raw_ocr = body.get("_raw_ocr") or ""
+        elif puter_text or puter_ocr:
+            raw_ocr = str(puter_text or puter_ocr or "").strip()
+            structured = parse_ai_json(raw_ocr) if isinstance(parse_ai_json(raw_ocr), list) else []
+            if not structured:
+                # Structure the plain OCR text via a Puter chat hop
+                await _log_ai(settings, doctor_id, "lab-ocr", "puter", settings.get("ai_model") or "puter", success=True)
+                struct_prompt = (
+                    f"{lab_report_ocr_prompt()}\n\n"
+                    f"OCR TEXT:\n{raw_ocr}\n\nReturn ONLY the JSON array."
+                )
+                return {"ok": False, "code": "PUTER_CHAT", "stage": "ocr", "prompt": struct_prompt,
+                        "model": settings.get("ai_model") or "gpt-4o-mini"}
+        else:
+            # Server-side: decode image + vision routing with lab prompt
+            if image_b64:
+                image_bytes = b64_mod.b64decode(img_b64_clean)
+                img = Image.open(io_mod.BytesIO(image_bytes))
+                routed = route_vision(settings, img, feature="lab-ocr", prompt_text=lab_report_ocr_prompt())
+                if routed.get("puter_needed"):
+                    return {"ok": False, "code": routed["code"], "prompt": routed["prompt"], "model": routed["model"]}
+                raw_ocr = routed.get("text") or ""
+                provider = routed.get("provider") or ""
+                model_used = routed.get("model") or ""
+                struct_routed = None
+                structured = parse_ai_json(raw_ocr) if isinstance(parse_ai_json(raw_ocr), list) else []
+                if not structured:
+                    # Text-only structuring fallback
+                    struct_prompt = f"{lab_report_ocr_prompt()}\n\nOCR TEXT:\n{raw_ocr}\n\nReturn ONLY the JSON array."
+                    struct_routed = route_chat(settings, [struct_prompt], feature="lab-ocr-struct", temp=0.1, max_tokens=2000)
+                    if struct_routed.get("puter_needed"):
+                        await _log_ai(settings, doctor_id, "lab-ocr", provider, model_used, success=True)
+                        return {"ok": False, "code": struct_routed["code"], "stage": "ocr", "prompt": struct_routed["prompt"],
+                                "model": struct_routed["model"]}
+                    raw_ocr = struct_routed.get("text") or raw_ocr
+                    structured = parse_ai_json(raw_ocr) if isinstance(parse_ai_json(raw_ocr), list) else []
+                await _log_ai(settings, doctor_id, "lab-ocr", provider or (struct_routed.get("provider") if struct_routed else ""),
+                              model_used, success=True,
+                              usage=(struct_routed.get("usage") if struct_routed else {}) or routed.get("usage") or {})
+            if not isinstance(structured, list):
+                structured = []
+                logger.warning("Lab OCR failed to extract structured values")
 
-        if not structured or not isinstance(structured, list):
-            structured = []
-            logger.warning("Lab OCR failed to extract structured values")
-
-        # ── Step 3: Classify abnormalities ──
+        # ═══ Step 3: Classify abnormalities ═══
         abnormal_items = []
         investigation_names = []
         for item in structured:
@@ -2112,7 +2446,7 @@ async def api_lab_report_analyze(request: Request):
 
         investigation_summary = "; ".join(investigation_names) if investigation_names else ""
 
-        # ── Step 4: Clinical Interpretation (only if abnormalities found) ──
+        # ═══ Step 4: Clinical Interpretation (only if abnormalities found) ═══
         ai_clinical_notes = ""
         ai_risk_flags = ""
         if abnormal_items:
@@ -2120,28 +2454,50 @@ async def api_lab_report_analyze(request: Request):
             clinical_prompt_text = lab_clinical_interpretation_prompt(
                 abnormal_json, patient_name, patient_age, patient_gender
             )
-            clinical_notes = call_groq([clinical_prompt_text], temp=0.3, max_tokens=2000)
-            if clinical_notes:
-                ai_clinical_notes = clinical_notes
-                # Extract risk flags section
+            if stage == "interpretation" and puter_text:
+                ai_clinical_notes = sanitize_output(puter_text)
                 risk_match = re.search(
                     r"🏷️ RISK FLAGS?\n?(.*?)(?=\n\s*(?:⚠️|$))",
-                    clinical_notes, re.DOTALL | re.IGNORECASE
+                    ai_clinical_notes, re.DOTALL | re.IGNORECASE
                 )
                 if risk_match:
                     ai_risk_flags = risk_match.group(1).strip()
+                await _log_ai(settings, doctor_id, "lab-interpret", "puter", settings.get("ai_model") or "puter", success=True)
+            else:
+                routed = route_chat(settings, [clinical_prompt_text], feature="lab-interpret", temp=0.3, max_tokens=2000)
+                if routed.get("puter_needed"):
+                    return {"ok": False, "code": routed["code"], "stage": "interpretation", "prompt": routed["prompt"],
+                            "model": routed["model"], "_structured": json.dumps(structured), "_raw_ocr": raw_ocr}
+                ai_clinical_notes = routed.get("text") or ""
+                if ai_clinical_notes:
+                    risk_match = re.search(
+                        r"🏷️ RISK FLAGS?\n?(.*?)(?=\n\s*(?:⚠️|$))",
+                        ai_clinical_notes, re.DOTALL | re.IGNORECASE
+                    )
+                    if risk_match:
+                        ai_risk_flags = risk_match.group(1).strip()
+                await _log_ai(settings, doctor_id, "lab-interpret", routed.get("provider") or "", routed.get("model") or "",
+                              success=bool(ai_clinical_notes), usage=routed.get("usage") or {}, error=routed.get("error") or "")
 
-        # ── Step 5: Follow-up Recommendations ──
+        # ═══ Step 5: Follow-up Recommendations ═══
         ai_recommendations = ""
         if abnormal_items:
             rec_prompt_text = lab_recommendations_prompt(
                 json.dumps(abnormal_items, indent=2), patient_name
             )
-            recs = call_groq([rec_prompt_text], temp=0.3, max_tokens=1500)
-            if recs:
-                ai_recommendations = recs
+            if stage == "recommendations" and puter_text:
+                ai_recommendations = sanitize_output(puter_text)
+                await _log_ai(settings, doctor_id, "lab-recommend", "puter", settings.get("ai_model") or "puter", success=True)
+            else:
+                routed = route_chat(settings, [rec_prompt_text], feature="lab-recommend", temp=0.3, max_tokens=1500)
+                if routed.get("puter_needed"):
+                    return {"ok": False, "code": routed["code"], "stage": "recommendations", "prompt": routed["prompt"],
+                            "model": routed["model"], "_structured": json.dumps(structured), "_raw_ocr": raw_ocr}
+                ai_recommendations = routed.get("text") or ""
+                await _log_ai(settings, doctor_id, "lab-recommend", routed.get("provider") or "", routed.get("model") or "",
+                              success=bool(ai_recommendations), usage=routed.get("usage") or {}, error=routed.get("error") or "")
 
-        # ── Step 6: Save to database ──
+        # ═══ Step 6: Save to database ═══
         structured_json = json.dumps(structured, ensure_ascii=False)
 
         async with async_session_factory() as session:
@@ -2701,7 +3057,7 @@ async def api_research(request: Request):
                 starred_data_lines.append(" | ".join(parts))
             starred_data = "\n".join(starred_data_lines[:10]) or "No starred cases."
 
-            settings = await _get_settings(doctor_id)
+            settings = await _ai_settings_for(doctor_id)
             prompt = research_prompt(
                 doc_name=settings.get("doc_name", "Doctor"),
                 patient_count=len(patient_ids),
@@ -2711,15 +3067,19 @@ async def api_research(request: Request):
                 question=question,
             )
 
-            groq_key = os.getenv("GROQ_API_KEY") or settings.get("groq_api_key") or ""
-            if not groq_key:
-                return {"ok": False, "error": "Groq API key not configured."}
-            os.environ["GROQ_API_KEY"] = groq_key
+            puter_text = _puter_text_or_none(body)
+            if puter_text:
+                result, provider, model_used, usage = sanitize_output(puter_text), "puter", settings.get("ai_model") or "puter", {}
+            else:
+                routed = route_chat(settings, [prompt], feature="research", temp=0.3, max_tokens=4000)
+                if routed.get("puter_needed"):
+                    return {"ok": False, "code": routed["code"], "prompt": routed["prompt"], "model": routed["model"]}
+                result, provider, model_used, usage = routed.get("text") or "", routed.get("provider") or "", routed.get("model") or "", routed.get("usage") or {}
+                if not result:
+                    await _log_ai(settings, doctor_id, "research", provider or "none", model_used, success=False, error=routed.get("error") or "")
+                    return {"ok": False, "error": routed.get("error") or "Research query failed."}
 
-            result = call_groq([prompt], temp=0.3)
-
-            if not result:
-                return {"ok": False, "error": "Research query failed."}
+            await _log_ai(settings, doctor_id, "research", provider, model_used, success=True, usage=usage)
 
             stats = {
                 "total_prescriptions": len(rx_list),
@@ -2727,7 +3087,7 @@ async def api_research(request: Request):
                 "total_revenue": total_revenue,
                 "starred_cases": len(starred_list),
             }
-            return {"ok": True, "result": result, "stats": stats}
+            return {"ok": True, "result": result, "stats": stats, "provider": provider}
 
     except Exception as e:
         logger.error("Research error: %s", e)

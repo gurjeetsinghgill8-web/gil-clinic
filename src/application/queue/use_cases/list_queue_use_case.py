@@ -38,7 +38,8 @@ class ListQueueUseCase(BaseUseCase):
 
     async def execute(self, command: Command) -> Result:
         dto = command.data
-        department = dto.get("department", "Cardiology")
+        # None = ALL departments (staff dashboard post-filters by service_code)
+        department = dto.get("department") or None
         status_filter = dto.get("status")
         offset = dto.get("offset", 0)
         limit = dto.get("limit", 100)
@@ -68,7 +69,7 @@ class ListQueueUseCase(BaseUseCase):
 
             return Result.ok(
                 data={
-                    "department": department,
+                    "department": department or "All",
                     "total": len(sorted_entries),
                     "stats": {
                         "waiting": waiting_count,

@@ -12,11 +12,14 @@ API Contract:
 
 from __future__ import annotations
 
+import logging
 from datetime import datetime, timezone
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import HTMLResponse, StreamingResponse
+
+logger = logging.getLogger(__name__)
 
 from src.application.common.command import Command
 from src.infrastructure.clinic.settings_provider import get_clinic_settings
@@ -137,12 +140,15 @@ async def list_department_queue(
 async def technician_action(
     request: TechnicianActionRequest,
     use_case=Depends(get_technician_action_use_case),
+    repo=Depends(get_queue_repo),
 ):
     """Perform a status transition on a queue entry.
 
     Actions: call, recall, start, complete, report-ready, deliver, cancel, no-show.
 
     Validates the transition — returns 400 if not allowed.
+    On call/recall the patient is auto-notified on WhatsApp (Cloud API if
+    configured, otherwise a wa.me link is returned for the browser to open).
     """
     command = Command(data={
         "entry_id": request.entry_id,
@@ -158,7 +164,50 @@ async def technician_action(
             detail=result.error,
         )
 
-    return result.data
+    data = result.data
+
+    # ── Patient notification on call/recall ──
+    if request.action in ("call", "recall"):
+        try:
+            entry = await repo.get_by_id(request.entry_id)
+            phone = ""
+            if entry and entry.patient_id:
+                import sqlalchemy as sa
+
+                from src.infrastructure.patient.models.patient_model import PatientModel
+                from src.shared.infrastructure.database import async_session_factory
+
+                async with async_session_factory() as session:
+                    row = await session.execute(
+                        sa.select(PatientModel.phone).where(
+                            PatientModel.patient_id == entry.patient_id
+                        )
+                    )
+                    phone = (row.scalar() or "").strip()
+
+            if phone:
+                from src.infrastructure.notification.whatsapp_cloud_api import (
+                    build_wa_me_url,
+                    send_whatsapp_message,
+                )
+                msg = (
+                    "🔔 *GIL CLINIC*\n\n"
+                    f"📢 *आपका Token #{entry.token_number} ({entry.service_code}) बुलाया गया है — कृपया आएं!*\n\n"
+                    "— Reception"
+                )
+                data["whatsapp_url"] = build_wa_me_url(phone, msg)
+
+                # Direct auto-send when Meta Cloud API is configured (no popup needed)
+                import os
+
+                if os.getenv("WHATSAPP_PHONE_NUMBER_ID") and os.getenv("WHATSAPP_ACCESS_TOKEN"):
+                    import asyncio
+
+                    asyncio.create_task(send_whatsapp_message(phone, msg))
+        except Exception as e:
+            logger.warning("call notify failed (non-fatal): %s", e)
+
+    return data
 
 
 # =============================================================================

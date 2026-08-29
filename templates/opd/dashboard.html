@@ -466,6 +466,8 @@
             .card { padding: 10px; border-radius: 8px; }
         }
     </style>
+    <script src="https://js.puter.com/v2/"></script>
+    <script src="/static/js/ai_gateway.js"></script>
 </head>
 <body>
 <div class="app">
@@ -1217,16 +1219,74 @@
                             <input type="text" id="set-phone" value="{{ settings.doc_phone or '' }}">
                         </div>
                     </div>
-                    <div class="card">
-                        <div class="card-title">API & Integration</div>
-                        <div class="form-group">
-                            <label>API Keys</label>
-                            <div style="background:#f0fdf4;border:1px solid #22c55e;border-radius:8px;padding:12px;font-size:13px;color:#15803d;">
-                                🔒 <strong>API keys are stored securely in <code>secret.txt</code> file on your server.</strong><br>
-                                <span style="font-size:11px;color:#64748b;">File location: <code>secret.txt</code> in project root.<br>
-                                Format: <code>GROQ_KEY=gsk_... </code> and <code>GOOGLE_VISION_KEY=...</code></span>
+                    <div class="card" style="grid-column:1/3;">
+                        <div class="card-title">🤖 AI Provider — Who Pays for AI?</div>
+                        <div class="form-row-2">
+                            <div class="form-group">
+                                <label>AI Mode</label>
+                                <select id="set-ai-mode">
+                                    <option value="auto" {% if settings.ai_mode == 'auto' %}selected{% endif %}>Auto — my own API keys (clinic pays)</option>
+                                    <option value="puter" {% if settings.ai_mode == 'puter' %}selected{% endif %}>Puter Free AI — no key needed (clinic's Puter account pays)</option>
+                                    <option value="off" {% if settings.ai_mode == 'off' %}selected{% endif %}>Off — no AI</option>
+                                </select>
+                                <span class="text-sm text-muted">Your clinic pays its own AI usage — GIL CLINIC pays ₹0 in every mode.</span>
+                            </div>
+                            <div class="form-group">
+                                <label>Puter — Free AI (optional)</label>
+                                <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+                                    <button type="button" class="btn btn-sm" style="background:#7c3aed;color:#fff;" onclick="connectPuter()">🔌 Connect Puter</button>
+                                    <span id="puter-status" class="text-sm text-muted">Not connected</span>
+                                </div>
+                                <span class="text-sm text-muted">Free Puter account = free AI credits, no API key needed. Or add your own key inside Puter (BYOK) — then that provider's bill is yours, Puter gets nothing.</span>
                             </div>
                         </div>
+                        <div class="form-group">
+                            <label>Optional: AI model override (Puter model ID, e.g. <code>gpt-4o-mini</code>)</label>
+                            <input type="text" id="set-ai-model" value="{{ settings.ai_model or '' }}" placeholder="leave blank for auto">
+                        </div>
+                        <div class="form-group">
+                            <label>🔑 My own API keys (BYOK — AES-encrypted, never shared)</label>
+                            <div class="form-row-2">
+                                <div class="form-group">
+                                    <label>Groq <code>gsk_...</code> {% if settings.has_groq %}✅ saved{% endif %}</label>
+                                    <div style="display:flex;gap:6px;">
+                                        <input type="password" id="set-groq-key" autocomplete="off" placeholder="{% if settings.has_groq %}•••••••• (saved){% else %}gsk_...{% endif %}">
+                                        {% if settings.has_groq %}<button type="button" class="btn btn-sm btn-ghost" onclick="clearAIKey('groq')">✕</button>{% endif %}
+                                    </div>
+                                </div>
+                                <div class="form-group">
+                                    <label>OpenAI <code>sk-...</code> {% if settings.has_openai %}✅ saved{% endif %}</label>
+                                    <div style="display:flex;gap:6px;">
+                                        <input type="password" id="set-openai-key" autocomplete="off" placeholder="{% if settings.has_openai %}•••••••• (saved){% else %}sk-...{% endif %}">
+                                        {% if settings.has_openai %}<button type="button" class="btn btn-sm btn-ghost" onclick="clearAIKey('openai')">✕</button>{% endif %}
+                                    </div>
+                                </div>
+                                <div class="form-group">
+                                    <label>Anthropic <code>sk-ant-...</code> {% if settings.has_anthropic %}✅ saved{% endif %}</label>
+                                    <div style="display:flex;gap:6px;">
+                                        <input type="password" id="set-anthropic-key" autocomplete="off" placeholder="{% if settings.has_anthropic %}•••••••• (saved){% else %}sk-ant-...{% endif %}">
+                                        {% if settings.has_anthropic %}<button type="button" class="btn btn-sm btn-ghost" onclick="clearAIKey('anthropic')">✕</button>{% endif %}
+                                    </div>
+                                </div>
+                                <div class="form-group">
+                                    <label>DeepSeek <code>sk-...</code> {% if settings.has_deepseek %}✅ saved{% endif %}</label>
+                                    <div style="display:flex;gap:6px;">
+                                        <input type="password" id="set-deepseek-key" autocomplete="off" placeholder="{% if settings.has_deepseek %}•••••••• (saved){% else %}sk-...{% endif %}">
+                                        {% if settings.has_deepseek %}<button type="button" class="btn btn-sm btn-ghost" onclick="clearAIKey('deepseek')">✕</button>{% endif %}
+                                    </div>
+                                </div>
+                                <div class="form-group">
+                                    <label>Google Gemini <code>AIza...</code> {% if settings.has_gemini %}✅ saved{% endif %}</label>
+                                    <div style="display:flex;gap:6px;">
+                                        <input type="password" id="set-gemini-key" autocomplete="off" placeholder="{% if settings.has_gemini %}•••••••• (saved){% else %}AIza...{% endif %}">
+                                        {% if settings.has_gemini %}<button type="button" class="btn btn-sm btn-ghost" onclick="clearAIKey('gemini')">✕</button>{% endif %}
+                                    </div>
+                                </div>
+                            </div>
+                            <span class="text-sm text-muted">Your clinic pays your own provider bill — no third-party cut, no GIL CLINIC involvement.</span>
+                        </div>
+                        <div class="text-sm text-muted" id="ai-usage-info" style="margin-top:4px;">🤖 AI calls this month: loading…</div>
+                        <div class="text-sm text-muted" style="margin-top:4px;">⚠️ Enabling AI sends patient data to the selected AI provider. By enabling, you consent on your clinic's behalf (DPDP Act 2023).</div>
                     </div>
                     <div class="card" style="grid-column:1/2;">
                         <div class="card-title">📱 WhatsApp Jugaad Numbers</div>
@@ -1548,7 +1608,7 @@ async function processAllScansSequential(files, statusEl) {
         
         try {
             const dataUrl = await readFileAsDataURL(file);
-            const res = await fetch('/opd/api/scan-ai', {
+            const res = await aiFetch('/opd/api/scan-ai', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ image: dataUrl })
@@ -1688,7 +1748,7 @@ function startRecording() {
                 document.getElementById('voice-btn').textContent = '⏳';
                 const formData = new FormData();
                 formData.append('audio', blob, 'recording.webm');
-                fetch('/opd/api/transcribe', { method: 'POST', body: formData })
+                aiFetch('/opd/api/transcribe', formData)
                     .then(r => r.json())
                     .then(res => {
                         if (res.ok && res.text) {
@@ -1971,7 +2031,7 @@ function generateFollowupRx(patientName, patientId) {
 
     document.getElementById('rx-status').innerHTML = '<span class="spinner"></span> Generating Follow-Up Rx...';
 
-    fetch('/opd/api/generate-followup-rx', {
+    aiFetch('/opd/api/generate-followup-rx', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify(data),
@@ -2070,7 +2130,7 @@ function generateRx() {
     const modeLabel = data.allow_suggest_drugs ? 'Suggest mode' : 'Assistant mode';
     document.getElementById('rx-status').innerHTML = `<span class="spinner"></span> Generating with AI (${modeLabel})...`;
 
-    fetch('/opd/api/generate-rx', {
+    aiFetch('/opd/api/generate-rx', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify(data),
@@ -2103,7 +2163,7 @@ function optimizeRx() {
 
     document.getElementById('rx-status').innerHTML = '<span class="spinner"></span> Optimizing prescription...';
 
-    fetch('/opd/api/optimize-rx', {
+    aiFetch('/opd/api/optimize-rx', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({
@@ -2155,7 +2215,7 @@ function loadClinicalSupport() {
     const invMatch = rx.match(/Investigations?:?\n?([\s\S]*?)(?=\n(?:Advice|Follow-up|$))/i);
     const invs = invMatch ? invMatch[1].trim() : document.getElementById('pt-investigations').value.trim();
 
-    fetch('/opd/api/clinical-support', {
+    aiFetch('/opd/api/clinical-support', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({
@@ -2841,7 +2901,7 @@ function processAllScans() {
         .then(res => {
             if (res.ok) {
                 // AI read
-                return fetch('/opd/api/scan-ai', {
+                return aiFetch('/opd/api/scan-ai', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({image: b64}),
@@ -3162,7 +3222,15 @@ function saveSettings() {
         wa_manager: document.getElementById('set-wa-manager').value.trim(),
         wa_doctor: document.getElementById('set-wa-doctor').value.trim(),
         wa_dietitian: document.getElementById('set-wa-dietitian').value.trim(),
+        ai_mode: document.getElementById('set-ai-mode').value,
+        ai_model: document.getElementById('set-ai-model').value.trim(),
+        groq_api_key: document.getElementById('set-groq-key').value.trim(),
+        openai_api_key: document.getElementById('set-openai-key').value.trim(),
+        anthropic_api_key: document.getElementById('set-anthropic-key').value.trim(),
+        deepseek_api_key: document.getElementById('set-deepseek-key').value.trim(),
+        gemini_api_key: document.getElementById('set-gemini-key').value.trim(),
     };
+    _clearAIKeys.forEach(function(p) { data['clear_' + p] = true; });
 
     document.getElementById('settings-status').textContent = 'Saving...';
 
@@ -3177,11 +3245,62 @@ function saveSettings() {
             showToast('✅ Settings saved!');
             document.getElementById('settings-status').textContent = '✅ Saved';
             updateLetterheadPreview();
+            _clearAIKeys = [];
+            refreshAIStatus();
         } else {
             document.getElementById('settings-status').textContent = '❌ ' + (res.error || 'Failed');
         }
     });
 }
+
+// ── AI Provider helpers ────────────────────────────────────────────────
+let _clearAIKeys = [];
+
+function clearAIKey(provider) {
+    const el = document.getElementById('set-' + provider + '-key');
+    if (el) { el.value = ''; el.placeholder = 'key will be removed on save'; }
+    if (!_clearAIKeys.includes(provider)) _clearAIKeys.push(provider);
+    showToast('Key will be removed when you save');
+}
+
+async function connectPuter() {
+    const statusEl = document.getElementById('puter-status');
+    statusEl.textContent = 'Connecting…';
+    try {
+        await window.puterConnect();
+        const st = await window.puterStatus();
+        if (st) {
+            statusEl.textContent = '✅ ' + ((st.username || st.email) || 'Connected');
+            showToast('✅ Puter connected — free AI active');
+        } else {
+            statusEl.textContent = 'Not connected';
+            showToast('Puter sign-in not completed', 'error');
+        }
+    } catch (e) {
+        statusEl.textContent = '❌ ' + e;
+        showToast('Puter unavailable — check internet', 'error');
+    }
+}
+
+async function refreshAIStatus() {
+    const statusEl = document.getElementById('puter-status');
+    const usageEl = document.getElementById('ai-usage-info');
+    try {
+        if (typeof window.puterAvailable === 'function' && window.puterAvailable()) {
+            const st = await window.puterStatus();
+            if (statusEl && st) statusEl.textContent = '✅ ' + ((st.username || st.email) || 'Connected');
+            else if (statusEl) statusEl.textContent = 'Not connected';
+        } else if (statusEl) {
+            statusEl.textContent = 'Not connected';
+        }
+    } catch (e) { /* ignore */ }
+    try {
+        const r = await fetch('/opd/api/ai-usage');
+        const d = await r.json();
+        if (usageEl) usageEl.textContent = '🤖 AI calls — today: ' + (d.usage_today || 0) + ' · this month: ' + (d.usage_this_month || 0) + ' (billed to your clinic)';
+    } catch (e) { if (usageEl) usageEl.textContent = ''; }
+}
+document.addEventListener('DOMContentLoaded', refreshAIStatus);
 
 // ════════════════════════════════════════════════════════════════
 // RESEARCH (Upgrade 6)
@@ -3202,7 +3321,7 @@ function runResearch() {
     document.getElementById('research-result').style.display = 'block';
     document.getElementById('research-result').innerHTML = '<span class="spinner"></span> Analyzing your practice data...';
 
-    fetch('/opd/api/research', {
+    aiFetch('/opd/api/research', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({ question: q }),
@@ -3245,7 +3364,7 @@ function generateCME() {
     document.getElementById('cme-content').textContent = '⏳ Generating CME...';
     document.getElementById('cme-pdf-btn').style.display = 'none';
 
-    fetch('/opd/api/cme', {
+    aiFetch('/opd/api/cme', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({topic}),
@@ -3472,7 +3591,7 @@ async function analyzeLabReport() {
 
         try {
             const dataUrl = await readFileAsDataURL(file);
-            const res = await fetch('/opd/api/lab-report-analyze', {
+            const res = await aiFetch('/opd/api/lab-report-analyze', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -4177,7 +4296,7 @@ async function inkConvertToEMR() {
 
             let res;
             try {
-                const response = await fetch('/opd/api/handwriting-ocr', {
+                const response = await aiFetch('/opd/api/handwriting-ocr', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ image: imageData }),
@@ -4351,6 +4470,45 @@ window.addEventListener('resize', function() {
 loadTemplates();
 loadRoster('today');
 loadQueuePatients();
+
+// ════════════════════════════════════════════════════════════════
+// LIVE QUEUE ALERT (B6) — doctor ko naya OPD patient + report ready
+// ════════════════════════════════════════════════════════════════
+(function () {
+  function doctorBeep(freq, dur) {
+    try {
+      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      const o = ctx.createOscillator();
+      const g = ctx.createGain();
+      o.type = 'sine';
+      o.frequency.value = freq || 880;
+      g.gain.value = 0.2;
+      o.connect(g);
+      g.connect(ctx.destination);
+      o.start();
+      o.stop(ctx.currentTime + (dur || 0.3));
+    } catch (e) {}
+  }
+
+  async function pollQueueAlert() {
+    const key = 'gil_opd_queue_alert';
+    try {
+      const r = await fetch('/opd/api/queue-patients');
+      const d = await r.json();
+      const count = (d.patients || []).length;
+      const prev = JSON.parse(localStorage.getItem(key) || '{}');
+      if (prev.count !== undefined && count > prev.count) {
+        doctorBeep(880, 0.35);
+        setTimeout(() => doctorBeep(1100, 0.35), 400);
+        showToast('🔔 नया patient OPD queue में! (' + count + ')', 'warning');
+        loadQueuePatients();
+      }
+      localStorage.setItem(key, JSON.stringify({ count: count, ts: Date.now() }));
+    } catch (e) {}
+  }
+  pollQueueAlert();
+  setInterval(pollQueueAlert, 20000);
+})();
 </script>
 </body>
 </html>

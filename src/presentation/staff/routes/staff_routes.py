@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 import math
 import os
 from datetime import datetime, timezone
@@ -33,6 +34,8 @@ import sqlalchemy as sa
 from fastapi import APIRouter, Cookie, Form, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from itsdangerous import BadSignature, SignatureExpired, URLSafeTimedSerializer
+
+logger = logging.getLogger(__name__)
 
 # ── Jinja2 template engine (direct, bypasses Starlette's wrapper) ────────────
 import jinja2
@@ -66,7 +69,7 @@ SESSION_MAX_AGE = 60 * 60 * 12  # 12 hours
 from itsdangerous import URLSafeSerializer
 _track_signer = URLSafeSerializer(SECRET_KEY, salt="patient-public-track-v1")
 
-APP_BASE_URL = os.getenv("APP_BASE_URL", "https://cardioqueue-production.up.railway.app")
+APP_BASE_URL = os.getenv("APP_BASE_URL", "http://localhost:8000")
 
 
 def make_tracking_token(patient_id: str) -> str:
@@ -116,6 +119,19 @@ SERVICES = [
     {"id": "Lab",      "name": "Lab Test", "icon": "🧪"},
     {"id": "Dietitian","name": "Dietitian","icon": "🥗"},
 ]
+
+# Service → real department name. FIX: entries used to be created with
+# department="Cardiology" for every service, which broke department views.
+_SERVICE_DEPARTMENT = {
+    "ECG": "ECG", "ECHO": "Echo", "TMT": "TMT", "OPD": "OPD",
+    "X-RAY": "X-Ray", "XRAY": "X-Ray", "LAB": "Lab", "DIETITIAN": "Dietitian",
+}
+
+
+def department_for_service(code: str) -> str:
+    """Map a service code to its department (fallback: the code itself)."""
+    c = (code or "").strip()
+    return _SERVICE_DEPARTMENT.get(c, _SERVICE_DEPARTMENT.get(c.upper(), c.upper() or "Cardiology"))
 
 # Under construction departments
 UNDER_CONSTRUCTION = [
@@ -217,33 +233,30 @@ async def _get_queue(request: Request, department: str | None = None,
                 return []
             entries = result.data.get("entries", [])
 
-            # Filter by service_code if department was specified
+            # Filter by service_code OR department (legacy rows use "Cardiology"
+            # department with a service_code; new rows carry the real department)
             if service_code_filter:
                 entries = [
                     e for e in entries
                     if e.get("service_code", "").upper() == service_code_filter.upper()
+                    or e.get("department", "").upper() == service_code_filter.upper()
                 ]
 
             # Collect patient_uuids & patient_ids to batch-fetch phone numbers
-            patient_uuids = list({e.get("patient_uuid", "") for e in entries if e.get("patient_uuid")})
             patient_ids = list({e.get("patient_id", "") for e in entries if e.get("patient_id")})
             phone_map: dict[str, str] = {}
-            if patient_uuids or patient_ids:
+            if patient_ids:
                 try:
                     from src.infrastructure.patient.models.patient_model import PatientModel
-                    stmt = sa.select(PatientModel.id, PatientModel.patient_id, PatientModel.phone).where(
-                        sa.or_(
-                            PatientModel.id.in_(patient_uuids),
-                            PatientModel.patient_id.in_(patient_ids)
-                        )
+                    # NOTE: query by patient_id (String) only — PatientModel.id is
+                    # a UUID column and passing raw strings raised
+                    # "'str' object has no attribute 'hex'" on SQLite.
+                    stmt = sa.select(PatientModel.patient_id, PatientModel.phone).where(
+                        PatientModel.patient_id.in_(patient_ids)
                     )
                     rows = (await session.execute(stmt)).all()
                     for r in rows:
-                        p_uuid_str = str(r[0])
-                        p_id_str = str(r[1])
-                        phone_num = r[2] or ""
-                        phone_map[p_uuid_str] = phone_num
-                        phone_map[p_id_str] = phone_num
+                        phone_map[str(r[0])] = r[1] or ""
                 except Exception as ex:
                     logger.error("Phone lookup error: %s", ex)
             for e in entries:
@@ -255,13 +268,13 @@ async def _get_queue(request: Request, department: str | None = None,
                 except Exception:
                     e["wait_minutes"] = 0
                 # Attach phone number for WhatsApp sharing
-                puuid = e.get("patient_uuid", "")
                 pid = e.get("patient_id", "")
-                phone = phone_map.get(puuid) or phone_map.get(pid, "")
+                phone = phone_map.get(pid, "")
                 e["patient_phone"] = phone
                 e["phone"] = phone
             return entries
-    except Exception:
+    except Exception as exc:
+        logger.exception("_get_queue failed: %s", exc)
         return []
 
 
@@ -514,13 +527,19 @@ async def _dept_page(request: Request, dept_key: str, active_page: str):
 
 
 @router.get("/ecg",  include_in_schema=False)
-async def ecg(request: Request):  return RedirectResponse("/staff/home")  # DISABLED
+async def ecg(request: Request):  return await _dept_page(request, "ECG", "ecg")
 
 @router.get("/echo", include_in_schema=False)
-async def echo(request: Request): return RedirectResponse("/staff/home")  # DISABLED
+async def echo(request: Request): return await _dept_page(request, "Echo", "echo")
 
 @router.get("/tmt",  include_in_schema=False)
-async def tmt(request: Request):  return RedirectResponse("/staff/home")  # DISABLED
+async def tmt(request: Request):  return await _dept_page(request, "TMT", "tmt")
+
+@router.get("/xray", include_in_schema=False)
+async def xray(request: Request): return await _dept_page(request, "XRay", "xray")
+
+@router.get("/lab", include_in_schema=False)
+async def lab(request: Request):  return await _dept_page(request, "Lab", "lab")
 
 @router.get("/opd",  include_in_schema=False)
 async def opd(request: Request):  return await _dept_page(request, "OPD",  "opd")
@@ -537,6 +556,70 @@ async def doctor(request: Request):
     if not sess:
         return RedirectResponse("/staff/login")
     return RedirectResponse("/opd/dashboard")
+
+
+# ── Clinic Live Board (B5 — sab departments ek screen par) ─────────────────────
+
+async def _live_board_snapshot(request: Request) -> dict:
+    """Build a per-department live snapshot from today's queue."""
+    entries = await _get_queue(request)
+    dept_cfgs = list(DEPT_CONFIG.values()) + [{"id": "Lab", "name": "Lab Test", "icon": "🧪"}]
+    departments = []
+    for cfg in dept_cfgs:
+        rows = [
+            e for e in entries
+            if e.get("service_code", "").upper() == cfg["id"].upper()
+            or e.get("department", "").upper() == cfg["id"].upper()
+        ]
+        waiting = [e for e in rows if e.get("status") == "WAITING"]
+        called = [e for e in rows if e.get("status") == "CALLED"]
+        current = next((e for e in rows if e.get("status") == "IN_PROGRESS"), None)
+        report_ready = [e for e in rows if e.get("status") in ("REPORT_READY", "COMPLETED")]
+        departments.append({
+            "id": cfg["id"],
+            "name": cfg["name"],
+            "icon": cfg["icon"],
+            "waiting": len(waiting),
+            "called": len(called),
+            "current": current.get("patient_name") if current else None,
+            "current_token": current.get("token_number") if current else None,
+            "report_ready": len(report_ready),
+            "top": [
+                {"name": e.get("patient_name"), "token": e.get("token_number")}
+                for e in (waiting + called)[:4]
+            ],
+        })
+    total_waiting = sum(d["waiting"] for d in departments)
+    total_report_ready = sum(d["report_ready"] for d in departments)
+    return {
+        "departments": departments,
+        "total_waiting": total_waiting,
+        "total_report_ready": total_report_ready,
+    }
+
+
+@router.get("/live-board", include_in_schema=False)
+async def live_board_page(request: Request):
+    sess = get_session(request)
+    if not sess:
+        return RedirectResponse("/staff/login")
+    snap = await _live_board_snapshot(request)
+    return HTMLResponse(content=_render("dashboard/live_board.html",
+        request=request, active_page="live_board", session_user=sess,
+        departments=snap["departments"],
+        total_waiting=snap["total_waiting"],
+        total_report_ready=snap["total_report_ready"],
+    ))
+
+
+@router.get("/api/live-board", include_in_schema=False)
+async def api_live_board(request: Request):
+    """JSON snapshot for the Live Board page (polled)."""
+    sess = get_session(request)
+    if not sess:
+        return {"ok": False, "error": "Not logged in"}
+    snap = await _live_board_snapshot(request)
+    return {"ok": True, **snap}
 
 
 # ── Manager ────────────────────────────────────────────────────────────────────
@@ -665,7 +748,7 @@ async def staff_register_patient(request: Request):
                         patient_name=patient_name,
                         service_code=code.upper(),
                         token_number=token,
-                        department="Cardiology",
+                        department=department_for_service(code),
                         room="",
                         status="WAITING",
                         priority=0,
@@ -680,9 +763,9 @@ async def staff_register_patient(request: Request):
                     session.add(q)
                     entries_created.append({"service": code, "token": token})
                 await session.commit()
-                # Generate WhatsApp notification data
+                # Generate WhatsApp notification data (with live tracking link)
                 tracking_token = make_tracking_token(patient_id)
-                tracking_url = f"{APP_BASE_URL}/track/{tracking_token}"
+                tracking_url = f"{_tracking_base(request)}/track/{tracking_token}"
                 whatsapp_links = []
                 if phone:
                     from src.infrastructure.notification.whatsapp_cloud_api import (
@@ -698,8 +781,6 @@ async def staff_register_patient(request: Request):
                             "token": entry["token"],
                             "url": build_wa_me_url(phone, msg),
                         })
-                tracking_token = make_tracking_token(patient_id)
-                tracking_url = f"{APP_BASE_URL}/track/{tracking_token}"
                 return {"ok": True, "patient_id": patient_id, "visit_id": visit_id,
                         "entries": entries_created, "whatsapp": whatsapp_links,
                         "tracking_url": tracking_url,
@@ -748,7 +829,7 @@ async def staff_register_patient(request: Request):
                     patient_name=name,
                     service_code=code.upper(),
                     token_number=token,
-                    department="Cardiology",
+                    department=department_for_service(code),
                     room="",
                     status="WAITING",
                     priority=0,
@@ -764,9 +845,9 @@ async def staff_register_patient(request: Request):
                 entries_created.append({"service": code, "token": token})
 
             await session.commit()
-            # Generate WhatsApp notification data
+            # Generate WhatsApp notification data (with live tracking link)
             tracking_token = make_tracking_token(patient_id)
-            tracking_url = f"{APP_BASE_URL}/track/{tracking_token}"
+            tracking_url = f"{_tracking_base(request)}/track/{tracking_token}"
             whatsapp_links = []
             if phone:
                 from src.infrastructure.notification.whatsapp_cloud_api import (
@@ -782,8 +863,6 @@ async def staff_register_patient(request: Request):
                         "token": entry["token"],
                         "url": build_wa_me_url(phone, msg),
                     })
-            tracking_token = make_tracking_token(patient_id)
-            tracking_url = f"{APP_BASE_URL}/track/{tracking_token}"
             return {"ok": True, "patient_id": patient_id, "visit_id": visit_id,
                     "entries": entries_created, "whatsapp": whatsapp_links,
                     "tracking_url": tracking_url,
@@ -791,6 +870,22 @@ async def staff_register_patient(request: Request):
 
     except Exception as exc:
         return {"ok": False, "error": str(exc)}
+
+
+def _tracking_base(request: Request) -> str:
+    """Base URL for patient tracking links.
+
+    Uses the Host header of the current request (LAN IP / domain / tunnel URL)
+    so the patient's phone can actually open the link. Falls back to
+    APP_BASE_URL only when the staff browser itself is on localhost.
+    """
+    try:
+        base = str(request.base_url).rstrip("/")
+        if base and not base.startswith("http://localhost") and not base.startswith("http://127."):
+            return base
+    except Exception:
+        pass
+    return APP_BASE_URL
 
 
 async def _next_token(session, service_code: str, date_prefix: str) -> int:
@@ -809,7 +904,6 @@ async def _next_token(session, service_code: str, date_prefix: str) -> int:
 
 # ── AI Dietician ─────────────────────────────────────────────────────────────
 
-from src.ai_engine.groq_client import call_groq
 from src.ai_engine.prompts import diet_plan_prompt
 
 
@@ -870,24 +964,34 @@ async def api_diet_plan(request: Request):
         protein_ratio=body.get("protein_ratio", "1.0"),
     )
 
-    from src.ai_engine.groq_client import _get_api_key, call_groq_with_error
-    groq_key = _get_api_key()
-    if not groq_key:
-        try:
-            from src.presentation.opd.routes.opd_routes import _get_settings
-            settings = await _get_settings("clinic_default")
-            groq_key = settings.get("groq_api_key", "")
-        except Exception:
-            pass
+    from src.ai_engine.provider_router import route_chat, sanitize_output
+    from src.ai_engine.usage import log_ai_usage
 
-    if not groq_key:
-        return {"ok": False, "error": "Groq API key not configured."}
+    settings = {}
+    try:
+        from src.presentation.opd.routes.opd_routes import _ai_settings_for
+        settings = await _ai_settings_for("clinic_default")
+    except Exception:
+        pass
 
-    os.environ["GROQ_API_KEY"] = groq_key
-    result, err_msg = call_groq_with_error([prompt], temp=0.3, max_tokens=4000)
+    puter_text = str(body.get("puter_result") or "").strip()
+    if puter_text:
+        result, provider, model_used, usage = sanitize_output(puter_text), "puter", settings.get("ai_model") or "puter", {}
+    else:
+        routed = route_chat(settings, [prompt], feature="diet-plan", temp=0.3, max_tokens=4000)
+        if routed.get("puter_needed"):
+            return {"ok": False, "code": routed["code"], "prompt": routed["prompt"], "model": routed["model"]}
+        result, provider, model_used, usage = routed.get("text") or "", routed.get("provider") or "", routed.get("model") or "", routed.get("usage") or {}
+        if not result:
+            await log_ai_usage(clinic_id=settings.get("clinic_id"), doctor_id="clinic_default",
+                               feature="diet-plan", provider=provider or "none", model=model_used,
+                               success=False, error=routed.get("error") or "")
+            return {"ok": False, "error": routed.get("error") or "AI generation failed. Clinic owner: OPD → Settings → AI Provider."}
 
-    if not result:
-        return {"ok": False, "error": f"AI generation failed: {err_msg or 'Check connection'}"}
+    await log_ai_usage(clinic_id=settings.get("clinic_id"), doctor_id="clinic_default",
+                       feature="diet-plan", provider=provider, model=model_used, success=True,
+                       prompt_tokens=int(usage.get("prompt_tokens") or 0),
+                       completion_tokens=int(usage.get("completion_tokens") or 0))
 
     # Auto-update queue entry for Dietitian to REPORT_READY for inter-department sync
     visit_id = body.get("visit_id")
@@ -953,6 +1057,32 @@ def _bmi_category(bmi: float) -> str:
     if bmi < 25: return "Normal"
     if bmi < 30: return "Overweight"
     return "Obese"
+
+
+@router.post("/api/ai-usage", include_in_schema=False)
+async def api_staff_ai_usage(request: Request):
+    """Browser gateway logs Puter-side AI calls here (staff pages) for metering."""
+    sess = get_session(request)
+    if not sess:
+        return {"ok": False, "error": "Not logged in"}
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    try:
+        from src.ai_engine.usage import log_ai_usage
+        await log_ai_usage(
+            clinic_id=None,
+            doctor_id="clinic_default",
+            feature=str(body.get("feature") or "browser-ai")[:50],
+            provider=str(body.get("provider") or "puter")[:40],
+            model=str(body.get("model") or "")[:100],
+            success=bool(body.get("success", True)),
+            error=str(body.get("error") or "")[:500],
+        )
+    except Exception as e:
+        logger.warning("staff ai-usage log failed: %s", e)
+    return {"ok": True}
 
 
 @router.get("/api/dietitian-queue", include_in_schema=False)
@@ -1056,6 +1186,43 @@ async def public_patient_track(request: Request, public_token: str):
         patient_entries=patient_entries,
         tracking_token=public_token,
     ))
+
+
+@public_router.get("/track/{public_token}/status", include_in_schema=False)
+async def public_patient_track_status(request: Request, public_token: str):
+    """Live JSON status for the patient tracking page (polled every 8s).
+
+    Lets the patient's phone show live "Called / In Progress / Report Ready"
+    without a full page reload — the missing link in the call flow.
+    """
+    patient_id = decode_tracking_token(public_token)
+    if not patient_id:
+        return {"ok": False, "error": "Invalid tracking link"}
+
+    try:
+        all_entries = await _get_queue(request)
+        patient_entries = [
+            e for e in all_entries
+            if e.get("patient_id") == patient_id
+        ]
+    except Exception as exc:
+        logger.exception("track status failed: %s", exc)
+        patient_entries = []
+
+    return {
+        "ok": True,
+        "patient_name": patient_entries[0].get("patient_name", patient_id) if patient_entries else patient_id,
+        "entries": [
+            {
+                "service_code": e.get("service_code", ""),
+                "token_number": e.get("token_number", ""),
+                "status": e.get("status", "WAITING"),
+                "department": e.get("department", ""),
+                "room": e.get("room", ""),
+            }
+            for e in patient_entries
+        ],
+    }
 
 
 def _render_track_error(msg: str) -> str:
@@ -1166,7 +1333,7 @@ async def seed_test_data(request: Request):
                     patient_name=p["name"],
                     service_code=p["service"],
                     token_number=token,
-                    department="Cardiology",
+                    department=department_for_service(p["service"]),
                     room="",
                     status=status,
                     priority=0,

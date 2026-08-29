@@ -110,19 +110,22 @@ def build_patient_token_message(
 ) -> str:
     """Build WhatsApp message for patient token slip.
 
-    SECURITY NOTE: No staff or tracking URLs are included in patient messages.
-    Patient receives only their basic token information.
-    tracking_url parameter is accepted but NOT used in the message (reserved for future opt-in).
+    Includes the patient's tracking link so they can watch live waiting
+    status and know when their token is called (fixes the "patient ko
+    waiting pata nahi chalta" problem).
     """
-    return (
+    msg = (
         f"🏥 *{clinic_name}*\n\n"
         f"✅ *Registration Confirmed*\n\n"
         f"👤 *Patient:* {patient_name}\n"
         f"🎟️ *Token No:* #{token_number}\n"
         f"🩺 *Service:* {service}\n\n"
-        f"📌 Please wait for your token to be called.\n\n"
-        f"— {clinic_name} Reception"
+        f"📌 Please wait for your token to be called."
     )
+    if tracking_url:
+        msg += f"\n\n👀 *Live waiting status:*\n{tracking_url}"
+    msg += f"\n\n— {clinic_name} Reception"
+    return msg
 
 
 def build_doctor_alert_message(

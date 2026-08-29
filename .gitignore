@@ -18,6 +18,13 @@ build/
 # Secrets
 pwa/secret.txt
 secret.txt
+admin_credentials.txt
+
+# Backups & runtime junk (patient data — NEVER commit)
+backups/
+*.log
+.deps_installed
+track_debug.log
 
 # OS
 .DS_Store

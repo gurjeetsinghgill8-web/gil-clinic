@@ -98,26 +98,43 @@ class SqlAlchemyQueueRepository(QueueRepository):
 
     async def list_by_department(
         self,
-        department: str,
+        department: str | None,
         status_filter: str | None = None,
         offset: int = 0,
         limit: int = 100,
     ) -> list[QueueEntry]:
-        """List queue entries for a department, with optional status filter."""
-        conditions = [QueueEntryModel.department == department]
+        """List queue entries for a department, with optional status filter.
+
+        department=None → ALL departments (used by staff dashboard + patient
+        tracking, which post-filter by service_code).
+        """
+        conditions = []
+        if department:
+            conditions.append(QueueEntryModel.department == department)
         if status_filter:
             conditions.append(QueueEntryModel.status == status_filter)
 
-        stmt = (
-            select(QueueEntryModel)
-            .where(and_(*conditions))
-            .order_by(
-                asc(QueueEntryModel.display_order),
-                asc(QueueEntryModel.token_number),
+        if conditions:
+            stmt = (
+                select(QueueEntryModel)
+                .where(and_(*conditions))
+                .order_by(
+                    asc(QueueEntryModel.display_order),
+                    asc(QueueEntryModel.token_number),
+                )
+                .offset(offset)
+                .limit(limit)
             )
-            .offset(offset)
-            .limit(limit)
-        )
+        else:
+            stmt = (
+                select(QueueEntryModel)
+                .order_by(
+                    asc(QueueEntryModel.display_order),
+                    asc(QueueEntryModel.token_number),
+                )
+                .offset(offset)
+                .limit(limit)
+            )
         result = await self._session.execute(stmt)
         models = result.scalars().all()
         return [self._mapper.to_domain(m) for m in models]
@@ -167,16 +184,16 @@ class SqlAlchemyQueueRepository(QueueRepository):
         return result.scalar() or 0
 
     async def count_by_status(
-        self, department: str, status: str
+        self, department: str | None, status: str
     ) -> int:
-        """Count entries in a given status for a department."""
-        stmt = select(func.count(QueueEntryModel.id)).where(
-            and_(
-                QueueEntryModel.department == department,
-                QueueEntryModel.status == status,
-                func.date(QueueEntryModel.created_at) == func.current_date(),
-            )
-        )
+        """Count today's entries in a given status for a department (None = all)."""
+        conditions = [
+            QueueEntryModel.status == status,
+            func.date(QueueEntryModel.created_at) == func.current_date(),
+        ]
+        if department:
+            conditions.append(QueueEntryModel.department == department)
+        stmt = select(func.count(QueueEntryModel.id)).where(and_(*conditions))
         result = await self._session.execute(stmt)
         return result.scalar() or 0
 

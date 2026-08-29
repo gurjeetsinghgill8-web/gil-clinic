@@ -103,6 +103,7 @@ class ActionResponse(BaseModel):
     action: str
     timestamp: str
     message: str
+    whatsapp_url: Optional[str] = None  # wa.me link to notify the patient (call/recall)
 
 
 class PatientEntryResponse(BaseModel):

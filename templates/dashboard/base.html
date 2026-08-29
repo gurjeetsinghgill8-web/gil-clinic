@@ -36,6 +36,9 @@
     <a href="/staff/home" class="nav-link {% if active_page=='home' %}active{% endif %}">
       <span class="icon">🏠</span> Dashboard
     </a>
+    <a href="/staff/live-board" class="nav-link {% if active_page=='live_board' %}active{% endif %}">
+      <span class="icon">📺</span> Live Board <span style="font-size:9px;background:rgba(16,185,129,0.12);color:#059669;padding:1px 6px;border-radius:8px;margin-left:4px;">NEW</span>
+    </a>
 
     <div class="nav-section">Clinical</div>
     <a href="/staff/reception" class="nav-link {% if active_page=='reception' %}active{% endif %}">
@@ -49,6 +52,12 @@
     </a>
     <a href="/staff/tmt" class="nav-link {% if active_page=='tmt' %}active{% endif %}">
       <span class="icon">🏃</span> TMT Lab
+    </a>
+    <a href="/staff/xray" class="nav-link {% if active_page=='xray' %}active{% endif %}">
+      <span class="icon">🦴</span> X-Ray
+    </a>
+    <a href="/staff/lab" class="nav-link {% if active_page=='lab' %}active{% endif %}">
+      <span class="icon">🧪</span> Lab
     </a>
     <a href="/staff/opd" class="nav-link {% if active_page=='opd' %}active{% endif %}">
       <span class="icon">🩺</span> OPD
@@ -126,6 +135,8 @@
 
 <script src="/static/dashboard/app.js"></script>
 <script src="/static/js/whatsapp_helper.js"></script>
+<script src="https://js.puter.com/v2/"></script>
+<script src="/static/js/ai_gateway.js"></script>
 <script>
 // Auto-dismiss flash messages
 const fa = document.getElementById('flash-alert');

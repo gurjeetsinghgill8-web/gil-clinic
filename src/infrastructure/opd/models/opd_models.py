@@ -176,7 +176,15 @@ class SettingsModel(Base):
     doc_phone: Mapped[str] = mapped_column(String(20), nullable=False, default="")
     clinic_address: Mapped[str] = mapped_column(Text, nullable=False, default="")
     doc_extra_quals: Mapped[str] = mapped_column(Text, nullable=False, default="")
-    groq_api_key: Mapped[str] = mapped_column(String(200), nullable=False, default="")
+    groq_api_key: Mapped[str] = mapped_column(String(500), nullable=False, default="")
+
+    # ── AI Provider (Direct BYOK) — keys stored AES/Fernet-encrypted ("enc:v1:...") ──
+    ai_mode: Mapped[str] = mapped_column(String(20), nullable=False, default="auto")  # auto | puter | off
+    ai_model: Mapped[str] = mapped_column(String(100), nullable=False, default="")     # optional model override
+    openai_api_key: Mapped[str] = mapped_column(String(500), nullable=False, default="")
+    anthropic_api_key: Mapped[str] = mapped_column(String(500), nullable=False, default="")
+    deepseek_api_key: Mapped[str] = mapped_column(String(500), nullable=False, default="")
+    gemini_api_key: Mapped[str] = mapped_column(String(500), nullable=False, default="")
 
     # WhatsApp Jugaad — role-based numbers for one-click sharing
     wa_reception: Mapped[str] = mapped_column(String(20), nullable=False, default="")

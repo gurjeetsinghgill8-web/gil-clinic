@@ -485,25 +485,15 @@ class JsonQueueRepository:
 
     async def list_by_department(
         self,
-        department: str,
+        department: str | None,
         status_filter: str | None = None,
         offset: int = 0,
         limit: int = 100,
     ) -> list[QueueEntry]:
-        """List queue entries for a department.
-
-        Args:
-            department: Department name.
-            status_filter: Optional status filter.
-            offset: Number of records to skip.
-            limit: Maximum records to return.
-
-        Returns:
-            List of QueueEntry objects.
-        """
+        """List queue entries for a department (None = all departments)."""
         result = []
         for e in load_queue_entries():
-            if e.get("department") != department:
+            if department and e.get("department") != department:
                 continue
             if status_filter and e.get("status") != status_filter:
                 continue
@@ -562,19 +552,13 @@ class JsonQueueRepository:
                 count += 1
         return count
 
-    async def count_by_status(self, department: str, status: str) -> int:
-        """Count entries in a given status for a department.
-
-        Args:
-            department: Department name.
-            status: Status to count.
-
-        Returns:
-            Count of matching entries.
-        """
+    async def count_by_status(self, department: str | None, status: str) -> int:
+        """Count entries in a given status for a department (None = all)."""
         count = 0
         for e in load_queue_entries():
-            if e.get("department") == department and e.get("status") == status:
+            if department and e.get("department") != department:
+                continue
+            if e.get("status") == status:
                 count += 1
         return count
 

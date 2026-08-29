@@ -221,12 +221,33 @@ async def admin_logout():
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
+def _safe_print(*args) -> None:
+    """Console printing that can never crash the app (Windows cp1252 console
+    cannot encode emoji like 🔐 — a print failure there used to abort admin
+    seeding on laptops)."""
+    try:
+        print(*args)
+    except Exception:
+        pass
+
+
+def _write_credentials_file(lines: list) -> None:
+    """Persist admin credentials to a file so they are never lost in console output."""
+    try:
+        p = Path(__file__).parents[4] / "admin_credentials.txt"
+        p.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    except Exception:
+        pass
+
+
 async def seed_default_admins():
     """Create or update default super_admin and ceo accounts.
 
     Called at every startup. If SUPER_ADMIN_PASSWORD or CEO_PASSWORD env vars
     are set, passwords are updated even for existing accounts.
+    Credentials are also written to admin_credentials.txt (safe, no emoji).
     """
+    cred_lines = ["GIL CLINIC — ADMIN CREDENTIALS (auto-generated)"]
     try:
         async with async_session_factory() as session:
             # ── Super Admin ──────────────────────────────────────────
@@ -245,12 +266,13 @@ async def seed_default_admins():
                 existing_sa.username = sa_username
                 existing_sa.email = os.getenv("SUPER_ADMIN_EMAIL", existing_sa.email or "")
                 await session.commit()
-                logger.info("✅ Super Admin password UPDATED (username: %s)", sa_username)
-                print(f"\n{'='*60}")
-                print(f"🔐 SUPER ADMIN — Password Updated!")
-                print(f"   Username: {sa_username}")
-                print(f"   Password: {sa_password}")
-                print(f"{'='*60}\n")
+                logger.info("Super Admin password UPDATED (username: %s)", sa_username)
+                _safe_print("=" * 60)
+                _safe_print("[ADMIN] SUPER ADMIN - Password Updated!")
+                _safe_print(f"   Username: {sa_username}")
+                _safe_print(f"   Password: {sa_password}")
+                _safe_print("=" * 60)
+                cred_lines.append(f"SUPER ADMIN: username={sa_username} password={sa_password}")
 
             elif not existing_sa:
                 # Create new super_admin
@@ -273,12 +295,13 @@ async def seed_default_admins():
                 )
                 session.add(sa_admin)
                 await session.commit()
-                logger.info("✅ Super Admin account CREATED (username: %s)", sa_username)
-                print(f"\n{'='*60}")
-                print(f"🔐 SUPER ADMIN CREDENTIALS (SAVE THESE!)")
-                print(f"   Username: {sa_username}")
-                print(f"   Password: {sa_password}")
-                print(f"{'='*60}\n")
+                logger.info("Super Admin account CREATED (username: %s)", sa_username)
+                _safe_print("=" * 60)
+                _safe_print("[ADMIN] SUPER ADMIN CREDENTIALS (SAVE THESE!)")
+                _safe_print(f"   Username: {sa_username}")
+                _safe_print(f"   Password: {sa_password}")
+                _safe_print("=" * 60)
+                cred_lines.append(f"SUPER ADMIN: username={sa_username} password={sa_password}")
 
             # ── CEO ──────────────────────────────────────────────────
             ceo_password = os.getenv("CEO_PASSWORD", "")
@@ -294,7 +317,8 @@ async def seed_default_admins():
                 existing_ceo.password_hash = ceo_hash
                 existing_ceo.username = ceo_username
                 await session.commit()
-                logger.info("✅ CEO password UPDATED (username: %s)", ceo_username)
+                logger.info("CEO password UPDATED (username: %s)", ceo_username)
+                cred_lines.append(f"CEO: username={ceo_username} password={ceo_password}")
 
             elif not existing_ceo:
                 if not ceo_password:
@@ -310,12 +334,28 @@ async def seed_default_admins():
                 )
                 session.add(ceo_admin)
                 await session.commit()
-                logger.info("✅ CEO account CREATED (username: %s)", ceo_username)
-                print(f"\n{'='*60}")
-                print(f"🔐 CEO CREDENTIALS (SAVE THESE!)")
-                print(f"   Username: {ceo_username}")
-                print(f"   Password: {ceo_password}")
-                print(f"{'='*60}\n")
+                logger.info("CEO account CREATED (username: %s)", ceo_username)
+                _safe_print("=" * 60)
+                _safe_print("[ADMIN] CEO CREDENTIALS (SAVE THESE!)")
+                _safe_print(f"   Username: {ceo_username}")
+                _safe_print(f"   Password: {ceo_password}")
+                _safe_print("=" * 60)
+                cred_lines.append(f"CEO: username={ceo_username} password={ceo_password}")
+
+        # Always keep the credentials file useful — even for existing accounts
+        # whose password is unknown (reset via .env).
+        if existing_sa and not sa_password:
+            cred_lines.append(
+                f"SUPER ADMIN: username={sa_username} password=<unknown> "
+                "-> .env me SUPER_ADMIN_PASSWORD set karke restart karein to reset"
+            )
+        if existing_ceo and not ceo_password:
+            cred_lines.append(
+                f"CEO: username={ceo_username} password=<unknown> "
+                "-> .env me CEO_PASSWORD set karke restart karein to reset"
+            )
+        if len(cred_lines) > 1:
+            _write_credentials_file(cred_lines)
 
     except Exception as e:
         logger.error("Failed to seed admin accounts: %s", e)

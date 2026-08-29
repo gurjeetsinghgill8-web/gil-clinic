@@ -155,6 +155,8 @@ from src.infrastructure.opd.models.opd_models import (  # noqa: F401
     PendingScanModel,
     LabReportModel,
 )
+# AI usage metering table
+from src.infrastructure.opd.models.ai_usage_model import AIUsageModel  # noqa: F401
 # Staff User model — multi-user auth (receptionists, doctors)
 from src.infrastructure.staff.models.staff_user_model import StaffUserModel  # noqa: F401
 # Admin User model — super_admin + ceo auth
@@ -177,6 +179,7 @@ async def lifespan(app: FastAPI):
     if _DB_URL.startswith("sqlite"):
         Base.metadata.create_all(bind=engine)
         print(f"[GHOS] Database: {_DB_URL} (tables created)")
+        _migrate_sqlite_columns()
     else:
         # PostgreSQL — create schemas first, then tables
         async with engine.begin() as conn:
@@ -217,6 +220,32 @@ async def lifespan(app: FastAPI):
     print("[GHOS] Shutdown complete")
 
 
+def _migrate_sqlite_columns():
+    """Add missing AI-provider columns to an existing SQLite opd_settings table.
+
+    SQLite `create_all` creates new tables but does NOT add columns to existing
+    tables, so new SettingsModel columns need a manual ALTER. Idempotent.
+    """
+    columns = [
+        ("ai_mode", "VARCHAR(20) DEFAULT 'auto'"),
+        ("ai_model", "VARCHAR(100) DEFAULT ''"),
+        ("openai_api_key", "VARCHAR(500) DEFAULT ''"),
+        ("anthropic_api_key", "VARCHAR(500) DEFAULT ''"),
+        ("deepseek_api_key", "VARCHAR(500) DEFAULT ''"),
+        ("gemini_api_key", "VARCHAR(500) DEFAULT ''"),
+    ]
+    try:
+        with engine.connect() as conn:
+            existing = {row[1] for row in conn.execute(text("PRAGMA table_info(opd_settings)"))}
+            for col_name, col_sql in columns:
+                if col_name not in existing:
+                    conn.execute(text(f"ALTER TABLE opd_settings ADD COLUMN {col_name} {col_sql}"))
+                    print(f"[GHOS] SQLite migration: added opd_settings.{col_name}")
+            conn.commit()
+    except Exception as e:
+        print(f"[GHOS] SQLite migration skipped/failed (non-fatal): {e}")
+
+
 async def _migrate_missing_columns():
     """Add any missing columns to existing tables (safe idempotent migration).
     
@@ -244,6 +273,13 @@ async def _migrate_missing_columns():
         ("opd_specialty_upgrades", "clinic_id", "VARCHAR(36)", "NULL"),
         ("opd_pending_scans", "clinic_id", "VARCHAR(36)", "NULL"),
         ("staff_users", "clinic_id", "VARCHAR(36)", "NULL"),
+        # ── AI Provider upgrade (BYOK): new encrypted key columns + mode ──
+        ("opd_settings", "ai_mode", "VARCHAR(20)", "'auto'"),
+        ("opd_settings", "ai_model", "VARCHAR(100)", "''"),
+        ("opd_settings", "openai_api_key", "VARCHAR(500)", "''"),
+        ("opd_settings", "anthropic_api_key", "VARCHAR(500)", "''"),
+        ("opd_settings", "deepseek_api_key", "VARCHAR(500)", "''"),
+        ("opd_settings", "gemini_api_key", "VARCHAR(500)", "''"),
         # New tables that might need creation
         ("clinic_staff_pins", "id", "INTEGER", "NULL"),  # will cause skip if table exists
     ]
@@ -269,6 +305,13 @@ async def _migrate_missing_columns():
                         print(f"[GHOS] Migration: Added column {table_name}.{col_name}")
                 except Exception as e:
                     print(f"[GHOS] Migration warning ({table_name}.{col_name}): {e}")
+
+            # Widen groq_api_key to fit Fernet-encrypted values (legacy VARCHAR(200))
+            try:
+                await conn.execute(text("ALTER TABLE opd_settings ALTER COLUMN groq_api_key TYPE VARCHAR(500)"))
+                print("[GHOS] Migration: opd_settings.groq_api_key widened to VARCHAR(500)")
+            except Exception as e:
+                print(f"[GHOS] Migration warning (groq_api_key widen): {e}")
 
         print("[GHOS] Auto-migration check complete")
     except Exception as e:

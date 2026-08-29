@@ -1,0 +1,413 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CardioQueue / GHOS — Enterprise R&D Budget, Build Cost & Asset Valuation Report</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #0b0f19;
+      --card: #111827;
+      --card-alt: #1a2234;
+      --border: rgba(255,255,255,0.1);
+      --border-highlight: rgba(59,130,246,0.4);
+      --text: #f9fafb;
+      --text-muted: #9ca3af;
+      --accent-blue: #3b82f6;
+      --accent-cyan: #06b6d4;
+      --accent-emerald: #10b981;
+      --accent-rose: #f43f5e;
+      --accent-amber: #f59e0b;
+      --accent-purple: #8b5cf6;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+      padding: 40px 20px;
+    }
+    .container {
+      max-width: 1000px;
+      margin: 0 auto;
+    }
+    .header {
+      text-align: center;
+      padding-bottom: 28px;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 36px;
+    }
+    .badge {
+      display: inline-block;
+      padding: 5px 14px;
+      border-radius: 20px;
+      background: rgba(244, 63, 94, 0.15);
+      border: 1px solid rgba(244, 63, 94, 0.3);
+      color: var(--accent-rose);
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      margin-bottom: 14px;
+    }
+    h1 {
+      font-size: 36px;
+      font-weight: 800;
+      letter-spacing: -0.8px;
+      margin-bottom: 10px;
+      background: linear-gradient(135deg, #ffffff 0%, #cbd5e1 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .subtitle {
+      font-size: 16px;
+      color: var(--text-muted);
+      max-width: 800px;
+      margin: 0 auto;
+    }
+    .summary-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 16px;
+      margin-bottom: 32px;
+    }
+    .summary-box {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 20px;
+      text-align: center;
+    }
+    .summary-val {
+      font-size: 26px;
+      font-weight: 800;
+      font-family: 'JetBrains Mono', monospace;
+      color: var(--accent-cyan);
+      margin-bottom: 4px;
+    }
+    .summary-lbl {
+      font-size: 12px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      color: var(--text-muted);
+    }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 28px;
+      margin-bottom: 28px;
+    }
+    .card-title {
+      font-size: 20px;
+      font-weight: 700;
+      margin-bottom: 18px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      color: var(--accent-cyan);
+    }
+    table.budget-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 14px;
+      margin-top: 10px;
+    }
+    table.budget-table th {
+      background: rgba(255,255,255,0.06);
+      padding: 14px 16px;
+      text-align: left;
+      font-weight: 700;
+      border-bottom: 1px solid var(--border);
+    }
+    table.budget-table td {
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--border);
+      color: var(--text-muted);
+    }
+    table.budget-table tr:hover td {
+      background: rgba(255,255,255,0.02);
+    }
+    .amount {
+      font-family: 'JetBrains Mono', monospace;
+      font-weight: 700;
+      color: var(--text);
+      text-align: right;
+    }
+    .total-row {
+      background: rgba(59, 130, 246, 0.12);
+      font-weight: 800;
+    }
+    .total-row td {
+      color: #ffffff !important;
+      font-size: 16px;
+      border-top: 2px solid var(--accent-blue);
+      border-bottom: 2px solid var(--accent-blue);
+    }
+    .total-row .amount {
+      color: var(--accent-cyan) !important;
+      font-size: 18px;
+    }
+    .benchmark-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 18px;
+      margin-top: 16px;
+    }
+    .benchmark-card {
+      background: var(--card-alt);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 20px;
+    }
+    .benchmark-name {
+      font-size: 16px;
+      font-weight: 700;
+      color: #ffffff;
+      margin-bottom: 4px;
+    }
+    .benchmark-spend {
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--accent-rose);
+      margin-bottom: 10px;
+    }
+    .benchmark-desc {
+      font-size: 13px;
+      color: var(--text-muted);
+      line-height: 1.5;
+    }
+    .btn-bar {
+      display: flex;
+      justify-content: center;
+      gap: 16px;
+      margin-top: 30px;
+    }
+    .btn {
+      padding: 12px 24px;
+      border-radius: 10px;
+      font-weight: 700;
+      font-size: 14px;
+      text-decoration: none;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      border: 1px solid var(--border);
+      background: rgba(255,255,255,0.08);
+      color: #ffffff;
+      transition: all 0.2s;
+    }
+    .btn:hover {
+      background: var(--accent-blue);
+      border-color: var(--accent-blue);
+    }
+    @media print {
+      body { background: #fff !important; color: #000 !important; padding: 0; }
+      .card, .summary-box, .benchmark-card { background: #fff !important; border: 1px solid #ccc !important; color: #000 !important; }
+      h1, .card-title, .summary-val, .benchmark-name { color: #000 !important; -webkit-text-fill-color: initial !important; }
+      table.budget-table th { background: #eee !important; color: #000 !important; }
+      table.budget-table td { color: #333 !important; }
+      .btn-bar { display: none !important; }
+    }
+    @media (max-width: 800px) {
+      .summary-grid, .benchmark-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <div class="badge">Project Financial Assessment & R&D Valuation</div>
+      <h1>CardioQueue / GHOS v2.0</h1>
+      <p class="subtitle">
+        Standard Industry Build Cost, Engineering Resource Allocation & Proprietary IP Asset Valuation Report
+      </p>
+    </div>
+
+    <!-- Key Metrics -->
+    <div class="summary-grid">
+      <div class="summary-box">
+        <div class="summary-val">₹83.5 L</div>
+        <div class="summary-lbl">Total Enterprise Build Cost</div>
+      </div>
+      <div class="summary-box">
+        <div class="summary-val">8–12 Mo</div>
+        <div class="summary-lbl">Standard Dev Timeline</div>
+      </div>
+      <div class="summary-box">
+        <div class="summary-val">6 Roles</div>
+        <div class="summary-lbl">Specialist Team Size</div>
+      </div>
+      <div class="summary-box">
+        <div class="summary-val">₹80L – 1.1Cr</div>
+        <div class="summary-lbl">IP Asset Valuation</div>
+      </div>
+    </div>
+
+    <!-- Line by line table -->
+    <div class="card">
+      <div class="card-title">💼 Comprehensive Line-Item Engineering & Domain Budget</div>
+      <p style="color:var(--text-muted); font-size:14px; margin-bottom:16px;">
+        The budget breakdown below outlines the realistic market cost if a healthcare network, hospital chain, or IT firm were to build this patient flow and AI clinical operating system from scratch under standard conditions:
+      </p>
+
+      <table class="budget-table">
+        <thead>
+          <tr>
+            <th>Role / Specialized Domain Component</th>
+            <th>Duration</th>
+            <th>Monthly Rate</th>
+            <th style="text-align:right;">Standard Cost</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>
+              <strong style="color:#ffffff;">1. Senior Interventional Cardiologist & Medical Director</strong><br>
+              <span style="font-size:12px; color:var(--text-muted);">
+                Clinical Protocol Design, Multi-Department (ECG/Echo/TMT) Queue Sequencing, Drug Contraindication Matrix, Cross-Specialty AI Verification & Safety Audits.
+              </span>
+            </td>
+            <td>8 Months</td>
+            <td>₹3,00,000</td>
+            <td class="amount">₹24,00,000</td>
+          </tr>
+
+          <tr>
+            <td>
+              <strong style="color:#ffffff;">2. Lead Full-Stack / Domain-Driven Design (DDD) Software Architect</strong><br>
+              <span style="font-size:12px; color:var(--text-muted);">
+                FastAPI Async Core, Clean Architecture Harness Pattern, Micro-Engines (Patient, Identity, Queue, Billing), Multi-Tenant Schemas & RBAC.
+              </span>
+            </td>
+            <td>8 Months</td>
+            <td>₹2,50,000</td>
+            <td class="amount">₹20,00,000</td>
+          </tr>
+
+          <tr>
+            <td>
+              <strong style="color:#ffffff;">3. Senior AI & Multimodal LLM Systems Engineer</strong><br>
+              <span style="font-size:12px; color:var(--text-muted);">
+                Groq LLaMA-3.3 70B Prompt Tuning, OpenAI Whisper Voice-to-Rx Pipeline, Vision OCR Lab Scanner, Token Caching & Latency Optimization (&lt;500ms).
+              </span>
+            </td>
+            <td>6 Months</td>
+            <td>₹2,50,000</td>
+            <td class="amount">₹15,00,000</td>
+          </tr>
+
+          <tr>
+            <td>
+              <strong style="color:#ffffff;">4. Real-Time Mobile PWA & Hardware Sockets Engineer</strong><br>
+              <span style="font-size:12px; color:var(--text-muted);">
+                Zero-App QR Protocol, Live Waiting Room TV Board, Web Vibrate/Audio Buzzer APIs, Technician Mobile Console & Sub-Second Polling.
+              </span>
+            </td>
+            <td>6 Months</td>
+            <td>₹1,75,000</td>
+            <td class="amount">₹10,50,000</td>
+          </tr>
+
+          <tr>
+            <td>
+              <strong style="color:#ffffff;">5. Hospital DevOps, Security, DISHA/HIPAA & Appliance Engineer</strong><br>
+              <span style="font-size:12px; color:var(--text-muted);">
+                Local-First Docker Appliances, SQLite WAL Mode Failover, Triple-Tier Cloud Sync (Postgres/Supabase), Encrypted Backups & Security Compliance.
+              </span>
+            </td>
+            <td>5 Months</td>
+            <td>₹1,30,000</td>
+            <td class="amount">₹6,50,000</td>
+          </tr>
+
+          <tr>
+            <td>
+              <strong style="color:#ffffff;">6. QA, Clinical Pilot Bench Testing & Hardware Integration</strong><br>
+              <span style="font-size:12px; color:var(--text-muted);">
+                ESC/POS Thermal Receipt Printers, Multi-Device Concurrent Traffic Testing, Real Patient Load Simulation & Bug Freezing.
+              </span>
+            </td>
+            <td>4 Months</td>
+            <td>₹1,00,000</td>
+            <td class="amount">₹4,00,000</td>
+          </tr>
+
+          <tr>
+            <td>
+              <strong style="color:#ffffff;">7. Frontier AI Model APIs, Cloud Benchmarking & Local Hardware Setup</strong><br>
+              <span style="font-size:12px; color:var(--text-muted);">
+                R&D Inference Tokens (Groq, OpenAI, Claude 3.5 Sonnet, Gemini), Cloud Benchmarking Servers, Thermal Test Terminals.
+              </span>
+            </td>
+            <td>One-time</td>
+            <td>—</td>
+            <td class="amount">₹3,50,000</td>
+          </tr>
+
+          <tr class="total-row">
+            <td colspan="3"><strong>TOTAL ESTIMATED ENTERPRISE BUILD BUDGET:</strong></td>
+            <td class="amount">₹83,50,000 ($100,000+)</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Market Comparison -->
+    <div class="card">
+      <div class="card-title">📊 Market Benchmark: Capital Expended by Competitors</div>
+      <p style="color:var(--text-muted); font-size:14px;">
+        How venture-funded commercial giants spent hundreds of crores, yet remain saddled with legacy architecture:
+      </p>
+
+      <div class="benchmark-grid">
+        <div class="benchmark-card">
+          <div class="benchmark-name">Practo Ray</div>
+          <div class="benchmark-spend">$230M+ (₹1,900+ Crores Raised)</div>
+          <div class="benchmark-desc">
+            Heavy cloud monolith. Requires constant internet. Charges ₹1,500-₹4,000/doctor/month + per-SMS costs. Lacks offline-first resilience and zero-app mobile buzzers.
+          </div>
+        </div>
+
+        <div class="benchmark-card">
+          <div class="benchmark-name">DocPulse / Qikwell</div>
+          <div class="benchmark-spend">₹50+ Crores Expended</div>
+          <div class="benchmark-desc">
+            Generic appointment tool without synchronized diagnostic room queues (ECG ↔ Echo ↔ TMT). Zero voice-to-Rx medical AI dictation.
+          </div>
+        </div>
+
+        <div class="benchmark-card">
+          <div class="benchmark-name">Legacy Hospital ERPs (Akhil / Attune)</div>
+          <div class="benchmark-spend">₹15L - ₹35L Upfront per Hospital</div>
+          <div class="benchmark-desc">
+            Clunky Windows 98-style desktop forms. Requires 3-week staff training. Charges ₹3-5 Lakhs annual AMC with zero mobile PWA capabilities.
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Strategic Value for Client -->
+    <div class="card" style="border-color: rgba(16, 185, 129, 0.4);">
+      <div class="card-title" style="color:var(--accent-emerald);">🎯 Strategic Takeaway for Clients & Investors</div>
+      <ul style="margin-left: 20px; color: var(--text-muted); font-size:14px; display:flex; flex-direction:column; gap:10px;">
+        <li><strong>Turnkey Immediate Value:</strong> CardioQueue & GHOS is fully built, tested on real patients, and ready for deployment immediately — bypassing 12 months of high-risk R&D.</li>
+        <li><strong>Doctor-Architected Superiority:</strong> Designed by an active clinician (Dr. Gurjeet Singh Gill), eliminating the common gap between software developers and real-world hospital workflows.</li>
+        <li><strong>Asset Worth:</strong> Conservative replacement valuation stands at **₹80,00,000+** in proprietary code, clean DDD architecture, and tuned clinical AI models.</li>
+      </ul>
+    </div>
+
+    <div class="btn-bar">
+      <a href="1_CardioQueue_Master_Presentation.html" class="btn">📊 Open 32-Slide Master Presentation →</a>
+      <a href="3_Executive_Concept_Note.html" class="btn">⚡ Open Concept Note Brief →</a>
+      <button class="btn" onclick="window.print()">🖨️ Print / Save to PDF</button>
+    </div>
+  </div>
+</body>
+</html>

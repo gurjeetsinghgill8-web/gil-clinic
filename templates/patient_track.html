@@ -238,7 +238,9 @@
         {% set is_done = entry.status in ['COMPLETED', 'REPORT_READY', 'DELIVERED'] %}
         {% set is_active = entry.status == 'IN_PROGRESS' %}
         {% set is_called = entry.status == 'CALLED' %}
-        <div class="test-card {{ s if s in ['waiting','called','in_progress','completed','report_ready','delivered'] else 'waiting' }}">
+        <div class="test-card {{ s if s in ['waiting','called','in_progress','completed','report_ready','delivered'] else 'waiting' }}"
+             data-key="{{ entry.service_code }}#{{ entry.token_number }}"
+             data-status="{{ entry.status }}">
           <!-- Icon -->
           <div class="test-icon-wrap {{ 'done' if is_done else ('in_progress' if is_active else ('called' if is_called else 'waiting')) }}">
             {% if is_done %}✅{% elif is_active %}🔄{% elif is_called %}📢{% else %}⏳{% endif %}
@@ -278,7 +280,8 @@
       <!-- Auto-refresh indicator -->
       <div class="refresh-note">
         <div class="refresh-dot"></div>
-        Auto-refreshing every 30 seconds
+        Live — updates every 8 seconds
+        <button id="sound-btn" style="margin-left:10px;border:none;background:#667eea;color:#fff;padding:6px 12px;border-radius:20px;font-size:12px;font-weight:600;cursor:pointer;">🔔 Sound On</button>
       </div>
 
     {% else %}
@@ -300,8 +303,93 @@
   </div><!-- /container -->
 
   <script>
-    // Auto-refresh every 30 seconds
-    setTimeout(() => location.reload(), 30000);
+    // ── Live status polling (8s) + called banner + sound ──
+    const TRACK_TOKEN = '{{ tracking_token }}';
+    const STATUS_META = {
+      'WAITING':      { badge: '⏳ Waiting',      cls: 'waiting',     icon: '⏳' },
+      'CALLED':       { badge: '📢 Called',       cls: 'called',      icon: '📢' },
+      'IN_PROGRESS':  { badge: '🔄 Active',       cls: 'in_progress', icon: '🔄' },
+      'COMPLETED':    { badge: '✅ Done',         cls: 'done',        icon: '✅' },
+      'REPORT_READY': { badge: '📄 Report Ready', cls: 'done',        icon: '✅' },
+      'DELIVERED':    { badge: '✅ Done',         cls: 'done',        icon: '✅' },
+    };
+
+    const cards = Array.from(document.querySelectorAll('.test-card[data-key]'));
+    const last = {};
+    cards.forEach(c => { last[c.dataset.key] = c.dataset.status; });
+
+    let audioUnlocked = false;
+    function playBeep(freq, dur) {
+      if (!audioUnlocked) return;
+      try {
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        const o = ctx.createOscillator();
+        const g = ctx.createGain();
+        o.type = 'sine';
+        o.frequency.value = freq || 880;
+        g.gain.value = 0.25;
+        o.connect(g);
+        g.connect(ctx.destination);
+        o.start();
+        o.stop(ctx.currentTime + (dur || 0.3));
+      } catch (e) {}
+    }
+
+    function showBanner(text) {
+      let b = document.getElementById('call-banner');
+      if (!b) {
+        b = document.createElement('div');
+        b.id = 'call-banner';
+        b.style.cssText = 'position:fixed;top:0;left:0;right:0;background:#e53e3e;color:#fff;padding:16px;text-align:center;font-weight:700;font-size:16px;z-index:9999;box-shadow:0 2px 12px rgba(0,0,0,0.25);animation:slideDown .4s ease;';
+        document.head.insertAdjacentHTML('beforeend', '<style>@keyframes slideDown{from{transform:translateY(-100%);}to{transform:translateY(0);}}</style>');
+        document.body.prepend(b);
+      }
+      b.textContent = text;
+    }
+
+    async function poll() {
+      try {
+        const r = await fetch('/track/' + TRACK_TOKEN + '/status');
+        const d = await r.json();
+        if (!d.ok) return;
+        (d.entries || []).forEach(e => {
+          const key = e.service_code + '#' + e.token_number;
+          const card = document.querySelector('.test-card[data-key="' + key + '"]');
+          const meta = STATUS_META[e.status] || STATUS_META['WAITING'];
+          if (card) {
+            const badge = card.querySelector('.badge');
+            if (badge) { badge.textContent = meta.badge; badge.className = 'badge ' + meta.cls; }
+            const iconWrap = card.querySelector('.test-icon-wrap');
+            if (iconWrap) { iconWrap.textContent = meta.icon; iconWrap.className = 'test-icon-wrap ' + meta.cls; }
+            if (last[key] && last[key] !== e.status) {
+              if (e.status === 'CALLED') {
+                playBeep(880, 0.35); setTimeout(() => playBeep(1100, 0.4), 400);
+                showBanner('📢 आपका Token #' + e.token_number + ' (' + e.service_code + ') बुलाया गया है — कृपया आएं!');
+              } else if (e.status === 'IN_PROGRESS') {
+                showBanner('🔄 आपका टेस्ट शुरू हो गया: ' + e.service_code);
+              } else if (e.status === 'REPORT_READY' || e.status === 'COMPLETED') {
+                playBeep(660, 0.3);
+                showBanner('✅ आपकी रिपोर्ट तैयार है — Reception से लें (' + e.service_code + ')');
+              }
+            }
+            last[key] = e.status;
+          }
+        });
+      } catch (e) { /* network — next poll will retry */ }
+    }
+
+    const soundBtn = document.getElementById('sound-btn');
+    if (soundBtn) {
+      soundBtn.addEventListener('click', () => {
+        audioUnlocked = true;
+        playBeep(880, 0.3);
+        soundBtn.textContent = '🔔 Sound On ✓';
+      });
+    }
+
+    poll();
+    setInterval(poll, 8000);
+    setTimeout(() => location.reload(), 60000); // full refresh fallback
   </script>
 </body>
 </html>

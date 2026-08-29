@@ -65,6 +65,58 @@ document.querySelectorAll('[data-refresh-btn]').forEach(btn => {
   btn.addEventListener('click', () => window.location.reload());
 });
 
+// ── Queue Alert Sounds (new patient + current patient called) ─────────────
+// Compares across 10s auto-refreshes using sessionStorage, so the department
+// page beeps when reception registers a new patient or a token gets called.
+function playBeep(freq, dur) {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const o = ctx.createOscillator();
+    const g = ctx.createGain();
+    o.type = 'sine';
+    o.frequency.value = freq || 880;
+    g.gain.value = 0.2;
+    o.connect(g);
+    g.connect(ctx.destination);
+    o.start();
+    o.stop(ctx.currentTime + (dur || 0.28));
+  } catch (e) { /* audio blocked — ignore */ }
+}
+
+function queueAlertCheck() {
+  if (!document.querySelector('[data-auto-refresh]')) return;
+  const key = 'gil_queue_alert_' + window.location.pathname;
+  try {
+    const waitingBtns = document.querySelectorAll('[data-action="call"]').length;
+    const curEl = document.querySelector('.current-patient .cp-name span:first-of-type');
+    const curName = curEl ? curEl.textContent.trim() : '';
+    const wtEl = document.querySelector('[data-waiting-total]');
+    const rrEl = document.querySelector('[data-report-ready]');
+    const waitingTotal = wtEl ? parseInt(wtEl.getAttribute('data-waiting-total') || '0', 10) : waitingBtns;
+    const reportReady = rrEl ? parseInt(rrEl.getAttribute('data-report-ready') || '0', 10) : -1;
+    const prev = JSON.parse(sessionStorage.getItem(key) || '{}');
+
+    if (prev.waiting !== undefined && waitingTotal > prev.waiting) {
+      playBeep(880, 0.35);
+      setTimeout(() => playBeep(1100, 0.35), 400);
+      showToast('🔔 नया patient आया! Waiting: ' + waitingTotal, 'warning');
+    } else if (prev.current && curName && prev.current !== curName) {
+      playBeep(660, 0.3);
+      showToast('📢 अभी बुलाया गया: ' + curName, 'success');
+    }
+
+    if (reportReady >= 0 && prev.reportReady !== undefined && reportReady > prev.reportReady) {
+      playBeep(988, 0.3);
+      showToast('📄 नई रिपोर्ट तैयार! (' + reportReady + ') — Doctor check करें', 'success');
+    }
+
+    sessionStorage.setItem(key, JSON.stringify({
+      waiting: waitingTotal, current: curName, reportReady: reportReady,
+    }));
+  } catch (e) { /* ignore */ }
+}
+document.addEventListener('DOMContentLoaded', queueAlertCheck);
+
 // ── Action Buttons — POST via fetch ────────────────────────────────────────
 document.querySelectorAll('[data-action]').forEach(btn => {
   btn.addEventListener('click', async function(e) {
@@ -90,6 +142,13 @@ document.querySelectorAll('[data-action]').forEach(btn => {
         })
       });
       if (resp.ok) {
+        // Auto-open patient WhatsApp notification on call/recall (fallback link)
+        try {
+          const result = await resp.json();
+          if (result && result.whatsapp_url) {
+            window.open(result.whatsapp_url, '_blank');
+          }
+        } catch (e) { /* response not JSON — ignore */ }
         window.location.reload();
       } else {
         const err = await resp.json();

@@ -1,0 +1,61 @@
+{% extends "dashboard/base.html" %}
+
+{% block title %}Live Board{% endblock %}
+{% block page_title %}📺 Clinic Live Board — सब Departments एक स्क्रीन पर{% endblock %}
+
+{% block content %}
+<!-- Live totals (data attrs feed the beep alerts in app.js) -->
+<div class="stats-grid" data-auto-refresh data-waiting-total="{{ total_waiting }}" data-report-ready="{{ total_report_ready }}">
+  <div class="stat-card" style="border-top-color:#667eea">
+    <div class="stat-value">{{ total_waiting }}</div>
+    <div class="stat-label">⏳ Total Waiting</div>
+  </div>
+  <div class="stat-card" style="border-top-color:#68d391">
+    <div class="stat-value">{{ total_report_ready }}</div>
+    <div class="stat-label">📄 Reports Ready</div>
+  </div>
+  <div class="stat-card" style="border-top-color:#f6ad55">
+    <div class="stat-value">{{ departments | length }}</div>
+    <div class="stat-label">🏥 Departments</div>
+  </div>
+</div>
+
+<div class="section-header">
+  <div class="section-title">🕒 Auto-refresh: हर 10 सेकंड · नया patient या report पर sound</div>
+  <button class="btn btn-outline btn-sm" data-refresh-btn>🔄 Refresh</button>
+</div>
+
+<div class="dept-grid" style="grid-template-columns:repeat(auto-fill,minmax(240px,1fr));">
+  {% for d in departments %}
+  <div class="dept-card live" style="text-align:left;padding:16px;">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
+      <div class="dept-icon">{{ d.icon }}</div>
+      <div>
+        <div class="dept-name">{{ d.name }}</div>
+        {% if d.current %}
+        <div style="font-size:12px;color:#2563eb;">🔄 अभी: {{ d.current }} (Token #{{ d.current_token }})</div>
+        {% else %}
+        <div style="font-size:12px;color:#64748b;">कोई patient in-progress नहीं</div>
+        {% endif %}
+      </div>
+    </div>
+    <div style="display:flex;gap:10px;margin-bottom:8px;flex-wrap:wrap;">
+      <span class="dept-badge" style="background:rgba(102,126,234,0.15);color:#667eea;">⏳ Waiting: {{ d.waiting }}</span>
+      <span class="dept-badge" style="background:rgba(246,173,85,0.2);color:#dd6b20;">📢 Called: {{ d.called }}</span>
+      {% if d.report_ready %}
+      <span class="dept-badge" style="background:rgba(104,211,145,0.25);color:#2f855a;">📄 Ready: {{ d.report_ready }}</span>
+      {% endif %}
+    </div>
+    {% if d.top %}
+    <div style="font-size:12px;color:#4a5568;">
+      {% for t in d.top %}
+      <div>🎟️ #{{ t.token }} — {{ t.name }}</div>
+      {% endfor %}
+    </div>
+    {% else %}
+    <div style="font-size:12px;color:#a0aec0;">Queue खाली</div>
+    {% endif %}
+  </div>
+  {% endfor %}
+</div>
+{% endblock %}
