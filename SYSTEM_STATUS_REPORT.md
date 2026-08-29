@@ -67,3 +67,18 @@
 4. Firewall popup → **Allow**
 5. एक test patient register करें → देखें: WhatsApp में अब **live waiting link** आता है ✅
 6. शाम को `BACKUP_DATA.bat` चलाएँ (या server बंद करने से पहले — auto-backup वैसे भी start पर होता है)
+
+---
+
+## 4. GO-LIVE STATUS — 29-Aug evening
+
+| चीज़ | Status |
+|---|---|
+| Test suite (सारे fixes prove) | ✅ **64/64 passed** |
+| GitHub push (cloud deploy का Step 0) | ✅ **Pushed** — commit `a030084` |
+| Local server live | ✅ `http://localhost:8000` (health 200 OK, LAN: `http://192.168.31.238:8000`) |
+| Data backup | ✅ `backups/2026-08-29_210555` |
+| Secret files gitignore में | ✅ `.env`, `*.db`, `secret.txt`, `admin_credentials.txt` — कोई patient data/key push नहीं हुआ |
+
+**अब 24/7 cloud के लिए सिर्फ एक मैनुअल step बाकी (मैं नहीं कर सकता — card चाहिए):**
+`CLOUD_DEPLOY_GUIDE.md` → Oracle Cloud signup (Part 1) या Google e2-micro (Part 2) → VM पर `deploy_oracle.sh` चलाना → बस। Code तैयार है, script तैयार है, सब push हो चुका है।
