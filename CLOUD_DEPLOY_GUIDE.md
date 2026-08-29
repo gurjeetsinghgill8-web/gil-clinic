@@ -38,7 +38,13 @@ Oracle VM पर deploy script आपके repo से code clone करता 
    ```
    Script खुद: SSH test → `deploy_oracle.sh` upload + चलाना → health check → admin credentials laptop पर save
 3. Browser में खोलें: `http://<VM-PUBLIC-IP>:8000` ✅
-4. Backup laptop पर लाने के लिए (हफ्ते में एक बार): `.\deploy_remote.ps1 -VmIp <VM-PUBLIC-IP> -KeyPath .\gil-clinic-key.key -Mode PullBackup`
+4. **Existing patient data migrate karna ho (laptop ka data VM par):**
+   ```
+   .\deploy_remote.ps1 -VmIp <VM-PUBLIC-IP> -KeyPath .\gil-clinic-key.key -Mode PushData
+   ```
+   (VM ka purana data pehle `pre-migrate-*.db` backup ban jata hai, phir local `ghos_dev.db` VM par chala jata hai)
+5. **Backup laptop par** (हफ्ते में एक बार): `.\deploy_remote.ps1 -VmIp <VM-PUBLIC-IP> -KeyPath .\gil-clinic-key.key -Mode PullBackup`
+6. **VM ki halat dekhni ho**: `-Mode Status` (service/data/backups/disk sab ek saath)
 
 **Manual way (backup):**
 1. अपने laptop पर: downloaded private key को `gil-clinic-key.key` नाम से save करें
