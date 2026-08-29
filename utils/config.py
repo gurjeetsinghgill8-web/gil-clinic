@@ -3,9 +3,12 @@ Configuration module for CardioQueue.
 Centralizes all constants, environment variables, and settings.
 """
 import os
+from pathlib import Path
 from dotenv import load_dotenv
 
-load_dotenv()
+# .env hamesha project root se load karo — chahe CWD kuch bhi ho.
+# (PythonAnywhere par uvicorn ka CWD project dir nahi hota.)
+load_dotenv(Path(__file__).resolve().parents[1] / ".env")
 
 # ─── Supabase ────────────────────────────────────────────────────────────────
 SUPABASE_URL = os.getenv("SUPABASE_URL", "https://your-project-id.supabase.co")
