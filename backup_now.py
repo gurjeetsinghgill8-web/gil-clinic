@@ -17,7 +17,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
 BACKUP_ROOT = ROOT / "backups"
-DB_FILES = ["ghos_dev.db", "cardioqueue.db", "test_ghos.db"]
+DB_FILES = ["ghos_dev.db", "ghos_prod.db", "cardioqueue.db", "test_ghos.db"]
 
 
 def main() -> int:
