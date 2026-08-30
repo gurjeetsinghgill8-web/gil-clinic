@@ -29,6 +29,14 @@ _src = Path(__file__).parent / "src"
 if str(_src) not in sys.path:
     sys.path.insert(0, str(_src))
 
+# ── Load .env from project root BEFORE reading any env vars ─────────────
+# (CWD-independent — PythonAnywhere/VMs par uvicorn ka CWD project dir nahi hota)
+try:
+    from dotenv import load_dotenv as _load_dotenv
+    _load_dotenv(Path(__file__).resolve().parent / ".env")
+except Exception:
+    pass
+
 # ═════════════════════════════════════════════════════════════════════════
 # Development Configuration — MUST be set before ANY engine imports
 # ═════════════════════════════════════════════════════════════════════════
