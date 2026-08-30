@@ -313,9 +313,9 @@ def make_cme_pdf(topic: str, content: str) -> bytes:
     pdf.set_fill_color(0, 51, 102)
     pdf.rect(0, 0, 210, 25, "F")
     pdf.set_xy(10, 5)
-    pdf.set_font("Helvetica", "B", 16)
+    pdf.set_font("Helvetica", "B", 18)
     pdf.set_text_color(255, 255, 255)
-    pdf.cell(190, 10, safe_str(f"CME: {topic}"), align="C")
+    pdf.cell(190, 12, safe_str(f"CME: {topic}"), align="C")
     pdf.set_xy(10, 15)
     pdf.set_font("Helvetica", "I", 9)
     pdf.set_text_color(200, 220, 255)
@@ -336,20 +336,20 @@ def make_cme_pdf(topic: str, content: str) -> bytes:
 
         # Section headers
         if line.endswith(":") or line.isupper():
-            pdf.set_font("Helvetica", "B", 10)
+            pdf.set_font("Helvetica", "B", 12)
             pdf.set_fill_color(240, 245, 255)
-            pdf.cell(190, 6, safe_str(line), fill=True)
-            y_pos += 7
+            pdf.cell(190, 7, safe_str(line), fill=True)
+            y_pos += 9
         else:
-            pdf.set_font("Helvetica", "", 10)
+            pdf.set_font("Helvetica", "", 11)
             pdf.set_x(14)
-            pdf.multi_cell(182, 5, safe_str(line))
+            pdf.multi_cell(180, 6.5, safe_str(line))
             y_pos = pdf.get_y() + 1
 
     pdf.set_y(-15)
-    pdf.set_font("Helvetica", "I", 7)
+    pdf.set_font("Helvetica", "I", 8)
     pdf.set_text_color(150, 150, 150)
-    pdf.cell(0, 10, safe_str("Bharat AI Clinic — CME Study Material"), align="C")
+    pdf.cell(0, 10, safe_str("AI-Generated CME - verify latest guidelines before clinical use"), align="C")
 
     result = pdf.output(dest="S")
     if isinstance(result, bytearray):

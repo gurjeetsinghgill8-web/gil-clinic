@@ -456,10 +456,15 @@ Provide analysis in plain text (no markdown). Be specific with drug names and do
 # CME (Continuing Medical Education) PROMPTS
 # ════════════════════════════════════════════════════════════════════════════
 
-_CME_LATEST_UPDATES = """LATEST GUIDELINE UPDATES (verified Aug-2026 — use these IF the topic covers them, otherwise ignore):
-1. MYOCARDIAL INFARCTION: The 5th Universal Definition of MI (ESC/ACC/AHA/WHF) was published in Aug-2026. It REPLACES the old numeric Types 1-5 with THREE CLINICAL CATEGORIES (ischemic vs non-ischemic myocardial injury flow, plaque-related/spontaneous, supply-demand mismatch, periprocedural). KABHI purani 'Type 1/2/3/4/5 MI' classification ko current ke roop mein mat present karo — ab wo outdated hai.
-2. HEART FAILURE: ESC published UPDATED Heart Failure Guidelines (2026) with an ITERATED/REVISED HF classification across the EF spectrum (HFrEF / HFmrEF / HFpEF categories revised; new terminology for HF with IMPROVED EF - HFimpEF - is now standard for recovered patients). Always frame HF content as 'per ESC 2026 (or latest)'.
-3. General rule: guidelines evolve rapidly. Agar aapka knowledge cutoff isse purana hai, to exact naye numbers/category names yaad na hon to usse mark karo: '(exact terms verify karein — latest ESC/ACC document)' — KABHI guess mat karo.
+_CME_LATEST_UPDATES = """LATEST GUIDELINE UPDATES (verified 2024-2026 — use these IF the topic covers them, otherwise ignore):
+1. MYOCARDIAL INFARCTION: 5th Universal Definition of MI (ESC/ACC/AHA/WHF, Aug-2026) — REPLACES numeric Types 1-5 with THREE CLINICAL CATEGORIES. Purani 'Type 1/2/3/4/5' classification ab outdated hai — current ke roop mein mat present karo.
+2. HEART FAILURE: ESC 2026 HF Guidelines — EF classification iterated; HFimpEF (HF with improved EF) ab recovered patients ke liye standard term.
+3. HYPERTENSION: ESC 2024 BP Guidelines — nayi category 'elevated BP' = 120-139/80-89 (ab sirf 140/90 se nahi shuru hota); treatment target ~120-129 agar tolerated (low-risk 130-139 par pehle lifestyle).
+4. ATRIAL FIBRILLATION: ESC 2024 AF Guidelines — AF-CARE pathway (C = Comorbidities, A = Anticoagulation, R = Rate, E = Rhythm control) purane 'ABC' framework ki jagah.
+5. COPD: GOLD 2025 — precision medicine: dupilumab (eosinophilic phenotype), ensifentrine (inhaled PDE3/PDE4) added; diagnosis fixed-ratio spirometry se.
+6. TYPE 2 DIABETES: ADA Standards 2025-2026 — T2D + obesity mein weight loss ab PRIMARY target; GLP-1 RA / SGLT2i CVD/HF/CKD wale patients mein PEHLE se first-line class.
+7. DYSLIPIDEMIA: LDL 'lower is better' — very high risk mein recent guidance lower LDL targets (e.g. <55 mg/dL and lower) support karti hai; latest ESC/ACC document verify karo.
+8. ANY OTHER SPECIALTY: agar aapka knowledge 2024 se purana lagta hai to lead karo 'as per latest [guideline] (year) — verify current version'; KABHI guess mat karo aur purani cheez ko 'new' mat bolo.
 """
 
 
