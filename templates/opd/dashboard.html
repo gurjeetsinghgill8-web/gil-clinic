@@ -644,7 +644,11 @@
                     </div>
 
                     <div class="form-group">
-                        <label>📝 Advice / Lifestyle Notes</label>
+                        <label>📝 Advice / Lifestyle Notes
+                            <button type="button" onclick="fillDxAdviceFromRx(document.getElementById('rx-output').value, true)"
+                                style="float:right;background:#7c3aed;color:#fff;border:none;border-radius:6px;padding:2px 10px;font-size:12px;cursor:pointer;">
+                                ✨ Fill from AI</button>
+                        </label>
                         <textarea id="pt-advice" rows="2" placeholder="Diet, exercise, lifestyle advice..."></textarea>
                     </div>
 
@@ -2042,6 +2046,7 @@ function generateFollowupRx(patientName, patientId) {
             document.getElementById('rx-output').value = res.prescription;
             document.getElementById('rx-output-section').style.display = 'block';
             document.getElementById('rx-status').textContent = '✅ Follow-Up Rx generated. Review and save.';
+            fillDxAdviceFromRx(res.prescription, false);
             showToast('✅ Follow-Up Rx ready');
         } else {
             document.getElementById('rx-status').textContent = '❌ ' + (res.error || 'Generation failed');
@@ -2102,6 +2107,25 @@ document.getElementById('pt-medicines').addEventListener('input', function() {
 // ════════════════════════════════════════════════════════════════
 // AI GENERATE PRESCRIPTION
 // ════════════════════════════════════════════════════════════════
+// C1: AI output se Diagnosis + Advice inline fields mein bharo (doctor
+// wahan edit kare, final print wahi jayega). force=true → overwrite;
+// force=false → sirf khali field mein bharo.
+function fillDxAdviceFromRx(rxText, force) {
+    if (!rxText) { showToast('Pehle AI se prescription banao, phir fill karo', 'error'); return; }
+    const diag = rxText.match(/Diagnosis[:\s]*\n?([\s\S]*?)(?=\n\s*(?:Treatment|Management|Drugs|Investigations|Advice|Follow-up|$)|$)/i);
+    const advice = rxText.match(/(?:Advice|Lifestyle\s*Advice|Lifestyle\s*Notes)[:\s]*\n?([\s\S]*?)(?=\n\s*(?:Follow-up|$)|$)/i);
+    let filled = false;
+    const dEl = document.getElementById('pt-diagnosis');
+    if (diag && dEl && (force || !dEl.value.trim())) { dEl.value = diag[1].trim(); filled = true; }
+    const aEl = document.getElementById('pt-advice');
+    if (advice && aEl && (force || !aEl.value.trim())) { aEl.value = advice[1].trim(); filled = true; }
+    if (filled) {
+        showToast('✅ Diagnosis & Advice bhar diye — edit karke Save karo');
+    } else {
+        showToast('AI output mein Diagnosis/Advice section nahi mila', 'error');
+    }
+}
+
 function generateRx() {
     const data = {
         patient_name: document.getElementById('pt-name').value.trim(),
@@ -2141,6 +2165,7 @@ function generateRx() {
             document.getElementById('rx-output').value = res.prescription;
             document.getElementById('rx-output-section').style.display = 'block';
             document.getElementById('optimize-btn').style.display = 'inline-block';
+            fillDxAdviceFromRx(res.prescription, false);
             const modeText = res.mode === 'suggest' ? '💡 AI Suggestions (review before using)' : '✅ AI Assistant output';
             document.getElementById('rx-status').textContent = modeText;
             showToast('Prescription generated!');
@@ -2180,6 +2205,7 @@ function optimizeRx() {
         if (res.ok) {
             document.getElementById('rx-output').value = res.prescription;
             document.getElementById('rx-status').textContent = '✅ Rx Optimized — crisp numbered format';
+            fillDxAdviceFromRx(res.prescription, false);
             showToast('Prescription optimized!');
             loadClinicalSupport();
         } else {
