@@ -16,9 +16,26 @@ logger = logging.getLogger(__name__)
 
 
 def safe_str(text) -> str:
-    """Convert to string, encode as latin-1 for FPDF compatibility."""
+    """FPDF latin-1 safe: emoji/symbols hatao (koi '?' nahi bachega)."""
     try:
-        return str(text).encode("latin-1", "replace").decode("latin-1")
+        s = str(text)
+        out = []
+        for ch in s:
+            cp = ord(ch)
+            if cp == 0x20B9:  # ₹
+                out.append("Rs ")
+            elif cp in (0x2013, 0x2014):  # en/em dash
+                out.append("-")
+            elif cp in (0x2018, 0x2019):  # single quotes
+                out.append("'")
+            elif cp in (0x201C, 0x201D):  # double quotes
+                out.append('"')
+            elif cp == 0x2022:  # bullet
+                out.append("-")
+            elif cp < 256:
+                out.append(ch)
+            # baaki (emoji, Hindi etc.) — drop, '?' kabhi nahi
+        return "".join(out)
     except Exception:
         return str(text)
 
@@ -321,7 +338,7 @@ def make_diet_pdf(
     diet_type: str = "",
     target_calories: str = "",
     diet_plan: str = "",
-    clinic_name: str = "GIL CLINIC",
+    clinic_name: str = "",
     doc_name: str = "Dietitian",
     phone: str = "",
 ) -> bytes:
@@ -346,16 +363,19 @@ def make_diet_pdf(
     pdf.set_xy(10, 5)
     pdf.set_font("Helvetica", "B", 16)
     pdf.set_text_color(255, 255, 255)
-    pdf.cell(190, 10, safe_str("🥗 Clinical Dietary Prescription"), align="C")
-    pdf.set_xy(10, 17)
-    pdf.set_font("Helvetica", "", 9)
-    pdf.set_text_color(200, 255, 220)
-    pdf.cell(190, 5, safe_str(clinic_name), align="C")
-    pdf.set_xy(10, 23)
+    pdf.cell(190, 10, safe_str("Clinical Dietary Prescription"), align="C")
+    header_y = 17
+    if clinic_name:
+        pdf.set_xy(10, header_y)
+        pdf.set_font("Helvetica", "", 9)
+        pdf.set_text_color(200, 255, 220)
+        pdf.cell(190, 5, safe_str(clinic_name), align="C")
+        header_y = 23
+    pdf.set_xy(10, header_y)
     pdf.set_font("Helvetica", "I", 8)
     pdf.set_text_color(180, 240, 200)
-    pdf.cell(190, 5, f"Prepared by: {safe_str(doc_name)}", align="C")
-    pdf.set_xy(10, 29)
+    pdf.cell(190, 5, "Prepared by AI - Reconfirm by Dietitian", align="C")
+    pdf.set_xy(10, header_y + 6)
     pdf.set_font("Helvetica", "I", 7)
     pdf.cell(190, 5, f"Date: {datetime.datetime.now().strftime('%d-%b-%Y')} | IFCT/NIN/ICMR Compliant", align="C")
 

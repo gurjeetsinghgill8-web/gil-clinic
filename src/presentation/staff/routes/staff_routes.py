@@ -1045,7 +1045,7 @@ async def api_diet_pdf(request: Request):
         diet_type=body.get("diet_type", ""),
         target_calories=body.get("target_calories", ""),
         diet_plan=body.get("diet_plan", ""),
-        clinic_name=body.get("clinic_name", "GIL CLINIC"),
+        clinic_name=body.get("clinic_name", ""),
         doc_name=body.get("doc_name", "Dietitian"),
         phone=body.get("phone", ""),
     )

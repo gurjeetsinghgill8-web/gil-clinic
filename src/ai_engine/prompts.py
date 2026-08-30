@@ -690,6 +690,11 @@ CRITICAL NUTRITION TARGETS (must calculate from weight):
 - PROTEIN TARGET PRESCRIBED BY DIETITIAN: {protein_spec} (Strict Target Ratio: {pr_val:.1f} g/kg body weight)
 - FIBER: {fiber_target} per NIN/ICMR guidelines
 - Use Mifflin-St Jeor equation for BMR, apply activity factor 1.2 (sedentary) to 1.5 (active)
+- CALORIE PRESCRIPTION RULES (AACE/ACC obesity guideline — 500-750 kcal deficit):
+  * Weight LOSS goal ya BMI >= 25: CALORIES = maintenance - 500 to 750 kcal. FLOOR: 1200 kcal (women) / 1400 kcal (men). Kabhi maintenance-level calories mat do.
+  * BMI >= 30 (OBESE): 1200-1600 kcal range prescribe karo aur "DEFICIT: XXX kcal/day" summary mein saaf likho (maintenance kitna, target kitna, deficit kitna).
+  * Weight GAIN goal: maintenance + 300-500 kcal.
+  * Agar BMI abnormal ho to pehle usi ke hisaab se calorie target banao, phir meals design karo — kabhi generic 1800-2000 mat do.
 
 IMPORTANT GUIDELINES (IFCT/NIN/ICMR compliant):
 1. Use ONLY Indian foods from IFCT database — rice, roti (whole wheat), dal (toor, moong, masoor, chana), sabzi (seasonal), curd/dahi, sprouts, poha, upma, idli, dosa, khichdi, millets (ragi, jowar, bajra), etc.
@@ -701,10 +706,10 @@ IMPORTANT GUIDELINES (IFCT/NIN/ICMR compliant):
 
 {"TARGET CALORIES: " + target_calories + " kcal/day — Design the meal plan to meet this target precisely." if target_calories else "Calculate the appropriate daily calorie target based on BMR (Mifflin-St Jeor), activity level, weight goals, and medical conditions."}
 
-OUTPUT FORMAT — Use EXACTLY this format (plain text, no markdown, no asterisks for bold):
+OUTPUT FORMAT — Use EXACTLY this format (plain text, no markdown, no asterisks, NO emojis/symbols — plain text only):
 
 CLINICAL DIETARY PRESCRIPTION
-GIL CLINIC — Dietitian Department
+Prepared by AI - Reconfirm by a qualified dietitian
 
 PATIENT: {patient_name}  |  AGE: {age}  |  GENDER: {gender}
 WEIGHT: {weight} kg  |  HEIGHT: {height} cm  |  BMI: {bmi}
