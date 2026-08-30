@@ -550,6 +550,10 @@
                             <span style="font-size:18px;">🖼️</span> <strong>Upload from Gallery / Files</strong>
                         </label>
 
+                        <button onclick="openBatchScan()" style="background:#0f766e;color:white;font-weight:700;font-size:13px;padding:10px 18px;border:none;border-radius:8px;cursor:pointer;display:inline-flex;align-items:center;gap:8px;box-shadow:0 3px 10px rgba(15,118,110,0.3);" title="10-50 pages ki investigations ek saath">
+                            <span style="font-size:18px;">📸</span> <strong>Batch Scan (multi-page)</strong>
+                        </button>
+
                         <button id="quick-scan-process-btn" onclick="processQuickScansAuto()" style="display:none;background:linear-gradient(135deg,#059669,#10b981);color:white;font-weight:700;font-size:14px;padding:10px 22px;border:none;border-radius:8px;cursor:pointer;box-shadow:0 4px 14px rgba(5,150,105,0.35);animation:pulse-btn 1.8s infinite;">
                             🔍 <strong>AI Process Prescription</strong>
                         </button>
@@ -918,6 +922,16 @@
                         <label for="batch-tab-gallery" style="background:#2563eb;color:white;font-weight:700;font-size:13px;padding:10px 18px;border:none;border-radius:8px;cursor:pointer;display:inline-flex;align-items:center;gap:8px;">
                             <span style="font-size:18px;">🖼️</span> <strong>Upload from Gallery / Files</strong>
                         </label>
+
+                        <label for="batch-tab-gallery" style="background:#f59e0b;color:white;font-weight:700;font-size:13px;padding:10px 18px;border:none;border-radius:8px;cursor:pointer;display:inline-flex;align-items:center;gap:8px;" title="10-50 pages ho to 1-2 karke baar-baar dabao — pages add hote rahenge">
+                            <span style="font-size:18px;">➕</span> <strong>Add More Pages</strong>
+                        </label>
+                    </div>
+
+                    <div style="font-size:12px;color:#475569;margin-bottom:10px;background:#f1f5f9;padding:8px 12px;border-radius:8px;">
+                        💡 <strong>25-50 pages?</strong> 1-2 karke upload karte jao (➕ Add More Pages) — AI sab pages
+                        1-by-1 padhega, relevant data extract karega aur form auto-fill karega. Process hone ke baad
+                        originals delete ho jate hain — jagah nahi bharegi.
                     </div>
 
                     <div id="scan-previews" class="flex flex-wrap gap-sm" style="margin-bottom:12px;"></div>
@@ -1577,15 +1591,6 @@ function previewScans() {
         reader.readAsDataURL(file);
     });
     document.getElementById('scan-queue-status').textContent = `Ready to process ${selectedScanFiles.length} image(s) in sequential AI queue.`;
-}
-
-function processAllScans() {
-    if (!selectedScanFiles || selectedScanFiles.length === 0) {
-        showToast('Please select at least 1 prescription or lab report image', 'error');
-        return;
-    }
-    const statusEl = document.getElementById('scan-queue-status');
-    processAllScansSequential(selectedScanFiles, statusEl);
 }
 
 function readFileAsDataURL(file) {
@@ -2908,7 +2913,7 @@ function previewScans() {
     document.getElementById('scan-queue-status').textContent = `${files.length} image(s) ready`;
 }
 
-function processAllScans() {
+function processCameraScans() {
     if (scannedImages.length === 0) { showToast('Upload images first', 'error'); return; }
 
     let processed = 0;
@@ -2965,6 +2970,28 @@ function processAllScans() {
             document.getElementById('scan-queue-status').textContent = `⚠️ ${processed}/${scannedImages.length} (with errors)`;
         });
     });
+}
+
+// C3: dono sources (gallery files + camera snaps) ek hi button se
+function processAllScans() {
+    if ((!selectedScanFiles || selectedScanFiles.length === 0) && (!scannedImages || scannedImages.length === 0)) {
+        showToast('Pehle images lo — 📷 camera snap ya 🖼️ gallery (1-2 karke bhi add kar sakte ho)', 'error');
+        return;
+    }
+    if (selectedScanFiles && selectedScanFiles.length > 0) {
+        processAllScansSequential(selectedScanFiles, document.getElementById('scan-queue-status'));
+        return;
+    }
+    processCameraScans();
+}
+
+// C3: Rx tab se 1 click mein batch tab + gallery picker
+function openBatchScan() {
+    switchTab('batch');
+    setTimeout(() => {
+        const g = document.getElementById('batch-tab-gallery');
+        if (g) g.click();
+    }, 300);
 }
 
 function loadPendingScans() {

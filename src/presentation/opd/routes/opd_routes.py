@@ -2316,6 +2316,16 @@ async def api_approve_scan(request: Request):
 
             await session.commit()
 
+            # C3 space management: data prescription mein save ho gaya —
+            # original image (bada base64) ab delete (PA ka 512MB bachata hai)
+            try:
+                await session.execute(
+                    sa.delete(PendingScanModel).where(PendingScanModel.id == scan_id)
+                )
+                await session.commit()
+            except Exception:
+                pass
+
             # Learn drugs
             await _learn_drugs(body.get("medicines", scan.medicines), doctor_id)
 
