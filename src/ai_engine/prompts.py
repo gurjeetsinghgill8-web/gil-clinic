@@ -456,21 +456,37 @@ Provide analysis in plain text (no markdown). Be specific with drug names and do
 # CME (Continuing Medical Education) PROMPTS
 # ════════════════════════════════════════════════════════════════════════════
 
+_CME_LATEST_UPDATES = """LATEST GUIDELINE UPDATES (verified Aug-2026 — use these IF the topic covers them, otherwise ignore):
+1. MYOCARDIAL INFARCTION: The 5th Universal Definition of MI (ESC/ACC/AHA/WHF) was published in Aug-2026. It REPLACES the old numeric Types 1-5 with THREE CLINICAL CATEGORIES (ischemic vs non-ischemic myocardial injury flow, plaque-related/spontaneous, supply-demand mismatch, periprocedural). KABHI purani 'Type 1/2/3/4/5 MI' classification ko current ke roop mein mat present karo — ab wo outdated hai.
+2. HEART FAILURE: ESC published UPDATED Heart Failure Guidelines (2026) with an ITERATED/REVISED HF classification across the EF spectrum (HFrEF / HFmrEF / HFpEF categories revised; new terminology for HF with IMPROVED EF - HFimpEF - is now standard for recovered patients). Always frame HF content as 'per ESC 2026 (or latest)'.
+3. General rule: guidelines evolve rapidly. Agar aapka knowledge cutoff isse purana hai, to exact naye numbers/category names yaad na hon to usse mark karo: '(exact terms verify karein — latest ESC/ACC document)' — KABHI guess mat karo.
+"""
+
+
 def cme_prompt(topic: str) -> str:
-    """Prompt for CME guideline summary generation."""
+    """Prompt for CME guideline summary generation — with 2026-aware honesty rules."""
     return f"""You are a medical educator creating CME study material for Indian doctors.
+
+CURRENT YEAR: 2026. IMPORTANT: Your training data may be OLDER than the latest guidelines.
+Follow these rules STRICTLY:
+- Kabhi bhi outdated content ko 'new/recent/latest' ke roop mein present mat karo.
+- Agar topic mein koi guideline RECENTLY (2024-2026) badli hai, to neeche diya LATEST GUIDELINE UPDATES block USE karo; warna clearly bolo ki 'latest guideline version verify karein'.
+- Exact naye numbers/definitions yaad na hon to UNKO MAT BANAO — '(latest ESC/ACC version verify karein)' likho.
+- Har answer ke end mein disclaimer do: 'Note: Guidelines evolve rapidly - verify latest ESC/ACC/ICMR update before clinical use.'
 
 Topic: {topic}
 
 Create a comprehensive CME summary:
 
-1. DEFINITIONS AND EPIDEMIOLOGY: India-specific data where available.
-2. DIAGNOSTIC CRITERIA: Indian guidelines (NHB for hypertension, RSSDI for diabetes, ICMR, API, IAP, IADVL).
+1. DEFINITIONS AND EPIDEMIOLOGY: India-specific data where available. Agar definition recently badli hai (jaise MI ki 5th Universal Definition 2026), to NEW definition use karo.
+2. DIAGNOSTIC CRITERIA: Indian guidelines (NHB for hypertension, RSSDI for diabetes, ICMR, API, IAP, IADVL) + current international (ESC/ACC) criteria.
 3. STEPWISE MANAGEMENT: Practical Indian OPD protocol with drug names, doses, durations.
 4. INVESTIGATIONS: Essential and optional tests with Indian cost considerations.
 5. RED FLAGS: When to refer urgently to specialist.
-6. RECENT ADVANCES (2024-2025): Latest updates relevant to Indian practice.
+6. RECENT ADVANCES (2025-2026): Sirf asli updates — LATEST GUIDELINE UPDATES block se, aur kuchh yaad na ho to 'verify latest' likho. Purani 'advances' ko naya bol kar mat do.
 7. TAKE-HOME POINTS: 5 key points for busy OPD doctors.
+
+{_CME_LATEST_UPDATES}
 
 Plain text only. No markdown. Use Indian drug names and brand alternatives."""
 
