@@ -626,3 +626,83 @@ Ye 3 test cases approval ke waqt dikhaenge:
 | D3B | Real web deep-research (whitelist ke baad) | Baad mein |
 
 **Aap bolo "D1+D2+D3A GO" → main code karke aapke saamne 3 test cases se dikhaunga.**
+
+
+---
+
+# PART E — Puter Recharge & Billing Guide (add-on) — 30-Aug-2026 evening
+## "Free AI band ho jaye to user kahan recharge karega?" — deep research + app options
+## Status: PLAN — approval ke baad code hoga
+
+> **Doctor ka sawaal:** "Jab free wala kaam karna band karega to user kahan jakar recharge karega,
+> kaise karega — use kuchh pata hi nahi. Detail do + option do ki wo seedha site par chala jaye,
+> recharge kar le. Kitna amount lagega, kaisa hai."
+
+---
+
+## E1. Puter ka billing system — kya hai (official docs se verified)
+
+**Model: "User-Pays"** — developer (hum) ka bill hamesha **$0**. Jo user Puter account se
+signed-in hai, **usi ke account par** AI usage ka charge jata hai ([Puter.js Pricing](https://developer.puter.com/pricing/),
+[User-Pays vs Traditional](https://developer.puter.com/blog/user-pays-vs-traditional-model/)).
+
+**3 cheezein usage rok sakti hain** ([Rate Limits and Quotas](https://docs.puter.com/rate-limits-and-quotas/)):
+1. **Usage credit** — monthly, per plan; har mahine refill hota hai. Khatam → error `402 insufficient_funds`.
+2. **Rate limits** — 10-sec/1-min rolling windows (Puter khud sambhal leta hai).
+3. **Storage quota** — cloud storage ke liye (hamara data apne DB mein hai, iska asar nahi).
+
+**Sabse important line (official docs se):**
+> "a call that runs out of credit or storage **surfaces an upgrade prompt to the user automatically**"
+
+**Matlab:** jab free credits khatam honge, **Puter khud user ko recharge/upgrade ka prompt dikha dega** —
+user ko kuchh pata nahi karna padta, prompt mein hi wo card se recharge kar lega. Ye humare app mein
+bhi automatic aa jayega (Puter.js SDK ke through).
+
+**Recharge ka manual rasta (bata dena hai user ko):**
+1. `puter.com` kholo → **Sign in** (WOHI account jo clinic ke app mein use kiya hai)
+2. Account menu → **Billing / Upgrade** → subscription plan ya credits khareedo (credit/debit card, international payment)
+3. Wapas app kholo → chip 🟢 green rahega aur AI chalega
+
+**Kitna amount lagega (honest baat):**
+- Puter exact per-model ₹ prices publicly publish **nahi** karta — plans per-user monthly hote hain
+  (free tier ke saath), aur usage ke hisab se upgrade prompts mein amount dikh jata hai.
+- Puter ke free tier + kuch models ke liye free promos ([Free AI tutorials](https://developer.puter.com/tutorials/free-unlimited-ai-api/))
+  se chhoti clinic ka daily OPD use aksar free mein hi nikal jata hai; heavy use par prompt aayega.
+- **Hamarе liye 100% ₹0** — chahe user ₹0 de ya ₹500/माह, humara koi bill nahi.
+
+---
+
+## E2. App mein add karne wale options (approval ke baad code)
+
+| # | Option | Kya karega |
+|---|---|---|
+| E2.1 | **💳 "Puter Recharge" button** (Settings + chip mein) | 1 click → `puter.com` nayi tab mein khule (user wahan sign-in → billing → recharge) |
+| E2.2 | **Monthly usage display** | Puter SDK ka `auth.getMonthlyUsage()` use karke Settings + chip mein dikhaye: "AI usage is month: X%" |
+| E2.3 | **80% warning** | Usage 80% cross kare to toast: "⚠️ Puter credits khatam hone wale hain — Recharge dabao" |
+| E2.4 | **402 handling** | AI call par `insufficient_funds` aaye to clear message + Recharge button (abhi generic error dikhta hai) |
+| E2.5 | **Relogin** | Already ship ho gaya (chip ka Re-login) — billing account switch karne ke liye |
+
+**Files (approx):** `templates/opd/dashboard.html` (Settings section + chip), `static/js/ai_gateway.js` (402 + usage), backend kuch nahi.
+
+---
+
+## E3. Long-term best option (Puter se aage)
+
+PA whitelist approve hote hi clinic **apni DeepSeek/Groq key** Settings → AI Provider mein daal de
+(BYOK path already live) — tab:
+- Puter ki zaroorat hi khatam (recharge ka sawaal hi nahi)
+- Clinic ka provider bill seedha apne account par (DeepSeek/Groq ke apne dashboard mein recharge — ₹ se, Indian cards se, sasta: DeepSeek ~₹0.2-1/1000 tokens)
+
+**Recommendation:** abhi Puter (E2.1 + E2.4 karna), whitelist ke baad BYOK primary bana dena.
+
+---
+
+## E4. Decision
+
+| ID | Kya | Approval |
+|---|---|---|
+| E2.1 | Puter Recharge button (puter.com khole) | GO? |
+| E2.2+E2.3 | Usage display + 80% warning | GO? |
+| E2.4 | 402 insufficient_funds handling | GO? |
+
+**Aap bolo "E2 sab GO" → main code karke browser mein verify karunga.**
