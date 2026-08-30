@@ -106,6 +106,7 @@ from src.ai_engine.usage import log_ai_usage
 from src.ai_engine.prompts import (
     gp_prompt_assistant, gp_prompt_suggest, gp_prompt_followup,
     specialty_prompt, drug_review_prompt, cme_prompt, research_prompt,
+    diagnosis_only_prompt,
 )
 
 # ── PDF Generator ────────────────────────────────────────────────────────────
@@ -977,6 +978,52 @@ def _extract_dx_advice(text: str):
         if m2:
             adv = m2.group(1).strip()
     return dx, adv
+
+
+@router.post("/api/generate-diagnosis", include_in_schema=False)
+async def api_generate_diagnosis(request: Request):
+    """Quick WORKING DIAGNOSIS — complaints/vitals bharne ke baad ek click."""
+    sess = _require_opd_session(request)
+    doctor_id = sess["doctor_id"]
+
+    try:
+        body = await request.json()
+    except Exception:
+        return {"ok": False, "error": "Invalid JSON"}
+
+    patient_name = body.get("patient_name", "")
+    vitals = body.get("vitals", "")
+    complaints = body.get("complaints", "")
+    doctor_medicines = body.get("doctor_medicines", "")
+
+    if not vitals.strip() and not complaints.strip():
+        return {"ok": False, "error": "Pehle Complaints ya Vitals bharo"}
+
+    settings = await _ai_settings_for(doctor_id)
+
+    prompt = diagnosis_only_prompt(
+        patient_name=patient_name,
+        vitals=vitals,
+        complaints=complaints,
+        doc_name=settings.get("doc_name", "Doctor"),
+        doc_degree=settings.get("doc_degree", ""),
+        doctor_medicines=doctor_medicines,
+    )
+
+    puter_text = _puter_text_or_none(body)
+    if puter_text:
+        result, provider, model_used, usage = sanitize_output(puter_text), "puter", settings.get("ai_model") or "puter", {}
+    else:
+        routed = route_chat(settings, [prompt], feature="generate-diagnosis", temp=0.2, max_tokens=1200)
+        if routed.get("puter_needed"):
+            return {"ok": False, "code": routed["code"], "prompt": routed["prompt"], "model": routed["model"]}
+        result, provider, model_used, usage = routed.get("text") or "", routed.get("provider") or "", routed.get("model") or "", routed.get("usage") or {}
+        if not result:
+            await _log_ai(settings, doctor_id, "generate-diagnosis", provider or "none", model_used, success=False, error=routed.get("error") or "")
+            return {"ok": False, "error": routed.get("error") or "Diagnosis generation failed"}
+
+    await _log_ai(settings, doctor_id, "generate-diagnosis", provider, model_used, success=True, usage=usage)
+    return {"ok": True, "diagnosis": sanitize_output(result), "provider": provider}
 
 
 @router.post("/api/generate-rx", include_in_schema=False)

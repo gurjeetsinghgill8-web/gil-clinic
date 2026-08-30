@@ -644,7 +644,11 @@
                     </div>
 
                     <div class="form-group">
-                        <label>🩺 Diagnosis (AI-extracted or Manual)</label>
+                        <label>🩺 Diagnosis (AI-extracted or Manual)
+                            <button type="button" id="dx-gen-btn" onclick="generateDiagnosisOnly()"
+                                style="float:right;background:#059669;color:#fff;border:none;border-radius:6px;padding:2px 10px;font-size:12px;cursor:pointer;font-weight:700;">
+                                🩺 Generate Dx</button>
+                        </label>
                         <textarea id="pt-diagnosis" rows="2" placeholder="Diagnosis / Clinical Impression..."></textarea>
                     </div>
 
@@ -2157,6 +2161,39 @@ function fillFieldsFromServer(dx, adv) {
         if (el && !el.value.trim()) { el.value = adv; filled = true; if (!dx) flashAndScroll('pt-advice'); }
     }
     if (filled) showToast('✅ Working Diagnosis & Advice bhar diye — edit karke Save karo');
+}
+
+// Quick WORKING DIAGNOSIS only — complaints/vitals bharne ke baad
+async function generateDiagnosisOnly() {
+    const complaints = (document.getElementById('pt-complaints')?.value || '').trim();
+    const vitals = (document.getElementById('pt-vitals')?.value || '').trim();
+    if (!complaints && !vitals) { showToast('Pehle Complaints ya Vitals bharo', 'error'); return; }
+    const btn = document.getElementById('dx-gen-btn');
+    const oldText = btn ? btn.textContent : '';
+    if (btn) { btn.disabled = true; btn.textContent = '⏳ Soch raha...'; }
+    try {
+        const res = await aiFetch('/opd/api/generate-diagnosis', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                patient_name: (document.getElementById('pt-name')?.value || '').trim(),
+                vitals,
+                complaints,
+                doctor_medicines: (document.getElementById('pt-medicines')?.value || '').trim(),
+            }),
+        }).then(r => r.json());
+        if (res.ok && res.diagnosis) {
+            document.getElementById('pt-diagnosis').value = res.diagnosis;
+            flashAndScroll('pt-diagnosis');
+            showToast('✅ Working Diagnosis ready — edit karke Save karo');
+        } else {
+            showToast(res.error || 'Diagnosis generate nahi hua', 'error');
+        }
+    } catch (e) {
+        showToast('Error: ' + e, 'error');
+    } finally {
+        if (btn) { btn.disabled = false; btn.textContent = oldText; }
+    }
 }
 
 function generateRx() {
@@ -4617,6 +4654,55 @@ loadQueuePatients();
       checkPuter();
     }
   })();
+</script>
+<div id="puter-chip" style="display:none; position:fixed; top:16px; right:16px; z-index:9998; padding:8px 12px; border-radius:999px; font-weight:700; font-size:13px; box-shadow:0 3px 10px rgba(0,0,0,.25); cursor:pointer; color:#fff;" onclick="chipAction()">
+  <span id="puter-chip-text">…</span>
+  <button id="puter-chip-relogin" style="display:none;margin-left:8px;background:#fff;color:#0b57d0;border:none;border-radius:999px;padding:2px 10px;font-weight:700;cursor:pointer;" onclick="event.stopPropagation(); reloginPuter();">Re-login</button>
+</div>
+<script>
+  async function chipAction() {
+    if (typeof puterConnect !== 'function') return;
+    let st = null;
+    try { if (window.puterStatus) st = await window.puterStatus(); } catch (e) {}
+    if (!st) {
+      try { await puterConnect(); } catch (e) {}
+    }
+    updatePuterChip();
+  }
+  async function reloginPuter() {
+    try {
+      if (window.puter && window.puter.auth && window.puter.auth.signOut) await window.puter.auth.signOut();
+    } catch (e) {}
+    try { await puterConnect(); } catch (e) {}
+    updatePuterChip();
+  }
+  async function updatePuterChip() {
+    const chip = document.getElementById('puter-chip');
+    const txt = document.getElementById('puter-chip-text');
+    const rel = document.getElementById('puter-chip-relogin');
+    if (!chip || !txt) return;
+    let st = null, available = false;
+    try {
+      if (typeof window.puterAvailable === 'function') available = window.puterAvailable();
+      if (available && window.puterStatus) st = await window.puterStatus();
+    } catch (e) {}
+    if (available && st) {
+      chip.style.background = '#059669';
+      txt.textContent = '🟢 Puter Attached: ' + ((st.username || st.email) || 'user');
+      rel.style.display = 'inline-block';
+    } else if (available) {
+      chip.style.background = '#dc2626';
+      txt.textContent = '🔴 Puter Detached — Sign In karo';
+      rel.style.display = 'none';
+    } else {
+      chip.style.background = '#92400e';
+      txt.textContent = '⚠️ Puter script load nahi hua (internet check karo)';
+      rel.style.display = 'none';
+    }
+    chip.style.display = 'block';
+  }
+  updatePuterChip();
+  setInterval(updatePuterChip, 20000);
 </script>
 </body>
 </html>
