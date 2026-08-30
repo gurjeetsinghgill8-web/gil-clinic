@@ -336,14 +336,14 @@ def make_cme_pdf(topic: str, content: str) -> bytes:
 
         # Section headers
         if line.endswith(":") or line.isupper():
-            pdf.set_font("Helvetica", "B", 12)
+            pdf.set_font("Helvetica", "B", 13)
             pdf.set_fill_color(240, 245, 255)
-            pdf.cell(190, 7, safe_str(line), fill=True)
-            y_pos += 9
+            pdf.cell(190, 8, safe_str(line), fill=True)
+            y_pos += 10
         else:
-            pdf.set_font("Helvetica", "", 11)
+            pdf.set_font("Helvetica", "", 12)
             pdf.set_x(14)
-            pdf.multi_cell(180, 6.5, safe_str(line))
+            pdf.multi_cell(180, 7, safe_str(line))
             y_pos = pdf.get_y() + 1
 
     pdf.set_y(-15)

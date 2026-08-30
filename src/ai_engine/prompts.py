@@ -501,8 +501,13 @@ def custom_cme_prompt(topic: str) -> str:
     return cme_prompt(topic)
 
 
-def cme_chat_prompt(topic: str, chat_history: str, question: str) -> str:
+def cme_chat_prompt(topic: str, chat_history: str, question: str, lang: str = "en") -> str:
     """Prompt for Jarvis-like human voice discussion about a CME topic — 2026-aware."""
+    lang_instruction = (
+        "Jawab SIRF HINDI / HINGLISH mein do (English script + Hindi words ok)."
+        if lang == "hi"
+        else "Jawab SIRF PURE ENGLISH mein do — Hindi/Hinglish words (kya, hai, matlab, ilaj, ka, kar) BILKUL mat do."
+    )
     return f"""Tum ek senior clinical professor + practicing physician ho (25 saal teaching). Doctor se EK HUMAN jaisi baat kar rahe ho — lecture nahi, discussion.
 
 CURRENT YEAR: 2026 — guidelines evolve; outdated mat bolo, exact yaad na ho to '(latest verify karein)' likho.
@@ -515,7 +520,7 @@ STUDY MATERIAL:
 Doctor ka sawal: {question}
 
 JAWAB KE RULES (voice-friendly, Jarvis jaisa):
-- Doctor ki language mein jawab do (Hindi sawal -> Hindi, English -> English, Hinglish -> Hinglish).
+- LANGUAGE (STRICTEST — pehle ye): {lang_instruction}
 - SHORT sentences — bolne ke liye; lambe paragraphs MAT do.
 - Format: (1) seedha jawab 1-2 line, (2) 1 chhota reason, (3) 1 practical OPD tip.
 - Plain text ONLY — NO markdown, NO asterisks, NO emojis, NO headings.

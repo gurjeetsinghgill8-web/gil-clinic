@@ -3770,6 +3770,12 @@ function jarvisSpeak(text) {
     } catch (e) {}
 }
 
+function jarvisDetectLang(q) {
+    if (/[\u0900-\u097F]/.test(q)) return 'hi';
+    if (/\b(kya|hai|kaise|matlab|ilaj|karo|karu|karein|karna|sahi|galat|dawai|dawa|hota|hoti|kyu|kya hai)\b/i.test(q)) return 'hi';
+    return 'en';
+}
+
 let _cmeTopic = '';
 let _cmeHistory = '';
 function cmeAsk() {
@@ -3785,7 +3791,7 @@ function cmeAsk() {
     aiFetch('/opd/api/cme-chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ topic: _cmeTopic, question: q, history: _cmeHistory.slice(-4000) }),
+        body: JSON.stringify({ topic: _cmeTopic, question: q, history: _cmeHistory.slice(-4000), lang: jarvisDetectLang(q) }),
     }).then(r => r.json()).then(res => {
         const think = document.getElementById('cme-thinking');
         if (think) think.remove();
@@ -3802,6 +3808,26 @@ function cmeAsk() {
         if (think) think.remove();
         log.innerHTML += '<div style="margin:6px 0;color:#dc2626;">❌ Error: ' + escapeHtml(String(e)) + '</div>';
     });
+}
+
+// CME content ko readable render karo — bold headings, badi font, saaf paragraphs
+function formatCmeContent(text) {
+    const esc = escapeHtml;
+    const lines = String(text || '').split('\n');
+    let html = '';
+    for (let i = 0; i < lines.length; i++) {
+        const t = lines[i].trim();
+        if (!t) { html += '<div style="height:8px;"></div>'; continue; }
+        const isHeader = t === t.toUpperCase() && t.length > 3 && t.length < 90 && !/\d/.test(t);
+        if (isHeader) {
+            html += '<div style="font-size:17px;font-weight:800;color:#0f172a;margin:16px 0 8px;border-left:4px solid #2563eb;padding-left:10px;">' + esc(t) + '</div>';
+        } else if (t.endsWith(':')) {
+            html += '<div style="font-size:15px;font-weight:700;color:#1e3a8a;margin:12px 0 5px;">' + esc(t) + '</div>';
+        } else {
+            html += '<div style="font-size:15px;line-height:1.7;color:#1f2937;margin:3px 0;">' + esc(t) + '</div>';
+        }
+    }
+    return html;
 }
 
 function generateCME() {
@@ -3821,12 +3847,12 @@ function generateCME() {
     .then(res => {
         if (res.ok) {
             cmeContent = res.content;
-            document.getElementById('cme-content').textContent = res.content;
+            document.getElementById('cme-content').innerHTML = formatCmeContent(res.content);
             document.getElementById('cme-pdf-btn').style.display = 'inline-flex';
             _cmeTopic = topic;
             _cmeHistory = '';
             document.getElementById('cme-chat-box').style.display = 'block';
-            document.getElementById('cme-chat-log').innerHTML = '<div style="margin:4px 0;color:#475569;">👋 Is topic par koi sawal? Neeche likho — main answer karunga.</div>';
+            document.getElementById('cme-chat-log').innerHTML = '<div style="margin:4px 0;color:#475569;">👋 Is topic par koi sawal? Neeche likho ya 🎙️ Bolo.</div>';
             showToast('✅ CME generated!');
         } else {
             document.getElementById('cme-content').textContent = '❌ ' + (res.error || 'Failed');

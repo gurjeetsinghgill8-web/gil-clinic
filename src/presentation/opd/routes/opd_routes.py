@@ -1442,12 +1442,15 @@ async def api_cme_chat(request: Request):
     topic = str(body.get("topic", "")).strip()
     question = str(body.get("question", "")).strip()
     history = str(body.get("history", ""))[:6000]
+    lang = str(body.get("lang", "en")).strip().lower()
+    if lang not in ("en", "hi"):
+        lang = "en"
     if not question:
         return {"ok": False, "error": "Question required"}
 
     settings = await _ai_settings_for(doctor_id)
 
-    prompt = cme_chat_prompt(topic=topic or "CME topic", chat_history=history, question=question)
+    prompt = cme_chat_prompt(topic=topic or "CME topic", chat_history=history, question=question, lang=lang)
 
     puter_text = _puter_text_or_none(body)
     if puter_text:
