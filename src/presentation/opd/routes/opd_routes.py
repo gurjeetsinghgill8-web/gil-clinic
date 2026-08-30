@@ -956,6 +956,29 @@ async def _log_ai(settings: dict, doctor_id: str, feature: str, provider: str,
     )
 
 
+_DX_RE = re.compile(
+    r"Diagnosis[:\s]*\n?([\s\S]*?)(?=\n\s*(?:Treatment|Management|Drugs|Investigations|Advice|Follow-up|$)|$)",
+    re.IGNORECASE,
+)
+_ADVICE_RE = re.compile(
+    r"(?:Advice|Lifestyle\s*Advice|Lifestyle\s*Notes)[:\s]*\n?([\s\S]*?)(?=\n\s*(?:Follow-up|$)|$)",
+    re.IGNORECASE,
+)
+
+
+def _extract_dx_advice(text: str):
+    """Server-side Diagnosis/Advice extraction — frontend ko reliable fields milen."""
+    dx, adv = "", ""
+    if text:
+        m = _DX_RE.search(text)
+        if m:
+            dx = m.group(1).strip()
+        m2 = _ADVICE_RE.search(text)
+        if m2:
+            adv = m2.group(1).strip()
+    return dx, adv
+
+
 @router.post("/api/generate-rx", include_in_schema=False)
 async def api_generate_rx(request: Request):
     sess = _require_opd_session(request)
@@ -1021,7 +1044,9 @@ async def api_generate_rx(request: Request):
         result = re.sub(r'\n\s*Investigations:.*?(?=\n\s*(?:Advice|Follow-up|$))', '', result, flags=re.DOTALL | re.IGNORECASE)
         result = re.sub(r'\n\s*Investigations needed:.*?(?=\n\s*(?:Advice|Follow-up|$))', '', result, flags=re.DOTALL | re.IGNORECASE)
 
-    return {"ok": True, "prescription": result, "mode": "suggest" if allow_suggest_drugs else "assistant", "provider": provider}
+    dx, adv = _extract_dx_advice(result)
+    return {"ok": True, "prescription": result, "diagnosis": dx, "advice": adv,
+            "mode": "suggest" if allow_suggest_drugs else "assistant", "provider": provider}
 
 
 @router.post("/api/generate-followup-rx", include_in_schema=False)
@@ -1072,7 +1097,8 @@ async def api_generate_followup_rx(request: Request):
 
     await _log_ai(settings, doctor_id, "generate-followup-rx", provider, model_used, success=True, usage=usage)
 
-    return {"ok": True, "prescription": result, "mode": "followup", "provider": provider}
+    dx, adv = _extract_dx_advice(result)
+    return {"ok": True, "prescription": result, "diagnosis": dx, "advice": adv, "mode": "followup", "provider": provider}
 
 
 @router.post("/api/optimize-rx", include_in_schema=False)
@@ -1116,7 +1142,8 @@ async def api_optimize_rx(request: Request):
 
     await _log_ai(settings, doctor_id, "optimize-rx", provider, model_used, success=True, usage=usage)
 
-    return {"ok": True, "prescription": result, "provider": provider}
+    dx, adv = _extract_dx_advice(result)
+    return {"ok": True, "prescription": result, "diagnosis": dx, "advice": adv, "provider": provider}
 
 
 @router.post("/api/clinical-support", include_in_schema=False)

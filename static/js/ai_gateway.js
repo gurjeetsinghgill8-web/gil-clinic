@@ -193,17 +193,24 @@
 
       try {
         usedPuter = true;
-        // Puter AI needs a signed-in user. Trigger the sign-in popup once
-        // (real browser shows the Puter login window), then verify.
+        // Puter AI needs a signed-in user. Try the popup, but do NOT hang
+        // forever — 20s timeout ke baad clear message (banner button se sign-in).
         var signedInNow = await isSignedIn();
         if (!signedInNow) {
-          try { await signIn(); } catch (e) {
-            final = { ok: false, error: 'Puter sign-in cancelled or unavailable: ' + e };
+          try {
+            await Promise.race([
+              signIn(),
+              new Promise(function (_, rej) {
+                setTimeout(function () { rej(new Error('timeout')); }, 20000);
+              }),
+            ]);
+          } catch (e) {
+            final = { ok: false, error: 'Puter sign-in popup nahi khula ya timeout ho gaya. Top-right "Sign in to Puter" button dabao, phir dobara Generate dabao.' };
             break;
           }
           signedInNow = await isSignedIn();
           if (!signedInNow) {
-            final = { ok: false, error: 'Puter sign-in popup block hua ya cancel hua. Page ke top-right "Sign in to Puter" button se sign-in karein, phir dobara try karein.' };
+            final = { ok: false, error: 'Puter sign-in complete nahi hua. Top-right "Sign in to Puter" button se sign-in karo, phir dobara Generate dabao.' };
             break;
           }
         }

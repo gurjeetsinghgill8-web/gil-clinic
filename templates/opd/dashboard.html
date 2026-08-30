@@ -2052,7 +2052,8 @@ function generateFollowupRx(patientName, patientId) {
             document.getElementById('rx-output').value = res.prescription;
             document.getElementById('rx-output-section').style.display = 'block';
             document.getElementById('rx-status').textContent = '✅ Follow-Up Rx generated. Review and save.';
-            fillDxAdviceFromRx(res.prescription, false);
+            if (res.diagnosis || res.advice) { fillFieldsFromServer(res.diagnosis, res.advice); }
+            else { fillDxAdviceFromRx(res.prescription, false); }
             showToast('✅ Follow-Up Rx ready');
         } else {
             document.getElementById('rx-status').textContent = '❌ ' + (res.error || 'Generation failed');
@@ -2144,6 +2145,20 @@ function fillDxAdviceFromRx(rxText, force) {
     }
 }
 
+// Server-side parsed Diagnosis/Advice (generate-rx response mein aate hain)
+function fillFieldsFromServer(dx, adv) {
+    let filled = false;
+    if (dx) {
+        const el = document.getElementById('pt-diagnosis');
+        if (el && !el.value.trim()) { el.value = dx; filled = true; flashAndScroll('pt-diagnosis'); }
+    }
+    if (adv) {
+        const el = document.getElementById('pt-advice');
+        if (el && !el.value.trim()) { el.value = adv; filled = true; if (!dx) flashAndScroll('pt-advice'); }
+    }
+    if (filled) showToast('✅ Working Diagnosis & Advice bhar diye — edit karke Save karo');
+}
+
 function generateRx() {
     const data = {
         patient_name: document.getElementById('pt-name').value.trim(),
@@ -2183,7 +2198,8 @@ function generateRx() {
             document.getElementById('rx-output').value = res.prescription;
             document.getElementById('rx-output-section').style.display = 'block';
             document.getElementById('optimize-btn').style.display = 'inline-block';
-            fillDxAdviceFromRx(res.prescription, false);
+            if (res.diagnosis || res.advice) { fillFieldsFromServer(res.diagnosis, res.advice); }
+            else { fillDxAdviceFromRx(res.prescription, false); }
             const modeText = res.mode === 'suggest' ? '💡 AI Suggestions (review before using)' : '✅ AI Assistant output';
             document.getElementById('rx-status').textContent = modeText;
             showToast('Prescription generated!');
@@ -2223,7 +2239,8 @@ function optimizeRx() {
         if (res.ok) {
             document.getElementById('rx-output').value = res.prescription;
             document.getElementById('rx-status').textContent = '✅ Rx Optimized — crisp numbered format';
-            fillDxAdviceFromRx(res.prescription, false);
+            if (res.diagnosis || res.advice) { fillFieldsFromServer(res.diagnosis, res.advice); }
+            else { fillDxAdviceFromRx(res.prescription, false); }
             showToast('Prescription optimized!');
             loadClinicalSupport();
         } else {
@@ -4580,8 +4597,8 @@ loadQueuePatients();
   setInterval(pollQueueAlert, 20000);
 })();
 </script>
-<div id="puter-banner" style="display:none; position:fixed; top:70px; right:16px; z-index:9999; background:#0b57d0; color:#fff; padding:12px 16px; border-radius:12px; box-shadow:0 4px 16px rgba(0,0,0,.3); cursor:pointer; font-weight:600; max-width:260px;" onclick="var b=this; puterConnect().then(function(ok){ if(ok) b.style.display='none'; }).catch(function(){});">
-  🔑 Sign in to Puter — AI features ke liye (ek baar, free)
+<div id="puter-banner" style="display:none; position:fixed; top:70px; right:16px; z-index:9999; background:#0b57d0; color:#fff; padding:14px 18px; border-radius:12px; box-shadow:0 4px 16px rgba(0,0,0,.35); cursor:pointer; font-weight:700; max-width:280px; animation:pulse-btn 1.6s infinite; border:2px solid #fff;" onclick="var b=this; puterConnect().then(function(ok){ if(ok) b.style.display='none'; }).catch(function(){});">
+  🔑 Sign in to Puter — AI ke liye YAHAN CLICK KARO (ek baar, free)
 </div>
 <script>
   (function () {
