@@ -217,12 +217,24 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         print(f"[GHOS] License scheduler start failed: {e}")
 
+    # Start in-app auto backups (startup + daily 23:30 UTC — hosted envs without cron)
+    try:
+        from src.infrastructure.clinic.services.auto_backup import start_auto_backup
+        start_auto_backup()
+    except Exception as e:
+        print(f"[GHOS] Auto-backup start failed: {e}")
+
     yield
 
     # Stop scheduler on shutdown
     try:
         from src.infrastructure.clinic.services.license_scheduler import stop_license_scheduler
         stop_license_scheduler()
+    except Exception:
+        pass
+    try:
+        from src.infrastructure.clinic.services.auto_backup import stop_auto_backup
+        stop_auto_backup()
     except Exception:
         pass
     print("[GHOS] Shutdown complete")
