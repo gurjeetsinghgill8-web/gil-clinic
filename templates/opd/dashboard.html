@@ -1474,8 +1474,22 @@
                     <div id="cme-content" class="mt-md rx-output" style="display:none;"></div>
                     <button class="btn btn-ghost mt-sm" id="cme-pdf-btn" style="display:none;" onclick="downloadCmePdf()">📄 Download PDF</button>
                     <div id="cme-chat-box" style="display:none; margin-top:16px; border-top:1px solid var(--border, #e2e8f0); padding-top:14px;">
-                        <div class="card-title">💬 Discuss — is topic par sawal poochein</div>
+                        <div class="card-title">💬 Discuss — sawal poochein (bol ke ya likh ke)</div>
                         <div id="cme-chat-log" style="max-height:280px; overflow-y:auto; margin-bottom:10px; font-size:14px; line-height:1.5;"></div>
+                        <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-bottom:8px;">
+                            <select id="jarvis-lang" onchange="_jarvisLang = this.value" style="padding:6px;border:1px solid #cbd5e1;border-radius:8px;" title="Bhasha chuno">
+                                <option value="hi-IN">🌐 हिंदी</option>
+                                <option value="en-IN" selected>🌐 English</option>
+                                <option value="mr-IN">🌐 मराठी</option>
+                                <option value="ta-IN">🌐 தமிழ்</option>
+                                <option value="te-IN">🌐 తెలుగు</option>
+                            </select>
+                            <label style="display:inline-flex;align-items:center;gap:5px;cursor:pointer;font-size:13px;">
+                                <input type="checkbox" id="jarvis-voice" checked> 🔊 Voice answer
+                            </label>
+                            <button class="btn btn-sm" id="jarvis-mic" onclick="jarvisToggleMic()" style="background:#059669;color:#fff;font-weight:700;">🎙️ Bolo</button>
+                            <span id="jarvis-mic-status" class="text-sm text-muted"></span>
+                        </div>
                         <div style="display:flex; gap:8px; align-items:center;">
                             <input type="text" id="cme-chat-q" placeholder="e.g. Is naye guideline ka Indian OPD par kya asar hai?" style="flex:1; padding:8px; border:1px solid #cbd5e1; border-radius:8px;" onkeydown="if(event.key==='Enter') cmeAsk()">
                             <button class="btn btn-sm btn-primary" onclick="cmeAsk()">💬 Poochein</button>
@@ -3687,6 +3701,75 @@ function runResearch() {
 // ════════════════════════════════════════════════════════════════
 let cmeContent = '';
 
+// ── Jarvis Voice Professor (P1) — mic + voice answer + language ──
+let _jarvisLang = 'en-IN';
+let _jarvisRec = null;
+let _jarvisListening = false;
+function jarvisSupportsSpeech() {
+    return !!(window.SpeechRecognition || window.webkitSpeechRecognition);
+}
+function jarvisToggleMic() {
+    if (_jarvisListening) { jarvisStopMic(); return; }
+    if (!jarvisSupportsSpeech()) { showToast('Mic ke liye Chrome/Edge chahiye (Web Speech API)', 'error'); return; }
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    _jarvisRec = new SR();
+    _jarvisRec.lang = _jarvisLang;
+    _jarvisRec.interimResults = true;
+    _jarvisRec.continuous = false;
+    const inp = document.getElementById('cme-chat-q');
+    const st = document.getElementById('jarvis-mic-status');
+    _jarvisRec.onresult = (e) => {
+        let final = '';
+        for (let i = e.resultIndex; i < e.results.length; i++) {
+            const t = e.results[i][0].transcript;
+            if (e.results[i].isFinal) final += t; else inp.value = t;
+        }
+        if (final) inp.value = final.trim();
+    };
+    _jarvisRec.onend = () => {
+        _jarvisListening = false;
+        const mb = document.getElementById('jarvis-mic');
+        if (mb) { mb.textContent = '🎙️ Bolo'; mb.style.background = '#059669'; }
+        if (st) st.textContent = '';
+        const q = inp.value.trim();
+        if (q) cmeAsk();
+    };
+    _jarvisRec.onerror = (e) => {
+        _jarvisListening = false;
+        const mb = document.getElementById('jarvis-mic');
+        if (mb) { mb.textContent = '🎙️ Bolo'; mb.style.background = '#059669'; }
+        if (st) st.textContent = 'Mic error: ' + e.error;
+        showToast('Mic error: ' + e.error, 'error');
+    };
+    try {
+        _jarvisRec.start();
+        _jarvisListening = true;
+        const mb = document.getElementById('jarvis-mic');
+        if (mb) { mb.textContent = '⏹️ Ruko'; mb.style.background = '#dc2626'; }
+        if (st) st.textContent = 'Sun raha hoon... bolo';
+    } catch (e) { showToast('Mic start fail: ' + e, 'error'); }
+}
+function jarvisStopMic() {
+    if (_jarvisRec) { try { _jarvisRec.stop(); } catch (e) {} }
+    _jarvisListening = false;
+}
+function jarvisSpeak(text) {
+    if (!document.getElementById('jarvis-voice').checked) return;
+    if (!('speechSynthesis' in window)) return;
+    try {
+        window.speechSynthesis.cancel();
+        const clean = String(text).replace(/[#*_`~|]/g, '').replace(/\s+/g, ' ').trim();
+        if (!clean) return;
+        const u = new SpeechSynthesisUtterance(clean);
+        u.lang = _jarvisLang;
+        u.rate = 1.0;
+        const voices = window.speechSynthesis.getVoices();
+        const v = voices.find(function (x) { return x.lang && x.lang.toLowerCase().indexOf(_jarvisLang.toLowerCase().split('-')[0]) === 0; });
+        if (v) u.voice = v;
+        window.speechSynthesis.speak(u);
+    } catch (e) {}
+}
+
 let _cmeTopic = '';
 let _cmeHistory = '';
 function cmeAsk() {
@@ -3709,6 +3792,7 @@ function cmeAsk() {
         if (res.ok && res.answer) {
             log.innerHTML += '<div style="margin:8px 0;background:#f1f5f9;border-radius:8px;padding:10px;white-space:pre-wrap;">💬 ' + escapeHtml(res.answer) + '</div>';
             _cmeHistory += 'Q: ' + q + '\nA: ' + res.answer + '\n';
+            jarvisSpeak(res.answer);
         } else {
             log.innerHTML += '<div style="margin:6px 0;color:#dc2626;">❌ ' + escapeHtml(res.error || 'Reply nahi ban paya') + '</div>';
         }
