@@ -1,5 +1,5 @@
 # GIL CLINIC — Graphical Project Memory (Knowledge Graph)
-## v1 · 30-Aug-2026 · Live system state + planned upgrades
+## v2 · 30-Aug-2026 · C1+C2+C3+C5 shipped · Live system state
 
 > Ye file project ki memory ko **graphical form** mein rakhti hai — taaki koi bhi
 > recording/feature kaam dubara na khoye (memory crash-proof). Har feature ship
@@ -56,12 +56,12 @@ flowchart LR
 ```mermaid
 flowchart TB
     IN["Patient Info + Vitals + Complaints"]
-    SCAN["📷 Camera / 🖼️ Gallery / ✍️ Writing Pad"]
+    SCAN["📷 Camera / 🖼️ Gallery / ✍️ Writing Pad / 🔁 Re-scan"]
     HWR{"Scan type"}
     HWRX["Handwritten Rx OCR<br/>→ fills Diagnosis + Advice (editable) ✅"]
-    HBATCH["📸 Batch Scan (multi-page investigations)"]
+    HBATCH["📸 Batch Scan (multi-page) ✅ C3:<br/>top button + Add More Pages<br/>+ originals delete after save"]
     GEN["🤖 AI Generate Prescription<br/>→ rx-output"]
-    PLAN_C1["PLANNED C1: AI output se Diagnosis +<br/>Advice inline fill (editable)"]
+    C1["✅ C1: AI output se Diagnosis + Advice<br/>inline fill (editable) + Fill from AI button"]
     UPGR["⚕️ Specialist Opinions<br/>(custom specialty ✅)"]
     SAVE["💾 Save → opd_prescriptions<br/>(clinic_id migrated ✅)"]
     IN --> GEN
@@ -69,10 +69,10 @@ flowchart TB
     SCAN --> HWR
     HWR --> HWRX
     HWR --> HBATCH
-    GEN --> PLAN_C1
+    GEN --> C1
     GEN --> UPGR
     HWRX --> SAVE
-    PLAN_C1 --> SAVE
+    C1 --> SAVE
     UPGR --> SAVE
 ```
 
@@ -85,7 +85,7 @@ flowchart TB
     PA["PythonAnywhere FREE<br/>gillhopitalsoftware1.pythonanywhere.com"]
     DEPLOY["pa_deploy.py<br/>(files upload + site reload)"]
     AUTOB["In-app auto-backup<br/>(startup + daily 23:30 UTC)"]
-    SHIP["PLANNED C5: weekly_ship<br/>(tests → push → deploy → health)"]
+    SHIP["✅ C5: pa_deploy.py ship<br/>(tests → commit+push → upload changed<br/>→ reload → health) — verified 30-Aug"]
     DEV -->|"commit + push"| GIT
     GIT -->|"upload changed files"| DEPLOY
     DEPLOY --> PA
