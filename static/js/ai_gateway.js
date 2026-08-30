@@ -90,6 +90,14 @@
       init.body = JSON.stringify(body || {});
     }
     var resp = await fetch(path, init);
+    // E2.4: Puter credits khatam (402 insufficient_funds) -> clear message
+    if (resp.status === 402) {
+      return {
+        ok: false,
+        code: 'PUTER_402',
+        error: 'Puter credits khatam ho gaye — "💳 Recharge" button dabao (top-right chip ya Settings) ya puter.com par sign-in karke Billing → upgrade karo.',
+      };
+    }
     var ct = resp.headers.get('content-type') || '';
     if (ct.indexOf('application/json') !== -1) {
       try { return await resp.json(); } catch (e) { return { ok: false, error: 'Bad JSON response' }; }

@@ -1258,9 +1258,11 @@
                                 <label>Puter — Free AI (optional)</label>
                                 <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
                                     <button type="button" class="btn btn-sm" style="background:#7c3aed;color:#fff;" onclick="connectPuter()">🔌 Connect Puter</button>
+                                    <button type="button" class="btn btn-sm" style="background:#0b57d0;color:#fff;" onclick="window.open('https://puter.com','_blank')" title="Puter account ka billing/recharge page kholega">💳 Recharge Puter</button>
                                     <span id="puter-status" class="text-sm text-muted">Not connected</span>
                                 </div>
-                                <span class="text-sm text-muted">Free Puter account = free AI credits, no API key needed. Or add your own key inside Puter (BYOK) — then that provider's bill is yours, Puter gets nothing.</span>
+                                <span id="puter-usage-info" class="text-sm" style="color:#047857;font-weight:600;"></span>
+                                <span class="text-sm text-muted">Free Puter account = free AI credits, no API key needed. Credits khatam ho to "💳 Recharge Puter" dabao — puter.com khulega, wahin sign-in karke Billing → upgrade/recharge. Or add your own key inside Puter (BYOK) — then that provider's bill is yours, Puter gets nothing.</span>
                             </div>
                         </div>
                         <div class="form-group">
@@ -3417,11 +3419,45 @@ async function refreshAIStatus() {
             statusEl.textContent = 'Not connected';
         }
     } catch (e) { /* ignore */ }
+    // E2: Puter monthly usage + 80% warning
+    try {
+        const pct = await fetchPuterUsagePct();
+        const pu = document.getElementById('puter-usage-info');
+        if (pu) {
+            if (pct !== null) {
+                pu.textContent = '📊 Puter AI usage — is month: ' + pct + '%';
+                if (pct >= 80 && !_usageWarned) { _usageWarned = true; showToast('⚠️ Puter credits ' + pct + '% use ho gaye — 💳 Recharge karo', 'warning'); }
+            } else {
+                pu.textContent = '';
+            }
+        }
+    } catch (e) {}
     try {
         const r = await fetch('/opd/api/ai-usage');
         const d = await r.json();
         if (usageEl) usageEl.textContent = '🤖 AI calls — today: ' + (d.usage_today || 0) + ' · this month: ' + (d.usage_this_month || 0) + ' (billed to your clinic)';
     } catch (e) { if (usageEl) usageEl.textContent = ''; }
+}
+
+// E2.2: Puter SDK se monthly usage % (defensive - shape badal jaye to bhi crash nahi)
+let _usageWarned = false;
+async function fetchPuterUsagePct() {
+    try {
+        if (!(window.puter && window.puter.auth && typeof window.puter.auth.getMonthlyUsage === 'function')) return null;
+        const st = await window.puterStatus();
+        if (!st) return null;
+        const u = await window.puter.auth.getMonthlyUsage();
+        if (!u) return null;
+        let ai = (u && u.usage && u.usage.ai) ? u.usage.ai : (u.ai || null);
+        if (ai && typeof ai === 'object') {
+            const used = Number(ai.used !== undefined ? ai.used : (ai.cost !== undefined ? ai.cost : (ai.usage !== undefined ? ai.usage : (ai.amount !== undefined ? ai.amount : NaN))));
+            const limit = Number(ai.limit !== undefined ? ai.limit : (ai.quota !== undefined ? ai.quota : (ai.allowed !== undefined ? ai.allowed : NaN)));
+            if (!isNaN(used) && !isNaN(limit) && limit > 0) {
+                return Math.min(999, Math.round((used / limit) * 100));
+            }
+        }
+    } catch (e) {}
+    return null;
 }
 document.addEventListener('DOMContentLoaded', refreshAIStatus);
 
@@ -4658,6 +4694,7 @@ loadQueuePatients();
 <div id="puter-chip" style="display:none; position:fixed; top:16px; right:16px; z-index:9998; padding:8px 12px; border-radius:999px; font-weight:700; font-size:13px; box-shadow:0 3px 10px rgba(0,0,0,.25); cursor:pointer; color:#fff;" onclick="chipAction()">
   <span id="puter-chip-text">…</span>
   <button id="puter-chip-relogin" style="display:none;margin-left:8px;background:#fff;color:#0b57d0;border:none;border-radius:999px;padding:2px 10px;font-weight:700;cursor:pointer;" onclick="event.stopPropagation(); reloginPuter();">Re-login</button>
+  <button id="puter-chip-recharge" style="margin-left:8px;background:#fff;color:#0b57d0;border:none;border-radius:999px;padding:2px 10px;font-weight:700;cursor:pointer;" onclick="event.stopPropagation(); window.open('https://puter.com','_blank');" title="puter.com billing page kholega — wahin recharge/upgrade karo">💳 Recharge</button>
 </div>
 <script>
   async function chipAction() {
@@ -4688,7 +4725,15 @@ loadQueuePatients();
     } catch (e) {}
     if (available && st) {
       chip.style.background = '#059669';
-      txt.textContent = '🟢 Puter Attached: ' + ((st.username || st.email) || 'user');
+      let usageTxt = '';
+      try {
+        const pct = await fetchPuterUsagePct();
+        if (pct !== null) {
+          usageTxt = ' · AI ' + pct + '%';
+          if (pct >= 80 && !_usageWarned) { _usageWarned = true; showToast('⚠️ Puter credits ' + pct + '% use ho gaye — 💳 Recharge karo', 'warning'); }
+        }
+      } catch (e) {}
+      txt.textContent = '🟢 Puter Attached: ' + ((st.username || st.email) || 'user') + usageTxt;
       rel.style.display = 'inline-block';
     } else if (available) {
       chip.style.background = '#dc2626';
