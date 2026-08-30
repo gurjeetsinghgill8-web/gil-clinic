@@ -433,7 +433,7 @@ async def api_save_settings(request: Request):
             # AI mode + optional model override
             if "ai_mode" in body:
                 mode = str(body["ai_mode"]).strip().lower()
-                if mode not in ("auto", "puter", "off"):
+                if mode not in ("auto", "puter", "off", "gilwallet"):
                     mode = "auto"
                 setattr(s, "ai_mode", mode)
             if "ai_model" in body:

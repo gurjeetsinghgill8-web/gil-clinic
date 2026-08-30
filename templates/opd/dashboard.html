@@ -519,14 +519,80 @@
                 <div class="flex-between mb-sm">
                     <h2>📝 New Prescription</h2>
                     <div class="flex gap-sm" style="flex-wrap:wrap;">
+                        <div id="ai-manual-toggle" style="display:inline-flex;background:#e2e8f0;border-radius:999px;padding:3px;">
+                            <button id="tg-ai" onclick="setManualMode(false)" style="border:none;border-radius:999px;padding:6px 14px;font-weight:700;cursor:pointer;">🤖 AI Mode</button>
+                            <button id="tg-manual" onclick="setManualMode(true)" style="border:none;border-radius:999px;padding:6px 14px;font-weight:700;cursor:pointer;">✍️ Manual</button>
+                        </div>
                         <button class="btn btn-ghost btn-sm" onclick="clearRxForm()">🔄 New Patient</button>
                         <button class="btn btn-ghost btn-sm" onclick="toggleSearch()">🔍 Search Old</button>
                         <button class="btn btn-sm btn-primary" id="followup-btn" onclick="showFollowupDialog()" style="display:none;">🔄 Follow-Up Rx</button>
                     </div>
                 </div>
 
+                <div id="manual-banner" style="display:{% if settings.ai_mode == 'off' %}block{% else %}none{% endif %}; background:#fff7ed; border:1.5px solid #f59e0b; color:#9a3412; border-radius:10px; padding:10px 14px; margin-bottom:12px; font-weight:600;">
+                    ✍️ <b>Manual Mode chalu hai</b> — sab kuch free, bina AI ke. Diagnosis / Medicines / Investigations khud likho aur 💾 Save karo — koi rukawat nahi. AI chahiye to upar "🤖 AI Mode" dabao (recharge/keys Settings mein).
+                </div>
+
+                <style>
+                    body.manual-mode #quick-scan-card,
+                    body.manual-mode button[onclick*="generateRx"],
+                    body.manual-mode button[onclick*="generateDiagnosisOnly"],
+                    body.manual-mode button[onclick*="fillDxAdviceFromRx"],
+                    body.manual-mode button[onclick*="runUpgrade"],
+                    body.manual-mode button[onclick*="processAllScans"],
+                    body.manual-mode button[onclick*="processQuickScansAuto"],
+                    body.manual-mode #voice-btn,
+                    body.manual-mode label[for="camera-file-input"],
+                    body.manual-mode label[for="gallery-file-input"] { display: none !important; }
+                    #tg-ai.active-ai { background:#059669; color:#fff; }
+                    #tg-manual.active-manual { background:#d97706; color:#fff; }
+                </style>
+
+                <script>
+                    var _manualMode = {{ 'true' if settings.ai_mode == 'off' else 'false' }};
+                    var _prevAiMode = {{ ("'" ~ settings.ai_mode ~ "'") if settings.ai_mode and settings.ai_mode != 'off' else "'puter'" }};
+                    function aiGuard() {
+                        if (_manualMode) { showToast('✍️ Manual Mode on hai — upar "🤖 AI Mode" dabao', 'error'); return false; }
+                        return true;
+                    }
+                    function setManualMode(on) {
+                        _manualMode = on;
+                        document.body.classList.toggle('manual-mode', on);
+                        var aiB = document.getElementById('tg-ai');
+                        var mnB = document.getElementById('tg-manual');
+                        if (aiB) { aiB.classList.toggle('active-ai', !on); aiB.style.background = on ? '' : '#059669'; aiB.style.color = on ? '' : '#fff'; }
+                        if (mnB) { mnB.classList.toggle('active-manual', on); mnB.style.background = on ? '#d97706' : ''; mnB.style.color = on ? '#fff' : ''; }
+                        var banner = document.getElementById('manual-banner');
+                        if (banner) banner.style.display = on ? 'block' : 'none';
+                        var mode = on ? 'off' : (_prevAiMode || 'puter');
+                        fetch('/opd/api/settings', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ ai_mode: mode }),
+                        }).then(function (r) { return r.json(); }).then(function (d) {
+                            if (d && d.ok) {
+                                showToast(on ? '✍️ Manual Mode ON — AI band, sab free chalega' : '🤖 AI Mode ON (' + mode + ')', 'success');
+                                var sel = document.getElementById('set-ai-mode');
+                                if (sel) sel.value = mode;
+                            } else {
+                                showToast((d && d.error) || 'Mode save fail', 'error');
+                            }
+                        }).catch(function () { showToast('Mode save fail', 'error'); });
+                    }
+                    if (_manualMode) {
+                        document.body.classList.add('manual-mode');
+                        var _mb = document.getElementById('tg-manual');
+                        var _ab = document.getElementById('tg-ai');
+                        if (_mb) { _mb.style.background = '#d97706'; _mb.style.color = '#fff'; }
+                        if (_ab) { _ab.style.background = ''; _ab.style.color = ''; }
+                    } else {
+                        var _ai2 = document.getElementById('tg-ai');
+                        if (_ai2) { _ai2.style.background = '#059669'; _ai2.style.color = '#fff'; }
+                    }
+                </script>
+
                 <!-- Prominent AI Camera & Gallery Upload Toolbar (Always Visible) -->
-                <div class="card mb-sm" style="background:linear-gradient(135deg, rgba(124,58,237,0.08), rgba(37,99,235,0.08));border:1.5px solid #a855f7;border-radius:12px;padding:16px;">
+                <div class="card mb-sm" id="quick-scan-card" style="background:linear-gradient(135deg, rgba(124,58,237,0.08), rgba(37,99,235,0.08));border:1.5px solid #a855f7;border-radius:12px;padding:16px;">
                     <div class="flex-between mb-sm" style="flex-wrap:wrap;gap:8px;">
                         <h4 style="margin:0;color:#581c87;font-size:15px;display:flex;align-items:center;gap:6px;">
                             📸 Snap/Upload Old Prescriptions & Lab Reports (Groq Vision AI)
@@ -1753,6 +1819,7 @@ let audioChunks = [];
 let isRecording = false;
 
 function toggleRecording() {
+    if (!aiGuard()) return;
     if (isRecording) {
         stopRecording();
     } else {
@@ -2149,6 +2216,7 @@ function flashAndScroll(id) {
 // wahan edit kare, final print wahi jayega). force=true → overwrite;
 // force=false → sirf khali field mein bharo.
 function fillDxAdviceFromRx(rxText, force) {
+    if (!aiGuard()) return;
     if (!rxText) { showToast('Pehle AI se prescription banao, phir fill karo', 'error'); return; }
     const diag = rxText.match(/Diagnosis[:\s]*\n?([\s\S]*?)(?=\n\s*(?:Treatment|Management|Drugs|Investigations|Advice|Follow-up|$)|$)/i);
     const advice = rxText.match(/(?:Advice|Lifestyle\s*Advice|Lifestyle\s*Notes)[:\s]*\n?([\s\S]*?)(?=\n\s*(?:Follow-up|$)|$)/i);
@@ -2180,6 +2248,7 @@ function fillFieldsFromServer(dx, adv) {
 
 // Quick WORKING DIAGNOSIS only — complaints/vitals bharne ke baad
 async function generateDiagnosisOnly() {
+    if (!aiGuard()) return;
     const complaints = (document.getElementById('pt-complaints')?.value || '').trim();
     const vitals = (document.getElementById('pt-vitals')?.value || '').trim();
     if (!complaints && !vitals) { showToast('Pehle Complaints ya Vitals bharo', 'error'); return; }
@@ -2212,6 +2281,7 @@ async function generateDiagnosisOnly() {
 }
 
 function generateRx() {
+    if (!aiGuard()) return;
     const data = {
         patient_name: document.getElementById('pt-name').value.trim(),
         vitals: document.getElementById('pt-vitals').value.trim(),
@@ -2269,6 +2339,7 @@ function generateRx() {
 }
 
 function optimizeRx() {
+    if (!aiGuard()) return;
     const currentRx = document.getElementById('rx-output').value.trim();
     if (!currentRx) { showToast('Generate a prescription first, then optimize', 'error'); return; }
 
@@ -3055,6 +3126,7 @@ function processCameraScans() {
 
 // C3: dono sources (gallery files + camera snaps) ek hi button se
 function processAllScans() {
+    if (!aiGuard()) return;
     if ((!selectedScanFiles || selectedScanFiles.length === 0) && (!scannedImages || scannedImages.length === 0)) {
         showToast('Pehle images lo — 📷 camera snap ya 🖼️ gallery (1-2 karke bhi add kar sakte ho)', 'error');
         return;
@@ -3126,6 +3198,7 @@ function loadPendingScans() {
 	}
 
 	function runUpgrade() {
+	    if (!aiGuard()) return;
 	    const specialties = Array.from(document.querySelectorAll('.spec-cb:checked')).map(cb => cb.value);
 	    const custom = document.getElementById('up-custom').value.trim();
 	    if (custom) specialties.push(custom);
