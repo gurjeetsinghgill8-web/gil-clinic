@@ -633,6 +633,7 @@
                             <button id="voice-btn" class="btn btn-sm btn-ghost" onclick="toggleRecording()" title="Record audio complaints" style="padding:2px 8px;font-size:14px;margin-left:8px;vertical-align:middle;">🎙️ Record</button>
                             <label for="camera-file-input" style="background:#7c3aed;color:white;font-weight:700;padding:3px 10px;font-size:12px;margin-left:6px;border:none;border-radius:6px;cursor:pointer;vertical-align:middle;display:inline-block;">📷 Scan Rx</label>
                             <label for="gallery-file-input" style="background:#2563eb;color:white;font-weight:700;padding:3px 10px;font-size:12px;margin-left:6px;border:none;border-radius:6px;cursor:pointer;vertical-align:middle;display:inline-block;">🖼️ Upload Rx</label>
+                            <label for="camera-file-input" title="Galat padha? Dobara scan karo" style="background:#f59e0b;color:white;font-weight:700;padding:3px 10px;font-size:12px;margin-left:6px;border:none;border-radius:6px;cursor:pointer;vertical-align:middle;display:inline-block;">🔁 Re-scan</label>
                             <span id="voice-status" class="text-sm text-muted" style="font-size:11px;margin-left:4px;"></span>
                         </label>
                         <textarea id="pt-complaints" rows="3" placeholder="Describe complaints..."></textarea>
@@ -4318,7 +4319,7 @@ async function inkConvertToEMR() {
 
     try {
         for (let i = 0; i < totalPages; i++) {
-            statusEl.innerHTML = `<span class="spinner"></span> AI Vision reading page ${i + 1} of ${totalPages}... (Groq Vision — Google Lens quality)`;
+            statusEl.innerHTML = `<span class="spinner"></span> AI Vision reading page ${i + 1} of ${totalPages}... (auto: Gemini → OpenAI → Groq → Puter)`;
 
             const imageData = images[i];
             console.log('Sending handwriting page ' + (i+1) + ', image size: ' + Math.round(imageData.length / 1024) + ' KB');
