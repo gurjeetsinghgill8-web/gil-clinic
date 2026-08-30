@@ -1,5 +1,5 @@
 # GIL CLINIC — Graphical Project Memory (Knowledge Graph)
-## v2 · 30-Aug-2026 · C1+C2+C3+C5 shipped · Live system state
+## v3 · 30-Aug-2026 · C1+C2+C3+C5+D1+D2+D3A shipped · Live system state
 
 > Ye file project ki memory ko **graphical form** mein rakhti hai — taaki koi bhi
 > recording/feature kaam dubara na khoye (memory crash-proof). Har feature ship
@@ -62,6 +62,8 @@ flowchart TB
     HBATCH["📸 Batch Scan (multi-page) ✅ C3:<br/>top button + Add More Pages<br/>+ originals delete after save"]
     GEN["🤖 AI Generate Prescription<br/>→ rx-output"]
     C1["✅ C1: AI output se Diagnosis + Advice<br/>inline fill (editable) + Fill from AI button"]
+    D12["✅ D1+D2: instant highlighted Working<br/>Diagnosis + best-physician persona<br/>(symptoms ≠ diagnosis, ranked conditions)"]
+    D3A["✅ D3A: 2-stage deep reasoning<br/>(hidden analysis → working diagnosis)"]
     UPGR["⚕️ Specialist Opinions<br/>(custom specialty ✅)"]
     SAVE["💾 Save → opd_prescriptions<br/>(clinic_id migrated ✅)"]
     IN --> GEN
@@ -70,9 +72,12 @@ flowchart TB
     HWR --> HWRX
     HWR --> HBATCH
     GEN --> C1
+    GEN --> D12
+    GEN --> D3A
     GEN --> UPGR
     HWRX --> SAVE
     C1 --> SAVE
+    D12 --> SAVE
     UPGR --> SAVE
 ```
 
