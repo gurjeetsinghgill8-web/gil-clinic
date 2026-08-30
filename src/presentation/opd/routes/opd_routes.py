@@ -1684,8 +1684,10 @@ async def api_specialty_upgrade(request: Request):
         if puter_text and puter_spec and key == puter_spec:
             continue  # already saved above
         spec_data = SPECIALTIES.get(key)
-        if not spec_data:
-            continue
+        is_custom = spec_data is None
+        if is_custom:
+            # Custom specialty (e.g. "Sports Medicine") — generic expert persona
+            spec_data = {}
 
         prompt = specialty_prompt(
             patient_name=patient_name,
@@ -1693,6 +1695,7 @@ async def api_specialty_upgrade(request: Request):
             current_rx=original_rx,
             specialty_name=key,
             specialty_data=spec_data,
+            custom_name=key if is_custom else "",
         )
 
         routed = route_chat(settings, [prompt], feature="specialty-upgrade", temp=0.2, max_tokens=4000)

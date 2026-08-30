@@ -3007,7 +3007,7 @@ function loadPendingScans() {
 
 	    document.getElementById('upgrade-results').innerHTML = '<span class="spinner"></span> Getting specialist opinions...';
 
-	    fetch('/opd/api/upgrade', {
+	    aiFetch('/opd/api/upgrade', {
 	        method: 'POST',
 	        headers: {'Content-Type': 'application/json'},
 	        body: JSON.stringify(data),
@@ -3027,6 +3027,9 @@ function loadPendingScans() {
 	        } else {
 	            document.getElementById('upgrade-results').innerHTML = '<div class="text-muted">Failed: ' + (res.error || 'Unknown') + '</div>';
 	        }
+	    })
+	    .catch(e => {
+	        document.getElementById('upgrade-results').innerHTML = '<div class="text-muted">Error: ' + e + '</div>';
 	    });
 	}
 

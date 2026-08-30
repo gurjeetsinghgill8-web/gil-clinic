@@ -13,7 +13,7 @@
 (function () {
   'use strict';
 
-  var HOP_LIMIT = 4;
+  var HOP_LIMIT = 8;  // multi-specialty upgrades need several Puter hops
 
   function puterAvailable() {
     return typeof window.puter !== 'undefined' && window.puter && window.puter.ai;
