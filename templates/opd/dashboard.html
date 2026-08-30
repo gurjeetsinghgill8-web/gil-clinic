@@ -4510,5 +4510,26 @@ loadQueuePatients();
   setInterval(pollQueueAlert, 20000);
 })();
 </script>
+<div id="puter-banner" style="display:none; position:fixed; top:70px; right:16px; z-index:9999; background:#0b57d0; color:#fff; padding:12px 16px; border-radius:12px; box-shadow:0 4px 16px rgba(0,0,0,.3); cursor:pointer; font-weight:600; max-width:260px;" onclick="var b=this; puterConnect().then(function(ok){ if(ok) b.style.display='none'; }).catch(function(){});">
+  🔑 Sign in to Puter — AI features ke liye (ek baar, free)
+</div>
+<script>
+  (function () {
+    function checkPuter() {
+      if (!window.puterStatus) { setTimeout(checkPuter, 800); return; }
+      window.puterStatus().then(function (st) {
+        if (window.puter && window.puter.ai && !st) {
+          var b = document.getElementById('puter-banner');
+          if (b) b.style.display = 'block';
+        }
+      }).catch(function () {});
+    }
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', checkPuter);
+    } else {
+      checkPuter();
+    }
+  })();
+</script>
 </body>
 </html>

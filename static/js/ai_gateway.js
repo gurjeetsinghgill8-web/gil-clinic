@@ -136,7 +136,28 @@
 
   async function aiFetch(path, body, opts) {
     opts = opts || {};
-    var payload = body;
+    // Accept BOTH calling conventions used across the app:
+    //   1. aiFetch(path, payload)                    -> legacy style (FormData etc.)
+    //   2. aiFetch(path, {method, headers, body})    -> fetch-style init object
+    var payload;
+    var isForm = (typeof FormData !== 'undefined' && body instanceof FormData);
+    var looksLikeInit = !isForm && body && typeof body === 'object' &&
+        (body.method || body.headers || body.body !== undefined || body.credentials);
+    if (looksLikeInit && !opts.body) {
+      opts = body;
+      if (typeof opts.body === 'string') {
+        try { payload = JSON.parse(opts.body) || {}; } catch (e) { payload = opts.body; }
+      } else if (typeof FormData !== 'undefined' && opts.body instanceof FormData) {
+        payload = opts.body;
+      } else {
+        payload = opts.body;
+      }
+    } else {
+      payload = body;
+    }
+    // The re-post payload must be the ACTUAL request data (parsed above),
+    // never the opts wrapper.
+    var basePayload = payload;
     var hops = 0;
     var usedPuter = false;
     var lastError = '';
@@ -172,10 +193,24 @@
 
       try {
         usedPuter = true;
+        // Puter AI needs a signed-in user. Trigger the sign-in popup once
+        // (real browser shows the Puter login window), then verify.
+        var signedInNow = await isSignedIn();
+        if (!signedInNow) {
+          try { await signIn(); } catch (e) {
+            final = { ok: false, error: 'Puter sign-in cancelled or unavailable: ' + e };
+            break;
+          }
+          signedInNow = await isSignedIn();
+          if (!signedInNow) {
+            final = { ok: false, error: 'Puter sign-in popup block hua ya cancel hua. Page ke top-right "Sign in to Puter" button se sign-in karein, phir dobara try karein.' };
+            break;
+          }
+        }
         if (code === 'PUTER_CHAT') {
           var text = await doChat(res.prompt, res.model);
           if (!text) { lastError = 'Puter returned empty response'; final = { ok: false, error: lastError }; break; }
-          payload = mergeBody(body, {
+          payload = mergeBody(basePayload, {
             puter_result: text,
             stage: res.stage,
             puter_specialty: res.puter_specialty,
@@ -183,13 +218,13 @@
             _raw_ocr: res._raw_ocr,
           });
         } else if (code === 'PUTER_OCR') {
-          var ocrText = await doOcr(body);
+          var ocrText = await doOcr(basePayload);
           if (!ocrText) { lastError = 'Puter OCR returned empty text'; final = { ok: false, error: lastError }; break; }
-          payload = mergeBody(body, { puter_ocr_result: ocrText });
+          payload = mergeBody(basePayload, { puter_ocr_result: ocrText });
         } else if (code === 'PUTER_TRANSCRIBE') {
-          var trText = await doTranscribe(body);
+          var trText = await doTranscribe(basePayload);
           if (!trText) { lastError = 'Puter transcription returned empty text'; final = { ok: false, error: lastError }; break; }
-          payload = mergeBody(body, { puter_result: trText });
+          payload = mergeBody(basePayload, { puter_result: trText });
         } else {
           final = res;
           break;
