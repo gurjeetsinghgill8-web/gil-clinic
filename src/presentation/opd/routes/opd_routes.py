@@ -2059,7 +2059,7 @@ OCR TEXT:
 {raw_text}
 
 Return ONLY valid JSON:
-{{"vitals":"","complaints":"","diagnosis":"expand abbreviations","medicines":"numbered list with drug+dose+freq+duration","investigations":"comma-separated","advice":"","follow_up":""}}"""
+{{"vitals":"","complaints":"","diagnosis":"WORKING DIAGNOSIS: think as the world's best internal medicine physician + graduate medical doctor of all subjects. NEVER copy symptoms as diagnosis — write ranked MEDICAL CONDITIONS (most likely first, (suspected)/(rule out) where uncertain, one-line reasoning each). Insufficient data -> ? Query <Condition> — needs <test>.","medicines":"numbered list with drug+dose+freq+duration","investigations":"comma-separated","advice":"","follow_up":""}}"""
 
 
 

@@ -1673,7 +1673,7 @@ function applyParsedDataToForm(p) {
     }
     if (p.diagnosis && p.diagnosis.length) {
         const el = $('pt-diagnosis');
-        if (el) el.value = el.value ? el.value + '\n' + p.diagnosis.join('\n') : p.diagnosis.join('\n');
+        if (el) { el.value = el.value ? el.value + '\n' + p.diagnosis.join('\n') : p.diagnosis.join('\n'); flashAndScroll('pt-diagnosis'); }
     }
     if (p.medicines && p.medicines.length) {
         const el = $('pt-medicines');
@@ -2113,6 +2113,18 @@ document.getElementById('pt-medicines').addEventListener('input', function() {
 // ════════════════════════════════════════════════════════════════
 // AI GENERATE PRESCRIPTION
 // ════════════════════════════════════════════════════════════════
+// D1: field ko turant dikhao — scroll + 2-second yellow highlight
+function flashAndScroll(id) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    try { el.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch (e) { el.scrollIntoView(); }
+    const oldBg = el.style.backgroundColor;
+    const oldTr = el.style.transition;
+    el.style.transition = 'background-color 0.4s';
+    el.style.backgroundColor = '#fef9c3';
+    setTimeout(() => { el.style.backgroundColor = oldBg; el.style.transition = oldTr; }, 2400);
+}
+
 // C1: AI output se Diagnosis + Advice inline fields mein bharo (doctor
 // wahan edit kare, final print wahi jayega). force=true → overwrite;
 // force=false → sirf khali field mein bharo.
@@ -2122,11 +2134,11 @@ function fillDxAdviceFromRx(rxText, force) {
     const advice = rxText.match(/(?:Advice|Lifestyle\s*Advice|Lifestyle\s*Notes)[:\s]*\n?([\s\S]*?)(?=\n\s*(?:Follow-up|$)|$)/i);
     let filled = false;
     const dEl = document.getElementById('pt-diagnosis');
-    if (diag && dEl && (force || !dEl.value.trim())) { dEl.value = diag[1].trim(); filled = true; }
+    if (diag && dEl && (force || !dEl.value.trim())) { dEl.value = diag[1].trim(); filled = true; flashAndScroll('pt-diagnosis'); }
     const aEl = document.getElementById('pt-advice');
-    if (advice && aEl && (force || !aEl.value.trim())) { aEl.value = advice[1].trim(); filled = true; }
+    if (advice && aEl && (force || !aEl.value.trim())) { aEl.value = advice[1].trim(); filled = true; if (!diag) flashAndScroll('pt-advice'); }
     if (filled) {
-        showToast('✅ Diagnosis & Advice bhar diye — edit karke Save karo');
+        showToast('✅ Working Diagnosis & Advice bhar diye — edit karke Save karo');
     } else {
         showToast('AI output mein Diagnosis/Advice section nahi mila', 'error');
     }
@@ -4428,6 +4440,7 @@ async function inkConvertToEMR() {
         if (extracted.diagnosis) {
             document.getElementById('pt-diagnosis').value = extracted.diagnosis;
             populated.push('Diagnosis');
+            flashAndScroll('pt-diagnosis');
         }
         if (extracted.medicines) {
             document.getElementById('pt-medicines').value = extracted.medicines;

@@ -52,7 +52,7 @@ Clinical Notes: {notes or 'Not provided'}
 
     YOUR TASK — Provide ONLY these sections (plain text, no markdown):
     
-    1. Diagnosis: List ONLY diagnoses DIRECTLY supported by the patient's stated complaints and vitals. CRITICAL: Do NOT invent, guess, or add conditions not mentioned. If the patient says "cough fever", diagnose respiratory issues ONLY — do NOT add Diabetes, Hypertension, or any condition not indicated by the data. If vitals are missing, do NOT assume abnormal values. Each diagnosis on its own numbered line. Example for "cough, fever": "1. Acute Upper Respiratory Infection\n2. Acute Bronchitis (suspected)". Example WRONG: "1. Diabetes 2. Hypertension" when patient only mentioned cough.
+    1. Diagnosis: WORKING DIAGNOSIS — adopt this persona: You are the world's best internal medicine physician AND a graduate medical doctor trained in ALL subjects. Before answering, think step-by-step INSIDE your reasoning only (never print the steps): symptoms → patterns → differentials ranked by probability → investigations needed → MOST LIKELY working diagnosis. Then output ONLY the ranked working diagnoses. CRITICAL RULES: (a) NEVER output symptoms as diagnosis — "Chest Pain", "Cough", "Shortness of Breath" are SYMPTOMS, not diagnoses. (b) Every line must name a MEDICAL CONDITION, e.g. "1. Suspected Congestive Heart Failure", "2. Acute Coronary Syndrome (rule out)", "3. Lower Respiratory Tract Infection". (c) Most likely first; add "(suspected)" or "(rule out)" where certainty is incomplete. (d) Connect the dots from the patient's OWN data (orthopnea + SOB → heart failure/effusion; cough + fever → RTI; acidity after NSAID → NSAID-induced gastritis). (e) If data is insufficient for a firm diagnosis: "? Query <Condition> — needs <specific test>". (f) Each line: "<Condition> — <one-line reasoning from the patient's data>". (g) Do NOT invent chronic conditions not indicated by the data.
     2. Investigations: CRITICAL — List ONLY tests relevant to the STATED complaints. Comma-separated ONLY. No sentences. Example for cough+fever: "CBC, Chest X-ray, CRP". Do NOT add unrelated tests.
     3. Treatment: List treatment/management plan as numbered items (1. Drug name + dose + frequency + duration per line).
     4. Advice: Suggest lifestyle modifications, diet tips. Hindi-English mix OK. Keep short and practical.
@@ -119,7 +119,7 @@ IMPORTANT: You are making SUGGESTIONS only. Every drug recommendation must be cl
     - NEVER add extra commentary
     
     OUTPUT FORMAT (every drug line starts with 💡 SUGGESTION:):
-    Diagnosis: (numbered list — 1. Dx1, 2. Dx2, etc.)
+    Diagnosis: (WORKING DIAGNOSIS — persona: world's best internal medicine physician + graduate medical doctor of ALL subjects. Think step-by-step INSIDE your reasoning: symptoms → patterns → ranked differentials → most likely working diagnosis. NEVER output symptoms as diagnosis; every line must be a MEDICAL CONDITION with "(suspected)" or "(rule out)" where uncertain, most likely first, each with one-line reasoning from the patient's own data. Insufficient data → "? Query <Condition> — needs <test>".)
     💡 SUGGESTION — Treatment: (numbered list with drug names, doses, frequency, duration)
     Investigations: (comma-separated test names only — NO sentences)
     Advice:
