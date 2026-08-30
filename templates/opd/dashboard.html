@@ -1250,9 +1250,22 @@
                                 <select id="set-ai-mode">
                                     <option value="auto" {% if settings.ai_mode == 'auto' %}selected{% endif %}>Auto — my own API keys (clinic pays)</option>
                                     <option value="puter" {% if settings.ai_mode == 'puter' %}selected{% endif %}>Puter Free AI — no key needed (clinic's Puter account pays)</option>
+                                    <option value="gilwallet" {% if settings.ai_mode == 'gilwallet' %}selected{% endif %}>GIL AI Wallet — sasta backup (UPI recharge, hamari keys)</option>
                                     <option value="off" {% if settings.ai_mode == 'off' %}selected{% endif %}>Off — no AI</option>
                                 </select>
                                 <span class="text-sm text-muted">Your clinic pays its own AI usage — GIL CLINIC pays ₹0 in every mode.</span>
+                            </div>
+                            <div class="form-group">
+                                <label>💰 GIL AI Wallet (sasta backup — Puter mahnga lage tab)</label>
+                                <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+                                    <button type="button" class="btn btn-sm" style="background:#059669;color:#fff;font-weight:700;" onclick="openWalletRecharge()">💳 UPI Recharge</button>
+                                    <span id="wallet-balance" class="text-sm" style="font-weight:700;color:#047857;">Balance: —</span>
+                                    <span id="wallet-upi" class="text-sm text-muted"></span>
+                                </div>
+                                <div id="wallet-detail" class="text-sm" style="margin-top:6px;color:#475569;"></div>
+                                {% if is_owner %}
+                                <div id="wallet-approvals" style="margin-top:8px;"></div>
+                                {% endif %}
                             </div>
                             <div class="form-group">
                                 <label>Puter — Free AI (optional)</label>
@@ -3459,6 +3472,82 @@ async function fetchPuterUsagePct() {
     } catch (e) {}
     return null;
 }
+// ── GIL AI Wallet (Puter ka sasta backup) ──
+let _walletData = null;
+async function loadWalletStatus() {
+    try {
+        const r = await fetch('/opd/api/wallet/status');
+        const d = await r.json();
+        if (!d.ok) return;
+        _walletData = d;
+        const balEl = document.getElementById('wallet-balance');
+        if (balEl) balEl.textContent = 'Balance: ₹' + (d.balance_paise / 100).toFixed(2);
+        const upiEl = document.getElementById('wallet-upi');
+        if (upiEl) upiEl.textContent = d.upi_id ? ('UPI: ' + d.upi_id) : '';
+        const det = document.getElementById('wallet-detail');
+        if (det) {
+            let html = 'Recharged: ₹' + (d.total_recharged_paise / 100).toFixed(2)
+                + ' · Spent: ₹' + (d.total_spent_paise / 100).toFixed(2)
+                + ' · Margin: ' + d.margin + 'x';
+            const txns = (d.transactions || []).slice(0, 5);
+            if (txns.length) html += '<br>Recent: ' + txns.map(function (t) {
+                return (t.delta_paise >= 0 ? '+' : '−') + '₹' + (Math.abs(t.delta_paise) / 100).toFixed(2) + ' ' + t.reason;
+            }).join(' · ');
+            det.innerHTML = html;
+        }
+        const appr = document.getElementById('wallet-approvals');
+        if (appr && d.is_owner) {
+            const pend = (d.recharges || []).filter(function (x) { return x.status === 'pending'; });
+            appr.innerHTML = pend.length
+                ? '<b>Pending recharges (' + pend.length + '):</b><br>' + pend.map(function (x) {
+                    return '₹' + (x.amount_paise / 100).toFixed(2) + ' · UTR ' + x.utr
+                        + ' <button class="btn btn-sm" style="background:#059669;color:#fff;" onclick="approveWallet(' + x.id + ',1)">✅</button>'
+                        + ' <button class="btn btn-sm" style="background:#dc2626;color:#fff;" onclick="approveWallet(' + x.id + ',0)">✕</button>';
+                }).join('<br>')
+                : '';
+        }
+    } catch (e) {}
+}
+async function approveWallet(id, ok) {
+    try {
+        const r = await fetch('/opd/api/wallet/approve', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id: id, action: ok ? 'approve' : 'reject' }),
+        });
+        const d = await r.json();
+        showToast(d.ok ? '✅ Done' : ('❌ ' + (d.error || 'fail')), d.ok ? 'success' : 'error');
+        loadWalletStatus();
+    } catch (e) {}
+}
+function openWalletRecharge() {
+    const m = document.getElementById('wallet-modal');
+    if (m) m.style.display = 'flex';
+    const upiModal = document.getElementById('wallet-upi-modal');
+    if (upiModal) upiModal.textContent = _walletData && _walletData.upi_id ? ('Pay karo: ' + _walletData.upi_id) : '';
+    loadWalletStatus();
+    updateWalletQR();
+}
+function closeWalletModal() { const m = document.getElementById('wallet-modal'); if (m) m.style.display = 'none'; }
+function updateWalletQR() {
+    const amt = parseInt(document.getElementById('wallet-amount').value || '0', 10);
+    const img = document.getElementById('wallet-qr');
+    if (img && _walletData && _walletData.upi_id) {
+        img.src = '/opd/api/wallet/upi-qr?amount=' + amt;
+    }
+}
+async function submitWalletRecharge() {
+    const amt = parseInt(document.getElementById('wallet-amount').value || '0', 10);
+    const utr = document.getElementById('wallet-utr').value.trim();
+    try {
+        const r = await fetch('/opd/api/wallet/recharge-request', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ amount_paise: amt, utr: utr }),
+        });
+        const d = await r.json();
+        showToast(d.ok ? d.message : ('❌ ' + (d.error || 'fail')), d.ok ? 'success' : 'error');
+        if (d.ok) { document.getElementById('wallet-utr').value = ''; loadWalletStatus(); }
+    } catch (e) {}
+}
 document.addEventListener('DOMContentLoaded', refreshAIStatus);
 
 // ════════════════════════════════════════════════════════════════
@@ -4749,5 +4838,22 @@ loadQueuePatients();
   updatePuterChip();
   setInterval(updatePuterChip, 20000);
 </script>
+<div id="wallet-modal" style="display:none; position:fixed; inset:0; z-index:10000; background:rgba(0,0,0,.5); align-items:center; justify-content:center;">
+  <div style="background:#fff;border-radius:14px;padding:20px;max-width:340px;width:92%;">
+    <div style="display:flex;justify-content:space-between;margin-bottom:10px;">
+      <h3 style="margin:0;">💰 UPI Recharge</h3>
+      <button onclick="closeWalletModal()" style="background:none;border:none;font-size:20px;cursor:pointer;">✕</button>
+    </div>
+    <label>Amount (₹50 - ₹5000)</label>
+    <input type="number" id="wallet-amount" value="100" min="50" max="5000" step="50" oninput="updateWalletQR()" style="width:100%;padding:8px;border:1px solid #cbd5e1;border-radius:8px;margin:6px 0;">
+    <div style="text-align:center;margin:8px 0;">
+      <img id="wallet-qr" alt="UPI QR" style="width:180px;height:180px;border:1px solid #e2e8f0;border-radius:10px;">
+      <div id="wallet-upi-modal" class="text-sm text-muted"></div>
+    </div>
+    <label>UPI Transaction ID (pay karne ke baad)</label>
+    <input type="text" id="wallet-utr" placeholder="e.g. 4182XXXXXXXX" style="width:100%;padding:8px;border:1px solid #cbd5e1;border-radius:8px;margin:6px 0;">
+    <button onclick="submitWalletRecharge()" style="width:100%;background:#059669;color:#fff;border:none;border-radius:8px;padding:10px;font-weight:700;cursor:pointer;">✅ Submit (payment verify hokar credit hoga)</button>
+  </div>
+</div>
 </body>
 </html>

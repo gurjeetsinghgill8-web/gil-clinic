@@ -310,6 +310,7 @@ async def opd_dashboard(request: Request, tab: str = "rx"):
         today_count=today_count,
         today_revenue=today_revenue,
         is_chief=_has_chief_access(sess),
+        is_owner=sess.get("role") in ("admin", "chief"),
         templates=templates,
     ))
 
@@ -1024,6 +1025,131 @@ async def api_generate_diagnosis(request: Request):
 
     await _log_ai(settings, doctor_id, "generate-diagnosis", provider, model_used, success=True, usage=usage)
     return {"ok": True, "diagnosis": sanitize_output(result), "provider": provider}
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# GIL AI WALLET — owner-owned prepaid credits (Puter ka sasta backup)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@router.get("/api/wallet/status", include_in_schema=False)
+async def api_wallet_status(request: Request):
+    sess = _require_opd_session(request)
+    doctor_id = sess["doctor_id"]
+    from src.ai_engine.provider_router import _WALLET_FEATURE_COST_PAISE, _wallet_margin, wallet_cost_paise
+    from src.infrastructure.opd.models.ai_wallet_model import (
+        AIRechargeModel, AIWalletModel, AIWalletTxnModel,
+    )
+    async with async_session_factory() as session:
+        w = await session.get(AIWalletModel, doctor_id)
+        recharges = (await session.execute(
+            sa.select(AIRechargeModel).where(AIRechargeModel.clinic_id == doctor_id)
+            .order_by(AIRechargeModel.id.desc()).limit(10)
+        )).scalars().all()
+        txns = (await session.execute(
+            sa.select(AIWalletTxnModel).where(AIWalletTxnModel.clinic_id == doctor_id)
+            .order_by(AIWalletTxnModel.id.desc()).limit(10)
+        )).scalars().all()
+    pricing = {f: wallet_cost_paise(f) for f in sorted(_WALLET_FEATURE_COST_PAISE.keys()) if _WALLET_FEATURE_COST_PAISE[f] > 0}
+    return {
+        "ok": True,
+        "balance_paise": int(w.balance_paise) if w else 0,
+        "total_recharged_paise": int(w.total_recharged_paise) if w else 0,
+        "total_spent_paise": int(w.total_spent_paise) if w else 0,
+        "upi_id": os.getenv("AI_WALLET_UPI_ID", ""),
+        "margin": _wallet_margin(),
+        "pricing": pricing,
+        "recharges": [{"id": r.id, "amount_paise": r.amount_paise, "utr": r.utr,
+                       "status": r.status, "created_at": str(r.created_at)} for r in recharges],
+        "transactions": [{"delta_paise": t.delta_paise, "reason": t.reason,
+                          "created_at": str(t.created_at)} for t in txns],
+        "is_owner": sess.get("role") in ("admin", "chief"),
+    }
+
+
+@router.post("/api/wallet/recharge-request", include_in_schema=False)
+async def api_wallet_recharge_request(request: Request):
+    sess = _require_opd_session(request)
+    doctor_id = sess["doctor_id"]
+    try:
+        body = await request.json()
+    except Exception:
+        return {"ok": False, "error": "Invalid JSON"}
+    try:
+        amount_paise = int(body.get("amount_paise") or 0)
+    except Exception:
+        amount_paise = 0
+    utr = str(body.get("utr") or "").strip()[:64]
+    if amount_paise < 5000 or amount_paise > 500000:
+        return {"ok": False, "error": "Amount ₹50 se ₹5000 ke beech hona chahiye"}
+    if not utr:
+        return {"ok": False, "error": "UPI Transaction ID (UTR) daalo"}
+    upi_id = os.getenv("AI_WALLET_UPI_ID", "")
+    if not upi_id:
+        return {"ok": False, "error": "Owner ne UPI ID set nahi kiya (AI_WALLET_UPI_ID)"}
+    from src.infrastructure.opd.models.ai_wallet_model import AIRechargeModel
+    async with async_session_factory() as session:
+        rec = AIRechargeModel(clinic_id=doctor_id, amount_paise=amount_paise, utr=utr, status="pending")
+        session.add(rec)
+        await session.commit()
+        rid = rec.id
+    return {"ok": True, "id": rid,
+            "message": f"₹{amount_paise/100:.2f} ka request aa gaya. Is UPI ID par pay karo: {upi_id}. Payment verify hote hi balance add hoga."}
+
+
+@router.post("/api/wallet/approve", include_in_schema=False)
+async def api_wallet_approve(request: Request):
+    sess = _require_opd_session(request)
+    if sess.get("role") not in ("admin", "chief"):
+        return {"ok": False, "error": "Sirf owner/admin approve kar sakta hai"}
+    try:
+        body = await request.json()
+    except Exception:
+        return {"ok": False, "error": "Invalid JSON"}
+    try:
+        rid = int(body.get("id") or 0)
+    except Exception:
+        rid = 0
+    action = body.get("action", "approve")
+    from src.infrastructure.opd.models.ai_wallet_model import (
+        AIRechargeModel, AIWalletModel, AIWalletTxnModel,
+    )
+    async with async_session_factory() as session:
+        rec = await session.get(AIRechargeModel, rid)
+        if not rec or rec.status != "pending":
+            return {"ok": False, "error": "Request nahi mila ya already processed"}
+        if action == "approve":
+            w = await session.get(AIWalletModel, rec.clinic_id)
+            if not w:
+                w = AIWalletModel(clinic_id=rec.clinic_id, balance_paise=0,
+                                  total_recharged_paise=0, total_spent_paise=0)
+                session.add(w)
+                await session.flush()
+            w.balance_paise = int(w.balance_paise or 0) + rec.amount_paise
+            w.total_recharged_paise = int(w.total_recharged_paise or 0) + rec.amount_paise
+            session.add(AIWalletTxnModel(clinic_id=rec.clinic_id, delta_paise=rec.amount_paise,
+                                         reason=f"recharge #{rec.id}"))
+            rec.status = "approved"
+        else:
+            rec.status = "rejected"
+        await session.commit()
+    return {"ok": True}
+
+
+@router.get("/api/wallet/upi-qr", include_in_schema=False)
+async def api_wallet_upi_qr(request: Request, amount: int = 0):
+    _require_opd_session(request)
+    upi_id = os.getenv("AI_WALLET_UPI_ID", "")
+    if not upi_id:
+        return JSONResponse({"ok": False, "error": "UPI ID not configured"}, status_code=400)
+    import io as _io
+    import qrcode as _qrcode
+    pay = f"upi://pay?pa={upi_id}&pn=GILCLINIC&cu=INR"
+    if amount and amount > 0:
+        pay += f"&am={amount/100:.2f}"
+    qr = _qrcode.make(pay)
+    buf = _io.BytesIO()
+    qr.save(buf, format="PNG")
+    return Response(content=buf.getvalue(), media_type="image/png")
 
 
 @router.post("/api/generate-rx", include_in_schema=False)

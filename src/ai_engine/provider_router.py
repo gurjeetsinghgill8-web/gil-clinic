@@ -27,6 +27,7 @@ import json
 import logging
 import os
 import time
+from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 import requests
@@ -157,6 +158,125 @@ def mask_value(value: str) -> str:
 
 def system_fallback_enabled() -> bool:
     return os.getenv("SYSTEM_AI_FALLBACK_ENABLED", "true").strip().lower() != "false"
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# GIL AI WALLET MODE ("gilwallet") — owner-owned prepaid credits (Phase 1)
+# Puter primary rehta hai; ye mode sasta backup hai. System keys (Groq/DeepSeek/
+# Gemini env se) use hoti hain aur har call par wallet balance se cost katta hai.
+# ═══════════════════════════════════════════════════════════════════════════════
+
+_WALLET_FEATURE_COST_PAISE = {
+    "generate-rx": 200,
+    "generate-diagnosis": 100,
+    "generate-followup-rx": 200,
+    "optimize-rx": 150,
+    "clinical-support": 150,
+    "drug-review": 100,
+    "handwriting-ocr": 100,
+    "handwriting-ocr-struct": 0,  # struct is part of handwriting-ocr call
+    "scan-ai": 100,
+    "lab-report-analyze": 200,
+    "transcribe": 100,
+    "specialty-upgrade": 300,
+    "cme": 300,
+    "research": 300,
+}
+
+
+def _wallet_margin() -> float:
+    try:
+        return max(1.0, float(os.getenv("AI_WALLET_MARGIN", "2.0")))
+    except Exception:
+        return 2.0
+
+
+def wallet_cost_paise(feature: str) -> int:
+    base = _WALLET_FEATURE_COST_PAISE.get(feature, 100)
+    return int(round(base * _wallet_margin()))
+
+
+def _secret_file_keys() -> Dict[str, str]:
+    """secret.txt (project root) se keys — groq_client jaisa hi behavior."""
+    out: Dict[str, str] = {}
+    try:
+        p = Path(__file__).resolve().parents[2] / "secret.txt"
+        if p.exists():
+            for line in p.read_text(encoding="utf-8", errors="replace").splitlines():
+                line = line.strip()
+                if not line or line.startswith("#") or "=" not in line:
+                    continue
+                k, v = line.split("=", 1)
+                out[k.strip().upper()] = v.strip().strip('"').strip("'")
+    except Exception:
+        pass
+    return out
+
+
+def _system_wallet_providers() -> List[Dict[str, Any]]:
+    """Owner ke system keys (env → secret.txt) — wallet mode ke liye."""
+    secrets = _secret_file_keys()
+    out: List[Dict[str, Any]] = []
+    for pid, env in (("groq", "GROQ_API_KEY"), ("deepseek", "DEEPSEEK_API_KEY"), ("gemini", "GEMINI_API_KEY")):
+        key = os.getenv(env, "") or secrets.get(env, "") or secrets.get(f"{pid.upper()}_KEY", "")
+        if not key:
+            continue
+        p = PROVIDERS[pid]
+        out.append({
+            "id": pid,
+            "label": p["label"],
+            "key": key,
+            "base_url": p["base_url"],
+            "model": p["model"],
+            "vision_model": p["vision_model"],
+            "audio_model": p["audio_model"],
+            "supports_vision": p["supports_vision"],
+            "supports_audio": p["supports_audio"],
+        })
+    return out
+
+
+def _wallet_precheck(settings: Optional[Dict[str, Any]], feature: str):
+    """Wallet mode: call se pehle balance check (SYNC — router functions sync hain).
+    Returns (ok, balance_paise)."""
+    try:
+        from main_v2 import SessionLocal  # deferred import (runtime loaded)
+        from src.infrastructure.opd.models.ai_wallet_model import AIWalletModel
+
+        clinic_id = (settings or {}).get("doctor_id") or "clinic_default"
+        with SessionLocal() as session:
+            w = session.get(AIWalletModel, clinic_id)
+            balance = int(w.balance_paise) if w else 0
+        cost = wallet_cost_paise(feature)
+        if balance < cost:
+            return False, balance
+        return True, balance
+    except Exception as exc:
+        logger.warning("wallet precheck failed: %s", exc)
+        return True, 0
+
+
+def _wallet_deduct(settings: Optional[Dict[str, Any]], feature: str) -> None:
+    try:
+        from main_v2 import SessionLocal  # deferred import (runtime loaded)
+        from src.infrastructure.opd.models.ai_wallet_model import AIWalletModel, AIWalletTxnModel
+
+        clinic_id = (settings or {}).get("doctor_id") or "clinic_default"
+        cost = wallet_cost_paise(feature)
+        with SessionLocal() as session:
+            w = session.get(AIWalletModel, clinic_id)
+            if not w:
+                w = AIWalletModel(clinic_id=clinic_id, balance_paise=0,
+                                  total_recharged_paise=0, total_spent_paise=0)
+                session.add(w)
+                session.flush()
+            w.balance_paise = int(w.balance_paise or 0) - cost
+            w.total_spent_paise = int(w.total_spent_paise or 0) + cost
+            session.add(AIWalletTxnModel(clinic_id=clinic_id, delta_paise=-cost, reason=feature))
+            session.commit()
+            logger.info("wallet: -%d paise (%s) balance=%d", cost, feature, int(w.balance_paise))
+    except Exception as exc:
+        logger.warning("wallet deduct failed: %s", exc)
 
 
 def puter_model_id(settings: Optional[Dict[str, Any]] = None) -> str:
@@ -359,16 +479,29 @@ def route_chat(settings: Optional[Dict[str, Any]], messages: List[Any], feature:
     override = ((settings or {}).get("ai_model") or "").strip()
     errors: List[str] = []
 
+    # ── GIL AI Wallet mode: owner's system keys + prepaid balance ──
+    is_wallet = mode == "gilwallet"
+    if is_wallet:
+        providers = _system_wallet_providers()
+        if not providers:
+            return {"text": "", "error": "GIL Wallet mode on hai par system AI keys set nahi hain (owner: .env mein GROQ_API_KEY/DEEPSEEK_API_KEY/GEMINI_API_KEY).", "provider": "", "model": "", "usage": {}}
+        ok, bal = _wallet_precheck(settings, feature)
+        if not ok:
+            return {"text": "", "error": f"Wallet balance kam hai (₹{bal/100:.2f}) — UPI se Recharge karo (Settings → GIL Wallet).", "provider": "", "model": "", "usage": {}, "wallet_low": True}
+
     for p in providers:
         pmodel = override or model or p["model"]
         text, usage, err = _call_openai_compat(p, pmodel, _build_openai_messages(messages), temp, max_tokens)
         if text:
+            if is_wallet:
+                _wallet_deduct(settings, feature)
             return {"text": text, "error": "", "provider": p["id"], "model": pmodel, "usage": usage}
         if err:
             errors.append(f"{p['label']}: {err}")
 
     # ── System emergency fallback (GIL CLINIC legacy keys) ──
-    if system_fallback_enabled():
+    # Wallet mode mein fallback nahi — wallet ke andar hi balance kata hai
+    if not is_wallet and system_fallback_enabled():
         try:
             from src.ai_engine.groq_client import call_groq_with_error
 
@@ -410,6 +543,15 @@ def route_vision(settings: Optional[Dict[str, Any]], image, feature: str = "",
     override = ((settings or {}).get("ai_model") or "").strip()
     errors: List[str] = []
 
+    is_wallet = mode == "gilwallet"
+    if is_wallet:
+        providers = [p for p in _system_wallet_providers() if p["supports_vision"]]
+        if not providers:
+            return {"text": "", "error": "GIL Wallet mode: system vision key set nahi hai (owner: .env mein GROQ_API_KEY ya GEMINI_API_KEY).", "provider": "", "usage": {}}
+        ok, bal = _wallet_precheck(settings, feature)
+        if not ok:
+            return {"text": "", "error": f"Wallet balance kam hai (₹{bal/100:.2f}) — UPI se Recharge karo.", "provider": "", "usage": {}, "wallet_low": True}
+
     prompt_text = prompt_text or _image_to_puter_prompt(context)
     vision_messages = [{
         "role": "user",
@@ -423,11 +565,13 @@ def route_vision(settings: Optional[Dict[str, Any]], image, feature: str = "",
         pmodel = override or p["vision_model"]
         text, usage, err = _call_openai_compat(p, pmodel, vision_messages, temp, max_tokens)
         if text:
+            if is_wallet:
+                _wallet_deduct(settings, feature)
             return {"text": text, "error": "", "provider": p["id"], "model": pmodel, "usage": usage}
         if err:
             errors.append(f"{p['label']}: {err}")
 
-    if system_fallback_enabled():
+    if not is_wallet and system_fallback_enabled():
         try:
             from src.ai_engine.groq_client import call_vision_with_fallback
 
@@ -462,6 +606,15 @@ def route_transcribe(settings: Optional[Dict[str, Any]], audio_bytes: bytes,
     providers = [p for p in resolve_provider_keys(settings) if p["supports_audio"]]
     errors: List[str] = []
 
+    is_wallet = mode == "gilwallet"
+    if is_wallet:
+        providers = [p for p in _system_wallet_providers() if p["supports_audio"]]
+        if not providers:
+            return {"text": "", "error": "GIL Wallet mode: system audio key set nahi hai.", "provider": "", "usage": {}}
+        ok, bal = _wallet_precheck(settings, feature)
+        if not ok:
+            return {"text": "", "error": f"Wallet balance kam hai (₹{bal/100:.2f}) — UPI se Recharge karo.", "provider": "", "usage": {}, "wallet_low": True}
+
     ext = filename.lower().split(".")[-1] if "." in filename else "webm"
     mime_map = {
         "webm": "audio/webm", "wav": "audio/wav", "mp3": "audio/mpeg",
@@ -488,12 +641,14 @@ def route_transcribe(settings: Optional[Dict[str, Any]], audio_bytes: bytes,
                 continue
             text = (resp.json().get("text") or "").strip()
             if text:
+                if is_wallet:
+                    _wallet_deduct(settings, feature)
                 return {"text": text, "error": "", "provider": p["id"], "model": p["audio_model"], "usage": {}}
             errors.append(f"{p['label']}: empty transcription")
         except requests.exceptions.RequestException as e:
             errors.append(f"{p['label']}: {e}")
 
-    if system_fallback_enabled():
+    if not is_wallet and system_fallback_enabled():
         try:
             from src.ai_engine.groq_client import call_whisper
 

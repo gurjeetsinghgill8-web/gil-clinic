@@ -165,6 +165,11 @@ from src.infrastructure.opd.models.opd_models import (  # noqa: F401
 )
 # AI usage metering table
 from src.infrastructure.opd.models.ai_usage_model import AIUsageModel  # noqa: F401
+from src.infrastructure.opd.models.ai_wallet_model import (  # noqa: F401
+    AIWalletModel,
+    AIRechargeModel,
+    AIWalletTxnModel,
+)
 # Staff User model — multi-user auth (receptionists, doctors)
 from src.infrastructure.staff.models.staff_user_model import StaffUserModel  # noqa: F401
 # Admin User model — super_admin + ceo auth
