@@ -501,3 +501,128 @@ Optionally GitHub Action (weekly Monday 06:00 IST) — laptop band ho tab bhi ch
 | C5 | Weekly ship command | **P1** | GO? |
 
 **Aap bolo "C1+C2 shuru karo"** → main dono implement + live test kar dunga.
+
+
+---
+
+# PART D — Working Diagnosis Engine Upgrade (30-Aug-2026, evening)
+## "AI ab symptoms ko diagnosis bana ke de raha hai — ise real physician jaisa banana hai"
+## Status: PLAN ONLY — approval ke baad hi code hoga (doctor ka clear instruction)
+
+> **Doctor ka feedback (seedha quote):**
+> "Chief complaint di, BP pulse sab diya — to hamara **working diagnosis** wahan upar aana chahiye,
+> click karte hi. Aur usmein kuchh change karna ho to wahin change kar denge."
+> "Jo likha hai — Chest Pain, Cough, Shortness of Breath — **yah diagnosis nahi hai, yah symptoms hai**.
+> Koi simple doctor bhi irritate ho jayega."
+> "Use bolo: **first think yourself as the best internal medicine physician in the world** (unhe most
+> OPD cheezein pata hoti hain) **and also think as a graduate medical doctor** (unhe saare subjects
+> padhaye jaate hain), FIR uske baad **working diagnosis** banao."
+> "Wahan **deep research wala tool** lagana padega kyunki bahut gadbad ho rahi hai."
+> "He should be a **realise doctor** (real doctor jaisa sochne wala)."
+
+---
+
+## D0. Problem (verified in live system)
+
+**Live example (30-Aug, Puter mode):** Vitals + complaints "chest pain, cough, SOB lying down (orthopnea)"
+→ AI ne Diagnosis mein likha:
+```
+1. Chest Pain
+2. Cough
+3. Shortness of Breath (suspected orthopnea)
+```
+**Yah symptoms ki list hai, diagnosis nahi.** Real doctor aise likhta:
+```
+1. Suspected Congestive Heart Failure (orthopnea + exertional SOB) — most likely
+2. Acute Coronary Syndrome (rule out — chest pain)
+3. Lower Respiratory Tract Infection (cough)
+```
+**Root cause:** `gp_prompt_assistant`/`gp_prompt_suggest` (src/ai_engine/prompts.py L55) ka
+Diagnosis section "ONLY diagnoses DIRECTLY supported by stated complaints" keh kar **AI ko
+symptoms copy karne ki permission** de deta hai. Working-diagnosis reasoning ka koi step hai hi nahi.
+
+**Second issue (UX):** doctor ko niche scroll karke click karna padta hai; diagnosis field upar hai
+par turant highlight/dikhta nahi. C1 (inline fill) ship ho chuka hai — ab use **instant + visible**
+banana hai, aur voice/scan flows mein bhi.
+
+---
+
+## D1. Instant Working Diagnosis (UX) — P0
+
+1. **Generate click karte hi** diagnosis seedha `pt-diagnosis` field mein aaye (C1 se ho raha hai) +
+   **auto-scroll + 2-second yellow highlight** us field par — doctor ko turant dikhe.
+2. **Voice scribe ke baad bhi** — transcript se diagnosis-extraction ke baad field fill + highlight.
+3. **Handwriting/scan ke baad bhi** — same fill + highlight (pehle se fill hota hai, highlight add).
+4. Field pehle se editable hai (textarea) — doctor upar-neeche change kare, Save wahi le.
+
+**Files:** `templates/opd/dashboard.html` (fill functions + scroll/highlight helper) — chhota change.
+
+---
+
+## D2. Diagnosis Persona Prompt (best physician in the world) — P0
+
+**Naya system prompt block (generate-rx ke prompt ke andar, Diagnosis ke liye):**
+
+> "For the Diagnosis section ONLY, adopt this persona:
+> You are the world's best internal medicine physician AND a graduate medical doctor trained in
+> ALL subjects (medicine, surgery, cardiology, pulmonology, neurology, pediatrics, psychiatry).
+> Take a thorough clinical look at vitals + complaints + doctor's medicines. Think in this order:
+> symptoms → patterns → differentials → investigations needed → MOST LIKELY working diagnosis.
+> RULES:
+> - NEVER output symptoms as diagnosis. 'Chest Pain', 'Cough', 'Shortness of Breath' are NOT diagnoses.
+> - Every diagnosis must be a MEDICAL CONDITION name (e.g., 'Suspected Congestive Heart Failure',
+>   'Acute Coronary Syndrome (rule out)', 'Lower Respiratory Tract Infection').
+> - Rank: most likely first. Use '(suspected)' or '(rule out)' jahan confidence full nahi.
+> - Connect the dots: orthopnea + SOB → heart failure / effusion / ACS; cough + fever → RTI.
+> - If data insufficient for a firm diagnosis: '? Query <Condition> — needs <specific test> to confirm'.
+> - Each line: '<Diagnosis> — <one-line reasoning from the patient's own data>'."
+
+**Files:** `src/ai_engine/prompts.py` — `gp_prompt_assistant` + `gp_prompt_suggest` ka Diagnosis
+section. Same persona handwriting-OCR structure prompt (L2053) aur scan-ai parse mein bhi.
+
+---
+
+## D3. Deep-Research Reasoning (2-stage) — P1
+
+**Stage 1 (hidden reasoning, output mein nahi aata):**
+AI ko bolna hai pehle apne andar ye analysis kare:
+1. Symptoms + vitals se **pattern** banao (e.g., orthopnea = left-heart vs pulmonary vs deconditioning)
+2. **5 differentials** banao with probability % ranking
+3. Har differential ke **for/against points** patient ke data se
+4. **Investigations** jo diagnosis confirm/refute karenge (order mein)
+
+**Stage 2 (doctor ko dikhne wala output):**
+- Working Diagnosis (ranked, reasoning ke saath, upar wale rules)
+- Recommended confirmatory investigations
+
+**Technical options (approval ke baad chunenge):**
+- **Option A (aaj, free):** single prompt mein "think step-by-step inside your reasoning before
+  answering" — Puter/Groq/DeepSeek sab isse support karte hain. Zero extra cost.
+- **Option B (whitelist ke baad):** real web deep-research — PA whitelist approve hone par ek search
+  API (ya Perplexity-style endpoint) se guidelines lookup. Cost: clinic ka provider bill.
+
+**Files:** `src/ai_engine/prompts.py` (diagnosis block), `opd_routes.py` (agar 2 alag calls chahiye).
+
+---
+
+## D4. Acceptance Test (doctor ke saamne chalega)
+
+Ye 3 test cases approval ke waqt dikhaenge:
+| Input | Aaj AI kya deta hai | Expected (D ke baad) |
+|---|---|---|
+| Chest pain + cough + SOB lying down | ❌ "Chest Pain, Cough, SOB (orthopnea)" | ✅ "1. Suspected CHF (orthopnea) 2. ACS rule-out 3. LRTI" |
+| Fever + headache + bodyache | ❌ "Fever, Headache, Bodyache" | ✅ "1. Acute Viral Illness 2. ? Dengue/Malaria (seasonal, needs CBC/NS1)" |
+| Dolo 650 + acidity | ❌ symptoms hi | ✅ "1. NSAID-induced Gastritis (suspected) — Dolo se correlate" |
+
+---
+
+## D5. Decision
+
+| ID | Kya | Approval chahiye? |
+|---|---|---|
+| D1 | Instant + highlighted working diagnosis field | GO? |
+| D2 | "Best physician in the world" diagnosis persona | GO? |
+| D3A | Deep-reasoning (2-stage prompt, free) | GO? |
+| D3B | Real web deep-research (whitelist ke baad) | Baad mein |
+
+**Aap bolo "D1+D2+D3A GO" → main code karke aapke saamne 3 test cases se dikhaunga.**
