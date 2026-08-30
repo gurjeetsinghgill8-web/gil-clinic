@@ -241,26 +241,38 @@ async def lifespan(app: FastAPI):
 
 
 def _migrate_sqlite_columns():
-    """Add missing AI-provider columns to an existing SQLite opd_settings table.
+    """Generic SQLite column migrator.
 
-    SQLite `create_all` creates new tables but does NOT add columns to existing
-    tables, so new SettingsModel columns need a manual ALTER. Idempotent.
+    SQLite `create_all` creates new tables but never adds columns to existing
+    tables, so model updates (e.g. multi-tenant clinic_id, AI BYOK keys) leave
+    production DBs missing columns. This compares each model table against the
+    live schema and ALTERs in whatever is missing. Idempotent + non-fatal.
     """
-    columns = [
-        ("ai_mode", "VARCHAR(20) DEFAULT 'auto'"),
-        ("ai_model", "VARCHAR(100) DEFAULT ''"),
-        ("openai_api_key", "VARCHAR(500) DEFAULT ''"),
-        ("anthropic_api_key", "VARCHAR(500) DEFAULT ''"),
-        ("deepseek_api_key", "VARCHAR(500) DEFAULT ''"),
-        ("gemini_api_key", "VARCHAR(500) DEFAULT ''"),
-    ]
     try:
+        from sqlalchemy import inspect as _inspect
+
+        insp = _inspect(engine)
         with engine.connect() as conn:
-            existing = {row[1] for row in conn.execute(text("PRAGMA table_info(opd_settings)"))}
-            for col_name, col_sql in columns:
-                if col_name not in existing:
-                    conn.execute(text(f"ALTER TABLE opd_settings ADD COLUMN {col_name} {col_sql}"))
-                    print(f"[GHOS] SQLite migration: added opd_settings.{col_name}")
+            for table in Base.metadata.sorted_tables:
+                if not insp.has_table(table.name):
+                    continue
+                existing = {c["name"] for c in insp.get_columns(table.name)}
+                for col in table.columns:
+                    if col.name in existing:
+                        continue
+                    coltype = col.type.compile(dialect=engine.dialect)
+                    default_sql = ""
+                    try:
+                        arg = getattr(col.default, "arg", None)
+                        if isinstance(arg, str):
+                            default_sql = f" DEFAULT '{arg.replace(chr(39), chr(39) * 2)}'"
+                        elif isinstance(arg, (int, float)) and not isinstance(arg, bool):
+                            default_sql = f" DEFAULT {arg}"
+                    except Exception:
+                        default_sql = ""
+                    sql = f"ALTER TABLE {table.name} ADD COLUMN {col.name} {coltype}{default_sql}"
+                    conn.execute(text(sql))
+                    print(f"[GHOS] SQLite migration: added {table.name}.{col.name} ({coltype})")
             conn.commit()
     except Exception as e:
         print(f"[GHOS] SQLite migration skipped/failed (non-fatal): {e}")
