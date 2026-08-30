@@ -1,5 +1,5 @@
 # GIL CLINIC — Graphical Project Memory (Knowledge Graph)
-## v3 · 30-Aug-2026 · C1+C2+C3+C5+D1+D2+D3A shipped · Live system state
+## v4 · 30-Aug-2026 · C/D/E2 + GIL AI Wallet shipped · Live system state
 
 > Ye file project ki memory ko **graphical form** mein rakhti hai — taaki koi bhi
 > recording/feature kaam dubara na khoye (memory crash-proof). Har feature ship
@@ -64,6 +64,7 @@ flowchart TB
     C1["✅ C1: AI output se Diagnosis + Advice<br/>inline fill (editable) + Fill from AI button"]
     D12["✅ D1+D2: instant highlighted Working<br/>Diagnosis + best-physician persona<br/>(symptoms ≠ diagnosis, ranked conditions)"]
     D3A["✅ D3A: 2-stage deep reasoning<br/>(hidden analysis → working diagnosis)"]
+    WALLET["✅ GIL AI Wallet: UPI recharge, margin 2x,\n    per-feature pricing, owner approve (Puter = primary)"]
     UPGR["⚕️ Specialist Opinions<br/>(custom specialty ✅)"]
     SAVE["💾 Save → opd_prescriptions<br/>(clinic_id migrated ✅)"]
     IN --> GEN
@@ -78,6 +79,7 @@ flowchart TB
     HWRX --> SAVE
     C1 --> SAVE
     D12 --> SAVE
+    WALLET -.->|mode: gilwallet (sasta backup)| GEN
     UPGR --> SAVE
 ```
 
