@@ -396,3 +396,108 @@ This is a medical system — we must not skip this:
 4. **System fallback (हमारी keys):** capped emergency रखें या पूरी तरह हटा दें? (Recommend: 3 महीने capped रखें, फिर बंद)
 
 **Next step:** आप "GO" कहें → Phase 0 (1-day POC): (a) test Puter account से असली prices/limits नापना, (b) Direct BYOK का एक prototype (clinic की key से generate-rx), (c) दोनों की side-by-side quality test। उसके बाद Phase 1–3 implement करते हैं।
+import io
+
+section = """
+
+---
+
+# PART C — Doctor Workflow Upgrades (30-Aug-2026)
+## "Doctor ke kaam ko aur easy — 5 upgrades" · Live system par based · Status: PLAN (aapki green flag ka intezaar)
+
+> **Context:** App ab **PythonAnywhere FREE par 24/7 LIVE** hai (`https://gillhopitalsoftware1.pythonanywhere.com`),
+> AI mode = **Puter (browser)**, data auto-backup (startup + daily), SQLite auto-migrate live.
+> Ye PART C doctor (gurjeet) ke live-use feedback par likha gaya hai. **Koi code abhi nahi badla — sirf plan.**
+
+---
+
+## C0. Feedback ka saar (doctor ke shabdon mein)
+
+1. Vitals + complaints + scan dene ke baad **Diagnosis** aur **Advice** AI se **usi field mein aana chahiye** jahan doctor **upar-neeche edit** kar sake — final print mein wahi jaye.
+2. **Handwritten Rx scan** (doctor ka likha hua) — Groq/Gemini/Google/Puter se achhe se padha jaye — quality check karna hai.
+3. **Batch scan** — 10/20/50 pages ki investigations ek saath; 1-2 karke upload karta rahe; **relevant data accept + baaki discard** (space bachana); doctor ki OPD notes ke liye combined summary.
+4. **Graphical memory** — poori project memory graph form mein (recording baar-baar crash par na gume).
+5. **Weekly ship** — har hafte sab kuch push + deploy ek option se.
+
+---
+
+## C1. Inline Editable AI Diagnosis + Advice — P0 (sabse pehle)
+
+**Current (verified in code):**
+- ✅ Handwriting OCR se `pt-diagnosis` (dashboard.html L4375) aur `pt-advice` (L4387) auto-fill hote hain — editable already.
+- ❌ **AI Generate Prescription sirf `rx-output` bharta hai** — Diagnosis/Advice fields khali rehte hain; doctor ko khud type karna padta hai.
+
+**Proposed (chhota change):**
+1. `generate-rx` / `followup-rx` / `optimize-rx` success par AI output se **Diagnosis** aur **Advice/Lifestyle** sections parse karo.
+2. Parsed text seedha `pt-diagnosis` + `pt-advice` mein daalo — doctor wahan **inline edit** kare (upar-neeche, jitna chahe).
+3. Save pehle se `pt-diagnosis` priority deta hai (L1816) — final notes wahi print hoga. Koi backend change nahi chahiye.
+4. Ek chhota "✨ Fill Diagnosis/Advice from AI" fallback button (agar doctor chahe to manual re-fill).
+
+**Effort:** ~1 din (JS parser + fill + test).
+
+---
+
+## C2. Handwritten Rx Scan Quality — P0
+
+**Current (verified):**
+- `/opd/api/handwriting-ocr` → `route_vision` (order: gemini → openai → groq → anthropic; Puter mode = `PUTER_OCR` browser hop).
+- Writing pad (stylus/finger) bhi hai. Multi-page writing-pad support maujood.
+
+**Proposed:**
+1. Puter OCR (live mode) se **3-4 real handwritten samples** test karke quality report banao (main khud test karunga).
+2. Result structured JSON → Diagnosis/Medicines/Advice fields mein pre-fill (pehle se hota hai) + **"Re-scan" button** agar galat padha.
+3. Agar Puter OCR weak lage → `PA whitelist` approve hone par Groq Vision/Gemini auto better ho jayega (router pehle se hai).
+
+**Effort:** test + chhota UX (1 din).
+
+---
+
+## C3. Batch Scan Upgrade — P1 (bada feature)
+
+**Current (verified):**
+- ✅ **"📸 Batch Scan" tab already exists** (dashboard.html L490/L896): multi-file gallery + camera, PDF/CSV/XLSX bhi accept karta hai; `loadPendingScans` + `lab-report-analyze` multi-file loop.
+- ❌ Doctor ko starting mein dikhta nahi (tab ke andar hai) + 25-page flow + space management nahi hai.
+
+**Proposed:**
+1. **Rx tab ke top par "📸 Batch Scan" button** — 1 click mein batch mode khule.
+2. **Sequential upload:** 1-2 pages at a time → "➕ Add more pages" loop (25-50 pages ke liye), har page par progress.
+3. **Smart extraction:** har page ka relevant data (test name + value + abnormal flag) DB mein text ke roop mein save; **original image extract ke baad delete** — PA ka 512MB space nahi bharega.
+4. **Combined "Investigations Summary"** output — doctor ke notes/clinical support mein auto-jaye.
+5. Duplicate-page detect (same page dobara upload na ho).
+
+**Effort:** 2-3 din.
+
+---
+
+## C4. Graphical Memory — P0 (IS ROUND MEIN DONE v1)
+
+**Done:** `ghos_memory/GRAPH_MEMORY.md` — 5 Mermaid graphs (System Architecture, AI Routing, OPD Workflow, Deploy/Ship, Memory Map) + node→file index. Har feature ship hone par graph update rule likha hai.
+
+**Aage:** har ship ke baad graph + `GHOS_MASTER_INDEX.md` update — recording kabhi na gume.
+
+---
+
+## C5. Weekly Ship (push + deploy automation) — P1
+
+**Proposed:** `pa_deploy.py` mein naya command:
+```
+python pa_deploy.py ship
+```
+Jo khud karega: tests (pytest) → git add+commit+push → PA par changed files upload → site reload → `/health` check → summary print.
+Optionally GitHub Action (weekly Monday 06:00 IST) — laptop band ho tab bhi chale.
+
+**Effort:** 1 din.
+
+---
+
+## C6. Priority & Decision
+
+| ID | Feature | Priority | Aap kya confirm karo |
+|---|---|---|---|
+| C1 | Inline editable Diagnosis + Advice | **P0** | GO? |
+| C2 | Handwritten scan quality + Re-scan | **P0** | GO? (main samples se test karunga) |
+| C4 | Graphical memory v1 | ✅ DONE | dekh lo |
+| C3 | Batch scan upgrade (25-50 pages + space bachao) | **P1** | GO? |
+| C5 | Weekly ship command | **P1** | GO? |
+
+**Aap bolo "C1+C2 shuru karo"** → main dono implement + live test kar dunga.
