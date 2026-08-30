@@ -49,3 +49,6 @@ node_modules/
 package-lock.json
 package.json
 repo-analysis
+
+# Dev scratch (test scripts, debug output)
+scratch/
