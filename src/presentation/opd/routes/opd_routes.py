@@ -1556,6 +1556,23 @@ async def api_pdf_rx(request: Request):
 
     settings = await _get_settings(doctor_id)
 
+    # Complaints + Patient No + tracking link (paper par sab dikhe)
+    complaints = body.get("complaints", "")
+    patient_no = body.get("patient_id", "") or body.get("patient_no", "")
+    if not patient_no:
+        patient_no = "OPD-" + datetime.datetime.now().strftime("%Y%m%d") + "-" + str(uuid.uuid4())[:4].upper()
+    tracking_url = body.get("tracking_url", "")
+    if not tracking_url:
+        try:
+            from itsdangerous import URLSafeSerializer as _USS
+            _track = _USS(os.getenv("SECRET_KEY", "gil-clinic-secret-2024-change-in-prod"),
+                          salt="patient-public-track-v1")
+            _base = os.getenv("APP_BASE_URL", "").rstrip("/")
+            if _base:
+                tracking_url = f"{_base}/track/{_track.dumps({'pid': patient_no})}"
+        except Exception:
+            tracking_url = ""
+
     pdf_bytes = make_rx_pdf(
         pt_name=body.get("patient_name", "Patient"),
         vitals=body.get("vitals", ""),
@@ -1571,6 +1588,9 @@ async def api_pdf_rx(request: Request):
         doc_email=settings.get("doc_email", ""),
         clinic_address=settings.get("clinic_address", ""),
         doc_extra_quals=settings.get("doc_extra_quals", ""),
+        complaints=complaints,
+        patient_no=patient_no,
+        tracking_url=tracking_url,
     )
 
     return Response(

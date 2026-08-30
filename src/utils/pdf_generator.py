@@ -55,6 +55,9 @@ def make_rx_pdf(
     doc_email: str = "",
     clinic_address: str = "",
     doc_extra_quals: str = "",
+    complaints: str = "",
+    patient_no: str = "",
+    tracking_url: str = "",
 ) -> bytes:
     """
     Generate professional prescription PDF with Indian letterhead format.
@@ -166,7 +169,10 @@ def make_rx_pdf(
     pdf.set_xy(8, y_info)
     pdf.set_font("Helvetica", "B", 10)
     pdf.set_text_color(0, 0, 0)
-    pdf.cell(60, 6, f"Patient: {safe_str(pt_name)}", ln=False)
+    patient_label = f"Patient: {safe_str(pt_name)}"
+    if patient_no:
+        patient_label += f"   |   Patient No: {safe_str(patient_no)}"
+    pdf.cell(100, 6, patient_label, ln=False)
 
     # Date
     pdf.set_font("Helvetica", "", 9)
@@ -186,13 +192,40 @@ def make_rx_pdf(
         pdf.set_xy(8, y_info + 14)
         pdf.set_font("Helvetica", "B", 9)
         pdf.set_text_color(180, 50, 50)
-        pdf.cell(100, 6, safe_str(f"⚕️ {specialty_label} Consult"), ln=False)
+        pdf.cell(100, 6, safe_str(f"{specialty_label} Consult"), ln=False)
+
+    # Tracking link (patient phone par WhatsApp link)
+    y_track = y_info + 7
+    if vitals:
+        y_track += 7
+    if specialty_label:
+        y_track += 7
+    if tracking_url:
+        pdf.set_xy(8, y_track)
+        pdf.set_font("Helvetica", "I", 7.5)
+        pdf.set_text_color(120, 120, 160)
+        pdf.cell(194, 5, f"Track: {safe_str(tracking_url)}", ln=False)
 
     # ── Divider ─────────────────────────────────────────────────────
-    y_pos = y_info + 20
+    y_pos = (y_track + 6) if tracking_url else (y_info + 20)
     pdf.set_draw_color(200, 200, 200)
     pdf.line(8, y_pos, 202, y_pos)
     y_pos += 4
+
+    # ── Complaints Section ──────────────────────────────────────────
+    if complaints and complaints.strip():
+        if y_pos > 258:
+            pdf.add_page()
+            y_pos = 10
+        pdf.set_xy(8, y_pos)
+        pdf.set_font("Helvetica", "B", 10)
+        pdf.set_fill_color(255, 250, 235)
+        pdf.cell(194, 6, "Complaints:", fill=True)
+        y_pos += 8
+        pdf.set_xy(12, y_pos)
+        pdf.set_font("Helvetica", "", 10)
+        pdf.multi_cell(186, 5, safe_str(complaints))
+        y_pos = pdf.get_y() + 3
 
     # ── Prescription Body ───────────────────────────────────────────
     pdf.set_xy(8, y_pos)

@@ -2512,6 +2512,8 @@ function previewPdf() {
         vitals: document.getElementById('pt-vitals').value.trim(),
         prescription: document.getElementById('rx-output').value.trim() || document.getElementById('pt-medicines').value.trim(),
         investigations: document.getElementById('pt-investigations').value.trim(),
+        complaints: document.getElementById('pt-complaints')?.value.trim() || '',
+        patient_id: (typeof _currentPatientId !== 'undefined' && _currentPatientId) || '',
     };
     if (!data.prescription) { showToast('Generate or enter prescription first', 'error'); return; }
 
