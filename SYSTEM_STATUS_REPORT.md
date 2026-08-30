@@ -91,3 +91,31 @@
 Code तैयार है, script तैयार है, सब push हो चुका है।
 
 **Tunnel note:** Quick tunnel का URL हर restart पर बदलता है — `START_TUNNEL.bat` दोबारा चलाने पर नया URL अपने आप `.env` में set हो जाता है (server restart की ज़रूरत नहीं)। Permanent URL Oracle VM (public IP) से मिलेगा।
+
+
+---
+
+## 5. [CLOUD LIVE] - PythonAnywhere FREE (30-Aug, BINA CARD)
+
+| Cheez | Status |
+|---|---|
+| Website | OK **https://gillhopitalsoftware1.pythonanywhere.com** - 24/7, kabhi nahi sota |
+| Health | OK /health -> 200 |
+| Admin login | OK End-to-end verified (superadmin login -> dashboard 200) |
+| Patient data | OK Local DB (430KB) migrated - ghos_prod.db permanent path par |
+| Auto-backup | OK In-app: har startup par + daily 23:30 UTC (backups/ mein, 30 din tak) - free account par scheduled tasks nahi hote |
+| Disk | OK 222MB / 512MB |
+| Deploy tooling | OK pa_deploy.py (API driver) + pa_requirements.txt (slim, 512MB-safe) - GitHub par |
+| Tests | 63/64 (1 pre-existing test-isolation flake - app se unrelated) |
+
+**Logins (PA cloud par):**
+- Super Admin: superadmin / GilClinic#2d275a0052ea!
+- CEO: ceo / GilClinic#1b80cb347755!
+- Staff PINs wahi (Reception 1234, Doctor 5678, Manager 9999, Admin 0000)
+
+**Abhi user ke 3 chhote kaam:**
+1. PA -> Help -> Send feedback mein pa_whitelist_request.txt ka text bhejein (AI/WhatsApp APIs ke liye)
+2. Account -> API token -> Delete (deploy ho gaya, security)
+3. Passwords change: PA Files -> gil-clinic/.env -> SUPER_ADMIN_PASSWORD/CEO_PASSWORD -> site reload
+
+**Laptop + tunnel ab zaroori nahi** - cloud hi 24/7 chalega. Laptop setup backup ke roop mein rakh sakte hain.
