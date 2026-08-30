@@ -140,37 +140,41 @@
     var hops = 0;
     var usedPuter = false;
     var lastError = '';
+    var final = null;
     while (hops < HOP_LIMIT) {
       var res;
       try { res = await rawFetch(path, payload, opts); }
-      catch (e) { return { ok: false, error: 'Network error: ' + e }; }
+      catch (e) { final = { ok: false, error: 'Network error: ' + e }; break; }
 
       if (!res || res.ok || !res.code) {
         if (usedPuter) logUsage(path, opts.feature, !!(res && res.ok), lastError);
-        return res;
+        final = res;
+        break;
       }
 
       var code = res.code;
       if (code === 'PUTER_NEED_SIGNIN') {
         try { await signIn(); } catch (e) {
-          return { ok: false, error: 'Puter sign-in cancelled or unavailable: ' + e };
+          final = { ok: false, error: 'Puter sign-in cancelled or unavailable: ' + e };
+          break;
         }
         hops++;
         continue;
       }
 
       if (!puterAvailable()) {
-        return {
+        final = {
           ok: false,
           error: 'This clinic uses the free Puter AI mode, but the Puter script could not load. Check internet, or switch OPD → Settings → AI Provider → mode "Own API keys".',
         };
+        break;
       }
 
       try {
         usedPuter = true;
         if (code === 'PUTER_CHAT') {
           var text = await doChat(res.prompt, res.model);
-          if (!text) { lastError = 'Puter returned empty response'; return { ok: false, error: lastError }; }
+          if (!text) { lastError = 'Puter returned empty response'; final = { ok: false, error: lastError }; break; }
           payload = mergeBody(body, {
             puter_result: text,
             stage: res.stage,
@@ -180,22 +184,33 @@
           });
         } else if (code === 'PUTER_OCR') {
           var ocrText = await doOcr(body);
-          if (!ocrText) { lastError = 'Puter OCR returned empty text'; return { ok: false, error: lastError }; }
+          if (!ocrText) { lastError = 'Puter OCR returned empty text'; final = { ok: false, error: lastError }; break; }
           payload = mergeBody(body, { puter_ocr_result: ocrText });
         } else if (code === 'PUTER_TRANSCRIBE') {
           var trText = await doTranscribe(body);
-          if (!trText) { lastError = 'Puter transcription returned empty text'; return { ok: false, error: lastError }; }
+          if (!trText) { lastError = 'Puter transcription returned empty text'; final = { ok: false, error: lastError }; break; }
           payload = mergeBody(body, { puter_result: trText });
         } else {
-          return res;
+          final = res;
+          break;
         }
       } catch (e) {
         lastError = 'Puter AI error: ' + e;
-        return { ok: false, error: lastError };
+        final = { ok: false, error: lastError };
+        break;
       }
       hops++;
     }
-    return { ok: false, error: 'AI gateway: too many steps. Please try again.' };
+    if (final === null) final = { ok: false, error: 'AI gateway: too many steps. Please try again.' };
+
+    // IMPORTANT: return a REAL Response object so every caller (legacy code
+    // does .then(r => r.json()) while newer code reads the object directly)
+    // works the same way. Status mirrors the logical ok flag.
+    var status = (final && final.ok === false) ? 502 : 200;
+    return new Response(JSON.stringify(final), {
+      status: status,
+      headers: { 'Content-Type': 'application/json' },
+    });
   }
 
   async function puterStatus() {

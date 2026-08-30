@@ -13,6 +13,7 @@ hospital/clinic system. It needs outbound HTTPS access to these standard API hos
 4. vision.googleapis.com   -> Google Vision OCR
 5. api.openai.com          -> optional AI provider
 6. api.anthropic.com       -> optional AI provider
+7. api.deepseek.com        -> DeepSeek AI (chat/prescriptions)
 
 Please add these to the allowlist for my free account.
 Thank you!
