@@ -111,7 +111,7 @@ def _put(remote_path: str, content: bytes, desc: str):
 
 
 def cmd_bootstrap(_):
-    # 1) setup.sh
+    # 1) setup.sh (idempotent + fast - venv ko delete nahi karta)
     setup = """#!/bin/bash
 exec >>/home/{u}/pa_setup.log 2>&1
 echo "=== SETUP START $(date -u) ==="
@@ -122,17 +122,15 @@ else
   (cd gil-clinic && git pull) || true
 fi
 cd /home/{u}/gil-clinic || {{ echo CD_APP_FAIL; exit 1; }}
-echo "--- disk before ---"; du -sh /home/{u} 2>/dev/null; du -sh /home/{u}/.cache/pip 2>/dev/null
-echo "--- cleanup old venv + pip cache ---"
-rm -rf /home/{u}/.virtualenvs/gilclinic
-rm -rf /home/{u}/.cache/pip
 VENV=/home/{u}/.virtualenvs/gilclinic
-for PY in python3.12 python3.11 python3.10 python3; do
-  if command -v $PY >/dev/null 2>&1; then
-    echo "venv from $PY"
-    $PY -m venv "$VENV" && break
-  fi
-done
+if [ ! -x "$VENV/bin/python" ]; then
+  for PY in python3.12 python3.11 python3.10 python3; do
+    if command -v $PY >/dev/null 2>&1; then
+      echo "venv from $PY"
+      $PY -m venv "$VENV" && break
+    fi
+  done
+fi
 [ -x "$VENV/bin/python" ] || {{ echo VENV_FAIL; exit 1; }}
 "$VENV/bin/pip" install --upgrade pip -q || {{ echo PIPUP_FAIL; exit 1; }}
 "$VENV/bin/pip" install --no-cache-dir -r pa_requirements.txt || {{ echo PIP_FAIL; exit 1; }}
@@ -249,6 +247,11 @@ def cmd_site_create(_):
     print("SITE CREATE:", r.status_code, r.text[:400])
 
 
+def cmd_site_delete(_):
+    r = api("DELETE", WEBSITES + DOMAIN + "/")
+    print("SITE DELETE:", r.status_code, r.text[:300])
+
+
 def cmd_site_get(_):
     r = api("GET", WEBSITES + DOMAIN + "/")
     print("SITE GET:", r.status_code, (r.json() if r.ok else r.text[:300]))
@@ -309,7 +312,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("cmd", choices=[
         "status", "bootstrap", "webapp_create", "webapp_reload", "trigger", "log",
-        "webapp_delete", "site_create", "site_get", "site_reload",
+        "webapp_delete", "site_create", "site_get", "site_reload", "site_delete",
         "upload_db", "backup_task", "cleanup", "creds", "env_check",
     ])
     args = ap.parse_args()
@@ -319,7 +322,7 @@ def main():
         "trigger": cmd_trigger,
         "log": cmd_log, "webapp_delete": cmd_webapp_delete,
         "site_create": cmd_site_create, "site_get": cmd_site_get,
-        "site_reload": cmd_site_reload, "upload_db": cmd_upload_db,
+        "site_reload": cmd_site_reload, "site_delete": cmd_site_delete, "upload_db": cmd_upload_db,
         "backup_task": cmd_backup_task, "cleanup": cmd_cleanup,
         "creds": cmd_creds, "env_check": cmd_env_check,
     }[args.cmd]
