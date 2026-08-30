@@ -1473,6 +1473,14 @@
                     <button class="btn btn-primary mt-sm" onclick="generateCME()">📚 Generate CME</button>
                     <div id="cme-content" class="mt-md rx-output" style="display:none;"></div>
                     <button class="btn btn-ghost mt-sm" id="cme-pdf-btn" style="display:none;" onclick="downloadCmePdf()">📄 Download PDF</button>
+                    <div id="cme-chat-box" style="display:none; margin-top:16px; border-top:1px solid var(--border, #e2e8f0); padding-top:14px;">
+                        <div class="card-title">💬 Discuss — is topic par sawal poochein</div>
+                        <div id="cme-chat-log" style="max-height:280px; overflow-y:auto; margin-bottom:10px; font-size:14px; line-height:1.5;"></div>
+                        <div style="display:flex; gap:8px; align-items:center;">
+                            <input type="text" id="cme-chat-q" placeholder="e.g. Is naye guideline ka Indian OPD par kya asar hai?" style="flex:1; padding:8px; border:1px solid #cbd5e1; border-radius:8px;" onkeydown="if(event.key==='Enter') cmeAsk()">
+                            <button class="btn btn-sm btn-primary" onclick="cmeAsk()">💬 Poochein</button>
+                        </div>
+                    </div>
                 </div>
             </div>
 
@@ -3679,6 +3687,39 @@ function runResearch() {
 // ════════════════════════════════════════════════════════════════
 let cmeContent = '';
 
+let _cmeTopic = '';
+let _cmeHistory = '';
+function cmeAsk() {
+    if (!aiGuard()) return;
+    const q = document.getElementById('cme-chat-q').value.trim();
+    if (!q) { showToast('Pehle sawal likho', 'error'); return; }
+    if (!_cmeTopic) { showToast('Pehle CME generate karo', 'error'); return; }
+    const log = document.getElementById('cme-chat-log');
+    log.innerHTML += '<div style="margin:8px 0;"><b>🧑‍⚕️ Aap:</b> ' + escapeHtml(q) + '</div>';
+    log.innerHTML += '<div id="cme-thinking" style="margin:6px 0;color:#64748b;"><span class="spinner"></span> Soch raha...</div>';
+    document.getElementById('cme-chat-q').value = '';
+    log.scrollTop = log.scrollHeight;
+    aiFetch('/opd/api/cme-chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ topic: _cmeTopic, question: q, history: _cmeHistory.slice(-4000) }),
+    }).then(r => r.json()).then(res => {
+        const think = document.getElementById('cme-thinking');
+        if (think) think.remove();
+        if (res.ok && res.answer) {
+            log.innerHTML += '<div style="margin:8px 0;background:#f1f5f9;border-radius:8px;padding:10px;white-space:pre-wrap;">💬 ' + escapeHtml(res.answer) + '</div>';
+            _cmeHistory += 'Q: ' + q + '\nA: ' + res.answer + '\n';
+        } else {
+            log.innerHTML += '<div style="margin:6px 0;color:#dc2626;">❌ ' + escapeHtml(res.error || 'Reply nahi ban paya') + '</div>';
+        }
+        log.scrollTop = log.scrollHeight;
+    }).catch(e => {
+        const think = document.getElementById('cme-thinking');
+        if (think) think.remove();
+        log.innerHTML += '<div style="margin:6px 0;color:#dc2626;">❌ Error: ' + escapeHtml(String(e)) + '</div>';
+    });
+}
+
 function generateCME() {
     const topic = document.getElementById('cme-topic').value.trim();
     if (!topic) { showToast('Enter a topic', 'error'); return; }
@@ -3698,6 +3739,10 @@ function generateCME() {
             cmeContent = res.content;
             document.getElementById('cme-content').textContent = res.content;
             document.getElementById('cme-pdf-btn').style.display = 'inline-flex';
+            _cmeTopic = topic;
+            _cmeHistory = '';
+            document.getElementById('cme-chat-box').style.display = 'block';
+            document.getElementById('cme-chat-log').innerHTML = '<div style="margin:4px 0;color:#475569;">👋 Is topic par koi sawal? Neeche likho — main answer karunga.</div>';
             showToast('✅ CME generated!');
         } else {
             document.getElementById('cme-content').textContent = '❌ ' + (res.error || 'Failed');

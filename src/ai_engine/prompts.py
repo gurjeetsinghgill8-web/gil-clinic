@@ -502,17 +502,21 @@ def custom_cme_prompt(topic: str) -> str:
 
 
 def cme_chat_prompt(topic: str, chat_history: str, question: str) -> str:
-    """Prompt for follow-up questions about a CME topic."""
+    """Prompt for follow-up questions about a CME topic — 2026-aware."""
     return f"""You are a medical educator continuing a CME discussion.
+
+CURRENT YEAR: 2026 — guidelines evolve rapidly. Kabhi outdated info ko 'current/new' mat bolo; exact naya data yaad na ho to '(latest version verify karein)' likho.
 
 Topic: {topic}
 
 STUDY MATERIAL:
-{chat_history}
+{chat_history[:6000]}
 
 Doctor's question: {question}
 
-Provide a detailed, evidence-based answer in plain text (no markdown). Include references to Indian guidelines where relevant."""
+Provide a detailed, evidence-based answer in plain text (no markdown). Include references to Indian guidelines where relevant. Agar topic recent guidelines se related ho to end mein disclaimer do: 'Note: verify latest ESC/ACC/ICMR update.'
+
+{_CME_LATEST_UPDATES}"""
 
 
 # ════════════════════════════════════════════════════════════════════════════

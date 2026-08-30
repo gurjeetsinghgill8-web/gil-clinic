@@ -106,7 +106,7 @@ from src.ai_engine.usage import log_ai_usage
 from src.ai_engine.prompts import (
     gp_prompt_assistant, gp_prompt_suggest, gp_prompt_followup,
     specialty_prompt, drug_review_prompt, cme_prompt, research_prompt,
-    diagnosis_only_prompt,
+    diagnosis_only_prompt, cme_chat_prompt,
 )
 
 # ── PDF Generator ────────────────────────────────────────────────────────────
@@ -1426,6 +1426,43 @@ async def api_transcribe(request: Request):
     except Exception as e:
         logger.error("Transcribe error: %s", e)
         return {"ok": False, "error": str(e)}
+
+
+@router.post("/api/cme-chat", include_in_schema=False)
+async def api_cme_chat(request: Request):
+    """CME discussion — doctor CME topic par sawal pooch sakta hai."""
+    sess = _require_opd_session(request)
+    doctor_id = sess["doctor_id"]
+
+    try:
+        body = await request.json()
+    except Exception:
+        return {"ok": False, "error": "Invalid JSON"}
+
+    topic = str(body.get("topic", "")).strip()
+    question = str(body.get("question", "")).strip()
+    history = str(body.get("history", ""))[:6000]
+    if not question:
+        return {"ok": False, "error": "Question required"}
+
+    settings = await _ai_settings_for(doctor_id)
+
+    prompt = cme_chat_prompt(topic=topic or "CME topic", chat_history=history, question=question)
+
+    puter_text = _puter_text_or_none(body)
+    if puter_text:
+        result, provider, model_used = sanitize_output(puter_text), "puter", settings.get("ai_model") or "puter"
+    else:
+        routed = route_chat(settings, [prompt], feature="cme-chat", temp=0.3, max_tokens=1500)
+        if routed.get("puter_needed"):
+            return {"ok": False, "code": routed["code"], "prompt": routed["prompt"], "model": routed["model"]}
+        result, provider, model_used = routed.get("text") or "", routed.get("provider") or "", routed.get("model") or ""
+        if not result:
+            await _log_ai(settings, doctor_id, "cme-chat", provider or "none", model_used, success=False, error=routed.get("error") or "")
+            return {"ok": False, "error": routed.get("error") or "Reply nahi ban paya"}
+
+    await _log_ai(settings, doctor_id, "cme-chat", provider, model_used, success=True)
+    return {"ok": True, "answer": sanitize_output(result)}
 
 
 @router.post("/api/cme", include_in_schema=False)
