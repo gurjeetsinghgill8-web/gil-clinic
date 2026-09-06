@@ -11,6 +11,39 @@ from typing import Any, Dict, List, Tuple
 logger = logging.getLogger(__name__)
 _REQUIRED_RX_SECTIONS: List[str] = ["Diagnosis", "Drugs", "Advice", "Follow-up"]
 
+# ── Evidence Source Library + Master Clinical Rules (evidence.py) ─────────────
+# Import root varies (src/ on path vs ai_engine/ as package) — try all three.
+try:
+    from src.ai_engine import evidence as _evidence
+except Exception:
+    try:
+        from ai_engine import evidence as _evidence
+    except Exception:
+        try:
+            from . import evidence as _evidence
+        except Exception:
+            _evidence = None
+
+
+def _master_rules() -> str:
+    """Master Clinical Rules block — injected into every clinical prompt."""
+    if _evidence is not None:
+        return _evidence.MASTER_CLINICAL_RULES
+    return (
+        "Work ONLY from the patient data provided. Never silently modify the doctor's "
+        "input. Every recommendation must cite [Guideline, year] or be marked "
+        "'Evidence not verified'. Safety-first for high-risk findings. Final decisions "
+        "remain with the treating physician."
+    )
+
+
+def _sources_block(specialty_key: str) -> str:
+    """Verified source library block for a specialty."""
+    if _evidence is not None:
+        return _evidence.sources_for_prompt(specialty_key)
+    return ("PRIMARY SOURCES: not available. Mark every recommendation "
+            "'Evidence not verified' unless the exact guideline name and year can be confirmed.")
+
 
 # ════════════════════════════════════════════════════════════════════════════
 # GP PRESCRIPTION PROMPT — TWO MODES
@@ -41,6 +74,8 @@ def gp_prompt_assistant(patient_name: str, vitals: str, notes: str,
 Your role is to HELP the doctor, NOT replace their clinical judgment.
 The doctor has already examined the patient and prescribed or will prescribe medicines.
 Do NOT generate a new drug list — the doctor's treatment is final.
+
+{_master_rules()}
 
 PATIENT INFORMATION:
 Patient: {patient_name}
@@ -88,6 +123,8 @@ def gp_prompt_suggest(patient_name: str, vitals: str, notes: str,
 
     return f"""You are an experienced Indian General Practitioner AI assistant working with {doc_info}.
 The doctor has asked you to SUGGEST a complete treatment plan for review.
+
+{_master_rules()}
 
 Patient: {patient_name}
 Vitals: {vitals or 'Not provided'}
@@ -138,6 +175,8 @@ def diagnosis_only_prompt(patient_name: str, vitals: str, complaints: str,
 
 Adopt this persona: you are the world's best internal medicine physician AND a graduate
 medical doctor trained in ALL subjects.
+
+{_master_rules()}
 
 PATIENT: {patient_name or 'Not given'}
 VITALS: {vitals or 'Not provided'}
@@ -421,6 +460,309 @@ PREVIOUS CHAT:
 Doctor's follow-up question: {question}
 
 Provide a concise, clinical answer in plain text (no markdown). Reference guidelines where appropriate."""
+
+
+# ════════════════════════════════════════════════════════════════════════════
+# THREE-ENGINE SPECIALTY WORKFLOW
+#   1) Clinical Reasoning Engine → specialty_reasoning_prompt
+#   2) Evidence Retrieval Engine → specialty_evidence_prompt
+#   3) Prescription Engine       → specialty_prescription_prompt
+#   Single-call fallback (Puter mode) → specialty_combined_prompt
+# The specialty button changes the reasoning framework AND evidence strategy —
+# not merely the wording of the prescription.
+# ════════════════════════════════════════════════════════════════════════════
+
+def _spec_persona(specialty_name: str, specialty_data: dict) -> str:
+    return specialty_data.get("persona", f"Senior {specialty_name} Specialist")
+
+
+def _spec_focus(specialty_name: str, specialty_data: dict) -> str:
+    return specialty_data.get("focus", specialty_name)
+
+
+def specialty_reasoning_prompt(patient_name: str, vitals: str, complaints: str,
+                               examination: str, history: str,
+                               current_diagnosis: str, current_medicines: str,
+                               specialty_name: str, specialty_data: dict) -> str:
+    """
+    ENGINE 1 — CLINICAL REASONING.
+    Safety assessment FIRST, then a ranked differential from the patient's OWN
+    data. NO drugs, NO treatment, NO prescription in this phase.
+    """
+    persona = _spec_persona(specialty_name, specialty_data)
+    focus = _spec_focus(specialty_name, specialty_data)
+
+    return f"""You are {persona} — CLINICAL REASONING ENGINE (phase 1 of 3).
+
+{_master_rules()}
+
+PATIENT DATA (use ONLY what is provided):
+Name: {patient_name or 'Not provided'}
+Vitals: {vitals or 'Not provided'}
+Symptoms / Complaints: {complaints or 'Not provided'}
+Examination: {examination or 'Not provided'}
+History: {history or 'Not provided'}
+
+PHYSICIAN'S OWN INPUT (sacrosanct — do NOT change it, do NOT overwrite it):
+Physician-entered diagnosis: {current_diagnosis or 'Not provided'}
+Physician's medicines: {current_medicines or 'Not provided'}
+
+SPECIALTY FRAMEWORK (this specialty changes how you reason):
+{_spec_focus(specialty_name, specialty_data)}
+{_sources_block(specialty_name)}
+
+YOUR TASK — clinical reasoning ONLY. Do NOT name drugs and do NOT draft any treatment or prescription in this phase.
+
+Provide EXACTLY these sections:
+
+🚨 SAFETY ASSESSMENT (always FIRST):
+- List high-risk findings present in THIS patient's data (e.g. BP ≥ 180/120 → advise repeat measurement and check for headache/chest pain/SOB/neuro deficit; SpO2 < 90; red-flag symptoms).
+- State the immediate action: urgent care / ED referral / same-day review / routine OPD care.
+- Remember: severe BP elevation alone is NOT hypertensive emergency — symptoms or target-organ injury decide (AHA/ACC 2025, ESC 2024).
+- If nothing high-risk: "No high-risk finding identified from the provided data."
+
+🔀 DIFFERENTIAL DIAGNOSIS (ranked, most likely first):
+1. [Condition] — [one-line reasoning from THIS patient's data] — [working / suspected / rule out]
+Rules: medical conditions only (never symptoms as diagnosis); "? Query <Condition> — needs <test>" when data is insufficient.
+
+🔑 CLINICAL QUESTION FOR EVIDENCE RETRIEVAL:
+One focused PICO-style question for phase 2, e.g. "In this patient, what is the current evidence-based management per {specialty_name} guidelines?"
+
+🔬 INVESTIGATIONS:
+1. [Test] — [what it confirms or rules out]
+Only tests relevant to this presentation and this specialty.
+
+OUTPUT RULES: numbered lists only, concise, plain text. NEVER output a prescription or drug in this phase. If the data is insufficient for this specialty's assessment, say exactly what is missing."""
+
+
+def specialty_evidence_prompt(patient_name: str, clinical_question: str,
+                              assessment_summary: str,
+                              specialty_name: str, specialty_data: dict) -> str:
+    """
+    ENGINE 2 — EVIDENCE RETRIEVAL.
+    Maps the clinical question to verified guidelines from the specialty's
+    source library. Unverifiable items are marked 'Evidence not verified'.
+    """
+    persona = _spec_persona(specialty_name, specialty_data)
+
+    return f"""You are {persona} — EVIDENCE RETRIEVAL ENGINE (phase 2 of 3).
+
+{_master_rules()}
+
+Patient: {patient_name or 'Not provided'}
+
+CLINICAL QUESTION (from phase 1):
+{clinical_question or 'Not provided'}
+
+PHASE 1 ASSESSMENT (context only — do NOT re-diagnose):
+{assessment_summary[:3000]}
+
+{_sources_block(specialty_name)}
+
+YOUR TASK — retrieve and verify evidence for the clinical question. No new diagnosis, no prescription draft. Drugs may be named only as evidence statements.
+
+Provide EXACTLY these sections:
+
+📚 RETRIEVED GUIDELINES:
+1. [Guideline/Society name, year] — [topic it covers]
+List ONLY guidelines from the ALLOWED list above, with the exact name and year.
+
+🧭 RECOMMENDATIONS MAPPED TO EVIDENCE:
+1. [Recommendation] — [Guideline name, year] — [strength/class if known]
+2. ...
+Every recommendation MUST carry a guideline name + year from the ALLOWED list.
+
+❓ NOT VERIFIABLE:
+- [Item] — "Evidence not verified" (why: exact guideline name/year not confirmable)
+Everything you cannot map to an allowed guideline goes here, explicitly marked "Evidence not verified".
+
+RULES:
+- CURRENT versions only. Hypertension → 2025 AHA/ACC and 2024 ESC (never default to 2017 ACC/AHA). Heart failure → ESC 2026. COPD → GOLD 2025. Diabetes → ADA 2025/2026.
+- If the ALLOWED list has no guideline matching the clinical question, say so honestly and mark every recommendation "Evidence not verified".
+- Numbered, concise, plain text — no storytelling."""
+
+
+def specialty_prescription_prompt(patient_name: str, vitals: str, complaints: str,
+                                  assessment_summary: str, evidence_summary: str,
+                                  current_diagnosis: str, current_medicines: str,
+                                  specialty_name: str, specialty_data: dict) -> str:
+    """
+    ENGINE 3 — PRESCRIPTION DRAFT.
+    Only NOW is a draft produced — built on phase 1 assessment + phase 2
+    verified evidence, with the physician's own input left untouched.
+    """
+    persona = _spec_persona(specialty_name, specialty_data)
+    indian_brands = specialty_data.get("indian_brands", "")
+    brands_hint = ""
+    if indian_brands:
+        brands_hint = f"\n\nINDIAN BRAND REFERENCE (prefer these):\n{indian_brands}"
+
+    if evidence_summary and evidence_summary.strip():
+        evidence_block = evidence_summary
+    else:
+        evidence_block = ("⚠️ Evidence retrieval failed or was not performed. EVERY recommendation "
+                          "below MUST be marked \"Evidence not verified\".")
+
+    return f"""You are {persona} — PRESCRIPTION ENGINE (phase 3 of 3).
+
+{_master_rules()}
+
+Patient: {patient_name or 'Not provided'}
+Vitals: {vitals or 'Not provided'}
+Complaints: {complaints or 'Not provided'}
+
+PHASE 1 — CLINICAL ASSESSMENT:
+{assessment_summary[:3000]}
+
+PHASE 2 — VERIFIED EVIDENCE:
+{evidence_block[:3000]}
+
+PHYSICIAN'S OWN INPUT (sacrosanct — never silently modify or overwrite):
+Physician-entered diagnosis: {current_diagnosis or 'Not provided'}
+Physician's medicines: {current_medicines or 'Not provided'}{brands_hint}
+
+YOUR TASK — draft a specialist recommendation FOR PHYSICIAN REVIEW. This is a DRAFT, not a final prescription.
+
+Provide EXACTLY these sections:
+
+🩺 PHYSICIAN-ENTERED DIAGNOSIS (unchanged — repeat verbatim):
+{current_diagnosis or 'None provided'}
+
+🤖 AI CLINICAL ASSESSMENT:
+1. [Working / suspected condition] — [reasoning from the patient's data + cited evidence]
+
+💊 DRAFT RECOMMENDATIONS (labelled suggestions only):
+ADD:
+• [Generic (Indian brand) dose freq x duration] — [Guideline name, year] — or "Evidence not verified"
+MODIFY:
+• [physician's drug → proposed change + clinical reason] — [Guideline name, year] — or "Evidence not verified"
+REMOVE:
+• [physician's drug → clinical reason]
+If the physician gave no medicines, ADD suggestions only. The doctor's own prescription is never overwritten.
+
+🔬 INVESTIGATIONS:
+1. [Test] — [purpose] — [Guideline, year if applicable]
+
+🍎 ADVICE & LIFESTYLE:
+1. [Specific, actionable point]
+
+🕒 FOLLOW-UP & RED FLAGS:
+- Follow-up timeline and what to monitor.
+- Red-flag symptoms requiring urgent referral.
+
+RULES:
+- Every evidence-based line carries [Guideline name, year]; otherwise write "Evidence not verified".
+- ADD/MODIFY/REMOVE are suggestions for the physician to review — never auto-applied.
+- Numbered, concise, plain text. No stories."""
+
+
+def specialty_combined_prompt(patient_name: str, vitals: str, complaints: str,
+                              examination: str, history: str,
+                              current_diagnosis: str, current_medicines: str,
+                              specialty_name: str, specialty_data: dict) -> str:
+    """
+    SINGLE-CALL FALLBACK (Puter mode / one-prompt providers) — phases 1→2→3
+    inside one structured response. Same rules, same sections.
+    """
+    persona = _spec_persona(specialty_name, specialty_data)
+    focus = _spec_focus(specialty_name, specialty_data)
+    indian_brands = specialty_data.get("indian_brands", "")
+    brands_hint = f"\n\nINDIAN BRAND REFERENCE (prefer these):\n{indian_brands}" if indian_brands else ""
+
+    return f"""You are {persona} — complete specialist consultation (reasoning → evidence → draft in one pass).
+
+{_master_rules()}
+
+PATIENT DATA (use ONLY what is provided):
+Name: {patient_name or 'Not provided'}
+Vitals: {vitals or 'Not provided'}
+Symptoms / Complaints: {complaints or 'Not provided'}
+Examination: {examination or 'Not provided'}
+History: {history or 'Not provided'}
+
+PHYSICIAN'S OWN INPUT (sacrosanct — never silently modify or overwrite):
+Physician-entered diagnosis: {current_diagnosis or 'Not provided'}
+Physician's medicines: {current_medicines or 'Not provided'}
+
+SPECIALTY FRAMEWORK: {focus}
+{_sources_block(specialty_name)}{brands_hint}
+
+Provide EXACTLY these sections, IN THIS ORDER:
+
+🚨 SAFETY ASSESSMENT (always FIRST):
+High-risk findings from this patient's data + immediate action (urgent care / ED / same-day / routine). Severe BP elevation alone is NOT hypertensive emergency — symptoms or target-organ injury decide. If nothing high-risk, say so.
+
+🔀 DIFFERENTIAL DIAGNOSIS (ranked, most likely first):
+1. [Condition] — [one-line reasoning from this patient's data] — [working / suspected / rule out]
+Conditions only — never symptoms as diagnosis.
+
+📚 RETRIEVED GUIDELINES:
+1. [Guideline/Society name, year] — [topic] — ONLY from the ALLOWED list above.
+
+🧭 RECOMMENDATIONS MAPPED TO EVIDENCE:
+1. [Recommendation] — [Guideline name, year] — or "Evidence not verified"
+
+💊 DRAFT RECOMMENDATIONS (labelled suggestions only):
+ADD:
+• [Generic (Indian brand) dose freq x duration] — [Guideline name, year] — or "Evidence not verified"
+MODIFY:
+• [physician's drug → proposed change + reason] — [Guideline name, year] — or "Evidence not verified"
+REMOVE:
+• [physician's drug → reason]
+
+🔬 INVESTIGATIONS:
+1. [Test] — [purpose]
+
+🍎 ADVICE & LIFESTYLE:
+1. [Point]
+
+🕒 FOLLOW-UP & RED FLAGS:
+- Timeline + monitoring; red-flag symptoms for urgent referral.
+
+RULES:
+- Current guideline versions only (hypertension → 2025 AHA/ACC & 2024 ESC, never 2017 by default; COPD → GOLD 2025; diabetes → ADA 2025/2026).
+- Every evidence-based line carries [Guideline name, year]; otherwise "Evidence not verified".
+- ADD/MODIFY/REMOVE are physician-review suggestions — never auto-applied.
+- Numbered, concise, plain text. No stories."""
+
+
+def guideline_retrieval_prompt(specialty_name: str, clinical_question: str,
+                               patient_context: str = "") -> str:
+    """
+    GUIDELINE RETRIEVAL — for the AI Assist / Evidence Search feature.
+    Clinical question → relevant current guideline → verified recommendation.
+    """
+    persona = f"Clinical Guideline Retrieval & Verification specialist for {specialty_name}"
+
+    return f"""You are a {persona}.
+
+{_master_rules()}
+
+PATIENT CONTEXT (if any): {patient_context or 'None'}
+
+CLINICAL QUESTION: {clinical_question or 'Not provided'}
+
+{_sources_block(specialty_name)}
+
+Provide EXACTLY these sections:
+
+📚 RETRIEVED GUIDELINES:
+1. [Guideline/Society name, year] — [topic] — ONLY from the ALLOWED list above, exact name + year.
+
+🧭 RECOMMENDATIONS:
+1. [Recommendation] — [Guideline name, year]
+2. ...
+
+❓ NOT VERIFIABLE:
+- [Item] — "Evidence not verified" (exact guideline name/year not confirmable)
+
+🏷️ EVIDENCE STATUS:
+One line: "Evidence verified: [sources cited]" OR "Evidence not verified".
+
+RULES:
+- CURRENT versions only — never cite an outdated guideline by default (hypertension → 2025 AHA/ACC, 2024 ESC — not 2017; COPD → GOLD 2025; diabetes → ADA 2025/2026).
+- This is evidence retrieval, NOT a prescription — do not draft treatments here.
+- Numbered, concise, plain text."""
 
 
 # ════════════════════════════════════════════════════════════════════════════

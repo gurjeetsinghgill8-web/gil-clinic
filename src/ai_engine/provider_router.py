@@ -179,6 +179,11 @@ _WALLET_FEATURE_COST_PAISE = {
     "lab-report-analyze": 200,
     "transcribe": 100,
     "specialty-upgrade": 300,
+    # 3-engine specialty pipeline (reasoning + evidence + draft = same 300 total)
+    "specialty-reasoning": 100,
+    "specialty-evidence": 100,
+    "specialty-prescription": 100,
+    "evidence-search": 150,
     "cme": 300,
     "research": 300,
 }

@@ -390,6 +390,35 @@
         }
         .spec-item.selected .spec-check { background: var(--primary); border-color: var(--primary); color: #fff; }
 
+        /* Evidence verification badges */
+        .ev-badge {
+            display: inline-block; padding: 3px 10px; border-radius: 999px;
+            font-size: 12px; font-weight: 700; margin: 4px 0;
+        }
+        .ev-verified {
+            background: #d1fae5; color: #065f46; border: 1px solid #6ee7b7;
+        }
+        .ev-unverified {
+            background: #fef3c7; color: #92400e; border: 1px solid #fcd34d;
+        }
+        .ev-section {
+            margin-top: 10px; border: 1px solid var(--border); border-radius: 8px;
+        }
+        .ev-section summary {
+            padding: 8px 12px; cursor: pointer; font-weight: 700; font-size: 13px;
+            background: rgba(0,0,0,0.03); border-radius: 8px;
+        }
+        .ev-section pre {
+            margin: 0; padding: 10px 12px; white-space: pre-wrap; word-break: break-word;
+            font-family: inherit; font-size: 13px; color: #374151; background: #fff;
+            border-radius: 0 0 8px 8px;
+        }
+        .ev-lib-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+        .ev-lib-table th, .ev-lib-table td {
+            border: 1px solid var(--border); padding: 6px 8px; text-align: left; vertical-align: top;
+        }
+        .ev-lib-table th { background: rgba(139,92,246,0.08); color: #6d28d9; }
+
         /* ── Patient Progress Banner ── */
         .progress-banner {
             border-radius: var(--radius);
@@ -710,12 +739,20 @@
                     </div>
 
                     <div class="form-group">
-                        <label>🩺 Diagnosis (AI-extracted or Manual)
+                        <label>🩺 Physician-entered Diagnosis
                             <button type="button" id="dx-gen-btn" onclick="generateDiagnosisOnly()"
                                 style="float:right;background:#059669;color:#fff;border:none;border-radius:6px;padding:2px 10px;font-size:12px;cursor:pointer;font-weight:700;">
                                 🩺 Generate Dx</button>
                         </label>
-                        <textarea id="pt-diagnosis" rows="2" placeholder="Diagnosis / Clinical Impression..."></textarea>
+                        <textarea id="pt-diagnosis" rows="2" placeholder="Aapki apni diagnosis — AI ise kabhi overwrite nahi karega..."></textarea>
+                        <div id="ai-assessment-box" style="display:none;margin-top:6px;padding:8px 10px;border:1px dashed #8b5cf6;border-radius:8px;background:rgba(139,92,246,0.05);">
+                            <label style="font-size:12px;color:#7c3aed;font-weight:700;">🤖 AI Clinical Assessment — suggestion only; Rx mein tabhi jayega jab aap "Copy to Diagnosis" dabayein</label>
+                            <textarea id="pt-ai-assessment" rows="3" readonly style="width:100%;margin-top:4px;border:1px solid #ddd;border-radius:6px;background:#fff;font-size:13px;color:#4b5563;resize:vertical;"></textarea>
+                            <div style="display:flex;gap:6px;margin-top:6px;">
+                                <button type="button" class="btn btn-sm" onclick="copyAiAssessmentToDiagnosis()" style="background:#8b5cf6;color:#fff;border:none;border-radius:6px;padding:3px 10px;font-size:12px;cursor:pointer;font-weight:700;">📋 Copy to Diagnosis</button>
+                                <button type="button" class="btn btn-sm" onclick="clearAiAssessment()" style="background:transparent;border:1px solid #ccc;color:#6b7280;border-radius:6px;padding:3px 10px;font-size:12px;cursor:pointer;">Clear</button>
+                            </div>
+                        </div>
                     </div>
 
                     <div class="form-group">
@@ -1202,22 +1239,33 @@
                     </div>
                     <div class="form-group">
                         <label>Vitals</label>
-                        <input type="text" id="up-vitals" placeholder="BP / Pulse / Sugar">
+                        <input type="text" id="up-vitals" placeholder="BP / Pulse / SpO2 / Sugar">
                     </div>
                     <div class="form-group">
-                        <label>Current Prescription</label>
-                        <textarea id="up-rx" rows="4" placeholder="Paste the current prescription..."></textarea>
+                        <label>Complaints / Symptoms</label>
+                        <textarea id="up-complaints" rows="2" placeholder="Fever, chest pain, SOB... (vitals + ye bhar do to bina purani Rx ke bhi fresh assessment milega)"></textarea>
                     </div>
                     <div class="form-group">
-                        <label>Select Specialties (up to 4)</label>
+                        <label>Examination Findings</label>
+                        <input type="text" id="up-examination" placeholder="e.g. P/A soft, chest clear, pedal edema —">
+                    </div>
+                    <div class="form-group">
+                        <label>Physician's Current Prescription (optional — doctor ka input kabhi overwrite nahi hota)</label>
+                        <textarea id="up-rx" rows="4" placeholder="Paste the current prescription... (optional)"></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label>Select Specialties (up to 4) — har specialty apna reasoning framework + evidence sources use karti hai</label>
                         <div class="flex gap-sm mb-sm">
                             <button class="btn btn-sm btn-ghost" onclick="selectAllSpecs()">✅ Select All</button>
                             <button class="btn btn-sm btn-ghost" onclick="clearAllSpecs()">❌ Clear All</button>
                         </div>
                         <div class="spec-grid">
+                            <div class="spec-item" onclick="toggleSpec(this)"><span class="spec-check">✓</span><input type="checkbox" class="spec-cb" value="🩺 General Medicine"><label>🩺 General Medicine</label></div>
                             <div class="spec-item" onclick="toggleSpec(this)"><span class="spec-check">✓</span><input type="checkbox" class="spec-cb" value="❤️ Cardiology"><label>❤️ Cardiology</label></div>
-                            <div class="spec-item" onclick="toggleSpec(this)"><span class="spec-check">✓</span><input type="checkbox" class="spec-cb" value="🦴 Orthopedics"><label>🦴 Orthopedics</label></div>
+                            <div class="spec-item" onclick="toggleSpec(this)"><span class="spec-check">✓</span><input type="checkbox" class="spec-cb" value="💓 Echocardiography"><label>💓 Echocardiography</label></div>
                             <div class="spec-item" onclick="toggleSpec(this)"><span class="spec-check">✓</span><input type="checkbox" class="spec-cb" value="🫁 Pulmonology"><label>🫁 Pulmonology</label></div>
+                            <div class="spec-item" onclick="toggleSpec(this)"><span class="spec-check">✓</span><input type="checkbox" class="spec-cb" value="🦠 Infectious Diseases"><label>🦠 Infectious Diseases</label></div>
+                            <div class="spec-item" onclick="toggleSpec(this)"><span class="spec-check">✓</span><input type="checkbox" class="spec-cb" value="🦴 Orthopedics"><label>🦴 Orthopedics</label></div>
                             <div class="spec-item" onclick="toggleSpec(this)"><span class="spec-check">✓</span><input type="checkbox" class="spec-cb" value="👶 Pediatrics"><label>👶 Pediatrics</label></div>
                             <div class="spec-item" onclick="toggleSpec(this)"><span class="spec-check">✓</span><input type="checkbox" class="spec-cb" value="🩸 Diabetology"><label>🩸 Diabetology</label></div>
                             <div class="spec-item" onclick="toggleSpec(this)"><span class="spec-check">✓</span><input type="checkbox" class="spec-cb" value="🧠 Neurology"><label>🧠 Neurology</label></div>
@@ -1236,11 +1284,56 @@
                         </div>
                     </div>
                     <div class="form-group">
-                        <label>Or type a custom specialty (optional)</label>
+                        <label>Or type a custom specialty (optional — no pre-verified sources, sab kuch "Evidence not verified" dikhega)</label>
                         <input type="text" id="up-custom" placeholder="e.g. Sports Medicine, Palliative Care">
                     </div>
-                    <button class="btn btn-primary" onclick="runUpgrade()">⚕️ Get Specialist Opinions</button>
+                    <button class="btn btn-primary" onclick="runUpgrade()">⚕️ Get Specialist Opinions (Reasoning → Evidence → Draft)</button>
                     <div id="upgrade-results" class="mt-md"></div>
+                </div>
+                <div class="card mt-sm">
+                    <div class="card-title">📚 Evidence Source Library</div>
+                    <div class="text-sm text-muted mb-sm">Specialty → verified primary sources. Ye sirf source list hai — har clinical question ke liye relevant guideline alag se retrieve + verify hoti hai. Current versions available hone par outdated guideline par default nahi hota.</div>
+                    <button class="btn btn-sm btn-ghost" onclick="loadEvidenceLibrary()">🔄 Load Library</button>
+                    <div id="evidence-library-box" class="mt-sm" style="max-height:300px;overflow-y:auto;"></div>
+                </div>
+                <div class="card mt-sm">
+                    <div class="card-title">🔎 Evidence Search (Guideline Retrieval)</div>
+                    <div class="form-group">
+                        <label>Specialty</label>
+                        <select id="ev-search-spec" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:6px;">
+                            <option value="🩺 General Medicine">🩺 General Medicine</option>
+                            <option value="❤️ Cardiology">❤️ Cardiology</option>
+                            <option value="💓 Echocardiography">💓 Echocardiography</option>
+                            <option value="🫁 Pulmonology">🫁 Pulmonology</option>
+                            <option value="🦠 Infectious Diseases">🦠 Infectious Diseases</option>
+                            <option value="🩸 Diabetology">🩸 Diabetology</option>
+                            <option value="🩺 Nephrology">🩺 Nephrology</option>
+                            <option value="🧠 Neurology">🧠 Neurology</option>
+                            <option value="🩺 Gastroenterology">🩺 Gastroenterology</option>
+                            <option value="🧪 Endocrinology">🧪 Endocrinology</option>
+                            <option value="🦴 Orthopedics">🦴 Orthopedics</option>
+                            <option value="👶 Pediatrics">👶 Pediatrics</option>
+                            <option value="👩‍⚕️ Gynecology">👩‍⚕️ Gynecology</option>
+                            <option value="👁️ Ophthalmology">👁️ Ophthalmology</option>
+                            <option value="👂 ENT">👂 ENT</option>
+                            <option value="🧬 Dermatology">🧬 Dermatology</option>
+                            <option value="🫀 Rheumatology">🫀 Rheumatology</option>
+                            <option value="🧠 Psychiatry">🧠 Psychiatry</option>
+                            <option value="🩺 Urology">🩺 Urology</option>
+                            <option value="🩺 Oncology">🩺 Oncology</option>
+                            <option value="🩺 General Surgery">🩺 General Surgery</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Clinical Question</label>
+                        <input type="text" id="ev-search-q" placeholder="e.g. Stage 1 HTN + diabetes mein first-line drug kya hai per latest guideline?">
+                    </div>
+                    <div class="form-group">
+                        <label>Patient Context (optional)</label>
+                        <input type="text" id="ev-search-ctx" placeholder="e.g. 58/M, BP 150/95, DM-2, no symptoms">
+                    </div>
+                    <button class="btn btn-sm btn-primary" onclick="runEvidenceSearch()">🔎 Search Evidence</button>
+                    <div id="evidence-search-result" class="mt-sm"></div>
                 </div>
                 <!-- Roster patients for upgrade (hidden, populated by JS) -->
                 <div id="up-roster-section" style="display:none;" class="card mt-sm">
@@ -2234,21 +2327,47 @@ function flashAndScroll(id) {
     setTimeout(() => { el.style.backgroundColor = oldBg; el.style.transition = oldTr; }, 2400);
 }
 
-// C1: AI output se Diagnosis + Advice inline fields mein bharo (doctor
-// wahan edit kare, final print wahi jayega). force=true → overwrite;
-// force=false → sirf khali field mein bharo.
+// ── Diagnosis field split: physician-entered (pt-diagnosis) vs AI clinical
+// assessment (pt-ai-assessment). AI NEVER writes into the physician's field —
+// doctor copies it over only if he wants it.
+function showAiAssessment(text) {
+    const box = document.getElementById('ai-assessment-box');
+    const el = document.getElementById('pt-ai-assessment');
+    if (!box || !el) return;
+    el.value = text;
+    box.style.display = 'block';
+}
+
+function clearAiAssessment() {
+    const el = document.getElementById('pt-ai-assessment');
+    if (el) el.value = '';
+    const box = document.getElementById('ai-assessment-box');
+    if (box) box.style.display = 'none';
+}
+
+function copyAiAssessmentToDiagnosis() {
+    const aiEl = document.getElementById('pt-ai-assessment');
+    const dEl = document.getElementById('pt-diagnosis');
+    if (!aiEl || !aiEl.value.trim()) { showToast('AI assessment khali hai', 'error'); return; }
+    if (dEl.value.trim()) dEl.value = dEl.value.trim() + '\n' + aiEl.value.trim();
+    else dEl.value = aiEl.value.trim();
+    flashAndScroll('pt-diagnosis');
+    showToast('✅ AI assessment Diagnosis mein copy ho gayi — review karke Save karo');
+}
+
+// C1: AI output se Diagnosis + Advice inline fields mein bharo. Diagnosis ab
+// physician field mein NAHI — AI assessment box mein jaati hai.
 function fillDxAdviceFromRx(rxText, force) {
     if (!aiGuard()) return;
     if (!rxText) { showToast('Pehle AI se prescription banao, phir fill karo', 'error'); return; }
     const diag = rxText.match(/Diagnosis[:\s]*\n?([\s\S]*?)(?=\n\s*(?:Treatment|Management|Drugs|Investigations|Advice|Follow-up|$)|$)/i);
     const advice = rxText.match(/(?:Advice|Lifestyle\s*Advice|Lifestyle\s*Notes)[:\s]*\n?([\s\S]*?)(?=\n\s*(?:Follow-up|$)|$)/i);
     let filled = false;
-    const dEl = document.getElementById('pt-diagnosis');
-    if (diag && dEl && (force || !dEl.value.trim())) { dEl.value = diag[1].trim(); filled = true; flashAndScroll('pt-diagnosis'); }
+    if (diag) { showAiAssessment(diag[1].trim()); filled = true; }
     const aEl = document.getElementById('pt-advice');
     if (advice && aEl && (force || !aEl.value.trim())) { aEl.value = advice[1].trim(); filled = true; if (!diag) flashAndScroll('pt-advice'); }
     if (filled) {
-        showToast('✅ Working Diagnosis & Advice bhar diye — edit karke Save karo');
+        showToast('✅ AI assessment box mein bhar diya — chahe to "Copy to Diagnosis" dabao');
     } else {
         showToast('AI output mein Diagnosis/Advice section nahi mila', 'error');
     }
@@ -2257,15 +2376,12 @@ function fillDxAdviceFromRx(rxText, force) {
 // Server-side parsed Diagnosis/Advice (generate-rx response mein aate hain)
 function fillFieldsFromServer(dx, adv) {
     let filled = false;
-    if (dx) {
-        const el = document.getElementById('pt-diagnosis');
-        if (el && !el.value.trim()) { el.value = dx; filled = true; flashAndScroll('pt-diagnosis'); }
-    }
+    if (dx) { showAiAssessment(dx); filled = true; }
     if (adv) {
         const el = document.getElementById('pt-advice');
         if (el && !el.value.trim()) { el.value = adv; filled = true; if (!dx) flashAndScroll('pt-advice'); }
     }
-    if (filled) showToast('✅ Working Diagnosis & Advice bhar diye — edit karke Save karo');
+    if (filled) showToast('✅ AI assessment box mein bhar diya — chahe to "Copy to Diagnosis" dabao');
 }
 
 // Quick WORKING DIAGNOSIS only — complaints/vitals bharne ke baad
@@ -2289,9 +2405,8 @@ async function generateDiagnosisOnly() {
             }),
         }).then(r => r.json());
         if (res.ok && res.diagnosis) {
-            document.getElementById('pt-diagnosis').value = res.diagnosis;
-            flashAndScroll('pt-diagnosis');
-            showToast('✅ Working Diagnosis ready — edit karke Save karo');
+            showAiAssessment(res.diagnosis);
+            showToast('✅ AI assessment ready — "Copy to Diagnosis" dabao to hi Rx mein jayegi');
         } else {
             showToast(res.error || 'Diagnosis generate nahi hua', 'error');
         }
@@ -2561,15 +2676,19 @@ function sendToSpecialtyConsult() {
     // Auto-fill the Specialty Upgrade form with current patient data
     const name = document.getElementById('pt-name').value.trim();
     const vitals = document.getElementById('pt-vitals').value.trim();
+    const complaints = document.getElementById('pt-complaints').value.trim();
+    const diagnosis = document.getElementById('pt-diagnosis').value.trim();
+    const medicines = document.getElementById('pt-medicines').value.trim();
     const rx = document.getElementById('rx-output').value.trim();
 
     if (!name) { showToast('Patient name required', 'error'); return; }
-    if (!rx) { showToast('No prescription to consult on', 'error'); return; }
+    if (!vitals && !complaints && !rx) { showToast('Vitals/Complaints ya prescription bharo', 'error'); return; }
 
-    // Fill the upgrade form
+    // Fill the upgrade form (physician's own diagnosis + medicines → prescription field)
     document.getElementById('up-pt-name').value = name;
     document.getElementById('up-vitals').value = vitals;
-    document.getElementById('up-rx').value = rx;
+    document.getElementById('up-complaints').value = complaints;
+    document.getElementById('up-rx').value = rx || (diagnosis ? 'Diagnosis:\n' + diagnosis + (medicines ? '\n\nMedicines:\n' + medicines : '') : medicines);
 
     // Switch to Specialty Upgrade tab
     const tabs = document.querySelectorAll('.tab-content');
@@ -2583,7 +2702,7 @@ function sendToSpecialtyConsult() {
     // Scroll to top
     window.scrollTo({ top: 0, behavior: 'smooth' });
 
-    showToast('⚕️ Prescription loaded — select specialties to consult');
+    showToast('⚕️ Patient data loaded — select specialties for fresh assessment');
 }
 
 // ════════════════════════════════════════════════════════════════
@@ -3231,13 +3350,17 @@ function loadPendingScans() {
 	    const data = {
 	        patient_name: document.getElementById('up-pt-name').value.trim(),
 	        vitals: document.getElementById('up-vitals').value.trim(),
+	        complaints: document.getElementById('up-complaints').value.trim(),
+	        examination: document.getElementById('up-examination').value.trim(),
 	        prescription: document.getElementById('up-rx').value.trim(),
 	        specialties,
 	    };
 	    if (!data.patient_name) { showToast('Patient name required', 'error'); return; }
-	    if (!data.prescription) { showToast('Prescription required', 'error'); return; }
+	    if (!data.vitals && !data.complaints && !data.prescription) {
+	        showToast('Vitals, complaints ya prescription mein se kuch bharo', 'error'); return;
+	    }
 
-	    document.getElementById('upgrade-results').innerHTML = '<span class="spinner"></span> Getting specialist opinions...';
+	    document.getElementById('upgrade-results').innerHTML = '<span class="spinner"></span> Reasoning → Evidence → Draft chal raha hai (har specialty ke 3 engines)...';
 
 	    aiFetch('/opd/api/upgrade', {
 	        method: 'POST',
@@ -3247,21 +3370,93 @@ function loadPendingScans() {
 	    .then(r => r.json())
 	    .then(res => {
 	        if (res.ok && res.results) {
-	            const html = res.results.map(r => `
+	            const html = res.results.map(r => {
+	                const badge = (r.evidence_status === 'verified')
+	                    ? '<span class="ev-badge ev-verified">✅ Evidence verified — official guideline cited</span>'
+	                    : '<span class="ev-badge ev-unverified">⚠️ Evidence not verified — guideline-based recommendation mat maano</span>';
+	                const sections = (r.assessment || r.evidence || r.recommendation)
+	                    ? `
+	                    <details class="ev-section" ${!(r.recommendation) ? 'open' : ''}>
+	                        <summary>🧠 1. Clinical Assessment (Reasoning Engine) — safety assessment + differential</summary>
+	                        <pre>${(r.assessment || '(unavailable)').replace(/</g,'&lt;')}</pre>
+	                    </details>
+	                    <details class="ev-section">
+	                        <summary>📚 2. Evidence & Guidelines (Retrieval Engine)${r.evidence ? '' : ' — retrieval failed'}</summary>
+	                        <pre>${(r.evidence || '⚠️ Evidence retrieval failed — draft mein sab kuch "Evidence not verified" hai.').replace(/</g,'&lt;')}</pre>
+	                    </details>
+	                    <details class="ev-section" open>
+	                        <summary>💊 3. Draft Recommendation (Prescription Engine) — physician review ke liye</summary>
+	                        <pre>${(r.recommendation || '(unavailable)').replace(/</g,'&lt;')}</pre>
+	                    </details>`
+	                    : `<div class="rx-output">${(r.content || '').replace(/</g,'&lt;')}</div>`;
+	                return `
 	                <div class="card">
-	                    <h3>${r.specialty}</h3>
-	                    <div class="rx-output">${r.content}</div>
+	                    <h3>${r.specialty} ${badge}</h3>
+	                    ${sections}
 	                    ${r.id ? `<button class="btn btn-sm btn-warning mt-sm" onclick="starUpgrade(${r.id})">⭐ Star this</button>` : ''}
 	                </div>
-	            `).join('');
+	            `;
+	            }).join('');
 	            document.getElementById('upgrade-results').innerHTML = html;
-	            showToast('Specialist opinions ready!');
+	            showToast('Specialist opinions ready — badge check karo (Evidence verified / not verified)');
 	        } else {
 	            document.getElementById('upgrade-results').innerHTML = '<div class="text-muted">Failed: ' + (res.error || 'Unknown') + '</div>';
 	        }
 	    })
 	    .catch(e => {
 	        document.getElementById('upgrade-results').innerHTML = '<div class="text-muted">Error: ' + e + '</div>';
+	    });
+	}
+
+	function loadEvidenceLibrary() {
+	    fetch('/opd/api/evidence-library')
+	        .then(r => r.json())
+	        .then(res => {
+	            const box = document.getElementById('evidence-library-box');
+	            if (!res.ok || !res.library) { box.innerHTML = '<div class="text-muted">Library load nahi hui</div>'; return; }
+	            const rows = res.library.map(e => `
+	                <tr>
+	                    <td><strong>${e.specialty}</strong></td>
+	                    <td>${(e.sources || []).join(', ')}</td>
+	                    <td>${(e.guidelines || []).map(g => '• ' + g).join('<br>')}</td>
+	                </tr>`).join('');
+	            box.innerHTML = `<table class="ev-lib-table"><thead><tr><th>Specialty</th><th>Primary Sources</th><th>Current Guidelines</th></tr></thead><tbody>${rows}</tbody></table>
+	                <div class="text-sm text-muted" style="margin-top:6px;">${res.note || ''}</div>`;
+	        })
+	        .catch(() => {
+	            document.getElementById('evidence-library-box').innerHTML = '<div class="text-muted">Error loading library</div>';
+	        });
+	}
+
+	function runEvidenceSearch() {
+	    if (!aiGuard()) return;
+	    const question = document.getElementById('ev-search-q').value.trim();
+	    if (!question) { showToast('Clinical question likho', 'error'); return; }
+	    const data = {
+	        specialty: document.getElementById('ev-search-spec').value,
+	        question,
+	        patient_context: document.getElementById('ev-search-ctx').value.trim(),
+	    };
+	    document.getElementById('evidence-search-result').innerHTML = '<span class="spinner"></span> Guidelines retrieve ho rahi hain...';
+	    aiFetch('/opd/api/evidence-search', {
+	        method: 'POST',
+	        headers: {'Content-Type': 'application/json'},
+	        body: JSON.stringify(data),
+	    })
+	    .then(r => r.json())
+	    .then(res => {
+	        const box = document.getElementById('evidence-search-result');
+	        if (res.ok && res.result) {
+	            const badge = (res.evidence_status === 'verified')
+	                ? '<span class="ev-badge ev-verified">✅ Evidence verified</span>'
+	                : '<span class="ev-badge ev-unverified">⚠️ Evidence not verified</span>';
+	            box.innerHTML = `<div class="card mt-sm">${badge}<div class="rx-output">${res.result.replace(/</g,'&lt;')}</div></div>`;
+	        } else {
+	            box.innerHTML = '<div class="text-muted">Failed: ' + (res.error || 'Unknown') + '</div>';
+	        }
+	    })
+	    .catch(e => {
+	        document.getElementById('evidence-search-result').innerHTML = '<div class="text-muted">Error: ' + e + '</div>';
 	    });
 	}
 
@@ -3369,18 +3564,18 @@ function loadStarred() {
             div.innerHTML = data.map(s => `
                 <div class="card">
                     <div class="flex-between">
-                        <h3>⭐ ${s.patient_name} — ${s.specialty}</h3>
+                        <h3>⭐ ${s.patient_name} — ${s.specialty} ${s.evidence === 'verified' ? '<span class="ev-badge ev-verified">✅ Evidence verified</span>' : '<span class="ev-badge ev-unverified">⚠️ Evidence not verified</span>'}</h3>
                         <span class="text-muted text-sm">${s.date || ''}</span>
                     </div>
                     <div class="text-sm"><strong>Vitals:</strong> ${s.vitals || '—'}</div>
                     <div class="grid-2 mt-sm">
                         <div>
                             <div class="text-sm text-muted mb-sm">GP Prescription:</div>
-                            <div class="rx-output" style="font-size:11px;">${s.original_rx || ''}</div>
+                            <div class="rx-output" style="font-size:11px;">${(s.original_rx || '').replace(/</g,'&lt;')}</div>
                         </div>
                         <div>
                             <div class="text-sm text-muted mb-sm">Specialist Rx (${s.specialty}):</div>
-                            <div class="rx-output" style="font-size:11px;">${s.upgraded_rx || ''}</div>
+                            <div class="rx-output" style="font-size:11px;">${(s.upgraded_rx || '').replace(/</g,'&lt;')}</div>
                         </div>
                     </div>
                     ${s.star_note ? `<div class="text-sm mt-sm">📝 ${s.star_note}</div>` : ''}

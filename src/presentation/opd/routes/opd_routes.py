@@ -107,7 +107,11 @@ from src.ai_engine.prompts import (
     gp_prompt_assistant, gp_prompt_suggest, gp_prompt_followup,
     specialty_prompt, drug_review_prompt, cme_prompt, research_prompt,
     diagnosis_only_prompt, cme_chat_prompt,
+    specialty_reasoning_prompt, specialty_evidence_prompt,
+    specialty_prescription_prompt, specialty_combined_prompt,
+    guideline_retrieval_prompt,
 )
+from src.ai_engine.evidence import EVIDENCE_LIBRARY, evidence_status
 
 # ── PDF Generator ────────────────────────────────────────────────────────────
 from src.utils.pdf_generator import make_rx_pdf, make_cme_pdf
@@ -1764,12 +1768,33 @@ async def api_delete_template(request: Request, name: str = Query(...)):
 # ═══════════════════════════════════════════════════════════════════════════════
 
 SPECIALTIES = {
+    "🩺 General Medicine": {
+        "persona": "Senior Internal Medicine Physician (MD General Medicine, MRCP)",
+        "guidelines": "ACP Clinical Guidelines (current), NICE Clinical Guidelines (current), WHO clinical guidance, Harrison's Principles of Internal Medicine (latest edition), Goldman-Cecil Medicine (latest edition)",
+        "primary_source": "American College of Physicians (ACP) + NICE + WHO + ICMR India",
+        "indian_brands": "Calpol (Paracetamol), Pan (Pantoprazole), Glycomet (Metformin), Telma (Telmisartan), Allegra (Fexofenadine), Azee (Azithromycin), Ondem (Ondansetron), Shelcal (Calcium+VitD3)",
+        "focus": "Fever, Infections, Hypertension, Diabetes, Anemia, Dyslipidemia, Headache, Fatigue, multi-system assessment",
+    },
     "❤️ Cardiology": {
         "persona": "Senior Interventional Cardiologist (DM Cardiology, FACC, FESC)",
-        "guidelines": "AHA/ACC 2023 Hypertension Guidelines, ESC 2024 Heart Failure Guidelines, ACC/AHA 2023 Chronic Coronary Disease, ESC 2024 Atrial Fibrillation, Braunwald's Heart Disease 12th Ed, CSI India CVD Guidelines",
-        "primary_source": "American Heart Association / American College of Cardiology (AHA/ACC) + European Society of Cardiology (ESC)",
+        "guidelines": "ACC/AHA 2025 Hypertension Guideline, ESC 2024 Hypertension Guidelines, ESC 2024 Atrial Fibrillation Guidelines (AF-CARE), ACC/AHA 2023 Chronic Coronary Disease Guideline, ESC 2026 Heart Failure Guidelines, ACC/AHA Guideline Methodology (COR/LOE), CSI India CVD Guidelines",
+        "primary_source": "American College of Cardiology / American Heart Association (ACC/AHA) + European Society of Cardiology (ESC) + European Society of Hypertension (ESH)",
         "indian_brands": "Telma (Telmisartan), Cilacar (Cilnidipine), Rozavel (Rosuvastatin), Ecosprin (Aspirin), Clopilet (Clopidogrel), Metolar (Metoprolol), Lanoxin (Digoxin), Lasix (Furosemide), Aldactone (Spironolactone), Cardivas (Carvedilol)",
         "focus": "Hypertension, Heart Failure, IHD, Arrhythmias, Valvular Heart Disease, Dyslipidemia",
+    },
+    "💓 Echocardiography": {
+        "persona": "Senior Cardiac Imaging Specialist (Echocardiographer, ASE/EACVI standards trained)",
+        "guidelines": "ASE/EACVI Chamber Quantification Recommendations (latest revision), ASE Standards for Adult Echocardiography Reporting, ASE/EACVI Diastolic Function Assessment (latest revision), ASE/EACVI Valvular Regurgitation & Stenosis Recommendations (latest revision)",
+        "primary_source": "American Society of Echocardiography (ASE) + European Association of Cardiovascular Imaging (EACVI)",
+        "indian_brands": "",
+        "focus": "Echo measurement interpretation, chamber quantification, diastolic function, valvular disease, hemodynamics, reporting terminology",
+    },
+    "🦠 Infectious Diseases": {
+        "persona": "Senior Infectious Diseases Specialist (MD Medicine, ID fellowship)",
+        "guidelines": "IDSA Clinical Practice Guidelines (current), ICMR Treatment Guidelines India, WHO clinical guidance (current), CDC guidance (current)",
+        "primary_source": "Infectious Diseases Society of America (IDSA) + ICMR India + WHO",
+        "indian_brands": "Azee (Azithromycin), Taxim-O (Cefixime), Ciplox (Ciprofloxacin), Mox (Amoxicillin-Clavulanate), Doxy (Doxycycline), Zentel (Albendazole), Metrogyl (Metronidazole), Oflox (Ofloxacin)",
+        "focus": "Fever of unknown origin, UTI, RTI, Skin infections, Typhoid, Dengue, Malaria, Tuberculosis, Antibiotic stewardship",
     },
     "🦴 Orthopedics": {
         "persona": "Senior Orthopedic Surgeon (MS Ortho, FACS, FIAS)",
@@ -1780,8 +1805,8 @@ SPECIALTIES = {
     },
     "🫁 Pulmonology": {
         "persona": "Senior Pulmonologist (DM Pulmonary Medicine, FCCP)",
-        "guidelines": "GOLD 2024 COPD Strategy, GINA 2024 Asthma Guidelines, ATS/IDSA CAP Guidelines 2023, RNTCP/NTEP India TB Guidelines, BTS Pleural Disease, Fletcher's Respiratory Medicine",
-        "primary_source": "Global Initiative for Chronic Obstructive Lung Disease (GOLD) + Global Initiative for Asthma (GINA) + ATS/IDSA",
+        "guidelines": "GOLD 2025 COPD Strategy, GINA Asthma Guidelines (current), ATS/ERS Technical Standards (current), ATS/IDSA CAP Guidelines (current), RNTCP/NTEP India TB Guidelines, BTS Pleural Disease, Fletcher's Respiratory Medicine",
+        "primary_source": "Global Initiative for Chronic Obstructive Lung Disease (GOLD) + Global Initiative for Asthma (GINA) + ATS/ERS",
         "indian_brands": "Foracort (Formoterol+Budesonide), Duolin (Levosalbutamol+Ipratropium), Montek (Montelukast), Allegra (Fexofenadine), Deriphyllin (Etofylline+Theophylline), Pulmoclear (Acetylcysteine), Ciplox (Ciprofloxacin)",
         "focus": "Asthma, COPD, Tuberculosis, Pneumonia, ILD, Allergic Rhinitis, Bronchiectasis",
     },
@@ -1794,7 +1819,7 @@ SPECIALTIES = {
     },
     "🩸 Diabetology": {
         "persona": "Senior Diabetologist (DM Endocrinology, CDE certified)",
-        "guidelines": "ADA Standards of Care 2024, RSSDI Clinical Practice Guidelines 2024, AACE/ACE Comprehensive Diabetes Algorithm 2024, IDF Global Diabetes Guidelines, Joslin's Diabetes Deskbook",
+        "guidelines": "ADA Standards of Care 2025/2026, RSSDI Clinical Practice Guidelines (current), AACE/ACE Comprehensive Diabetes Algorithm (current), IDF Global Diabetes Guidelines, Joslin's Diabetes Deskbook",
         "primary_source": "American Diabetes Association (ADA) + Research Society for Study of Diabetes in India (RSSDI)",
         "indian_brands": "Glycomet (Metformin), Glimiprex (Glimepiride), Janumet (Sitagliptin+Metformin), Forxiga (Dapagliflozin), Istavel (Sitagliptin), Volix (Voglibose), Lantus (Insulin Glargine), Humalog (Insulin Lispro)",
         "focus": "Type 2 DM, Type 1 DM, Insulin Management, HbA1c Control, Diabetic Complications, Prediabetes, Metabolic Syndrome",
@@ -1893,6 +1918,160 @@ SPECIALTIES = {
 }
 
 
+def _split_physician_rx(rx: str):
+    """Split the physician's own Rx text into (diagnosis, medicines).
+
+    The doctor's input is sacred — the AI never overwrites it; the engines only
+    read it and label any change as ADD/MODIFY/REMOVE suggestions.
+    """
+    rx = (rx or "").strip()
+    if not rx:
+        return "", ""
+    m = re.search(
+        r"\bDiagnosis[:\s]*\n?([\s\S]*?)(?=\n\s*(?:Treatment|Management|Drugs|Medicines|Investigations|Advice|Follow-up|$)|$)",
+        rx, re.IGNORECASE,
+    )
+    if m and m.group(1).strip():
+        diagnosis = m.group(1).strip()
+        # Everything after the diagnosis block is the medicines/rest section.
+        medicines = rx[m.end():].strip()
+        medicines = re.sub(
+            r"^(?:Treatment|Management|Drugs|Medicines)[:\s]*", "", medicines, flags=re.IGNORECASE
+        ).strip()
+        return diagnosis, medicines
+    return "", rx
+
+
+def _extract_clinical_question(assessment_text: str) -> str:
+    """Pull the phase-1 'Clinical Question' out of the reasoning output."""
+    m = re.search(
+        r"CLINICAL QUESTION[^\n:]*[:\s]*\n?([\s\S]*?)(?=\n\s*🔬|\n\s*INVESTIGATIONS|\Z)",
+        assessment_text or "", re.IGNORECASE,
+    )
+    if m and m.group(1).strip():
+        return m.group(1).strip()
+    return ""
+
+
+def _format_specialty_content(assessment: str, evidence_text: str, recommendation: str) -> str:
+    """Combined, human-readable result of the three engines (starred records etc.)."""
+    parts = [
+        "CLINICAL ASSESSMENT (Reasoning Engine)",
+        "─" * 44,
+        assessment or "(unavailable)",
+    ]
+    if evidence_text:
+        parts += ["", "EVIDENCE & GUIDELINES (Evidence Retrieval Engine)", "─" * 44, evidence_text]
+    else:
+        parts += ["", "EVIDENCE & GUIDELINES (Evidence Retrieval Engine)", "─" * 44,
+                  '⚠️ Evidence retrieval failed — every recommendation below is marked "Evidence not verified".']
+    parts += ["", "SPECIALIST DRAFT — for physician review (Prescription Engine)", "─" * 44, recommendation]
+    return "\n".join(parts)
+
+
+async def _run_specialty_engines(settings: dict, doctor_id: str, key: str, spec_data: dict,
+                                 patient_name: str, vitals: str, complaints: str,
+                                 examination: str, history: str, original_rx: str) -> dict:
+    """
+    Three-engine pipeline: Clinical Reasoning → Evidence Retrieval → Prescription Draft.
+    The specialty button changes the reasoning framework AND the evidence strategy —
+    not merely the wording of the prescription.
+    """
+    current_diagnosis, current_medicines = _split_physician_rx(original_rx)
+
+    # ── ENGINE 1: CLINICAL REASONING ─────────────────────────────────────────
+    p1 = specialty_reasoning_prompt(
+        patient_name=patient_name, vitals=vitals, complaints=complaints,
+        examination=examination, history=history,
+        current_diagnosis=current_diagnosis, current_medicines=current_medicines,
+        specialty_name=key, specialty_data=spec_data,
+    )
+    r1 = route_chat(settings, [p1], feature="specialty-reasoning", temp=0.2, max_tokens=2500)
+    if r1.get("puter_needed"):
+        # Browser-side Puter can only do one prompt — use the combined single-call version.
+        combined = specialty_combined_prompt(
+            patient_name=patient_name, vitals=vitals, complaints=complaints,
+            examination=examination, history=history,
+            current_diagnosis=current_diagnosis, current_medicines=current_medicines,
+            specialty_name=key, specialty_data=spec_data,
+        )
+        return {"puter_needed": True, "code": r1["code"], "prompt": combined, "model": r1["model"]}
+
+    assessment = sanitize_output(r1.get("text") or "")
+    if not assessment:
+        await _log_ai(settings, doctor_id, "specialty-reasoning", r1.get("provider") or "none",
+                      r1.get("model") or "", success=False, error=r1.get("error") or "")
+        return {"error": r1.get("error") or "Clinical reasoning engine failed"}
+    await _log_ai(settings, doctor_id, "specialty-reasoning", r1.get("provider") or "none",
+                  r1.get("model") or "", success=True, usage=r1.get("usage") or {})
+
+    clinical_question = _extract_clinical_question(assessment) or (
+        f"Current evidence-based assessment and management for this presentation per {key} guidelines."
+    )
+
+    # ── ENGINE 2: EVIDENCE RETRIEVAL ─────────────────────────────────────────
+    p2 = specialty_evidence_prompt(
+        patient_name=patient_name, clinical_question=clinical_question,
+        assessment_summary=assessment, specialty_name=key, specialty_data=spec_data,
+    )
+    r2 = route_chat(settings, [p2], feature="specialty-evidence", temp=0.1, max_tokens=2500)
+    if r2.get("puter_needed"):
+        combined = specialty_combined_prompt(
+            patient_name=patient_name, vitals=vitals, complaints=complaints,
+            examination=examination, history=history,
+            current_diagnosis=current_diagnosis, current_medicines=current_medicines,
+            specialty_name=key, specialty_data=spec_data,
+        )
+        return {"puter_needed": True, "code": r2["code"], "prompt": combined, "model": r2["model"]}
+
+    evidence_text = sanitize_output(r2.get("text") or "")
+    if evidence_text:
+        await _log_ai(settings, doctor_id, "specialty-evidence", r2.get("provider") or "none",
+                      r2.get("model") or "", success=True, usage=r2.get("usage") or {})
+    else:
+        await _log_ai(settings, doctor_id, "specialty-evidence", r2.get("provider") or "none",
+                      r2.get("model") or "", success=False, error=r2.get("error") or "")
+        evidence_text = ""
+
+    # ── ENGINE 3: PRESCRIPTION DRAFT ─────────────────────────────────────────
+    p3 = specialty_prescription_prompt(
+        patient_name=patient_name, vitals=vitals, complaints=complaints,
+        assessment_summary=assessment, evidence_summary=evidence_text,
+        current_diagnosis=current_diagnosis, current_medicines=current_medicines,
+        specialty_name=key, specialty_data=spec_data,
+    )
+    r3 = route_chat(settings, [p3], feature="specialty-prescription", temp=0.2, max_tokens=3000)
+    if r3.get("puter_needed"):
+        combined = specialty_combined_prompt(
+            patient_name=patient_name, vitals=vitals, complaints=complaints,
+            examination=examination, history=history,
+            current_diagnosis=current_diagnosis, current_medicines=current_medicines,
+            specialty_name=key, specialty_data=spec_data,
+        )
+        return {"puter_needed": True, "code": r3["code"], "prompt": combined, "model": r3["model"]}
+
+    recommendation = sanitize_output(r3.get("text") or "")
+    if not recommendation:
+        await _log_ai(settings, doctor_id, "specialty-prescription", r3.get("provider") or "none",
+                      r3.get("model") or "", success=False, error=r3.get("error") or "")
+        return {"error": r3.get("error") or "Prescription engine failed"}
+    await _log_ai(settings, doctor_id, "specialty-prescription", r3.get("provider") or "none",
+                  r3.get("model") or "", success=True, usage=r3.get("usage") or {})
+
+    # Badge: verified ONLY if the evidence engine actually produced citations
+    # from the specialty's verified library. If retrieval failed (or the draft
+    # had to self-cite), everything stays "not verified" — honest by design.
+    status = evidence_status(evidence_text, key) if evidence_text else "not_verified"
+    return {
+        "assessment": assessment,
+        "evidence": evidence_text,
+        "recommendation": recommendation,
+        "content": _format_specialty_content(assessment, evidence_text, recommendation),
+        "evidence_status": status,
+        "provider": r3.get("provider") or "",
+    }
+
+
 @router.post("/api/upgrade", include_in_schema=False)
 async def api_specialty_upgrade(request: Request):
     sess = _require_opd_session(request)
@@ -1905,11 +2084,18 @@ async def api_specialty_upgrade(request: Request):
 
     patient_name = body.get("patient_name", "")
     vitals = body.get("vitals", "")
+    complaints = body.get("complaints", "")
+    examination = body.get("examination", "")
+    history = body.get("history", "")
     original_rx = body.get("prescription", "")
     specialty_keys = body.get("specialties", [])
 
-    if not patient_name or not original_rx or not specialty_keys:
-        return {"ok": False, "error": "Patient name, prescription, and specialties required."}
+    if not patient_name:
+        return {"ok": False, "error": "Patient name required."}
+    if not any((field or "").strip() for field in (vitals, complaints, original_rx)):
+        return {"ok": False, "error": "Vitals, complaints, ya current prescription mein se kuch bharo — fresh clinical assessment ke liye."}
+    if not specialty_keys:
+        return {"ok": False, "error": "Select at least one specialty."}
 
     settings = await _ai_settings_for(doctor_id)
 
@@ -1919,6 +2105,7 @@ async def api_specialty_upgrade(request: Request):
 
     # ── Save a browser-side Puter result for its specialty, if any ──
     if puter_text and puter_spec:
+        status = evidence_status(puter_text, puter_spec)
         up_id = None
         try:
             async with async_session_factory() as session:
@@ -1930,15 +2117,21 @@ async def api_specialty_upgrade(request: Request):
                     original_rx=original_rx,
                     specialty=puter_spec,
                     upgraded_rx=sanitize_output(puter_text),
-                    evidence="AI Generated (Puter)",
+                    evidence=status,
                 )
                 session.add(upgrade)
                 await session.commit()
                 up_id = upgrade.id
         except Exception:
             up_id = None
-        results.append({"specialty": puter_spec, "content": sanitize_output(puter_text), "id": up_id})
-        await _log_ai(settings, doctor_id, "specialty-upgrade", "puter", settings.get("ai_model") or "puter", success=True)
+        results.append({
+            "specialty": puter_spec,
+            "content": sanitize_output(puter_text),
+            "evidence_status": status,
+            "id": up_id,
+        })
+        await _log_ai(settings, doctor_id, "specialty-upgrade", "puter",
+                      settings.get("ai_model") or "puter", success=True)
 
     for key in specialty_keys:
         if puter_text and puter_spec and key == puter_spec:
@@ -1946,32 +2139,23 @@ async def api_specialty_upgrade(request: Request):
         spec_data = SPECIALTIES.get(key)
         is_custom = spec_data is None
         if is_custom:
-            # Custom specialty (e.g. "Sports Medicine") — generic expert persona
+            # Custom specialty (e.g. "Sports Medicine") — generic expert persona,
+            # no pre-verified sources → every recommendation must be "Evidence not verified".
             spec_data = {}
 
-        prompt = specialty_prompt(
-            patient_name=patient_name,
-            vitals=vitals,
-            current_rx=original_rx,
-            specialty_name=key,
-            specialty_data=spec_data,
-            custom_name=key if is_custom else "",
+        outcome = await _run_specialty_engines(
+            settings, doctor_id, key, spec_data,
+            patient_name, vitals, complaints, examination, history, original_rx,
         )
 
-        routed = route_chat(settings, [prompt], feature="specialty-upgrade", temp=0.2, max_tokens=4000)
-        if routed.get("puter_needed"):
-            return {"ok": False, "code": routed["code"], "prompt": routed["prompt"],
-                    "model": routed["model"], "puter_specialty": key, "partial_results": results}
-        result_text = routed.get("text") or ""
-        provider = routed.get("provider") or ""
-        model_used = routed.get("model") or ""
-        usage = routed.get("usage") or {}
-        if not result_text:
-            await _log_ai(settings, doctor_id, "specialty-upgrade", provider or "none", model_used, success=False, error=routed.get("error") or "")
+        if outcome.get("puter_needed"):
+            return {"ok": False, "code": outcome["code"], "prompt": outcome["prompt"],
+                    "model": outcome["model"], "puter_specialty": key, "partial_results": results}
+        if outcome.get("error"):
             continue
-        await _log_ai(settings, doctor_id, "specialty-upgrade", provider, model_used, success=True, usage=usage)
 
         # Save upgrade
+        up_id = None
         try:
             async with async_session_factory() as session:
                 upgrade = SpecialtyUpgradeModel(
@@ -1981,8 +2165,8 @@ async def api_specialty_upgrade(request: Request):
                     vitals=vitals,
                     original_rx=original_rx,
                     specialty=key,
-                    upgraded_rx=result_text,
-                    evidence="AI Generated",
+                    upgraded_rx=outcome["content"],
+                    evidence=outcome["evidence_status"],
                 )
                 session.add(upgrade)
                 await session.commit()
@@ -1992,11 +2176,82 @@ async def api_specialty_upgrade(request: Request):
 
         results.append({
             "specialty": key,
-            "content": result_text,
+            "assessment": outcome["assessment"],
+            "evidence": outcome["evidence"],
+            "recommendation": outcome["recommendation"],
+            "content": outcome["content"],
+            "evidence_status": outcome["evidence_status"],
+            "provider": outcome["provider"],
             "id": up_id,
         })
 
     return {"ok": True, "results": results}
+
+
+@router.get("/api/evidence-library", include_in_schema=False)
+async def api_evidence_library(request: Request):
+    """Evidence Source Library — specialty → verified primary sources + current guidelines."""
+    _require_opd_session(request)
+    rows = []
+    for key, entry in EVIDENCE_LIBRARY.items():
+        rows.append({
+            "specialty": entry.get("label", key),
+            "sources": entry.get("sources", []),
+            "guidelines": entry.get("guidelines", []),
+        })
+    return {
+        "ok": True,
+        "library": rows,
+        "note": "Ye source list hai — har clinical question ke liye relevant guideline alag se retrieve aur verify hoti hai. Current versions (2025 AHA/ACC, ESC 2024, GOLD 2025, ADA 2025/2026, KDIGO 2024) available hone par outdated guideline par default nahi hota.",
+    }
+
+
+@router.post("/api/evidence-search", include_in_schema=False)
+async def api_evidence_search(request: Request):
+    """Evidence Retrieval Engine standalone — AI Assist / Evidence Search button."""
+    sess = _require_opd_session(request)
+    doctor_id = sess["doctor_id"]
+
+    try:
+        body = await request.json()
+    except Exception:
+        return {"ok": False, "error": "Invalid JSON"}
+
+    specialty = str(body.get("specialty") or "🩺 General Medicine")
+    question = str(body.get("question") or "").strip()
+    patient_context = str(body.get("patient_context") or "").strip()
+
+    if not question:
+        return {"ok": False, "error": "Clinical question required"}
+
+    settings = await _ai_settings_for(doctor_id)
+
+    prompt = guideline_retrieval_prompt(
+        specialty_name=specialty,
+        clinical_question=question,
+        patient_context=patient_context,
+    )
+
+    puter_text = _puter_text_or_none(body)
+    if puter_text:
+        result, provider, model_used, usage = sanitize_output(puter_text), "puter", settings.get("ai_model") or "puter", {}
+    else:
+        routed = route_chat(settings, [prompt], feature="evidence-search", temp=0.1, max_tokens=2500)
+        if routed.get("puter_needed"):
+            return {"ok": False, "code": routed["code"], "prompt": routed["prompt"], "model": routed["model"]}
+        result, provider, model_used, usage = routed.get("text") or "", routed.get("provider") or "", routed.get("model") or "", routed.get("usage") or {}
+        if not result:
+            await _log_ai(settings, doctor_id, "evidence-search", provider or "none", model_used,
+                          success=False, error=routed.get("error") or "")
+            return {"ok": False, "error": routed.get("error") or "Evidence search failed"}
+
+    await _log_ai(settings, doctor_id, "evidence-search", provider, model_used, success=True, usage=usage)
+    return {
+        "ok": True,
+        "result": sanitize_output(result),
+        "evidence_status": evidence_status(result, specialty),
+        "provider": provider,
+    }
 
 
 @router.get("/api/starred", include_in_schema=False)
