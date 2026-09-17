@@ -1,6 +1,14 @@
 # GIL CLINIC — System Status Report + Lego Fix Plan
 ## 29-Aug-2026 · "हर cheez आपस में जुड़ी हो — sabko sab pata ho"
 
+> ### 🔴 LIVE SYSTEM UPDATE (17-Sep-2026) — pehle ye padhein
+> **Doctor dashboard:** https://gillhopitalsoftware1.pythonanywhere.com/opd/dashboard · **PIN 5554**
+> **Host:** PythonAnywhere (FREE, card nahi chahiye, kabhi sleep nahi) — Railway **Offline** ho gayi thi (free tier khatam).
+> **Naya code live karne ka tarika:** `python pa_deploy.py ship --since <commit> --no-git --no-tests`
+> **Patient self-filling system LIVE hai** (`/my/<token>` patient, `/s/<token>` doctor read-only, dashboard me
+> 🩺 Patient Monitor tab + 📱 Patient link button) — 17-Sep ko live verify hua.
+> 👉 Poora memory: [`MEMORY.md`](MEMORY.md) · deploy guide: [`PA_DEPLOY_GUIDE.md`](PA_DEPLOY_GUIDE.md)
+
 ---
 
 ## 1. Diagnosis — आपकी शिकायतों की असली जड़ें (code पढ़कर मिली)

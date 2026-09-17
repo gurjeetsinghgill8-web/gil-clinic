@@ -3,6 +3,16 @@
 
 > ## 🔴 UPDATE 17-Sep-2026 — Railway **band ho gayi** (confirm ho gaya) + uska pakka ilaaj ban gaya
 >
+> ### ✅ ASLI JAWAB: **PythonAnywhere (free) hi hamara permanent host hai**
+> **LIVE:** https://gillhopitalsoftware1.pythonanywhere.com/opd/dashboard · PIN **5554**
+> — card **nahi** chahiye, kabhi **sleep nahi** karta, data `/home/gillhopitalsoftware1/gil-clinic/ghos_prod.db` par permanent.
+> (Oracle/Google **card** maangte hain, aur doctor ke paas card nahi hai → wo raste band. Clinic ka PC 3 din me
+> ek baar khulta hai → wo bhi 24/7 host nahi ban sakta; uske scripts sirf emergency backup ke liye hain.)
+> PA ki limits: 100 CPU-sec/din, scheduled tasks nahi, custom domain nahi, outbound sirf whitelist.
+> Deploy: `python pa_deploy.py ship --since <commit> --no-git --no-tests` · poora memory: [`MEMORY.md`](MEMORY.md)
+>
+> Neeche wale (purane) options me sirf itna kaam ka hai: **kya-kya try kiya gaya aur kaun kyun band hua.**
+>
 > **Kya hua:** `railway status` ne dikhaya — service **`gil-clinic` = ○ Offline** (project `3883950d-…`,
 > environment `production`). Railway ka free tier 2023 me hi khatam ho gaya tha; ab sirf $5/month Hobby
 > plan hai. Isliye "app band ho gayi" — ye credit khatam hone wali baat hai, koi code bug nahi.

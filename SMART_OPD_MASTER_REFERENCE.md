@@ -1,5 +1,18 @@
 # 🧠 SMART OPD — Master Reference Memory File
 
+> ## 🔴 PEHLE YE PADHO — LIVE SYSTEM (17-Sep-2026)
+> | | |
+> |---|---|
+> | **Doctor dashboard (LIVE)** | **https://gillhopitalsoftware1.pythonanywhere.com/opd/dashboard** |
+> | Doctor PIN | **5554** (Chief) · 1234 (Junior) · 1010 (Admin) |
+> | Patient portal | `https://gillhopitalsoftware1.pythonanywhere.com/my/<token>` |
+> | Doctor read-only share | `https://gillhopitalsoftware1.pythonanywhere.com/s/<token>` |
+> | Host | **PythonAnywhere (FREE, card nahi, kabhi sleep nahi)** · Railway **Offline** hai (free tier khatam) |
+> | Naya code live karne ka tarika | `python pa_deploy.py ship --since <commit> --no-git --no-tests` |
+>
+> 👉 **Poora memory ek jagah: [`MEMORY.md`](MEMORY.md)** — live URL, deploy commands,
+> patient portal ke routes, PA free limits, aur wo faisle jo ho chuke hain.
+
 > ⚠️ Yeh memory file **master source file** par based hai:
 > `C:\Users\pc\.zcode\tmp\paste-attachments\2026-07-20\pasted-text-20260720-214546-b395e2de.txt`
 >

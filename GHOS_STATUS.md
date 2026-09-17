@@ -1,5 +1,11 @@
 # 🏥 GHOS V2 — STATUS AT A GLANCE
 
+> ### 🔴 LIVE (17-Sep-2026) — pehle ye
+> **https://gillhopitalsoftware1.pythonanywhere.com/opd/dashboard** · PIN **5554**
+> Host: **PythonAnywhere (FREE, card nahi, kabhi sleep nahi)** · Railway **Offline** (free tier khatam)
+> Naya code live: `python pa_deploy.py ship --since <commit> --no-git --no-tests`
+> Patient self-filling system LIVE (dashboard me 🩺 Patient Monitor + 📱 Patient link) · sab detail [`MEMORY.md`](MEMORY.md)
+
 ## PHASE 0 — FOUNDATION ✅ COMPLETE (Frozen)
 
 ```

@@ -1,6 +1,11 @@
 # GIL CLINIC — PythonAnywhere Free Deploy Guide (BINA CARD, 24/7)
 ## 29-Aug-2026 · Verified against PA official ASGI beta docs · Cost ₹0/माह
 
+> ## 🔴 YE HAI HAMARA LIVE HOST (17-Sep-2026)
+> **https://gillhopitalsoftware1.pythonanywhere.com/opd/dashboard** · PIN **5554**
+> **Naya code chadhane ke liye seedha neeche "NAYA CODE PA PAR CHADHANE KA TARIKA" section padhein**
+> (`python pa_deploy.py ship --since <commit> --no-git --no-tests`). Poora memory: [`MEMORY.md`](MEMORY.md)
+
 > ⚠️ PythonAnywhere ki ASGI (FastAPI) hosting **beta** hai aur normal "Web" tab se nahi,
 > **`pa` command-line tool** se hoti hai. Neeche steps PA ki official help page
 > (help.pythonanywhere.com/pages/ASGICommandLine) se verify kiye hue hain.
