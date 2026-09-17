@@ -518,6 +518,7 @@
         <button class="nav-item" data-tab="roster"> <span class="icon">📋</span> OPD Roster</button>
         <button class="nav-item" data-tab="batch"> <span class="icon">📸</span> Batch Scan</button>
         <button class="nav-item" data-tab="lab-intel"> <span class="icon">🧪</span> Lab Intelligence</button>
+        <button class="nav-item" data-tab="patient-monitor"> <span class="icon">🩺</span> Patient Monitor</button>
         <button class="nav-item" data-tab="upgrade"> <span class="icon">⚕️</span> Specialty Upgrade</button>
         {% if is_chief %}
         <button class="nav-item" data-tab="starred"> <span class="icon">⭐</span> Starred</button>
@@ -668,7 +669,12 @@
                     <div id="selected-patient" style="display:none; margin-top:8px;">
                         <div class="flex-between">
                             <span id="selected-patient-info"></span>
-                            <button class="btn btn-sm btn-ghost" onclick="clearSelected()">✕ Clear</button>
+                            <div class="flex gap-sm" style="align-items:center;">
+                                <button class="btn btn-sm" id="patient-link-btn" onclick="openPatientLink()"
+                                        style="background:#0d9488;color:#fff;font-weight:700;"
+                                        title="Patient ko WhatsApp par apna self-monitoring link bhejein (ghar se BP/sugar bharega)">📱 Patient link</button>
+                                <button class="btn btn-sm btn-ghost" onclick="clearSelected()">✕ Clear</button>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -1591,6 +1597,36 @@
                 </div>
             </div>
 
+            <!-- ════════════════ TAB: PATIENT MONITOR (patient self-filling) ════════════════ -->
+            <div class="tab-content" id="tab-patient-monitor">
+                <div class="flex-between mb-sm" style="flex-wrap:wrap;gap:8px;">
+                    <h2 style="margin:0;">🩺 Patient Monitor — ghar se bhari readings</h2>
+                    <div class="flex gap-sm" style="flex-wrap:wrap;">
+                        <button class="btn btn-sm btn-ghost" onclick="loadPatientMonitor()">🔄 Refresh</button>
+                    </div>
+                </div>
+                <p class="text-sm text-muted" style="margin-bottom:10px;">
+                    Patient apne phone se BP / sugar / pulse / weight / temp bharta hai — yahan trends aur
+                    report dikhte hain. Naya patient jodne ke liye <b>New Rx</b> me patient select karke
+                    <b>📱 Patient link</b> dabayein (WhatsApp par link chala jayega).
+                </p>
+
+                <div class="card" style="margin-bottom:12px;">
+                    <div class="flex-between" style="flex-wrap:wrap;gap:10px;">
+                        <div id="pm-stats" class="text-sm"><span class="text-muted">Loading…</span></div>
+                        <div class="flex gap-sm" style="flex-wrap:wrap;">
+                            <input type="text" id="pm-search" placeholder="Patient ka naam / ID / phone…"
+                                   style="padding:7px 10px;border:1px solid #cbd5e1;border-radius:8px;"
+                                   onkeydown="if(event.key==='Enter') loadPatientMonitor()">
+                            <button class="btn btn-sm btn-primary" onclick="loadPatientMonitor()">🔍 Dhoondo</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="pm-list"><p class="text-muted text-sm">Loading…</p></div>
+                <div id="pm-detail"></div>
+            </div>
+
         </div>
     </main>
 </div>
@@ -1613,6 +1649,7 @@ document.querySelectorAll('.nav-item[data-tab]').forEach(btn => {
         if (btn.dataset.tab === 'queue') loadQueuePatients();
         if (btn.dataset.tab === 'starred') loadStarred();
         if (btn.dataset.tab === 'batch') loadPendingScans();
+        if (btn.dataset.tab === 'patient-monitor') loadPatientMonitor();
     });
 });
 
@@ -5263,6 +5300,212 @@ loadQueuePatients();
   }
   updatePuterChip();
   setInterval(updatePuterChip, 20000);
+
+// ════════════════════════════════════════════════════════════════
+// PATIENT MONITOR (patient self-filling) — v1.0
+//   * New Rx: patient select karte hi "📱 Patient link" (WhatsApp par bhejo)
+//   * Naya tab: ghar se bhari readings ke trends + report
+// Graphs server se HTML me aate hain (wahi SVG jo patient ko dikhta hai).
+// ════════════════════════════════════════════════════════════════
+
+function _pmStatusColor(status) {
+  return { ok: '#047857', high: '#b45309', low: '#2563eb', critical: '#dc2626' }[status] || '#334155';
+}
+function _pmStatusLabel(status) {
+  return { ok: 'Normal', high: 'High', low: 'Low', critical: 'Critical' }[status] || status || '—';
+}
+function _pmEsc(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+    return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+  });
+}
+
+// ── Patient link modal ──────────────────────────────────────────────────────
+function openPatientLink() {
+  const pid = (typeof _currentPatientId !== 'undefined' && _currentPatientId) ? _currentPatientId : '';
+  const name = (document.getElementById('pt-name') || {}).value || '';
+  const phone = (document.getElementById('pt-phone') || {}).value || '';
+  if (!pid && !phone) {
+    showToast('Pehle patient select karein (🔍 Search Old) ya naam/phone bharein', 'warning');
+    return;
+  }
+  const modal = document.getElementById('patient-link-modal');
+  const msgBox = document.getElementById('pl-msg');
+  const urlBox = document.getElementById('pl-url');
+  const waBtn = document.getElementById('pl-wa');
+  const errBox = document.getElementById('pl-err');
+  modal.style.display = 'flex';
+  msgBox.value = 'Link ban raha hai…';
+  urlBox.value = '';
+  waBtn.href = '#';
+  errBox.style.display = 'none';
+  waBtn.style.pointerEvents = 'none';
+
+  fetch('/opd/api/patient-link', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ patient_id: pid, patient_name: name, phone: phone })
+  })
+    .then(r => r.json().then(j => ({ ok: r.ok, j: j })))
+    .then(res => {
+      if (!res.ok || !res.j || !res.j.ok) {
+        errBox.textContent = (res.j && res.j.error) || 'Link nahi ban paya';
+        errBox.style.display = 'block';
+        msgBox.value = '';
+        return;
+      }
+      const j = res.j;
+      urlBox.value = j.url;
+      msgBox.value = j.message;
+      waBtn.href = j.whatsapp_url;
+      waBtn.style.pointerEvents = 'auto';
+      document.getElementById('pl-count').textContent = j.readings_count
+        ? j.readings_count + ' self-readings already saved'
+        : 'Abhi koi self-reading nahi — patient pehli reading bharega';
+    })
+    .catch(() => {
+      errBox.textContent = 'Internet problem — dobara koshish karein';
+      errBox.style.display = 'block';
+    });
+}
+
+function closePatientLink() {
+  document.getElementById('patient-link-modal').style.display = 'none';
+}
+
+function copyPatientLink() {
+  const url = (document.getElementById('pl-url') || {}).value || '';
+  if (!url) return;
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(url).then(() => showToast('Link copy ho gaya ✓'))
+      .catch(() => { document.getElementById('pl-url').select(); });
+  } else {
+    document.getElementById('pl-url').select();
+  }
+}
+
+// ── Patient Monitor tab ─────────────────────────────────────────────────────
+function loadPatientMonitor() {
+  const list = document.getElementById('pm-list');
+  const stats = document.getElementById('pm-stats');
+  const q = (document.getElementById('pm-search') || {}).value || '';
+  list.innerHTML = '<p class="text-muted text-sm">Loading…</p>';
+  document.getElementById('pm-detail').innerHTML = '';
+  fetch('/opd/api/portal-stats').then(r => r.json()).then(s => {
+    if (s && s.ok) {
+      stats.innerHTML = '📱 Portal links: <b>' + s.links_active + '</b>/' + s.links_total +
+        ' active · 📊 Self-readings: <b>' + s.readings_total + '</b> · 👤 Patients: <b>' +
+        s.patients_with_readings + '</b> · 🩺 Doctor-share: <b>' + s.shares_total + '</b>';
+    }
+  }).catch(() => {});
+
+  fetch('/opd/api/portal-patients?q=' + encodeURIComponent(q))
+    .then(r => r.json())
+    .then(data => {
+      if (!data || !data.ok || !data.patients.length) {
+        list.innerHTML = '<div class="card"><p class="text-muted text-sm" style="margin:0;">' +
+          (q ? 'Is search se koi self-reading wala patient nahi mila.' :
+               'Abhi tak kisi patient ne ghar se reading nahi bhari. New Rx me patient select karke <b>📱 Patient link</b> bhejein.') +
+          '</p></div>';
+        return;
+      }
+      let html = '<div class="card" style="padding:0;"><table style="width:100%;border-collapse:collapse;font-size:14px;">' +
+        '<thead><tr style="background:#f8fafc;text-align:left;">' +
+        '<th style="padding:9px 12px;">Patient</th><th style="padding:9px 12px;">Latest reading</th>' +
+        '<th style="padding:9px 12px;">Readings</th><th style="padding:9px 12px;">Link</th>' +
+        '<th style="padding:9px 12px;"></th></tr></thead><tbody>';
+      data.patients.forEach(p => {
+        const sc = _pmStatusColor(p.last_status);
+        html += '<tr style="border-top:1px solid #e2e8f0;">' +
+          '<td style="padding:9px 12px;"><b>' + _pmEsc(p.patient_name) + '</b>' +
+          '<div class="text-sm text-muted">' + _pmEsc(p.patient_id) + (p.phone ? ' · ' + _pmEsc(p.phone) : '') + '</div></td>' +
+          '<td style="padding:9px 12px;">' + (p.last_label ? _pmEsc(p.last_label) + ' <b>' + _pmEsc(p.last_value) + ' ' + _pmEsc(p.last_unit) + '</b> ' +
+            '<span style="color:' + sc + ';font-weight:700;">(' + _pmStatusLabel(p.last_status) + ')</span>' +
+            '<div class="text-sm text-muted">' + _pmEsc(p.last_at_text) + '</div>' : '<span class="text-muted">—</span>') + '</td>' +
+          '<td style="padding:9px 12px;">' + p.count + '</td>' +
+          '<td style="padding:9px 12px;">' + (p.has_link ? '✅ active' : '—') + '</td>' +
+          '<td style="padding:9px 12px;white-space:nowrap;">' +
+          '<button class="btn btn-sm btn-primary" onclick="pmOpen(\'' + p.patient_id + '\')">📊 Dekho</button> ' +
+          '<button class="btn btn-sm btn-ghost" onclick="pmReport(\'' + p.patient_id + '\',\'pdf\')">📄 PDF</button> ' +
+          '<button class="btn btn-sm btn-ghost" onclick="pmLink(\'' + p.patient_id + '\',\'' + _pmEsc(p.patient_name) + '\',\'' + _pmEsc(p.phone) + '\')">📱 Link</button>' +
+          '</td></tr>';
+      });
+      html += '</tbody></table></div>';
+      list.innerHTML = html;
+    })
+    .catch(() => {
+      list.innerHTML = '<div class="card"><p class="text-muted text-sm" style="margin:0;">Load nahi hua — internet check karke Refresh dabayein.</p></div>';
+    });
+}
+
+function pmOpen(patientId) {
+  const detail = document.getElementById('pm-detail');
+  detail.innerHTML = '<div class="card"><p class="text-muted text-sm" style="margin:0;">Patient ka record khul raha hai…</p></div>';
+  fetch('/opd/api/patient-readings?patient_id=' + encodeURIComponent(patientId))
+    .then(r => r.json())
+    .then(d => {
+      if (!d || !d.ok) {
+        detail.innerHTML = '<div class="card"><p class="text-muted" style="margin:0;">Record nahi mila.</p></div>';
+        return;
+      }
+      detail.innerHTML =
+        '<div class="card">' +
+          '<div class="flex-between" style="flex-wrap:wrap;gap:8px;margin-bottom:8px;">' +
+            '<h3 style="margin:0;">🩺 ' + _pmEsc(d.patient_name) + ' — self-monitoring</h3>' +
+            '<div class="flex gap-sm">' +
+              '<button class="btn btn-sm btn-ghost" onclick="pmReport(\'' + patientId + '\',\'pdf\')">📄 PDF</button>' +
+              '<button class="btn btn-sm btn-ghost" onclick="pmReport(\'' + patientId + '\',\'html\')">🌐 HTML</button>' +
+              '<button class="btn btn-sm btn-ghost" onclick="pmReport(\'' + patientId + '\',\'csv\')">⬇ CSV</button>' +
+              '<button class="btn btn-sm btn-ghost" onclick="document.getElementById(\'pm-detail\').innerHTML=\'\'">✕ Band karein</button>' +
+            '</div>' +
+          '</div>' +
+          '<p class="text-sm text-muted">' + d.count + ' readings · ye patient ne khud bhare hain (self-reported — diagnosis nahi).</p>' +
+          (d.flags_html || '') +
+          (d.trends || '') +
+        '</div>' +
+        '<div class="card"><div class="card-title">📋 Sabhi readings — Excel-style</div>' + (d.table || '') + '</div>';
+      detail.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    })
+    .catch(() => {
+      detail.innerHTML = '<div class="card"><p class="text-muted" style="margin:0;">Internet problem — dobara koshish karein.</p></div>';
+    });
+}
+
+function pmReport(patientId, fmt) {
+  window.open('/opd/api/patient-report?patient_id=' + encodeURIComponent(patientId) + '&fmt=' + fmt, '_blank');
+}
+
+function pmLink(patientId, name, phone) {
+  window._currentPatientId = patientId; // reuse the modal
+  const modal = document.getElementById('patient-link-modal');
+  modal.style.display = 'flex';
+  document.getElementById('pl-msg').value = 'Link ban raha hai…';
+  document.getElementById('pl-url').value = '';
+  document.getElementById('pl-err').style.display = 'none';
+  document.getElementById('pl-wa').style.pointerEvents = 'none';
+  fetch('/opd/api/patient-link', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ patient_id: patientId, patient_name: name, phone: phone })
+  })
+    .then(r => r.json())
+    .then(j => {
+      if (!j || !j.ok) {
+        document.getElementById('pl-err').textContent = (j && j.error) || 'Link nahi ban paya';
+        document.getElementById('pl-err').style.display = 'block';
+        return;
+      }
+      document.getElementById('pl-url').value = j.url;
+      document.getElementById('pl-msg').value = j.message;
+      document.getElementById('pl-wa').href = j.whatsapp_url;
+      document.getElementById('pl-wa').style.pointerEvents = 'auto';
+      document.getElementById('pl-count').textContent = j.readings_count + ' self-readings saved';
+    })
+    .catch(() => {
+      document.getElementById('pl-err').textContent = 'Internet problem — dobara koshish karein';
+      document.getElementById('pl-err').style.display = 'block';
+    });
+}
 </script>
 <div id="wallet-modal" style="display:none; position:fixed; inset:0; z-index:10000; background:rgba(0,0,0,.5); align-items:center; justify-content:center;">
   <div style="background:#fff;border-radius:14px;padding:20px;max-width:340px;width:92%;">
@@ -5279,6 +5522,33 @@ loadQueuePatients();
     <label>UPI Transaction ID (pay karne ke baad)</label>
     <input type="text" id="wallet-utr" placeholder="e.g. 4182XXXXXXXX" style="width:100%;padding:8px;border:1px solid #cbd5e1;border-radius:8px;margin:6px 0;">
     <button onclick="submitWalletRecharge()" style="width:100%;background:#059669;color:#fff;border:none;border-radius:8px;padding:10px;font-weight:700;cursor:pointer;">✅ Submit (payment verify hokar credit hoga)</button>
+  </div>
+</div>
+<div id="patient-link-modal" style="display:none; position:fixed; inset:0; z-index:10000; background:rgba(0,0,0,.5); align-items:center; justify-content:center;">
+  <div style="background:#fff;border-radius:14px;padding:20px;max-width:520px;width:94%;max-height:90vh;overflow:auto;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+      <h3 style="margin:0;">📱 Patient self-monitoring link</h3>
+      <button onclick="closePatientLink()" style="background:none;border:none;font-size:20px;cursor:pointer;">✕</button>
+    </div>
+    <p class="text-sm text-muted" style="margin-top:0;">
+      Patient is link se ghar baithe apni BP / sugar / pulse / weight bharega. Kholne par wo apna
+      10-digit mobile number dale ga (suraksha ke liye). Wo apna record PDF me download bhi kar sakta hai
+      aur kisi bhi doctor ko read-only link bhej sakta hai.
+    </p>
+    <div id="pl-count" class="text-sm" style="color:#0d9488;font-weight:700;margin-bottom:8px;"></div>
+    <label class="text-sm text-muted">Link (patient ko bhejein)</label>
+    <input type="text" id="pl-url" readonly style="width:100%;padding:8px;border:1px solid #cbd5e1;border-radius:8px;margin:4px 0 10px;font-size:12px;">
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;">
+      <button class="btn btn-sm btn-ghost" onclick="copyPatientLink()">📋 Copy link</button>
+      <a class="btn btn-sm" id="pl-wa" href="#" target="_blank" rel="noopener"
+         style="background:#25D366;color:#fff;font-weight:700;">💬 WhatsApp par bhejo</a>
+    </div>
+    <label class="text-sm text-muted">Patient ko exactly ye message jayega</label>
+    <textarea id="pl-msg" readonly rows="9" style="width:100%;padding:8px;border:1px solid #cbd5e1;border-radius:8px;font-size:12.5px;line-height:1.5;"></textarea>
+    <div id="pl-err" class="text-sm" style="display:none;color:#dc2626;margin-top:8px;"></div>
+    <p class="text-sm text-muted" style="margin-bottom:0;">
+      Tip: patient link kholne par "Add to Home screen" karega to phone par app jaisa icon ban jayega.
+    </p>
   </div>
 </div>
 </body>

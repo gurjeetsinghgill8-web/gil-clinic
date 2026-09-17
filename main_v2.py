@@ -101,6 +101,14 @@ from src.presentation.staff.routes.settings_routes import router as staff_settin
 # -- Smart OPD --
 from src.presentation.opd.routes.opd_routes import router as opd_router
 
+# -- Patient Portal (patient self-filling + read-only doctor share) --
+from src.presentation.patient_portal.routes.patient_portal_routes import (
+    doctor_router as patient_portal_doctor_router,
+)
+from src.presentation.patient_portal.routes.patient_portal_routes import (
+    router as patient_portal_router,
+)
+
 # -- Admin Panel (Super Admin + CEO) --
 from src.presentation.admin.routes.auth_routes import router as admin_auth_router
 from src.presentation.admin.routes.dashboard_routes import router as admin_dashboard_router
@@ -165,6 +173,13 @@ from src.infrastructure.opd.models.opd_models import (  # noqa: F401
 )
 # AI usage metering table
 from src.infrastructure.opd.models.ai_usage_model import AIUsageModel  # noqa: F401
+# Patient Portal tables — patient self-readings, portal links, share snapshots
+from src.infrastructure.opd.models.patient_portal_models import (  # noqa: F401
+    PatientPortalLinkModel,
+    PatientReadingModel,
+    PatientRequestModel,
+    PatientShareModel,
+) 
 from src.infrastructure.opd.models.ai_wallet_model import (  # noqa: F401
     AIWalletModel,
     AIRechargeModel,
@@ -407,6 +422,10 @@ app.include_router(patient_track_router)
 
 # Smart OPD (HTML + API, session auth)
 app.include_router(opd_router)
+
+# Patient Portal — public token links (/my/<token>, /s/<token>) + doctor APIs
+app.include_router(patient_portal_router)
+app.include_router(patient_portal_doctor_router)
 
 # Admin Panel (Super Admin + CEO)
 app.include_router(admin_auth_router)

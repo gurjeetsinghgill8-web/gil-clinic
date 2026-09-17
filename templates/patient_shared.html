@@ -1,0 +1,76 @@
+{# READ-ONLY shared record — patient ne khud kisi doctor ko bheja (`/s/<token>`).
+   Is page par koi save/edit ka rasta nahi hai: doctor sirf dekh sakta hai,
+   print/PDF kar sakta hai. Snapshot 7 din me expire ho jata hai. #}
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0d9488">
+  <title>{{ patient_name }} — Shared Health Record ({{ clinic_name }})</title>
+  <link rel="stylesheet" href="/static/patient/portal.css">
+</head>
+<body class="pp-body">
+  <header class="pp-header">
+    <div class="pp-head-main">
+      <div class="pp-logo">🏥</div>
+      <div>
+        <div class="pp-title">{{ clinic_name }} — Shared Health Record</div>
+        <div class="pp-sub">{{ patient_name }} <span class="pp-id">· {{ patient_id }}</span></div>
+      </div>
+    </div>
+  </header>
+
+  <main class="pp-main">
+    <section class="pp-card pp-blue">
+      <div class="pp-card-title">🩺 Patient ne khud ye record share kiya hai (read-only)</div>
+      <p class="pp-muted pp-small">
+        Ye <b>self-reported home readings</b> hain — {{ readings_count }} values.
+        Aap inhe dekh sakte hain, <b>badal nahi sakte</b>.
+        {% if valid_till %}🔒 Link valid till <b>{{ valid_till }}</b>.{% endif %}
+        {% if created_at %} Record {{ created_at }} par bheja gaya tha.{% endif %}
+      </p>
+      <div class="pp-actions pp-noprint">
+        <button class="pp-btn pp-btn-primary" onclick="window.print()">🖨️ Print / Save as PDF</button>
+        <a class="pp-btn pp-btn-outline" href="/s/{{ token }}/export?fmt=pdf">📄 PDF</a>
+        <a class="pp-btn pp-btn-outline" href="/s/{{ token }}/export?fmt=html">🌐 HTML</a>
+        <a class="pp-btn pp-btn-outline" href="/s/{{ token }}/export?fmt=csv">⬇ CSV</a>
+      </div>
+    </section>
+
+    {% if note %}
+      <section class="pp-card pp-amber">
+        <b>💬 Patient ka message:</b>
+        <p class="pp-note-text">{{ note }}</p>
+      </section>
+    {% endif %}
+
+    {{ flags|safe }}
+
+    <section class="pp-card">
+      <div class="pp-card-head"><h3>📊 Summary</h3>
+        <span class="pp-muted pp-small">{{ readings_count }} readings</span></div>
+      {{ summary|safe }}
+    </section>
+
+    <section class="pp-card">
+      <div class="pp-card-head"><h3>📈 Trends — graphs</h3>
+        <span class="pp-muted pp-small">Green patti = normal range</span></div>
+      {{ trends|safe }}
+    </section>
+
+    <section class="pp-card">
+      <div class="pp-card-head"><h3>📋 Sabhi readings — Excel-style</h3></div>
+      {{ table|safe }}
+    </section>
+
+    <section class="pp-card pp-note">
+      <b>ℹ️ Disclaimer</b>
+      <p class="pp-muted pp-small">
+        Ye self-reported readings sirf home tracking aur clinical review ke liye hain — final
+        diagnosis nahi. Emergency me turant nearest emergency se sampark karein.
+      </p>
+    </section>
+  </main>
+</body>
+</html>

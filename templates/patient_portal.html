@@ -1,0 +1,161 @@
+{# Patient Self-Monitoring Portal (Smart OPD) — patient khud readings bharta hai.
+   Server-rendered se: graphs/graphs/table sab pehle se HTML me hote hain (JS ke
+   bina bhi dikhte hain), aur save ke baad JS `/my/<token>/content` se refresh
+   kar leta hai — koi client-side chart code nahi. #}
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0d9488">
+  <title>{{ patient_name }} — {{ clinic_name }} Patient Monitor</title>
+  <link rel="stylesheet" href="/static/patient/portal.css">
+</head>
+<body class="pp-body">
+  <header class="pp-header">
+    <div class="pp-head-main">
+      <div class="pp-logo">🏥</div>
+      <div>
+        <div class="pp-title">{{ clinic_name }} — Patient Monitor</div>
+        <div class="pp-sub">
+          {% if verified %}Namaste, {{ patient_name }} <span class="pp-id">· {{ patient_id }}</span>
+          {% else %}Suraksha satyapan baaki hai{% endif %}
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main class="pp-main">
+    {% if not verified %}
+      {# ---------- Phone verification lock ---------- #}
+      <section class="pp-card pp-verify">
+        <div class="pp-verify-icon">🔒</div>
+        <h2>Suraksha Satyapan</h2>
+        <p class="pp-muted">
+          Aapke medical records ki suraksha ke liye, clinic me darj apna
+          <b>10-digit mobile number</b> dalein{% if phone_last4 %} (ending in •••• {{ phone_last4 }}){% endif %}:
+        </p>
+        <input id="pp-phone" class="pp-input pp-phone-input" type="tel" inputmode="numeric"
+               maxlength="10" placeholder="10-digit mobile number" autocomplete="tel">
+        <div id="pp-verify-error" class="pp-error" style="display:none"></div>
+        <button id="pp-verify-btn" class="pp-btn pp-btn-primary pp-full">Unlock Portal 🔓</button>
+        <p class="pp-muted pp-small">
+          Agar number badal gaya hai ya koi samasya hai, to clinic se sampark karein.
+        </p>
+      </section>
+    {% else %}
+      {# ---------- Download + share ---------- #}
+      <section class="pp-card pp-blue">
+        <div class="pp-card-title">📥 Apne records download karo (doctor ko dikhane ke liye)</div>
+        <div class="pp-actions">
+          <a class="pp-btn pp-btn-primary" href="/my/{{ token }}/export?fmt=pdf">📄 PDF (best)</a>
+          <a class="pp-btn pp-btn-outline" href="/my/{{ token }}/export?fmt=html">🌐 HTML</a>
+          <a class="pp-btn pp-btn-outline" href="/my/{{ token }}/export?fmt=csv">⬇ CSV (Excel)</a>
+        </div>
+        <p class="pp-muted pp-small">
+          Teeno files me <b>graphs bhi aate hain</b>. PDF WhatsApp par doctor ko seedha khulti hai;
+          HTML browser me khulti hai (print bhi kar sakte hain); CSV Excel me.
+        </p>
+      </section>
+
+      <section class="pp-card pp-green">
+        <div class="pp-card-title">🩺 Kisi bhi doctor ko record bhejein (link se)</div>
+        <p class="pp-muted pp-small">
+          Doctor ye link apne phone ya computer par kholenge — poora record + graphs dikhega.
+          Unhe <b>app install karne ki ya password ki zarurat nahi</b>. Wo data badal nahi sakte
+          (read-only). Link {{ share_days }} din tak chalta hai.
+        </p>
+        <textarea id="pp-share-note" class="pp-input pp-textarea" rows="2"
+          placeholder="Doctor ko sandesh (optional) — jaise: BP 3 din se 150/95 aa raha hai"></textarea>
+        <div class="pp-actions">
+          <button id="pp-share-btn" class="pp-btn pp-btn-primary">🔗 Doctor ke liye link banao</button>
+          <button id="pp-share-refresh" class="pp-btn pp-btn-outline" style="display:none">🔄 Latest data bhejo</button>
+        </div>
+        <div id="pp-share-msg" class="pp-ok" style="display:none"></div>
+        <div id="pp-share-err" class="pp-error" style="display:none"></div>
+        <div id="pp-share-box" style="display:none">
+          <input id="pp-share-url" class="pp-input" readonly>
+          <div class="pp-actions">
+            <button id="pp-share-copy" class="pp-btn pp-btn-outline">📋 Link copy karo</button>
+            <a id="pp-share-wa" class="pp-btn pp-btn-outline" target="_blank" rel="noopener">💬 WhatsApp par bhejo</a>
+            <a id="pp-share-preview" class="pp-btn pp-btn-outline" target="_blank" rel="noopener">👁️ Preview</a>
+          </div>
+          <p id="pp-share-valid" class="pp-muted pp-small"></p>
+        </div>
+      </section>
+
+      {# ---------- Red flags ---------- #}
+      <div id="pp-flags">{{ flags|safe }}</div>
+
+      {# ---------- Entry form ---------- #}
+      <section class="pp-card">
+        <div class="pp-card-head">
+          <h3>Aaj ki readings</h3>
+          <span class="pp-muted pp-small">Excel-sheet style — value bharo, save karo</span>
+        </div>
+        <label class="pp-field">
+          <span>Date &amp; time</span>
+          <input id="pp-datetime" class="pp-input" type="datetime-local">
+        </label>
+        <div id="pp-rows" class="pp-rows"></div>
+        <div class="pp-actions">
+          <button id="pp-add-custom" class="pp-btn pp-btn-ghost">+ Add field (Hemoglobin, CBC…)</button>
+          <button id="pp-save" class="pp-btn pp-btn-primary">💾 Save readings</button>
+        </div>
+        <div id="pp-save-msg" class="pp-ok" style="display:none"></div>
+        <div id="pp-save-err" class="pp-error" style="display:none"></div>
+      </section>
+
+      {# ---------- Summary + trends + table ---------- #}
+      <section class="pp-card">
+        <div class="pp-card-head"><h3>📊 Summary</h3>
+          <span class="pp-muted pp-small" id="pp-count">{{ readings_count }} readings</span></div>
+        <div id="pp-summary">{{ summary|safe }}</div>
+      </section>
+
+      <section class="pp-card">
+        <div class="pp-card-head"><h3>📈 My trends</h3>
+          <span class="pp-muted pp-small">Green patti = normal range</span></div>
+        <div id="pp-trends">{{ trends|safe }}</div>
+      </section>
+
+      <section class="pp-card">
+        <div class="pp-card-head"><h3>📋 Sabhi readings — Excel-style</h3></div>
+        <p class="pp-muted pp-small">
+          Har line = ek hi baar ki entry. BP systolic/diastolic dono ek column me (jaise 135/85).
+        </p>
+        <div id="pp-table">{{ table|safe }}</div>
+      </section>
+
+      <section class="pp-card pp-note">
+        <b>ℹ️ Medical Disclaimer</b>
+        <p class="pp-muted pp-small">
+          Ye self-reported readings sirf home tracking aur doctor review ke liye hain — final
+          diagnosis nahi. Kisi bhi asuvidha, sudden ghabrahat ya dawa badalne se pehle apne doctor
+          se turant consult karein.
+        </p>
+      </section>
+
+      <section class="pp-card pp-note">
+        <b>📲 Is link ko phone par app jaisa banao</b>
+        <p class="pp-muted pp-small">
+          <b>Chrome:</b> upar-right ⋮ menu → <b>"Add to Home screen"</b> / "Install app".
+          <b> iPhone:</b> Share button → <b>"Add to Home Screen"</b>. Iske baad home screen ke icon se
+          seedha yahi portal khulega.
+        </p>
+      </section>
+    {% endif %}
+  </main>
+
+  <script>
+    window.PP_PORTAL = {
+      token: "{{ token }}",
+      verified: {{ 'true' if verified else 'false' }},
+      phoneLast4: "{{ phone_last4 }}",
+      metrics: {{ form_metrics|tojson }},
+      shareDays: {{ share_days }}
+    };
+  </script>
+  <script src="/static/patient/portal.js"></script>
+</body>
+</html>
