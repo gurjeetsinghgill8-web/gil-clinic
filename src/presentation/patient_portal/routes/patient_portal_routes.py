@@ -86,19 +86,14 @@ def _render(name: str, **context: Any) -> str:
 
 
 def _base_url(request: Request) -> str:
-    """Public base URL (APP_BASE_URL → warna request ka host) — jaise /track links."""
-    import os
+    """Public base URL — APP_BASE_URL zinda ho to wahi, warna request ka host.
 
-    cfg = (os.getenv("APP_BASE_URL") or "").strip().rstrip("/")
-    if cfg and not cfg.startswith("http://localhost") and not cfg.startswith("http://127."):
-        return cfg
-    try:
-        base = str(request.base_url).rstrip("/")
-        if base:
-            return base
-    except Exception:
-        pass
-    return "http://localhost:8000"
+    (`.env` me purana tunnel/Railway URL pada ho to patient ka link toota hua na
+    jaye — `src/utils/public_url.py` dekhein.)
+    """
+    from src.utils.public_url import public_base_url
+
+    return public_base_url(request)
 
 
 def _error_page(title: str, message: str, status_code: int = 400) -> HTMLResponse:
@@ -923,6 +918,15 @@ async def api_portal_patients(request: Request, q: str = Query("")):
     return JSONResponse({"ok": True, "patients": patients, "count": len(patients)})
 
 
+@doctor_router.get("/base-url", include_in_schema=False)
+async def api_base_url(request: Request):
+    """Patient links kis base URL se ban rahe hain + wo zinda hai ya nahi."""
+    _require_doctor(request)
+    from src.utils.public_url import base_url_status
+
+    return JSONResponse({"ok": True, **base_url_status(request)})
+
+
 @doctor_router.get("/portal-stats", include_in_schema=False)
 async def api_portal_stats(request: Request):
     """Chhote numbers: kitne portal link ban chuke, kitni self-readings aayi."""
@@ -939,6 +943,8 @@ async def api_portal_stats(request: Request):
         patients = await session.execute(
             sa.select(sa.func.count(sa.distinct(PatientReadingModel.patient_id)))
         )
+    from src.utils.public_url import base_url_status
+
     return JSONResponse(
         {
             "ok": True,
@@ -947,6 +953,7 @@ async def api_portal_stats(request: Request):
             "readings_total": int(readings.scalar() or 0),
             "shares_total": int(shares.scalar() or 0),
             "patients_with_readings": int(patients.scalar() or 0),
+            "link_health": base_url_status(request),
         }
     )
 

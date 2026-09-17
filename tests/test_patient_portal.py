@@ -382,3 +382,63 @@ def test_reading_delete_is_owner_scoped():
         # dobara delete → 404 (aur doosre patient ki reading delete nahi ho sakti)
         assert anon.delete(f"/my/{token}/readings/{rid}").status_code == 404
         assert anon.delete(f"/my/{token}/readings/not-my-reading").status_code == 404
+
+
+# ── public base URL (patient link kabhi toota hua na jaye) ───────────────────
+def test_public_base_url_falls_back_when_configured_host_is_dead(monkeypatch):
+    """Purana tunnel/Railway URL mar chuka ho to link os se na bane.
+
+    Ye asli bug tha: `.env` me dead `trycloudflare` URL pada tha aur patient ko
+    wahi link jata tha → "site not found".
+    """
+    from src.utils import public_url as pu
+
+    pu.reset_cache()
+    monkeypatch.setenv("APP_BASE_URL", "https://rio-minerals-rim-skills.trycloudflare.com")
+
+    import socket as _socket
+
+    def _dead(host, *a, **k):
+        raise _socket.gaierror("nodename nor servname provided")
+
+    monkeypatch.setattr(pu.socket, "getaddrinfo", _dead)
+    assert pu.host_is_alive("https://rio-minerals-rim-skills.trycloudflare.com") is False
+
+    class _Req:
+        base_url = "http://192.168.31.238:8000/"
+
+    assert pu.public_base_url(_Req()) == "http://192.168.31.238:8000"
+    status = pu.base_url_status(_Req())
+    assert status["configured_alive"] is False
+    assert "zinda nahi" in str(status["warning"])
+    pu.reset_cache()
+
+
+def test_public_base_url_uses_configured_when_alive(monkeypatch):
+    from src.utils import public_url as pu
+
+    pu.reset_cache()
+    monkeypatch.setenv("APP_BASE_URL", "https://gilclinic.duckdns.org")
+    monkeypatch.setattr(pu.socket, "getaddrinfo", lambda *a, **k: [("ok",)])
+
+    class _Req:
+        base_url = "http://192.168.31.238:8000/"
+
+    assert pu.public_base_url(_Req()) == "https://gilclinic.duckdns.org"
+    assert pu.base_url_status(_Req())["warning"] == ""
+    pu.reset_cache()
+
+
+def test_public_base_url_ignores_localhost_setting(monkeypatch):
+    from src.utils import public_url as pu
+
+    pu.reset_cache()
+    monkeypatch.setenv("APP_BASE_URL", "http://localhost:8000")
+    monkeypatch.setattr(pu.socket, "getaddrinfo", lambda *a, **k: [("ok",)])
+
+    class _Req:
+        base_url = "https://gilclinic.duckdns.org/"
+
+    assert pu.public_base_url(_Req()) == "https://gilclinic.duckdns.org"
+    assert "localhost" in str(pu.base_url_status(_Req())["warning"])
+    pu.reset_cache()

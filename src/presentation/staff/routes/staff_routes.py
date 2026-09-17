@@ -877,22 +877,15 @@ async def staff_register_patient(request: Request):
 def _tracking_base(request: Request) -> str:
     """Base URL for patient tracking links.
 
-    Priority:
-      1. APP_BASE_URL — jab wo public URL par set ho (tunnel/VM/domain).
-         Staff LAN IP se app kholein tab bhi patient ko public link milega.
-      2. Host header of the current request — jab staff public URL se
-         directly app khole (APP_BASE_URL set nahi ho).
+    Priority (v2.0 — shared helper `src/utils/public_url.py`):
+      1. APP_BASE_URL — jab wo public URL par set ho **aur zinda ho** (DNS resolve ho).
+         Purana tunnel/Railway URL mar chuka ho to use nahi karte, warna patient ka
+         link "site not found" deta hai.
+      2. Host header of the current request — jab staff public URL se app khole.
     """
-    cfg = _app_base_url().strip().rstrip("/")
-    if cfg and not cfg.startswith("http://localhost") and not cfg.startswith("http://127."):
-        return cfg
-    try:
-        base = str(request.base_url).rstrip("/")
-        if base:
-            return base
-    except Exception:
-        pass
-    return "http://localhost:8000"
+    from src.utils.public_url import public_base_url
+
+    return public_base_url(request)
 
 
 async def _next_token(session, service_code: str, date_prefix: str) -> int:

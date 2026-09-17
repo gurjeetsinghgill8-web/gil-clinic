@@ -1,6 +1,28 @@
 # GIL CLINIC — FREE Hosting Plan (Deep Research, 29-Aug-2026)
 ## "Paisa nahi dena + App kabhi band na ho + Data kabhi na ude"
 
+> ## 🔴 UPDATE 17-Sep-2026 — Railway **band ho gayi** (confirm ho gaya) + uska pakka ilaaj ban gaya
+>
+> **Kya hua:** `railway status` ne dikhaya — service **`gil-clinic` = ○ Offline** (project `3883950d-…`,
+> environment `production`). Railway ka free tier 2023 me hi khatam ho gaya tha; ab sirf $5/month Hobby
+> plan hai. Isliye "app band ho gayi" — ye credit khatam hone wali baat hai, koi code bug nahi.
+>
+> **Ab kya ban gaya (sab already GitHub par push):**
+>
+> | # | Ilaaj | File | Kaam |
+> |---|---|---|---|
+> | 1 | **Clinic ka computer = permanent server** (aaj hi, ₹0) | `deploy/permanent/install-windows-service.ps1` | Boot par auto-start + crash par 999 baar auto-restart + **health watchdog (har 3 min)** — app *hang* ho to bhi restart. Tunnel bhi auto-start. |
+> | 2 | **Oracle Always Free VM par 1-command deploy** (24/7, hamesha ₹0) | `deploy/permanent/bootstrap.sh` | Permanent disk par data, systemd auto-restart, **health watchdog**, **Caddy free HTTPS**, roz 2 baar backup + off-site GitHub backup, `gilclinic-update` command |
+> | 3 | **Free permanent domain** (bina paisa, bina card) | `deploy/permanent/duckdns-update.sh` | DuckDNS subdomain + har 5 min IP update (ya sslip.io — signup bhi nahi) |
+> | 4 | **Patient link kabhi toota hua na jaye** | `src/utils/public_url.py` | `.env` ka purana tunnel/Railway URL mar chuka ho to **DNS check** karke request ke host se link banata hai + doctor ko warning dikhata hai |
+> | 5 | **Data har deploy par udne wala bug** | `main_v2.py` | Platform volume mile (`RAILWAY_VOLUME_MOUNT_PATH`/`RENDER_DISK_PATH`) to DB usi permanent disk par |
+> | 6 | **Railway ka config (agar kabhi paid/staging me use karein)** | `railway.json` | `/health` healthcheck + ON_FAILURE restart policy |
+> | 7 | **CI me permanent test** | `.github/workflows/patient-portal-tests.yml` | Har push par patient portal tests — "galti se toota" pakda jaye |
+>
+> **Aaj ka kaam:** `install-windows-service.ps1` (5 min) → clinic turant chalu.
+> **Is hafte:** Oracle VM + `bootstrap.sh --domain …` → 24/7 free, phir computer band hone ki fikar khatam.
+> Poori step-by-step guide: **`deploy/permanent/README.md`**.
+
 ---
 
 ## 0. TL;DR (सीधी बात)

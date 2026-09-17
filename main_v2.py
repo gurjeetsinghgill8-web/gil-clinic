@@ -46,7 +46,29 @@ except Exception:
 os.environ.setdefault("GHOS_DEV_AUTH_BYPASS", "false")
 
 # Detect database URL (default: SQLite for dev)
-_DB_URL = os.getenv("GHOS_DB_URL", "sqlite:///./ghos_dev.db")
+_DB_URL = os.getenv("GHOS_DB_URL", "")
+
+# ── Hosted platforms: agar volume mount diya hai to data usi par rakho ────────
+# Railway/Render par SQLite container ke andar pada ho to **har deploy par data
+# ud jata hai** (yahi "data save nahi hota" ki asli wajah thi). Agar platform
+# volume mount path deta hai (RAILWAY_VOLUME_MOUNT_PATH / RENDER_DISK_PATH) aur
+# GHOS_DB_URL khud set nahi kiya gaya, to DB usi permanent disk par bana lenge.
+if not _DB_URL:
+    _volume = (
+        os.getenv("RAILWAY_VOLUME_MOUNT_PATH")
+        or os.getenv("RENDER_DISK_PATH")
+        or os.getenv("PERSISTENT_DISK_PATH")
+        or ""
+    ).strip()
+    if _volume:
+        try:
+            Path(_volume).mkdir(parents=True, exist_ok=True)
+        except Exception:
+            pass
+        _DB_URL = f"sqlite:///{_volume.rstrip('/')}/ghos_prod.db"
+        print(f"[GHOS] Volume mila → data permanent disk par: {_DB_URL}")
+    else:
+        _DB_URL = "sqlite:///./ghos_dev.db"
 
 # Set async SQLite URL for shared infra (patient engine uses async sessions)
 # before any module that imports shared/infrastructure/database.py

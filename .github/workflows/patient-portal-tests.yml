@@ -1,0 +1,38 @@
+# Patient Portal + Smart OPD tests (free, permanent — CI me har push par)
+#
+# Isse "galti se kuch toot gaya" wala risk khatam hota hai: patient portal,
+# reports (graphs wali PDF/HTML/CSV), share link ka expiry, doctor APIs aur
+# public base-URL fallback — sab har push par check ho jate hain.
+name: Patient Portal tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Patient portal tests (metrics, reports, portal flow, share expiry, base URL)
+        run: python -m pytest tests/test_patient_portal.py -q -p no:warnings
+
+      - name: Other fast tests (live board, interconnection)
+        run: |
+          python -m pytest tests/test_live_board.py -q -p no:warnings
+          python -m pytest tests/test_interconnection.py -q -p no:warnings
+        continue-on-error: true   # ye purane tests alag-alag chalte hain (DB env share karte hain)

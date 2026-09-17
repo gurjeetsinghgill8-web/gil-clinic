@@ -5395,7 +5395,14 @@ function loadPatientMonitor() {
     if (s && s.ok) {
       stats.innerHTML = '📱 Portal links: <b>' + s.links_active + '</b>/' + s.links_total +
         ' active · 📊 Self-readings: <b>' + s.readings_total + '</b> · 👤 Patients: <b>' +
-        s.patients_with_readings + '</b> · 🩺 Doctor-share: <b>' + s.shares_total + '</b>';
+        s.patients_with_readings + '</b> · 🩺 Doctor-share: <b>' + s.shares_total + '</b>' +
+        '<div class="text-sm" style="margin-top:4px;">🔗 Link base: <code>' +
+        ((s.link_health && s.link_health.effective) || '—') + '</code></div>';
+      const warn = s.link_health && s.link_health.warning;
+      if (warn) {
+        stats.innerHTML += '<div style="margin-top:8px;background:#fff7ed;border:1.5px solid #f59e0b;' +
+          'color:#9a3412;border-radius:8px;padding:8px 10px;font-size:13px;">⚠️ ' + _pmEsc(warn) + '</div>';
+      }
     }
   }).catch(() => {});
 
