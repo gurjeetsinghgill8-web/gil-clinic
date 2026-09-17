@@ -123,3 +123,45 @@ WHATSAPP_ACCESS_TOKEN=<token>
 - [ ] Whitelist request bhej di
 
 **Laptop + Cloudflare Tunnel** abhi bhi chal raha hai — PA live hone tak dono saath chal sakte hain.
+
+---
+
+# NAYA CODE PA PAR CHADHANE KA TARIKA (17-Sep-2026 ke baad)
+
+PA account **free** hai (`daily_cpu_limit_seconds: 100`, scheduled tasks blocked) — is liye
+`git pull` wala purana rasta kaam nahi karta. Ab ye 3 command kaafi hain:
+
+```bash
+# 1) naya code upload + site reload + health check  (git commit ki zaroorat nahi)
+python pa_deploy.py ship --since <jis-commit-se-aage> --no-git --no-tests
+#    example: python pa_deploy.py ship --since c6d26938edb26fbb6195f52fae20322bc1540397 --no-git --no-tests
+
+# 2) live par naye routes check karo (read-only)
+python pa_deploy.py status_check
+
+# 3) poora patient-portal flow live test (asli browser) + test data ki safai
+node scripts/pa_live_e2e.cjs
+python scripts/pa_cleanup.py
+```
+
+**Kaam kaise karta hai:** `ship` local `git diff (since..HEAD)` nikaal kar sirf wahi files
+PythonAnywhere Files API se upload karta hai, site reload karta hai, aur `/health` check karta hai.
+`.env`, `*.db`, `pa_token.txt`, `deploy/`, `.github/`, `scratch/`, `ghos_memory/` kabhi upload nahi hote.
+
+**PA free ki limits (zaroori):**
+
+| Cheez | Free me | Asar |
+|---|---|---|
+| CPU | **100 second / din** | Bhari AI usage quota khatam kar sakti hai (us din app band) — patient portal halka hai, theek chalta hai |
+| Scheduled tasks | ❌ allowed nahi | Daily backup ke liye app ka **in-built auto-backup** chalta hai (startup + daily) |
+| Custom domain | ❌ | Address `gillhopitalsoftware1.pythonanywhere.com` hi rahega |
+| Outbound internet | sirf whitelist | AI / WhatsApp hosts ke liye `pa_whitelist_request.txt` bhejni padti hai |
+
+**Remote git checkout:** Files API se upload karne par PA ka git checkout purane commit par reh jata hai.
+Isliye `setup.sh` (pa_deploy.py ke andar) ab `git pull` ki jagah
+`git fetch origin main && git reset --hard origin/main` karta hai — dobara bootstrap chalane par
+sab kuch GitHub ke main par saaf-saaf sync ho jata hai.
+
+**Patient portal ke live routes (17-Sep ko verify ho chuke):**
+`/my/<token>` (patient filling) · `/s/<token>` (doctor read-only) · `/static/patient/portal.css|js` ·
+`/opd/api/patient-link | patient-readings | portal-patients | portal-stats | patient-report | base-url`

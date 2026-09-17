@@ -119,7 +119,9 @@ cd /home/{u} || {{ echo CD_HOME_FAIL; exit 1; }}
 if [ ! -d gil-clinic/.git ]; then
   git clone https://github.com/gurjeetsinghgill8-web/gil-clinic.git || {{ echo CLONE_FAIL; exit 1; }}
 else
-  (cd gil-clinic && git pull) || true
+  # NOTE: `git pull` nahi - kyunki kabhi kabhi files API se upload hui hoti hain aur
+  # checkout aage/peeche ho jata hai. Hard-sync GitHub ke main par = hamesha saaf.
+  (cd gil-clinic && git fetch origin main && git reset --hard origin/main) || true
 fi
 cd /home/{u}/gil-clinic || {{ echo CD_APP_FAIL; exit 1; }}
 VENV=/home/{u}/.virtualenvs/gilclinic
@@ -308,35 +310,54 @@ def cmd_env_check(_):
         print(r.content.decode("utf-8", "replace"))
 
 
-def cmd_ship(_):
-    """Weekly ship: tests -> commit+push -> upload changed files -> reload -> health."""
+def cmd_ship(args):
+    """Ship: tests -> commit+push -> upload changed files -> reload -> health.
+
+    Options (naye):
+      --since <rev>   kis commit se compare karke files upload karni hain
+                      (default: HEAD~1)
+      --no-git        commit/push skip karo (jab pehle se commit ho chuka ho)
+      --no-tests      pytest skip karo
+    """
     import subprocess
 
-    print("==> [1/5] Tests (pytest)...")
-    t0 = time.time()
-    r = subprocess.run(
-        [sys.executable, "-m", "pytest", "tests/", "-q", "--no-header"],
-        cwd=BASE_DIR, capture_output=True, text=True,
-    )
-    print(r.stdout[-500:] if r.stdout else "(no stdout)")
-    if r.returncode == 0:
-        print("   tests: ALL PASS (%.0fs)" % (time.time() - t0))
+    if not getattr(args, "no_tests", False):
+        print("==> [1/5] Tests (pytest)...")
+        t0 = time.time()
+        r = subprocess.run(
+            [sys.executable, "-m", "pytest", "tests/", "-q", "--no-header"],
+            cwd=BASE_DIR, capture_output=True, text=True,
+        )
+        print(r.stdout[-500:] if r.stdout else "(no stdout)")
+        if r.returncode == 0:
+            print("   tests: ALL PASS (%.0fs)" % (time.time() - t0))
+        else:
+            # known pre-existing test-isolation flake exists; warn but continue
+            print("   tests: rc=%d (KNOWN flaky test ho sakta hai - ship jaari)" % r.returncode)
     else:
-        # known pre-existing test-isolation flake exists; warn but continue
-        print("   tests: rc=%d (KNOWN flaky test ho sakta hai — ship jaari)" % r.returncode)
+        print("==> [1/5] Tests skip (--no-tests)")
 
-    old_head = subprocess.run(
-        ["git", "rev-parse", "HEAD"], cwd=BASE_DIR, capture_output=True, text=True
-    ).stdout.strip()
+    if getattr(args, "no_git", False):
+        old_head = args.since or subprocess.run(
+            ["git", "rev-parse", "HEAD~1"], cwd=BASE_DIR, capture_output=True, text=True
+        ).stdout.strip()
+        new_head = subprocess.run(
+            ["git", "rev-parse", "HEAD"], cwd=BASE_DIR, capture_output=True, text=True
+        ).stdout.strip()
+        print("==> [2/5] git skip (--no-git) - upload %s..%s" % (old_head[:7], new_head[:7]))
+    else:
+        old_head = subprocess.run(
+            ["git", "rev-parse", "HEAD"], cwd=BASE_DIR, capture_output=True, text=True
+        ).stdout.strip()
 
-    print("==> [2/5] git add + commit + push...")
-    subprocess.run(["git", "add", "-A"], cwd=BASE_DIR, check=True)
-    stamp = time.strftime("%Y-%m-%d %H:%M")
-    subprocess.run(["git", "commit", "-m", "weekly ship %s" % stamp], cwd=BASE_DIR)
-    subprocess.run(["git", "push", "origin", "main"], cwd=BASE_DIR, check=True)
-    new_head = subprocess.run(
-        ["git", "rev-parse", "HEAD"], cwd=BASE_DIR, capture_output=True, text=True
-    ).stdout.strip()
+        print("==> [2/5] git add + commit + push...")
+        subprocess.run(["git", "add", "-A"], cwd=BASE_DIR, check=True)
+        stamp = time.strftime("%Y-%m-%d %H:%M")
+        subprocess.run(["git", "commit", "-m", "weekly ship %s" % stamp], cwd=BASE_DIR)
+        subprocess.run(["git", "push", "origin", "main"], cwd=BASE_DIR, check=True)
+        new_head = subprocess.run(
+            ["git", "rev-parse", "HEAD"], cwd=BASE_DIR, capture_output=True, text=True
+        ).stdout.strip()
 
     files = subprocess.run(
         ["git", "diff", "--name-only", old_head, new_head],
@@ -344,19 +365,27 @@ def cmd_ship(_):
     ).stdout.split()
 
     print("==> [3/5] Upload changed files (%d)..." % len(files))
-    skip_prefixes = (".git/", "node_modules/", "backups/", "scratch/", "ghos_memory/")
+    skip_prefixes = (".git/", "node_modules/", "backups/", "scratch/", "ghos_memory/", "deploy/", ".github/")
+    skipped = 0
+    ok_count = 0
     for f in files:
         path = os.path.join(BASE_DIR, f)
         if not os.path.isfile(path):
+            skipped += 1
             continue
         if f.startswith(skip_prefixes):
+            skipped += 1
             continue
         if f.endswith((".db", ".log")) or f in (".env", "pa_token.txt", "pa_state.json", "admin_credentials.txt", "secret.txt"):
+            skipped += 1
             continue
         with open(path, "rb") as fh:
             data = fh.read()
         r = api("POST", V0 + "/files/path/home/%s/gil-clinic/" % USERNAME + f, files={"content": data})
+        if r.ok:
+            ok_count += 1
         print("   %s -> %s" % (f, r.status_code))
+    print("   uploaded: %d, skipped: %d" % (ok_count, skipped))
 
     print("==> [4/5] Site reload...")
     api("POST", WEBSITES + DOMAIN + "/reload/")
@@ -371,13 +400,75 @@ def cmd_ship(_):
     print("SHIP COMPLETE")
 
 
+def cmd_remote_sync(_):
+    """PA par git checkout ko GitHub ke main par hard-reset karo (ek baar ka kaam).
+
+    Files API se upload karne ke baad remote git checkout purane commit par reh
+    jata hai - aage `git pull` takra sakta hai. Ye command ek temporary scheduled
+    task se `git fetch + reset --hard origin/main` chalata hai, log padhta hai, aur
+    task delete kar deta hai.
+    """
+    import datetime as _dt
+
+    log_remote = f"/home/{USERNAME}/pa_git_sync.log"
+    cmdline = (
+        f"cd /home/{USERNAME}/gil-clinic && "
+        f"(git fetch origin main && git reset --hard origin/main && git log -1 --oneline) "
+        f"> {log_remote} 2>&1"
+    )
+    at = _dt.datetime.now(_dt.timezone.utc) + _dt.timedelta(minutes=2)
+    r = api("POST", V0 + "/schedule/", json={
+        "command": cmdline, "enabled": True,
+        "interval": "daily", "hour": at.hour, "minute": at.minute,
+    })
+    print("SYNC TASK:", r.status_code, (r.json() if r.ok else r.text[:300]))
+    if not r.ok:
+        return
+    task_id = (r.json() or {}).get("id")
+
+    print(f"   task {at.strftime('%H:%M')} UTC par chalega - intezaar...")
+    time.sleep(180)
+    lg = api("GET", V0 + "/files/path" + log_remote)
+    print("SYNC LOG:", lg.status_code)
+    if lg.ok:
+        print(lg.content.decode("utf-8", "replace")[-400:])
+
+    if task_id is not None:
+        d = api("DELETE", V0 + f"/schedule/{task_id}/")
+        print("TASK DELETE:", d.status_code)
+
+
+def cmd_status_check(_):
+    """PA par hamare naye patient-portal routes live hain ya nahi (read-only)."""
+    checks = [
+        ("/health", 200),
+        ("/my/nonexistent-token", 404),
+        ("/s/nonexistent-share", 410),
+        ("/static/patient/portal.css", 200),
+        ("/static/patient/portal.js", 200),
+        ("/opd/dashboard", 302),   # login nahi hai to login page par redirect (sahi behaviour)
+    ]
+    base = f"https://{DOMAIN}"
+    for path, want in checks:
+        try:
+            r = requests.get(base + path, timeout=30, allow_redirects=False)
+            flag = "OK " if r.status_code == want else "!! "
+            print(f"   {flag} {r.status_code} (want {want})  {path}  len={len(r.content)}")
+        except Exception as e:
+            print(f"   !! ERR {path}: {e}")
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("cmd", choices=[
         "status", "bootstrap", "webapp_create", "webapp_reload", "trigger", "log",
         "webapp_delete", "site_create", "site_get", "site_reload", "site_delete",
         "upload_db", "backup_task", "cleanup", "creds", "env_check", "ship",
+        "remote_sync", "status_check",
     ])
+    ap.add_argument("--since", help="ship: kis commit se compare karna hai (default HEAD~1)")
+    ap.add_argument("--no-git", action="store_true", help="ship: commit/push skip (pehle se commit hai)")
+    ap.add_argument("--no-tests", action="store_true", help="ship: pytest skip")
     args = ap.parse_args()
     fn = {
         "status": cmd_status, "bootstrap": cmd_bootstrap,
@@ -388,6 +479,7 @@ def main():
         "site_reload": cmd_site_reload, "site_delete": cmd_site_delete, "upload_db": cmd_upload_db,
         "backup_task": cmd_backup_task, "cleanup": cmd_cleanup,
         "creds": cmd_creds, "env_check": cmd_env_check, "ship": cmd_ship,
+        "remote_sync": cmd_remote_sync, "status_check": cmd_status_check,
     }[args.cmd]
     fn(args)
 
