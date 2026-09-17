@@ -1,4 +1,4 @@
-﻿# ═══════════════════════════════════════════════════════════════════════════════
+﻿# ===============================================================================
 # GIL CLINIC - Windows PC/Laptop ko PERMANENT server banao (Rs0, auto-restart)
 #
 # Clinic ka computer hi server ban jata hai - aur ye script usko aisa bana deti hai ki
@@ -18,7 +18,7 @@
 #   1) GILCLINIC-Server  -> boot par app start, crash par 1 min me restart (999 baar)
 #   2) GILCLINIC-Tunnel  -> boot par Cloudflare tunnel start (public patient link)
 #   3) GILCLINIC-Watchdog-> har 3 min /health check; fail ho to Server task restart
-# ═══════════════════════════════════════════════════════════════════════════════
+# ===============================================================================
 param(
   [switch]$DryRun,
   [switch]$Uninstall,
@@ -53,13 +53,59 @@ if ($Uninstall) {
   exit 0
 }
 
-Head '1) Check: Python venv + cloudflared'
-if (-not (Test-Path $PythonExe)) {
-  Write-Host "   [ERROR] venv nahi mila: $PythonExe" -ForegroundColor Red
-  Write-Host "           Pehle ek baar START_LOCAL.bat chalayein (wo venv + deps bana deta hai)."
-  exit 1
+Head '1) Check: Python + venv + cloudflared'
+$VenvDir = Join-Path $Root 'venv'
+
+# Python dhoondo (nahi hai to winget se install) - non-coder ke liye zaroori
+function Find-Python {
+  $cands = @(
+    (Join-Path $env:LOCALAPPDATA 'Programs\Python\Python312\python.exe'),
+    (Join-Path $env:LOCALAPPDATA 'Programs\Python\Python311\python.exe'),
+    'C:\Python312\python.exe',
+    'C:\Python311\python.exe'
+  )
+  foreach ($c in $cands) { if (Test-Path $c) { return $c } }
+  $g = Get-Command python -ErrorAction SilentlyContinue
+  if ($g) { return $g.Source }
+  $py = Get-Command py -ErrorAction SilentlyContinue
+  if ($py) { return $py.Source }
+  return $null
 }
-Info "python : $PythonExe"
+
+$SysPython = Find-Python
+if (-not $SysPython) {
+  if ($DryRun) {
+    Info '[dry-run] winget install Python.Python.3.12'
+    $SysPython = 'python'
+  } else {
+    Write-Host '   Python nahi mila - install kar raha hoon (winget se, ~1 minute)...' -ForegroundColor Yellow
+    winget install --id Python.Python.3.12 -e --accept-package-agreements --accept-source-agreements | Out-Null
+    $SysPython = Find-Python
+    if (-not $SysPython) {
+      Write-Host '   [ERROR] Python install nahi ho paya - python.org se install karke dobara chalayein.' -ForegroundColor Red
+      exit 1
+    }
+  }
+}
+Info "python : $SysPython"
+
+if (-not (Test-Path $PythonExe)) {
+  if ($DryRun) {
+    Info "[dry-run] venv banao + pip install -r requirements.txt"
+  } else {
+    Write-Host '   Pehli baar setup: venv bana raha hoon...' -ForegroundColor Yellow
+    & $SysPython -m venv $VenvDir
+    $VenvPip = Join-Path $VenvDir 'Scripts\pip.exe'
+    Write-Host '   Dependencies install ho rahe hain (3-6 minute, window khuli rakhein)...' -ForegroundColor Yellow
+    & $VenvPip install --upgrade pip | Out-Null
+    & $VenvPip install -r (Join-Path $Root 'requirements.txt')
+    if (-not (Test-Path $PythonExe)) {
+      Write-Host '   [ERROR] venv nahi ban paya - is window ka output bhej dein.' -ForegroundColor Red
+      exit 1
+    }
+  }
+}
+Info "venv   : $PythonExe"
 $hasTunnel = Test-Path $Cloudflared
 if (-not $NoTunnel -and -not $hasTunnel) {
   Write-Host "   [WARN] cloudflared.exe nahi mila -> tunnel task skip (sirf LAN chalega)." -ForegroundColor Yellow
@@ -148,9 +194,9 @@ $lanIp = (Get-NetIPAddress -AddressFamily IPv4 |
   Select-Object -First 1 -ExpandProperty IPAddress)
 
 Write-Host ""
-Write-Host "════════════════════════════════════════════════════════════════" -ForegroundColor Green
+Write-Host "================================================================" -ForegroundColor Green
 Write-Host " [OK] HO GAYA - clinic ka computer ab permanent server hai" -ForegroundColor Green
-Write-Host "════════════════════════════════════════════════════════════════" -ForegroundColor Green
+Write-Host "================================================================" -ForegroundColor Green
 Write-Host "   Doctor login (isi PC par) : http://localhost:$Port/opd/login"
 if ($lanIp) { Write-Host "   Clinic ke baaki phone/PC  : http://${lanIp}:$Port/opd/login" }
 if (-not $NoTunnel) {

@@ -1,10 +1,55 @@
-# GIL CLINIC — Oracle Cloud **Always Free** VM par app 24/7 chalana
-### (Non-coder ke liye: sirf 2 cheezein aapko karni hain, baaki sab automatic)
+# GIL CLINIC — app ko **permanent** aur **hamesha free** chalana
 
-> **Kyun ye rasta:** Railway ne free tier band kar diya (isliye app Offline ho gayi thi).
-> Oracle ka **Always Free** tier **kabhi expire nahi hota, kabhi sleep nahi karta** —
-> 4 CPU + 24GB RAM + 200GB permanent disk, **hamesha ₹0**.
-> Aapka data VM ki permanent disk par rehta hai (Railway par har deploy me ud jata tha).
+> ## 🟢 CARD NAHI HAI? — koi baat nahi, ye rasta bilkul bina card hai
+>
+> Oracle aur Google dono **card verification** maangte hain — is liye unka rasta **band** hai.
+> Par **card ke bina bhi permanent solution hai**, aur wo actually **sabse safe** hai
+> (data aapke hi computer par rehta hai, kisi cloud company ke paas nahi):
+>
+> ### 👉 Sirf ek file par DOUBLE-CLICK karein
+> ```
+> deploy\permanent\SETUP-NO-CARD.bat
+> ```
+> **Kaam kya karti hai (sab khud):**
+> 1. Python install (agar nahi hai)
+> 2. App ki files + dependencies setup
+> 3. App ko **permanent server** banati hai — computer on hote hi chalu,
+>    crash par auto-restart, aur **health watchdog** (app *hang* ho to bhi restart)
+> 4. Internet par **permanent `https://` address** deti hai — **Tailscale** se
+>    (free plan, **card nahi**, sirf ek baar Gmail/email se login)
+> 5. Address screen par dikhati hai + browser khol deti hai
+>
+> **Aapko sirf itna karna hai:** double-click → 1 baar Tailscale me Gmail se login → bas.
+> Uske baad aapka address hamesha same rahega, jaise `https://gilclinic-pc.tailXXXX.ts.net/opd/login`
+> (PIN **5554** — Chief).
+>
+> **Ek hi limitation (imaandari se):** computer band = app band. Isliye clinic ka computer
+> din me chalu rehna chahiye (power settings script khud theek kar deti hai — sleep off).
+>
+> **Agar aapke paas cloud wala rasta chahiye (computer band hone par bhi chale)** — uske liye
+> card chahiye (Oracle/Google). Card mil jaye to neeche **STEP 1-6** follow karein, sab ready hai.
+
+---
+
+## Andar kya-kya hai (file list)
+
+| File | Kaam |
+|---|---|
+| **`SETUP-NO-CARD.bat`** | **Ye chalayein** — pura setup ek click me (Python + server + permanent URL) |
+| `install-windows-service.ps1` | App ko permanent server banana (auto-start, auto-restart, watchdog, firewall, sleep off) · `-DryRun` / `-Uninstall` |
+| `windows-watchdog.ps1` | Har 3 min health check; app hang ho to restart |
+| `install-permanent-url.ps1` | Permanent public HTTPS address · `-Provider tailscale\|ngrok\|cloudflare` · `-Status` |
+| `bootstrap.sh` | (Cloud wala rasta) Oracle/Google/kisi bhi Ubuntu VM par 1-command install |
+| `oracle-setup.bat` | (Cloud wala rasta) Oracle VM ke liye Windows one-click — **card chahiye** |
+| `duckdns-update.sh` | Free permanent domain (DuckDNS) — VM ke liye |
+
+---
+
+# (Cloud rasta — sirf tab jab card ho) Oracle Always Free VM par 24/7
+
+> **Kyun:** Oracle ka **Always Free** tier **kabhi expire nahi hota, kabhi sleep nahi karta** —
+> 4 CPU + 24GB RAM + 200GB permanent disk, **hamesha ₹0**. Data VM ki permanent disk par
+> rehta hai (Railway par har deploy me ud jata tha).
 
 ---
 
