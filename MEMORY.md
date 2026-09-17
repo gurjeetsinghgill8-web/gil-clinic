@@ -1,5 +1,28 @@
 # 🧠 GIL CLINIC — MEMORY (single source of truth)
 
+> ## ⚠️ SABSE PEHLE: DO ALAG SOFTWARE HAIN (kabhi mix na karo)
+>
+> Doctor ke paas **do bilkul alag products** hain. Inka code, data, hosting aur login — sab alag hai.
+> **Ek me kiye gaye change doosre me apne aap nahi jaate** (feature dono me banana padta hai,
+> jaise patient portal dono me hai — par code alag hai).
+>
+> | | **GIL CLINIC** — Smart OPD / GHOS v2 | **NANO CLINIC** — CLINICITY OPD |
+> |---|---|---|
+> | Folder | `C:\Users\pc\Desktop\gurjas ai\GIL CLINIC` | `C:\Users\pc\Desktop\gurjas ai\newmcg nano clinic` |
+> | Kya hai | Hospital/OPD system — reception → queue/token → doctor → lab → admin | Single-doctor OPD clinic app (patients, prescription, AI, monitoring) |
+> | Tech | **Python FastAPI + Jinja2 + SQLite** | **React + TypeScript + Vite PWA + IndexedDB + Firebase** |
+> | LIVE URL | **https://gillhopitalsoftware1.pythonanywhere.com/opd/dashboard** | **https://clincity-opd.web.app** |
+> | Host | PythonAnywhere (free, card nahi) | Firebase Hosting (GitHub push par CI deploy) |
+> | Login | PIN **5554** / 1234 / 1010 | Doctor PIN (6-digit, device par set hota hai) |
+> | Data kahan | SQLite `/home/…/gil-clinic/ghos_prod.db` (host par) | IndexedDB (device) + Firestore (cloud) |
+> | Git repo | `gurjeetsinghgill8-web/gil-clinic` | `gurjeetsinghgill8-web/clincity-opd` |
+> | Version | GHOS v2.0.0 | CLINICITY **v0.8.0** |
+> | Patient self-filling | `/my/<token>` (patient) · `/s/<token>` (doctor read-only) | `#patient/<token>` · `#share/<token>` |
+> | Naya code live | `python pa_deploy.py ship --since <commit> --no-git --no-tests` | `git push` (CI) ya `npm run build && firebase deploy` |
+> | Memory file | **yahi file** | `…\newmcg nano clinic\MEMORY.md` |
+>
+> Neeche sirf **GIL CLINIC** ki baatein hain.
+
 > **Ye file har naye session/agent ko SABSE PEHLE padhni chahiye.**
 > Yahan sirf wahi baatein hain jo baar-baar kaam aati hain: live URL, login, hosting,
 > deploy commands, aur wo faisle jo ho chuke hain. Detail ke liye neeche di gayi files.
@@ -8,7 +31,7 @@
 
 ---
 
-## 1. 🔴 LIVE SYSTEM (yahi asli production hai)
+## 1. 🔴 LIVE SYSTEM — GIL CLINIC (yahi asli production hai)
 
 | | |
 |---|---|
