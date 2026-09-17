@@ -20,15 +20,17 @@
 #  10. End me health check + saaf Hinglish summary
 #
 # Options:
+#   --auto-domain       domain khud banao (public IP se sslip.io) — kuch sochna nahi padta
 #   --domain <host>     public HTTPS domain (DuckDNS/sslip.io/apna domain)
 #   --port <n>          internal port (default 8000)
 #   --repo <url>        git repo (default niche REPO_URL)
 #   --no-caddy          sirf IP:PORT par chalao (HTTPS nahi)
 #   --backup-repo <url> private GitHub repo for off-site backups (optional)
 #
-# Oracle VM par SRF ye 2 cheezein console se karni hoti hain (script unhe yaad dilata hai):
+# Oracle VM par SIRF ye 2 kaam console se karne hote hain (script unhe yaad dilata hai):
 #   * Security List / NSG me port 80 + 443 (ya 8000) open
 #   * Public IP ko **Reserved** karein (free) — warna VM restart par IP badal sakta hai
+#   (VM ke andar ka iptables firewall ye script khud khol deta hai)
 # ═══════════════════════════════════════════════════════════════════════════════
 set -euo pipefail
 
@@ -38,6 +40,7 @@ BACKUP_DIR=${DATA_DIR}/backups
 SERVICE=gilclinic
 PORT=8000
 DOMAIN=""
+AUTO_DOMAIN=0
 USE_CADDY=1
 REPO_URL="https://github.com/gurjeetsinghgill8-web/gil-clinic.git"
 BACKUP_REPO=""
@@ -45,6 +48,7 @@ SCRIPT_VERSION="2026-09-17"
 
 while [ $# -gt 0 ]; do
   case "$1" in
+    --auto-domain) AUTO_DOMAIN=1; shift ;;
     --domain) DOMAIN="${2:-}"; shift 2 ;;
     --port) PORT="${2:-8000}"; shift 2 ;;
     --repo) REPO_URL="${2:-}"; shift 2 ;;
@@ -59,8 +63,21 @@ warn() { echo -e "   [WARN] $*"; }
 ok()   { echo -e "   [OK] $*"; }
 
 if [ "$(id -u)" -ne 0 ]; then
-  echo "Root/sudo se chalayein:  sudo bash deploy/permanent/bootstrap.sh --domain <domain>"
+  echo "Root/sudo se chalayein:  sudo bash deploy/permanent/bootstrap.sh --auto-domain"
   exit 1
+fi
+
+# ── 0. Public IP + auto-domain (sslip.io — koi signup nahi, hamesha free) ─────
+PUB_IP=""
+for _i in 1 2 3; do
+  PUB_IP=$(curl -fsS --max-time 8 https://api.ipify.org 2>/dev/null || curl -fsS --max-time 8 ifconfig.me 2>/dev/null || echo "")
+  [ -n "${PUB_IP}" ] && break
+  sleep 2
+done
+
+if [ "${AUTO_DOMAIN}" = "1" ] && [ -z "${DOMAIN}" ] && [ -n "${PUB_IP}" ]; then
+  DOMAIN="$(echo "${PUB_IP}" | tr '.' '-').sslip.io"
+  echo "==> Auto domain (sslip.io, free + permanent): ${DOMAIN}"
 fi
 
 # ── 1. packages ───────────────────────────────────────────────────────────────
@@ -186,6 +203,30 @@ systemctl daemon-reload
 systemctl enable --now "${SERVICE}-watchdog.timer" >/dev/null 2>&1
 ok "watchdog har 2 minute /health check karta hai"
 
+# ── 6b. VM ka apna firewall (Oracle Ubuntu me by default SAB band hota hai) ───
+# Ye step bahut zaroori hai: Oracle ki Ubuntu image me iptables sirf SSH (22)
+# chhodta hai — is liye 80/443/8000 locally kholne padte hain, warna bahar se
+# "site not reachable" aata hai (security list khuli hone ke bawajood).
+log "[6b/10] VM ka firewall (port 80, 443, ${PORT})"
+if command -v iptables >/dev/null 2>&1; then
+  for P in 80 443 "${PORT}"; do
+    iptables -C INPUT -p tcp --dport "${P}" -j ACCEPT 2>/dev/null || \
+      iptables -I INPUT 5 -p tcp --dport "${P}" -j ACCEPT 2>/dev/null || true
+  done
+  if command -v netfilter-persistent >/dev/null 2>&1; then
+    netfilter-persistent save >/dev/null 2>&1 || true
+    ok "iptables rules save (reboot ke baad bhi khule rahenge)"
+  else
+    DEBIAN_FRONTEND=noninteractive apt-get install -y -qq iptables-persistent >/dev/null 2>&1 || true
+    netfilter-persistent save >/dev/null 2>&1 || true
+    ok "iptables rules save"
+  fi
+fi
+if command -v ufw >/dev/null 2>&1 && ufw status 2>/dev/null | grep -q "Status: active"; then
+  for P in 80 443 "${PORT}"; do ufw allow "${P}/tcp" >/dev/null 2>&1 || true; done
+  ok "ufw rules khole"
+fi
+
 # ── 7. Caddy — free permanent HTTPS ───────────────────────────────────────────
 if [ "${USE_CADDY}" = "1" ] && [ -n "${DOMAIN}" ]; then
   log "[7/10] Caddy (free HTTPS) → ${DOMAIN}"
@@ -217,9 +258,8 @@ EOF
   PUBLIC_URL="https://${DOMAIN}"
   ok "HTTPS ready (certificate pehli request par ban jata hai)"
 else
-  log "[7/10] Caddy skip (--no-caddy ya --domain nahi diya)"
-  IP_ADDR=$(curl -s --max-time 8 ifconfig.me 2>/dev/null || echo "")
-  PUBLIC_URL="http://${IP_ADDR:-<VM-IP>}:${PORT}"
+  log "[7/10] Caddy skip (--no-caddy ya domain nahi mila)"
+  PUBLIC_URL="http://${PUB_IP:-<VM-IP>}:${PORT}"
 fi
 
 # ── 8. off-site backup (optional, ₹0) ─────────────────────────────────────────
@@ -319,26 +359,46 @@ for i in 1 2 3 4 5 6; do
   sleep 5
 done
 
+# Bahar se bhi check (HTTPS) — DNS + certificate banne me 10-30 sec lag sakte hain
+OUTSIDE="skip"
+if [ "${HEALTH}" = "PASS" ] && [ -n "${PUBLIC_URL}" ]; then
+  for i in 1 2 3 4 5 6 7 8; do
+    if curl -fsS --max-time 10 "${PUBLIC_URL}/health" 2>/dev/null | grep -q '"ok"'; then
+      OUTSIDE="OK"; break
+    fi
+    sleep 5
+  done
+fi
+
 echo ""
 echo "════════════════════════════════════════════════════════════════"
 if [ "${HEALTH}" = "PASS" ]; then
-  echo " ✅ APP CHALU HAI — ${PUBLIC_URL}"
+  echo " ✅ HO GAYA — APP 24/7 CHALU HAI"
+  echo ""
+  echo "    🌐 AAPKA ADDRESS : ${PUBLIC_URL}"
+  echo "    👨‍⚕️ DOCTOR LOGIN  : ${PUBLIC_URL}/opd/login   (PIN 5554 = Chief)"
+  echo ""
+  if [ "${OUTSIDE}" = "OK" ]; then
+    echo "    ✅ Bahar se (internet se) bhi khul raha hai — sab theek hai."
+  else
+    echo "    ⏳ Bahar se check abhi pass nahi hua. Ye 2 kaam Oracle console me baaki ho sakte hain:"
+    echo "       1) Security List / NSG me port 80 + 443 (Ingress, 0.0.0.0/0) open karein"
+    echo "       2) 2-3 minute ruk kar browser me khol kar dekhein (certificate ban raha hota hai)"
+  fi
 else
-  echo " ⚠️  HEALTH FAIL — ye chalayein: journalctl -u ${SERVICE} -n 80 --no-pager"
+  echo " ⚠️  APP START NAHI HUA — ye chalayein aur output bhejein:"
+  echo "       journalctl -u ${SERVICE} -n 80 --no-pager"
 fi
 echo "════════════════════════════════════════════════════════════════"
-echo "   Doctor login : ${PUBLIC_URL}/opd/login   (PIN: 5554 chief / 1234 junior)"
-echo "   Admin        : ${PUBLIC_URL}/clinic-portal"
-echo "   Health       : ${PUBLIC_URL}/health"
+echo "   Ab is URL ko phone me khol kar test karein: ${PUBLIC_URL}/opd/login"
 echo ""
-echo "   Logs         : journalctl -u ${SERVICE} -f"
-echo "   Restart      : systemctl restart ${SERVICE}"
-echo "   Update app   : sudo ${SERVICE}-update"
-echo "   Data + backup: ${DATA_DIR}  (backups: ${BACKUP_DIR})"
+echo "   Rozmarra ke commands (zaroorat pade to):"
+echo "     App band/chalu  : sudo systemctl status ${SERVICE}"
+echo "     App restart     : sudo systemctl restart ${SERVICE}"
+echo "     Logs            : sudo journalctl -u ${SERVICE} -n 80 --no-pager"
+echo "     Naya update     : sudo ${SERVICE}-update"
+echo "     Backup dekhein  : ls ${BACKUP_DIR}"
 echo ""
-echo "   ⚠️  Oracle console me ye 2 kaam (ek baar):"
-echo "       1) Security List / NSG me port 80 + 443 open karein"
-echo "       2) Public IP ko RESERVED karein (free) — warna restart par IP badal jayega"
-echo "   ⚠️  Domain free rakhein: DuckDNS (gilclinic.duckdns.org) ya sslip.io"
-echo "       aur VM par DuckDNS updater cron daal dein (deploy/permanent/README.md)"
+echo "   ⚠️  Ek baar Oracle console me: Public IP ko RESERVED karein (free) —"
+echo "       warna VM reboot par IP badal sakta hai aur upar wala address badal jayega."
 echo "════════════════════════════════════════════════════════════════"

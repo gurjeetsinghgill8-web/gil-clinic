@@ -1,153 +1,181 @@
-# GIL CLINIC — Permanent FREE Hosting (Railway band ho gayi, uska pakka ilaaj)
+# GIL CLINIC — Oracle Cloud **Always Free** VM par app 24/7 chalana
+### (Non-coder ke liye: sirf 2 cheezein aapko karni hain, baaki sab automatic)
 
-> **17-Sep-2026 · Status:** Railway service `gil-clinic` **Offline** hai (free tier 2023 me hi khatam — ab
-> sirf $5/month Hobby plan hai). Isliye ab app **hamesha-free** jagah chalti hai:
-> **apna computer (turant)** + **Oracle Cloud Always Free VM (24/7, permanent)**.
-
----
-
-## 0. TL;DR — 2 minute me faisla
-
-| | Kya | Kharcha | Kab band hota hai | Kab chalu karein |
-|---|---|---|---|---|
-| **A** | **Clinic ka computer hi server** (`install-windows-service.ps1`) | ₹0 | Jab computer band ho | **Aaj hi** (5 min) — clinic ke andar 100% chalta hai |
-| **B** | **Oracle Cloud Always Free VM** (`deploy/permanent/bootstrap.sh`) | ₹0 **hamesha** | Kabhi nahi (24/7, no sleep, 200GB disk) | Is hafte (signup me card verification lagta hai) |
-| C | Google Cloud e2-micro (always free) | ₹0 | Kabhi nahi | B backup ke liye |
-| ❌ | Railway / Render free / Koyeb free / HuggingFace | — | Free tier khatam / app sota hai / data udta hai | **Nahi** |
-
-**Sabse achha rasta:** pehle **A** se aaj clinic chalu karo (data turant safe, clinic ke andar koi rukawat nahi),
-phir **B** par shift ho jao — uske baad computer band hone par bhi app 24/7 chalta rahega, aur **paisa zindagi bhar ₹0**.
+> **Kyun ye rasta:** Railway ne free tier band kar diya (isliye app Offline ho gayi thi).
+> Oracle ka **Always Free** tier **kabhi expire nahi hota, kabhi sleep nahi karta** —
+> 4 CPU + 24GB RAM + 200GB permanent disk, **hamesha ₹0**.
+> Aapka data VM ki permanent disk par rehta hai (Railway par har deploy me ud jata tha).
 
 ---
 
-## A. Aaj hi: clinic ka computer = permanent server (₹0)
+## Aapko sirf itna karna hai (5 kaam)
 
-```powershell
-# PowerShell **Administrator** me:
-powershell -ExecutionPolicy Bypass -File deploy\permanent\install-windows-service.ps1
-```
+| # | Kaam | Kitna time | Kahan |
+|---|---|---|---|
+| 1 | Oracle account banana | 10 min | Browser |
+| 2 | VM (computer) banana | 5 min | Oracle console |
+| 3 | IP ko **Reserved** karna | 1 min | Oracle console |
+| 4 | Port **80 + 443** kholna | 2 min | Oracle console |
+| 5 | **`oracle-setup.bat` par double-click** | 8 min (khud chalta hai) | Aapka PC |
 
-Ye kya karta hai (sab apne aap, dobara chalane par bhi safe):
+Uske baad aapka address ban jayega, jaise: **`https://152-67-12-34.sslip.io/opd/login`**
 
-| # | Kaam | Fayda |
+> ⚠️ **Domain ke liye kuch kharidna nahi hai.** `sslip.io` free + permanent hai (VM ke IP se
+> apne aap ban jata hai). Chahein to baad me DuckDNS ka aasan naam bhi laga sakte hain
+> (`deploy/permanent/duckdns-update.sh` se, wo bhi free).
+
+---
+
+## STEP 1 — Oracle account (10 min)
+
+1. https://signup.cloud.oracle.com khol kar **Country: India** chuniye
+2. Email + password → email verify
+3. **Home Region: `India South (Hyderabad)`** chuniye (ya jo sabse paas ho) — ye baad me nahi badalta
+4. Card details: **sirf verification ke liye** (₹0 charge hota hai, Always Free me kuch nahi katta).
+   - Card reject hone lage to: dusra card try karein, ya seedha **Google Cloud e2-micro** (bhi always free) lein —
+     wahan bhi wahi `oracle-setup.bat` chal jayega (bas username pooch lega, GCP me wo aapka email hota hai).
+5. Account ban jaye to console: https://cloud.oracle.com
+
+---
+
+## STEP 2 — VM banana (5 min)
+
+`Compute → Instances → Create instance` — in cheezon ko aise rakhein:
+
+| Field | Kya chunein |
+|---|---|
+| Name | `gilclinic` |
+| **Image** | **Ubuntu 22.04** (Canonical Ubuntu) |
+| **Shape** | **`VM.Standard.A1.Flex`** (ARM, Always Free) — OCPU **2**, RAM **12 GB** |
+| Networking | Default VCN (naya banaye ga to theek hai) |
+| **Assign a public IPv4 address** | ✅ **Yes** (bahut zaroori) |
+| **SSH keys** | **"Generate a key pair for me"** chunein → **private key download** kar lein |
+| Boot volume | Default (50GB) — chahein to 100GB tak kar sakte hain (free) |
+
+**Create** dabayein. 2-3 minute me **Running** ho jayegi.
+
+### ⚠️ Agar "Out of capacity" error aaye (India region me common hai)
+1. **Availability Domain** badal kar dobara try karein (AD-1 → AD-2 → AD-3)
+2. Ya shape `VM.Standard.E2.1.Micro` (AMD, 1GB — Always Free, chhota par kaam kar jata hai)
+3. Ya 5-10 minute baad try karein (capacity free hoti rehti hai)
+
+---
+
+## STEP 3 — IP ko Reserved karein (1 min, free)
+
+Bina iske VM reboot hone par **IP badal sakta hai** aur patient ka link toot jayega.
+
+`Networking → Reserved public IPs` → **Reserve public IP** → naam `gilclinic-ip` →
+phir `Compute → Instances → gilclinic → Attached VNICs → ... → Public IP` me isi reserved IP ko assign karein.
+(VM banate waqt hi "Reserved public IP" chunne ka option bhi milta hai — wo best hai.)
+
+**Ye IP note kar lein**, jaise `152.67.12.34`.
+
+---
+
+## STEP 4 — Port 80 + 443 kholna (2 min)
+
+`Networking → Virtual Cloud Networks → (aapka VCN) → Security Lists → Default Security List`
+→ **Add Ingress Rules** — 2 baar:
+
+| Source CIDR | IP Protocol | Destination Port Range |
 |---|---|---|
-| 1 | **GILCLINIC-Server** task (boot par start) | Computer on hote hi app chalu — koi click nahi |
-| 2 | **Restart 999 baar / 1 minute** | App crash ho to Windows khud wapas chalu kar de |
-| 3 | **GILCLINIC-Tunnel** task | Public patient link (Cloudflare tunnel) bhi auto-start |
-| 4 | **GILCLINIC-Watchdog** (har 3 min) | App **hang** ho jaye (crash na ho) to bhi restart — ye asli "app band ho gayi" ka ilaaj |
-| 5 | Firewall + power settings | Clinic ke phone/PC se access + laptop sleep nahi |
+| `0.0.0.0/0` | TCP | `80` |
+| `0.0.0.0/0` | TCP | `443` |
 
-**Clinic ke andar:** `http://<is-PC-ka-IP>:8000/opd/login` · **Patient link:** tunnel log me URL
-(`Get-Content scratch\service-logs\tunnel.log | Select-String trycloudflare`).
-
-Band karna ho: `... -Uninstall`
-
-⚠️ **Sirf ek limitation:** computer band = app band. 24/7 ke liye neeche **B** karein.
+(Save dabayein. VM ke andar ka firewall script khud khol leta hai — aapko kuch nahi karna.)
 
 ---
 
-## B. Is hafte: Oracle Cloud **Always Free** VM (24/7, hamesha ₹0)
+## STEP 5 — Sab kuch install: `oracle-setup.bat` par DOUBLE-CLICK
 
-Oracle ka Always Free tier **kabhi expire nahi hota, kabhi sleep nahi karta**:
-**4 CPU + 24GB RAM + 200GB permanent disk** — clinic app ke liye bahut zyada. Signup me card sirf
-**verification** ke liye lagta hai (charge nahi hota); kuch Indian cards reject ho jate hain — tab **C** (Google) try karein.
+File yahan hai: **`deploy\permanent\oracle-setup.bat`**
 
-### B1. VM banana (Oracle console, 10 minute)
-1. https://cloud.oracle.com → sign up (Always Free chuno)
-2. **Compute → Instances → Create instance**
-   - Image: **Ubuntu 22.04** (ya 24.04)
-   - Shape: **VM.Standard.A1.Flex** (ARM, Always Free) — 2 OCPU / 12GB kaafi hai
-   - **Add SSH key** (apni public key paste karein — Windows me `ssh-keygen -t ed25519`)
-3. Create hone ke baad **Public IP copy** karein → **Reserved IP** bana dein
-   (Networking → Reserved public IPs → Assign) — free hai, aur IP kabhi nahi badlega
-4. **Security List / NSG** me **port 80 + 443** open karein (Ingress rule: 0.0.0.0/0, TCP, 80,443)
+Ye window 3 cheezein poochegi:
+1. **VM ka Public IP** → STEP 3 wala IP paste karein
+2. **SSH key** → ENTER dabayein (Downloads me jo `.key` file hai wo khud pakad lega), ya path dein
+3. **username** → ENTER (Oracle me `ubuntu` hota hai)
 
-### B2. Free permanent domain (2 minute, ₹0)
-- **DuckDNS** (recommended): https://www.duckdns.org → Google/GitHub se login → naam chuno, e.g. `gilclinic`
-  → token copy. (Bina card, hamesha free.)
-- Ya **sslip.io**: koi signup nahi — aapka host `152-67-12-34.sslip.io` jaisa hi kaam karta hai
-  (IP ko dash se likhein). Certificate Caddy khud le lega.
+Ab 5-8 minute ruk jaayein — ye window khud ye sab kar degi:
 
-### B3. VM par 2 command (bas itna hi)
-```bash
-# VM me SSH karke:
-git clone https://github.com/gurjeetsinghgill8-web/gil-clinic.git /tmp/gc && cd /tmp/gc
-
-# DuckDNS domain + token ke saath (ek hi command — sab kuch set ho jata hai)
-sudo bash deploy/permanent/bootstrap.sh --domain gilclinic.duckdns.org
-```
-(DuckDNS use kar rahe hain to pehle: `sudo bash deploy/permanent/duckdns-update.sh --domain gilclinic --token <TOKEN> --install`)
-
-**Bas. Ab app 24/7 chalu hai:** `https://gilclinic.duckdns.org/opd/login`
-
-### B4. Bootstrap kya-kya karta hai
-| # | Kaam | Kyun zaroori |
+| # | Ye khud karta hai | Fayda |
 |---|---|---|
-| 1 | Data **permanent disk** par (`/opt/gilclinic/data`) | Railway par SQLite har redeploy me ud jata tha — ab kabhi nahi |
-| 2 | `systemctl` service + boot par auto-start | VM restart/bijli jane par bhi app wapas chalu |
-| 3 | `Restart=always` + crash-loop guard | App crash ho to 5 sec me wapas (aur bekaar loop se bachav) |
-| 4 | **Health watchdog** (har 2 min `/health`) | App **hang** ho to bhi apne aap restart — "app band" ka pakka ilaaj |
-| 5 | **Caddy + Let's Encrypt HTTPS** | Free SSL, koi renew ka jhanjhat nahi |
-| 6 | **Roz 2 baar backup** (13:00 + 21:00) + 30 din retention | Galti se data kharab ho to wapas |
-| 7 | **Off-site backup** (optional private GitHub repo) | VM hi ud jaye (Oracle account issue) to bhi data safe |
-| 8 | `gilclinic-update` command | Naya code deploy = ek command |
-| 9 | `APP_BASE_URL` = aapka domain | Patient link **hamesha** sahi URL ka |
-| 10 | Heartbeat cron | Oracle "idle VM" samajh kar reclaim na kare |
+| 1 | VM se connect + naya code GitHub se | Aapka latest app |
+| 2 | Python + dependencies install | — |
+| 3 | **Data permanent disk par** (`/opt/gilclinic/data`) | Data kabhi nahi udta |
+| 4 | App ko **systemd service** banana | VM restart/bijli jane par bhi app wapas chalu |
+| 5 | **Crash par auto-restart** (999 baar) | App gir jaye to 5 second me wapas |
+| 6 | **Health watchdog (har 2 min)** | App **hang** ho jaye to bhi restart |
+| 7 | **HTTPS (Caddy + Let's Encrypt)** apne aap | `https://…sslip.io` — secure lock |
+| 8 | **Roz 2 baar backup** (13:00, 21:00) + 30 din tak rakhta hai | Galti se kharab data wapas |
+| 9 | VM ka firewall khud khol deta hai | Bahar se access |
+| 10 | Aapka **address** set + health check | Link kaam karta hai |
+| 11 | `gilclinic-update` command | Aage naya code = ek command |
 
-**Off-site backup chalu karne ke liye** (recommended — 30 second):
-1. GitHub par ek **private** repo banayein, e.g. `gil-clinic-backup`
-2. VM par ek deploy key banayein: `ssh-keygen -t ed25519 -f ~/.ssh/backup -N ""` aur public key us repo me
-   **Deploy keys → Allow write access** ke saath add karein
-3. `sudo bash deploy/permanent/bootstrap.sh --domain <domain> --backup-repo git@github.com:gurjeetsinghgill8-web/gil-clinic-backup.git`
-
-### B5. Rozana/zaroorat par
-```bash
-sudo gilclinic-update                  # naya code deploy (git pull + deps + restart + health check)
-systemctl status gilclinic             # app chalu hai?
-journalctl -u gilclinic -n 80 --no-pager   # logs
-curl -s localhost:8000/health          # health
-ls /opt/gilclinic/data/backups         # backups
-```
+Aakhir me screen par aapka address aa jayega + browser khul jayega.
 
 ---
 
-## C. Backup option: Google Cloud e2-micro (always free)
-Oracle signup reject ho jaye to yahi karein — steps ekdum same hain (Ubuntu VM + `bootstrap.sh --domain ...`).
-Free tier: 1 vCPU + 1GB RAM + 30GB disk, US region, kabhi expire nahi.
+## STEP 6 — Test (phone se, 2 min)
+
+1. Address kholiye: `https://<aapka-address>/opd/login` → PIN **5554** (Chief)
+2. Kisi patient ko select karke **📱 Patient link** dabayein → WhatsApp par bhej dein
+3. Patient ke phone par link khulega → mobile number verify → BP/sugar bharega → graph banega
+4. Patient **📄 PDF download** kar sakta hai, aur **🩺 Doctor ko bhejo** se kisi bhi doctor ko
+   read-only link bhej sakta hai
+
+Bas! Ab app **24/7 chalu hai, hamesha free**.
 
 ---
 
-## D. Railway ka kya karein?
+## Rozmarra (sirf zaroorat pade to)
 
-- **Abhi ke liye:** use na karein. Free tier nahi hai, aur bina paid volume ke SQLite data har deploy me udta hai —
-  aapka "data save nahi hota" wala issue isi wajah se tha.
-- **Agar kabhi paid plan lein** (ya staging ke liye use karein): repo me `railway.json` add kar diya gaya hai
-  (healthcheck `/health`, restart policy, aur DB ko **volume** par rakhne ka rasta `RAILWAY_VOLUME_MOUNT_PATH` se) —
-  phir Railway par bhi data safe rahega.
-- **Project delete mat karein** — offline pada rehne do, kuch kharcha nahi karta.
+VM par SSH karke (ya `oracle-setup.bat` dobara chala kar) ye commands:
 
----
-
-## E. Ek zaroori bug jo is baar pakda gaya (permanent fix ho gaya)
-
-`.env` me `APP_BASE_URL` **purana tunnel/Railway URL** pada reh gaya tha
-(`https://rio-minerals-rim-skills.trycloudflare.com`) — aur tunnel band hone ke baad bhi app **wahi** base URL
-patient links me bhej raha tha → patient ke phone par "site not found".
-
-Ab `src/utils/public_url.py` har baar check karta hai:
-1. `APP_BASE_URL` set hai **aur uska DNS zinda hai** → wahi use karo
-2. Host mar chuka hai (tunnel/Railway band) → usko 5 minute ke liye "dead" mark karo aur
-   **request ke apne host** se link banao (jo abhi chal raha hai)
-3. `Patient Monitor` tab par doctor ko **warning** dikhti hai: kaun sa URL use ho raha hai aur kyun
-
-Isliye ab patient link kabhi chup-chaap toota hua nahi jayega — doctor ko screen par hi pata chal jayega.
+| Kaam | Command |
+|---|---|
+| App chalu hai ya nahi | `sudo systemctl status gilclinic` |
+| App restart | `sudo systemctl restart gilclinic` |
+| Logs dekhna | `sudo journalctl -u gilclinic -n 80 --no-pager` |
+| **Naya update** (GitHub se) | `sudo gilclinic-update` |
+| Backup dekhein | `ls /opt/gilclinic/data/backups` |
+| Health check | `curl -s localhost:8000/health` |
 
 ---
 
-## F. Aaj ka action plan (checklist)
+## Kuch galat ho to (troubleshooting)
 
-- [ ] **Aaj:** `install-windows-service.ps1` chala kar clinic ka computer server bana lein (5 min)
-- [ ] **Aaj:** ek patient ko apna link bhej kar phone par test karein (verify → reading → graph → PDF)
-- [ ] **Is hafte:** Oracle (ya Google) VM banayein + `bootstrap.sh` chalayein → 24/7 free
-- [ ] **Is hafte:** DuckDNS free domain + `--backup-repo` (off-site backup) chalu karein
-- [ ] **Uske baad:** purane tunnel wale `.env` ki fikar khatam — `APP_BASE_URL` ab permanent domain hoga
+| Problem | Wajah | Ilaaj |
+|---|---|---|
+| Browser me "site can't be reached" | Port 80/443 cloud me khule nahi | STEP 4 dobara karein |
+| HTTPS certificate ka error | Certificate ban raha hota hai | 2-3 minute ruk kar refresh karein |
+| `setup.bat` me SSH fail | IP ya key galat / VM abhi Running nahi | IP dobara copy karein, 2 min baad try karein |
+| "Out of capacity" VM banate waqt | ARM capacity full | Dusra Availability Domain, ya `E2.1.Micro` |
+| App chalu par health fail | Code/DB issue | `sudo journalctl -u gilclinic -n 80` ka output bhej dein |
+| Patient ka link purane address par ja raha hai | `APP_BASE_URL` purana hai | Naya install khud set karta hai; phir bhi `sudo nano /opt/gilclinic/.env` me `APP_BASE_URL` dekh lein |
+
+**Kuch bhi atak jaye:** jo bhi screen par likha ho, wo copy karke bhej dein — main dekh lunga.
+
+---
+
+## Off-site backup (optional, 2 min — sabse safe)
+
+VM hi kharab ho jaye to bhi data bachane ke liye (private GitHub repo me rozana backup):
+
+1. GitHub par **private** repo banayein: `gil-clinic-backup`
+2. VM par: `ssh-keygen -t ed25519 -f ~/.ssh/backup -N ""` → `cat ~/.ssh/backup.pub` copy
+3. Us repo me `Settings → Deploy keys → Add deploy key` (✅ Allow write access) me paste
+4. `sudo bash deploy/permanent/bootstrap.sh --auto-domain --backup-repo git@github.com:gurjeetsinghgill8-web/gil-clinic-backup.git`
+
+---
+
+## Aur ek rasta (agar Oracle me card reject ho jaye)
+
+**Google Cloud e2-micro** (Always Free): 1 vCPU + 1GB RAM + 30GB disk, US region, kabhi expire nahi.
+Steps ekdum same hain — VM bana kar wahi **`oracle-setup.bat`** chalayein (username me apna GCP username dein).
+Deploy ke waqt `--auto-domain` ki jagah GCP ke external IP se bhi wahi `sslip.io` address ban jayega.
+
+**Ya bilkul bina cloud (₹0, aaj hi):** clinic ka PC hi server —
+`powershell -ExecutionPolicy Bypass -File deploy\permanent\install-windows-service.ps1`
+(boot par auto-start + crash par auto-restart + health watchdog + tunnel auto-start).
+Sirf kami: computer band = app band.
