@@ -365,7 +365,15 @@ def cmd_ship(args):
     ).stdout.split()
 
     print("==> [3/5] Upload changed files (%d)..." % len(files))
-    skip_prefixes = (".git/", "node_modules/", "backups/", "scratch/", "ghos_memory/", "deploy/", ".github/")
+    skip_prefixes = (".git/", "node_modules/", "backups/", "scratch/", "ghos_memory/",
+                     "deploy/", ".github/", "future_ideas/")
+    # Internal planning/memory docs — server par bhejne ki zaroorat nahi
+    # (ye web par serve nahi hote, par live box par rakhne ka koi faayda nahi).
+    skip_exact = (
+        ".env", "pa_token.txt", "pa_state.json", "admin_credentials.txt", "secret.txt",
+        "build_info.json",  # ise neeche alag se banakar upload karte hain
+        "MEMORY.md", "FIR_PRODUCT_DEVELOPMENT.md", "PRODUCT_UPGRADATION_PLAN.md",
+    )
     skipped = 0
     ok_count = 0
     for f in files:
@@ -376,7 +384,7 @@ def cmd_ship(args):
         if f.startswith(skip_prefixes):
             skipped += 1
             continue
-        if f.endswith((".db", ".log")) or f in (".env", "pa_token.txt", "pa_state.json", "admin_credentials.txt", "secret.txt"):
+        if f.endswith((".db", ".log")) or f in skip_exact:
             skipped += 1
             continue
         with open(path, "rb") as fh:
@@ -386,6 +394,31 @@ def cmd_ship(args):
             ok_count += 1
         print("   %s -> %s" % (f, r.status_code))
     print("   uploaded: %d, skipped: %d" % (ok_count, skipped))
+
+    # ── BUILD STAMP ──────────────────────────────────────────────────────
+    # Har ship par ek naya build_info.json banta + upload hota hai. Isse live
+    # par turant pata chalta hai ki naya code chadha hai ya purana:
+    #   /health -> {"build": "2026-09-21.1432.12d49c3", ...}
+    #   dashboard sidebar footer me bhi dikhta hai.
+    short = subprocess.run(
+        ["git", "rev-parse", "--short", new_head], cwd=BASE_DIR,
+        capture_output=True, text=True,
+    ).stdout.strip()
+    build = "%s.%s" % (time.strftime("%Y-%m-%d.%H%M"), short or "nogit")
+    info = {
+        "build": build,
+        "commit": short,
+        "commit_full": new_head,
+        "built_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        "files": files,
+        "file_count": len(files),
+    }
+    payload = json.dumps(info, indent=2).encode()
+    with open(os.path.join(BASE_DIR, "build_info.json"), "wb") as fh:
+        fh.write(payload)
+    r = api("POST", V0 + "/files/path/home/%s/gil-clinic/build_info.json" % USERNAME,
+            files={"content": payload})
+    print("   build_info.json -> %s   BUILD = %s" % (r.status_code, build))
 
     print("==> [4/5] Site reload...")
     api("POST", WEBSITES + DOMAIN + "/reload/")
@@ -440,6 +473,14 @@ def cmd_remote_sync(_):
 
 def cmd_status_check(_):
     """PA par hamare naye patient-portal routes live hain ya nahi (read-only)."""
+    # Live BUILD stamp — yahi batata hai ki naya code chadha hai ya purana
+    try:
+        h = requests.get(f"https://{DOMAIN}/health", timeout=30).json()
+        print("   BUILD LIVE : %s" % h.get("build"))
+        print("   commit     : %s  | built_at: %s  | files shipped: %s"
+              % (h.get("commit"), h.get("built_at"), h.get("files_shipped")))
+    except Exception as e:
+        print("   !! build stamp read fail:", e)
     checks = [
         ("/health", 200),
         ("/my/nonexistent-token", 404),

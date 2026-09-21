@@ -162,7 +162,7 @@
           if (real) resolve();
           else {
             clearPuterSession();
-            reject(new Error('Puter guest account bana — puter.com tab me apni email se login karo, phir wapas aao. Ya Settings → AI Mode me Groq key lagao.'));
+            reject(new Error('Puter ne temporary guest bana diya (asli account nahi). Settings → "🆕 Naya Account banao" dabao → puter.com par email/Google se free account banao → phir "🔌 Connect Puter" dabao. Ya Settings me Groq key lagao (usme koi login hi nahi chahiye).'));
           }
         });
       }
@@ -173,7 +173,7 @@
         if (d.msg !== 'puter.token') return;
         if (d.msg_id != null && String(d.msg_id) !== String(msgId)) return;
         if (d.success && d.token) finish(function () { acceptToken(d.token, d.app_uid); });
-        else finish(function () { reject(new Error('Puter sign-in complete nahi hua — puter.com tab me login pura karo, tab band mat karo.')); });
+        else finish(function () { reject(new Error('Puter sign-in complete nahi hua — puter.com tab me login pura karo, tab band mat karo. Naya account nahi hai? Settings → "🆕 Naya Account banao" dabao.')); });
       }
 
       function pollOnce() {
@@ -199,7 +199,7 @@
       function onResume() { pollOnce(); }
 
       timer = setTimeout(function () {
-        finish(function () { reject(new Error('Puter sign-in timed out — puter.com tab me login complete karke wapas aao, phir dobara "Connect Puter" dabao. Ya Groq key lagao.')); });
+        finish(function () { reject(new Error('Puter sign-in timed out — puter.com tab me login complete karke wapas aao, phir dobara "Connect Puter" dabao. Account nahi hai? Settings → "🆕 Naya Account banao". Ya Groq key lagao (koi login nahi chahiye).')); });
       }, TAB_SIGNIN_TIMEOUT_MS);
 
       window.addEventListener('message', onMsg);

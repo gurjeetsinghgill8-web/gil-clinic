@@ -531,6 +531,8 @@
 
         <div class="sb-footer">
             <a href="/opd/logout">🚪 Logout</a>
+            <div id="build-stamp" title="Live par kaunsa version chal raha hai — har deploy par badalta hai. Naya code chadha ya nahi, yahin se pata chalta hai."
+                 style="margin-top:8px;font-size:11px;color:var(--text-muted);line-height:1.35;word-break:break-all;">Build: …</div>
         </div>
     </aside>
 
@@ -1447,11 +1449,17 @@
                                 <label>Puter — Free AI (optional)</label>
                                 <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
                                     <button type="button" class="btn btn-sm" style="background:#7c3aed;color:#fff;" onclick="connectPuter()">🔌 Connect Puter</button>
+                                    <button type="button" class="btn btn-sm" style="background:#059669;color:#fff;font-weight:700;" onclick="window.open('https://puter.com/login','_blank')" title="Puter par naya FREE account banao (email ya Google se) — sign-in popup blank aaye to yahi asli rasta hai">🆕 Naya Account banao</button>
                                     <button type="button" class="btn btn-sm" style="background:#0b57d0;color:#fff;" onclick="window.open('https://puter.com','_blank')" title="Puter account ka billing/recharge page kholega">💳 Recharge Puter</button>
                                     <span id="puter-status" class="text-sm text-muted">Not connected</span>
                                 </div>
                                 <span id="puter-usage-info" class="text-sm" style="color:#047857;font-weight:600;"></span>
-                                <span class="text-sm text-muted">Free Puter account = free AI credits, no API key needed. Credits khatam ho to "💳 Recharge Puter" dabao — puter.com khulega, wahin sign-in karke Billing → upgrade/recharge. Or add your own key inside Puter (BYOK) — then that provider's bill is yours, Puter gets nothing.</span>
+                                <div class="text-sm text-muted" style="line-height:1.5;">
+                                    Free Puter account = free AI credits, koi API key nahi chahiye.
+                                    <br>• <b>Naya account nahi ban raha?</b> "🆕 Naya Account banao" dabao → puter.com/login nayi tab me khulega → wahan <b>email ya Google se Sign up</b> karo → phir yahan "🔌 Connect Puter" dabao.
+                                    <br>• Puter ki taraf se sign-up me dikkat aa rahi hai (<a href="https://github.com/HeyPuter/puter/issues/1430" target="_blank" rel="noopener">known Puter bug</a>) — hamare app ki galti nahi. Sign-in window blank aaye to tab band mat karo, login pura karke wapas aao (app khud pakad lega).
+                                    <br>• <b>Puter bilkul hi na chale to</b> neeche "My own API keys" me <b>Groq key</b> (free — console.groq.com) daal do: usme <b>koi login, koi popup hi nahi</b> chahiye aur AI seedha chalta hai.
+                                </div>
                             </div>
                         </div>
                         <div class="form-group">
@@ -3764,11 +3772,16 @@ async function connectPuter() {
             showToast('✅ Puter connected — free AI active');
         } else {
             statusEl.textContent = 'Not connected';
-            showToast('Puter sign-in not completed', 'error');
+            showToast('Puter sign-in complete nahi hua — pehle "🆕 Naya Account banao" se free account banao, ya Groq key lagao', 'error');
         }
     } catch (e) {
-        statusEl.textContent = '❌ ' + e;
-        showToast('Puter unavailable — check internet', 'error');
+        const msg = (e && e.message) ? e.message : String(e);
+        statusEl.textContent = '❌ ' + msg;
+        if (/guest|account|sign\s?up|nahi bana|temporary/i.test(msg)) {
+            showToast('🆕 Pehle "Naya Account banao" dabao → puter.com par free account banao → phir "Connect Puter" dabao', 'error');
+        } else {
+            showToast('Puter connect nahi hua — ya "🆕 Naya Account banao" try karo, ya Groq key lagao (usme koi login nahi chahiye)', 'error');
+        }
     }
 }
 
@@ -5843,6 +5856,20 @@ async function deleteMedLibrary(id) {
   if (res.ok) { await loadMedLibrary(); showToast('🗑 Medicine library se hata di'); }
   else showToast('❌ ' + (res.error || 'Delete nahi hua'), 'error');
 }
+
+// ── Live BUILD stamp — naya code chadha hai ya purana, ye turant batata hai ──
+(function () {
+  var el = document.getElementById('build-stamp');
+  if (!el) return;
+  fetch('/health')
+    .then(function (r) { return r.json(); })
+    .then(function (h) {
+      el.textContent = 'Build: ' + (h.build || '?') + (h.built_at ? '  ·  ' + h.built_at : '');
+      el.style.color = '#047857';
+      el.style.fontWeight = '600';
+    })
+    .catch(function () { el.textContent = 'Build: (health check nahi chala)'; });
+})();
 </script>
 </body>
 </html>

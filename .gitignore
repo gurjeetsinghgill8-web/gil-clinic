@@ -31,6 +31,9 @@ pa_data_upload.zip
 pa_token.txt
 pa_state.json
 
+# Build stamp — deploy ke waqt pa_deploy.py apne aap banata + upload karta hai
+build_info.json
+
 # OS
 .DS_Store
 Thumbs.db

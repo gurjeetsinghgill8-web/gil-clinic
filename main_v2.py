@@ -14,6 +14,7 @@ Usage:
 
 from __future__ import annotations
 
+import json
 import os
 import sys
 from contextlib import asynccontextmanager
@@ -87,6 +88,30 @@ print(f"[GHOS] ASYNC DB = {os.environ.get('GHOS_DB_URL_ASYNC', 'N/A')}")
 APP_NAME = "GHOS V2 — GIL CLINIC"
 APP_VERSION = "2.0.0"
 APP_DESC = "Department Pilot — Reception → Queue → Technician → Patient PWA"
+
+
+# ── BUILD STAMP ─────────────────────────────────────────────────────────
+# Har deploy par `pa_deploy.py ship` ek NAYA build_info.json upload karta hai.
+# Isse turant pata chalta hai ki live par NAYA code chadha hai ya PURANA —
+# pehle ye hardcoded tha ("2026.08.06.v2.0") is liye kabhi nahi badalta tha.
+#   Dekho:  /health   (aur dashboard ke sidebar footer me bhi dikhta hai)
+def _load_build_info() -> dict:
+    _p = Path(__file__).resolve().parent / "build_info.json"
+    try:
+        if _p.exists():
+            # utf-8-sig: BOM ho to bhi padh le (Windows editors/PowerShell BOM daal dete hain)
+            return json.loads(_p.read_text(encoding="utf-8-sig"))
+    except Exception as _e:
+        print(f"[GHOS] build_info.json padha nahi gaya: {_e}")
+    return {}
+
+
+BUILD_INFO = _load_build_info()
+BUILD_STAMP = BUILD_INFO.get("build") or "dev-local"
+BUILD_COMMIT = BUILD_INFO.get("commit") or ""
+BUILD_AT = BUILD_INFO.get("built_at") or ""
+BUILD_FILES = BUILD_INFO.get("file_count") or 0
+print(f"[GHOS] BUILD = {BUILD_STAMP} (commit {BUILD_COMMIT}, files {BUILD_FILES})")
 
 
 # =========================================================================
@@ -539,8 +564,19 @@ async def user_manual():
 
 @app.get("/health", include_in_schema=False)
 async def health():
-    """Healthcheck endpoint for Railway deployment container."""
-    return {"status": "ok", "build": "2026.08.06.v2.0", "version": APP_VERSION, "timestamp": "2026-08-06T19:30:00Z"}
+    """Healthcheck + LIVE BUILD stamp.
+
+    `build` har deploy par badalta hai, is liye yahi sabse aasan tarika hai ye
+    janne ka ki live par naya code chadha hai ya purana.
+    """
+    return {
+        "status": "ok",
+        "build": BUILD_STAMP,
+        "commit": BUILD_COMMIT,
+        "built_at": BUILD_AT,
+        "files_shipped": BUILD_FILES,
+        "version": APP_VERSION,
+    }
 
 
 # =========================================================================

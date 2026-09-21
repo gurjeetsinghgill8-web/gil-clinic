@@ -27,7 +27,7 @@
 > Yahan sirf wahi baatein hain jo baar-baar kaam aati hain: live URL, login, hosting,
 > deploy commands, aur wo faisle jo ho chuke hain. Detail ke liye neeche di gayi files.
 >
-> **Last updated:** 17-Sep-2026 · **Owner:** Dr. G. S. Gill
+> **Last updated:** 21-Sep-2026 · **Owner:** Dr. G. S. Gill
 
 ---
 
@@ -82,6 +82,33 @@ node scripts/pa_live_e2e.cjs && python scripts/pa_cleanup.py                # po
   `git fetch + reset --hard origin/main` karta hai (git pull nahi)
 - Poora detail: **`PA_DEPLOY_GUIDE.md`**
 
+### 3.1 🔍 NAYA CODE LIVE HUA YA NAHI — kaise pata chalega (BUILD STAMP)
+
+> **Ye zaroori rule hai — har deploy par build stamp badalna chahiye.**
+
+**Problem jo pehle thi:** `/health` me build string **hardcoded** thi (`"2026.08.06.v2.0"`) —
+is liye naya code chadhne ke baad bhi wahi purana dikhta tha aur pata hi nahi chalta tha
+ki naya version live hua ya nahi.
+
+**Ab kya hota hai:** `pa_deploy.py ship` **har baar** ek naya `build_info.json`
+(git commit + UTC time + kitni files gayi) banata hai, upload karta hai, aur app use padhta hai.
+
+**Naya/purana check karne ke 3 tareeke:**
+
+| Kahan | Kaise |
+|---|---|
+| **1. Browser me (sabse aasan)** | OPD dashboard kholo → sidebar ke **sabse neeche footer** me **`Build: 2026-09-21.1432.12d49c3 · 2026-09-21T09:02Z`** likha dikhta hai. Har deploy ke baad ye badal jata hai. |
+| **2. Health URL** | https://gillhopitalsoftware1.pythonanywhere.com/health → `{"status":"ok","build":"2026-09-21.1432.12d49c3","commit":"12d49c3","built_at":"...","files_shipped":1,"version":"2.0.0"}` |
+| **3. Terminal** | `python pa_deploy.py status_check` → sabse pehli line **`BUILD LIVE : ...`** print karta hai |
+
+**Deploy ke baad ka niyam:** `ship` ke output me `BUILD = ...` line aati hai — wahi build
+dashboard footer me dikhna chahiye. **Agar dono same hain to naya code live hai.**
+Agar footer me purana build dikhe → browser **hard refresh (Ctrl+Shift+R)** karo (cache),
+phir bhi purana ho to reload fail hua — `pa_deploy.py site_reload` chalao.
+
+**`build_info.json`** project root me banta hai (deploy ke waqt) — ise chhedna nahi,
+ye apne aap ban jata hai.
+
 ---
 
 ## 4. 🧩 Patient Self-Filling System (v1.0 — LIVE, verified)
@@ -117,6 +144,10 @@ Detail + phase 4 list: **`PRODUCT_UPGRADATION_PATIENT_FILLING_PLAN.md`**
 | `deploy/permanent/` | PC-server + permanent URL ke scripts (emergency/backup rasta) |
 | `FREE_HOSTING_PLAN.md` | hosting faisla + Railway verdict |
 | `PA_DEPLOY_GUIDE.md` | PA deploy ka poora tarika |
+| `build_info.json` | deploy ke waqt apne aap banta hai — live **BUILD stamp** (naya/purana check karne ke liye) |
+| `FIR_PRODUCT_DEVELOPMENT.md` | issues ka register (FIR) + deployment log |
+| `PRODUCT_UPGRADATION_PLAN.md` | upgrade plan + implementation status |
+| `future_ideas/PATIENT_PORTAL_UPLOAD.md` | patient upload idea (⏸️ abhi implement nahi karna) |
 
 ---
 
@@ -127,6 +158,9 @@ Detail + phase 4 list: **`PRODUCT_UPGRADATION_PATIENT_FILLING_PLAN.md`**
 3. **PC ko 24/7 host nahi banaya** — PC 3 din me ek baar khulta hai (scripts ready hain, emergency ke liye).
 4. **Patient portal me AI nahi** — self-reported readings, graphs, PDF; AI sirf doctor ke tools me.
 5. **Share link read-only + 7 din** — doctor kabhi patient ka data badal nahi sakta.
+6. **Har deploy par BUILD stamp badalta hai** — `/health` aur dashboard sidebar footer se turant pata chalta hai ki naya code live hua ya nahi (pehle version hardcoded tha, is liye kabhi nahi badalta tha).
+7. **AI ka sabse bharosemand rasta = Groq key** — Puter ka sign-up Puter ki taraf se hi toota hua hai ([#1430](https://github.com/HeyPuter/puter/issues/1430)); is liye doctor ko Groq key ka option hamesha batana (usme koi login/popup nahi chahiye).
+8. **Drug bank = doctor ka personal medicine bank** — ek baar save karo, agli baar sirf naam type karo, dose/timing khud bhar jayega.
 
 ---
 
@@ -137,3 +171,44 @@ Detail + phase 4 list: **`PRODUCT_UPGRADATION_PATIENT_FILLING_PLAN.md`**
 - [ ] Critical reading aane par doctor ko **alert/badge**
 - [ ] AI whitelist confirm karna (Groq/DeepSeek/OpenAI PA par chal rahe hain ya nahi)
 - [ ] Purane `patient-pwa/` (lab token tracking) ko naye portal ke saath ek installable PWA me jodna
+
+---
+
+## 8. 💊 Drug Bank (Medicine auto-fill) — LIVE 21-Sep-2026
+
+Doctor ki sabse badi shikayat thi: *"medicine ka naam, dose, timing baar-baar type karna padta hai"*.
+
+| Cheez | Jagah |
+|---|---|
+| Drug bank table | `opd_drug_history` — 9 naye columns: `brand_name`, `strength`, `salt_composition`, `form`, `default_frequency`, `default_timing`, `default_duration`, `active`, `updated_at` |
+| **GET** `/opd/api/drugs?q=` | autocomplete — ab **JSON objects** deta hai (pehle sirf plain strings) |
+| **POST** `/opd/api/drugs` | medicine save/upsert (one-tap 💾 save-to-library) |
+| **DELETE** `/opd/api/drugs?drug_id=` | library se hide |
+| **POST** `/opd/api/drugs/backfill?reset=true` | purani prescriptions se bank dobara banao (idempotent — duplicate nahi bante) |
+| UI | Rx tab → medicine row me **dropdown auto-fill** + **💾** button; **💊 Library** button se pura manage (add/edit/delete, brand, salt) |
+
+**Auto-learn:** har saved prescription se drugs khud bank me aate hain (`_learn_drugs`).
+**Live par bhara gaya:** 16 purani prescriptions → **11 entries** (Olmin 20, Citrizine 5/10, Dolo 500/650, zifi 200, Ascoryl, Augmentin 625, Azee 500, Cetrizine 10mg, Moxikind cv 625).
+
+**Yaad rakho:** Rx parser (`_parse_rx_line`) **do format** sambhalta hai —
+`Tab Olmin 20 OD before food x 30` **aur** `1. Tab. Metformin 500mg - BD - After meals - 30 Days`.
+Drug naam **case-insensitive** match hota hai ("Dolo" = "dolo" → ek hi entry, duplicate nahi).
+
+---
+
+## 9. 🔐 Puter AI account — "naya account nahi ban raha" (IMPORTANT)
+
+**Doctor ki report:** *"puter pe naya account nahi ban ra"*.
+
+**Sach:** ye **Puter ki taraf ka bug hai**, hamare app ki galti nahi —
+[HeyPuter/puter #1430](https://github.com/HeyPuter/puter/issues/1430) · [#1373](https://github.com/HeyPuter/puter/issues/1373).
+
+**App me kya kiya:**
+- Settings me **"🆕 Naya Account banao"** button — `puter.com/login` nayí tab me kholta hai (wahan email/Google se sign up)
+- `signIn` ab **full-tab login** karta hai (blank popup ka fix) + temporary **guest account detect** karke clear karta hai
+- Error message me saaf likha aata hai: account banao, ya Groq key lagao
+
+**Doctor ko sirf 2 raste batane hain:**
+1. Settings → **"🆕 Naya Account banao"** → puter.com par email/Google se free account banao → phir **"🔌 Connect Puter"** dabao.
+2. **Puter bilkul hi na chale to** → Settings → "My own API keys" me **Groq key** (free — console.groq.com) daal do.
+   Usme **koi login, koi popup hi nahi** chahiye aur AI seedha chalta hai. **Yahi sabse bharosemand rasta hai.**
