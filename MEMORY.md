@@ -64,16 +64,12 @@
 - **100 CPU-second / din** → bhaari AI usage quota khatam kar sakti hai (us din app band)
 - **Scheduled tasks allowed nahi** (403) → daily backup app ke in-built auto-backup se hota hai
 - **Custom domain nahi** → address `gillhopitalsoftware1.pythonanywhere.com` hi rahega
-- **Outbound internet sirf whitelist — SABSE BADA AI BLOCKER** → PA free server sirf whitelisted hosts
-  tak internet deta hai. Is liye **BYOK API keys (Groq / DeepSeek / OpenAI / Gemini) PA par kaam NAHI karti** —
-  key bilkul sahi hone par bhi "connection failed" aata hai, kyunki server provider tak pahunch hi nahi sakta.
-  - Live par confirm kiya (21-Sep-2026): `POST /opd/api/test-key` (Groq key saved thi) →
-    `"Groq (Llama) tak pahunch nahi paye: All connection attempts failed"`
-  - **AI chalane ka ekmatra FREE rasta = Puter** — wo **doctor ke BROWSER** se chalta hai, is server block se
-    affect nahi hota. Isi liye app ka default `ai_mode = puter` hai.
-  - Apni paid key chalani ho to: **(a)** PA ko whitelist request bhejo — project me `pa_whitelist_request.txt`
-    ready hai (pythonanywhere.com → **Help → Send feedback** me paste karo), ya **(b)** PA ka **Hacker plan ($5/mo)**
-    lo — usme outbound block nahi hota.
+- **Outbound internet sirf whitelist (SERVER-SIDE BLOCK)** → PA free ka **SERVER** sirf whitelisted hosts tak
+  internet deta hai. Is liye **server-side BYOK** (`provider_router` ka `requests.post`) PA par "connection failed" deta hai.
+  - **✅ SOLUTION (LIVE 21-Sep-2026): browser-side BYOK** — AI call ab **doctor ke BROWSER se seedha** provider
+    (DeepSeek/Groq/Gemini) ko jaati hai, PA ke server se nahi → block **bypass**. Section **9.3 / 9.4** dekho.
+  - **Puter ab HATA diya hai** (Puter ka sign-up khud band + paid + irritating) — UI se bilkul gayab (9.4).
+  - Apni paid key **server-side** chalani hi ho (rare) to: PA Hacker plan ($5/mo) ya whitelist request (`pa_whitelist_request.txt`).
   - **Patient portal ko AI ki zaroorat nahi** — wo is block se bilkul affect nahi hota (verified).
 
 ---
@@ -168,7 +164,7 @@ Detail + phase 4 list: **`PRODUCT_UPGRADATION_PATIENT_FILLING_PLAN.md`**
 4. **Patient portal me AI nahi** — self-reported readings, graphs, PDF; AI sirf doctor ke tools me.
 5. **Share link read-only + 7 din** — doctor kabhi patient ka data badal nahi sakta.
 6. **Har deploy par BUILD stamp badalta hai** — `/health` aur dashboard sidebar footer se turant pata chalta hai ki naya code live hua ya nahi (pehle version hardcoded tha, is liye kabhi nahi badalta tha).
-7. **AI ka sabse bharosemand rasta = Groq key** — Puter ka sign-up Puter ki taraf se hi toota hua hai ([#1430](https://github.com/HeyPuter/puter/issues/1430)); is liye doctor ko Groq key ka option hamesha batana (usme koi login/popup nahi chahiye).
+7. **AI ab browser-side BYOK se chalta hai** — har doctor apni DeepSeek/Groq/Gemini key daale (uska bill usi ka, owner ₹0). **Puter hata diya** (sign-up Puter ne khud band rakha [#1430](https://github.com/HeyPuter/puter/issues/1430) + paid + irritating). Text AI = DeepSeek/Groq/Gemini; image AI = Groq/Gemini (DeepSeek image nahi padhta).
 8. **Drug bank = doctor ka personal medicine bank** — ek baar save karo, agli baar sirf naam type karo, dose/timing khud bhar jayega.
 
 ---
@@ -205,7 +201,11 @@ Drug naam **case-insensitive** match hota hai ("Dolo" = "dolo" → ek hi entry, 
 
 ---
 
-## 9. 🔐 Puter AI account — "naya account nahi ban raha" (IMPORTANT)
+## 9. 🤖 AI Provider — Puter ka safar (⚠️ Puter ab HATA diya — asli state 9.4 me)
+
+> ⚠️ **AB (21-Sep-2026) Puter bilkul GAYAB hai** — UI se hata diya (banner/chip/Settings/mode option).
+> AI ab **browser-side BYOK** (DeepSeek/Groq/Gemini) se chalta hai. Neeche 9.1–9.3 **history** hai;
+> **asli current state = section 9.4.** Puter ka sign-up bug (unki taraf): [#1430](https://github.com/HeyPuter/puter/issues/1430).
 
 **Doctor ki report:** *"puter pe naya account nahi ban ra"*.
 
@@ -240,3 +240,70 @@ sirf UI usko dikha nahi raha tha. Is liye 3 cheezein add ki:
 
 **Sabak:** key ka **save** hona ≠ key ka **chalna**. Is liye (1) save par turant confirmation,
 (2) real Test button, (3) `ai_mode` ka check — teenon zaroori hain.
+
+### 9.2 Tablet par Puter nahi chal raha (mobile par chal raha hai) — FIXED 21-Sep-2026
+
+**Doctor ki report:** *"mobile me Puter chal raha hai, tablet me nahi"*.
+
+**Root cause (2 cheezein ek saath):**
+1. **Puter login har device par ALAG hota hai** — mobile par sign-in hua hai (token mobile ke
+   browser ke localStorage me hai), tablet ke browser me koi session nahi. Ye server-side
+   `ai_mode` ki galti nahi (wo sab devices par same hai) — local Puter session ki baat hai.
+2. **iPadOS 13+ ka UA "Macintosh" hota hai** (iPad nahi likhta) → `isMobileOrPwa()` false →
+   tablet **desktop popup** path leta hai → iPad par popup blank/blocked → 25s hang → phir tab.
+
+**Fix (commit `45038eb`, LIVE):**
+- `static/js/ai_gateway.js`: `isMobileOrPwa()` ab touch-capable Macintosh (iPadOS) ko tablet
+  maanta hai → seedha full-tab login, popup skip.
+- **Direct Puter Token Paste** (nano clinic se port kiya): Settings → Puter section me ab
+  **"📋 Copy my token"** (jin device par Puter chal raha hai) aur **"💾 Save Token"** (tablet par
+  paste) hai — token first-party localStorage me jata hai, **koi popup/cookie/login nahi**.
+  Expose `window.puterGetToken` / `window.puterSaveToken`.
+
+**Doctor ko batana:** tablet par Settings kholo → Puter section → mobile se "📋 Copy my token"
+karke token tablet par paste → "💾 Save Token". Ek baar me permanent (reload ke baad bhi).
+
+### 9.3 ✅ BROWSER-SIDE BYOK — DeepSeek/Groq/Gemini ab PA free par CHALTI hai (LIVE 21-Sep-2026)
+
+> **Purana section 2 ka "BYOK PA par kaam nahi karti" AB SIRF SERVER-SIDE ke liye sach hai.**
+> Naya feature: AI call **doctor ke BROWSER se seedha provider ko** jaati hai (server nahi).
+
+**Kya fix kiya (commit `1116d33`, LIVE):**
+- `provider_router.py`: "auto" mode me server provider tak nahi pahunch paata (PA block) to
+  `byok_browser:true` + `PUTER_CHAT` handoff bhejta hai (prompt ke saath) → browser retry karta hai.
+- `static/js/ai_gateway.js`: `byokChat()` — DeepSeek/Groq/Gemini ko **browser se seedha** call
+  (CORS verified: teeno allow karte hain; OpenAI/Anthropic browser CORS block karte hain isliye skip).
+  Local key (localStorage `gilclinic.byok.*`) ko Puter se **pehle** try karta hai.
+- `dashboard.html`: key save karte hi **is device ke browser** (localStorage) me save; Settings
+  warning update (green: "ab browser se chalti hai").
+
+**Iska matlab (business model):**
+- **Har doctor apni key apne device par daale** → uska bill usi ka → owner ka ₹0. ✅
+- Har device par alag key (key browser-local hai, server pe nahi) — 20-25 doctors ke liye yehi rasta.
+- "🧪 Test" ab **browser-side** hai (`byokTest()`) — seedha provider ko chhota real call, sahi/galat key turant pata.
+
+**Vision/OCR ab browser-side hai** — `byokOcr()` Gemini (native `generateContent`) / Groq (vision). DeepSeek image NAHI padhta.
+
+### 9.4 🧹 Puter GAYAB + Gemini model fix (LIVE 21-Sep-2026 — FINAL AI state)
+
+**Doctor ki report:** *"puter is becoming hell — bar-bar popup, paid, image read par Puter khulta hai, bilkul gayab karo."*
+
+**Ab kya hai (commit `db6cb3b` + `2f391a7`):**
+- **Puter bilkul HATA diya** UI se: banner, chip (bottom-right), Settings ka Puter section, AI-Mode ka "Puter" option — sab gayab.
+  Code me `doChat/doOcr/doTranscribe` Puter **fallback** ke roop me reh gaye (sirf tab chalti jab koi key hi na ho).
+- **Browser-side OCR (`byokOcr`)**: image read ab Gemini (native) ya Groq (vision) se browser me hota hai — Puter nahi.
+  DeepSeek ka **koi vision nahi** — image ke liye Groq/Gemini key chahiye.
+- **Gemini model = `gemini-3-flash`** (Google ne 2.0 family 1-June-2026 retire kiya → `gemini-2.0-flash` 404 deta hai).
+  Auto-fallback: `gemini-3-flash → gemini-2.5-flash → gemini-2.0-flash` (`modelCandidates`) — model rename se kabhi nahi atkega.
+- **Key auto-sync**: dashboard render par server **raw (decrypted) key** browser localStorage me daal deta hai
+  (`opd_routes.py` → `raw_ai_keys` context → dashboard head `<script>` → `gilclinic.byok.*`). Dobara type nahi karna padta.
+- **Local key > Puter**: `ai_gateway.js` me local BYOK key hamesha Puter se pehle try hoti hai (chat + OCR dono me).
+
+**AI billing model (final):** har doctor apni key apne device par daale (text: DeepSeek/Groq/Gemini · image: Groq/Gemini)
+→ bill usi ka → **owner ₹0**. Puter ka koi role nahi.
+
+**Yaad rakhne ke liye (AI stack):**
+- `static/js/ai_gateway.js` = browser AI gateway (`byokChat` / `byokOcr` / `byokTest` + Puter fallback; `BYOK_PROVIDERS` registry).
+- `src/ai_engine/provider_router.py` = server router ("auto" fail par `byok_browser:true` + `PUTER_CHAT`/`PUTER_OCR` handoff).
+- `src/presentation/opd/routes/opd_routes.py` dashboard render me `raw_ai_keys` (decrypt karke browser ko deta hai).
+- **CORS verified (21-Sep-2026):** DeepSeek/Groq/Gemini browser se allow; **OpenAI/Anthropic browser CORS block** karte hain (isliye browser BYOK me skip).
