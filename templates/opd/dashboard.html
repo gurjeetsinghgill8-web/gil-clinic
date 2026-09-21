@@ -4152,12 +4152,12 @@ function medTimingOptions(selected) {
 }
 function inferMedForm(name, dose) {
     const s = ((name || '') + ' ' + (dose || '')).toLowerCase();
-    if (s.includes('syrup') || s.includes('syp') || /ml\b/.test(s)) return 'Syrup';
-    if (s.includes('injection') || s.includes(' inj')) return 'Injection';
-    if (s.includes('capsule') || s.includes('cap')) return 'Capsule';
-    if (s.includes('drop')) return 'Drops';
-    if (s.includes('cream') || s.includes('ointment') || s.includes('gel') || s.includes('lotion')) return 'Topical';
-    if (s.includes('inhaler') || s.includes('spray')) return 'Inhaler';
+    if (/\bml\b/.test(s) || s.includes('syrup') || s.includes('susp')) return 'Syrup';
+    if (s.includes('injection') || /\binj\b/.test(s)) return 'Injection';
+    if (s.includes('capsule') || /\bcaps?\b/.test(s)) return 'Capsule';
+    if (/\bdrops?\b/.test(s)) return 'Drops';
+    if (s.includes('ointment') || s.includes('cream') || s.includes('gel') || s.includes('lotion')) return 'Topical';
+    if (s.includes('inhaler') || s.includes('spray') || s.includes('rotacap')) return 'Inhaler';
     return 'Tablet';
 }
 

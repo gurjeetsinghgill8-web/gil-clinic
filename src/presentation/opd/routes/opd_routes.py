@@ -1013,109 +1013,168 @@ async def api_delete_drug(request: Request, drug_id: int = Query(...)):
         return {"ok": True}
 
 
-async def _learn_drugs(rx_text: str, doctor_id: str):
-    """Parse Rx text and store each drug in the drug bank for autocomplete.
+# ── Rx text → drug bank parsing helpers ──────────────────────────────────────
+# Handles both formats seen in the clinic:
+#   "1. Tab. Metformin 500mg - BD - After meals - 30 Days"   (AI output)
+#   "Tab Olmin 20 OD before food x 30"                       (structured rows)
+#   "Dolo 500 TDS before food"
+_RX_FREQ_RE = re.compile(r"\b(OD|BD|TDS|QID|HS|SOS|STAT)\b", re.IGNORECASE)
+_RX_TIMING_RE = re.compile(
+    r"\b(before food|after food|with food|empty stomach|after meals|before meals|"
+    r"morning|afternoon|evening|night|bedtime|at night)\b",
+    re.IGNORECASE,
+)
+_RX_DURATION_UNIT_RE = re.compile(r"(\d+)\s*(?:days?|weeks?|months?)", re.IGNORECASE)
+_RX_DURATION_X_RE = re.compile(r"\bx\s*(\d+)\b", re.IGNORECASE)
+_RX_STRENGTH_RE = re.compile(
+    r"\b(\d+(?:\.\d+)?\s*(?:mg|mcg|microg|ml|g|gm|iu|units?))\b", re.IGNORECASE
+)
+_RX_TRAILING_NUM_RE = re.compile(r"\s(\d+(?:\.\d+)?)\s*$")
+_RX_PREFIX_RE = re.compile(
+    r"^(tab(?:let)?s?|cap(?:sule)?s?|syp(?:rup)?s?|susp(?:ension)?s?|inj(?:ection)?s?|"
+    r"drops?|inh(?:aler)?s?|rotacaps?|oint(?:ment)?s?|creams?|gels?|lotions?|sprays?)"
+    r"\b[.\s]*",
+    re.IGNORECASE,
+)
+_FORM_FROM_PREFIX = {
+    "tab": "Tablet", "cap": "Capsule", "syp": "Syrup", "susp": "Syrup",
+    "inj": "Injection", "drop": "Drops", "inh": "Inhaler", "rotacap": "Inhaler",
+    "oint": "Topical", "cream": "Topical", "gel": "Topical",
+    "lotion": "Topical", "spray": "Topical",
+}
 
-    Captures name + strength/dose + frequency + timing + duration when the
-    text has them, without overwriting richer fields already on a matched row.
-    """
+
+def _parse_rx_line(line: str) -> Optional[dict]:
+    """Parse one Rx line into drug-bank fields. None when no usable name found."""
+    cleaned = re.sub(r"^\d+[\.\)\s]*", "", (line or "").strip())
+    if len(cleaned) < 3:
+        return None
+
+    form = ""
+    pm = _RX_PREFIX_RE.match(cleaned)
+    if pm:
+        token = pm.group(1).lower()
+        for key, val in _FORM_FROM_PREFIX.items():
+            if token.startswith(key):
+                form = val
+                break
+        cleaned = cleaned[pm.end():]
+
+    freq = ""
+    m = _RX_FREQ_RE.search(cleaned)
+    if m:
+        freq = m.group(1).upper()
+        cleaned = cleaned[:m.start()] + " " + cleaned[m.end():]
+
+    timing = ""
+    m = _RX_TIMING_RE.search(cleaned)
+    if m:
+        timing = m.group(1).strip().lower()
+        cleaned = cleaned[:m.start()] + " " + cleaned[m.end():]
+
+    duration = ""
+    m = _RX_DURATION_UNIT_RE.search(cleaned)
+    if m:
+        duration = f"{m.group(1)} days"
+        cleaned = cleaned[:m.start()] + " " + cleaned[m.end():]
+    else:
+        m = _RX_DURATION_X_RE.search(cleaned)
+        if m:
+            duration = f"{m.group(1)} days"
+            cleaned = cleaned[:m.start()] + " " + cleaned[m.end():]
+
+    # Strength: prefer explicit unit ("500mg"), else a trailing bare number ("Olmin 20").
+    strength = ""
+    m = _RX_STRENGTH_RE.search(cleaned)
+    if m:
+        strength = m.group(1).strip()
+        cleaned = cleaned[:m.start()] + " " + cleaned[m.end():]
+    else:
+        m = _RX_TRAILING_NUM_RE.search(cleaned)
+        if m:
+            strength = m.group(1)
+            cleaned = cleaned[:m.start()]
+
+    cleaned = re.sub(r"[-–—|]+", " ", cleaned)
+    cleaned = re.sub(r"\([^)]*\)", " ", cleaned)  # drop (Brand)
+    cleaned = re.sub(r"^\d+\s*(?:tab|tablet|caps?|syp|inj|drops?)\b", "", cleaned, flags=re.IGNORECASE)
+    cleaned = re.sub(r"\s+", " ", cleaned).strip(" .,-")
+
+    if len(cleaned) < 3 or not re.search(r"[A-Za-z]", cleaned):
+        return None
+
+    if not form:
+        low = (cleaned + " " + strength).lower()
+        if re.search(r"\bml\b", low) or "syrup" in low or "susp" in low:
+            form = "Syrup"
+        elif "injection" in low:
+            form = "Injection"
+        elif "capsule" in low:
+            form = "Capsule"
+        elif re.search(r"\bdrops?\b", low):
+            form = "Drops"
+        elif any(w in low for w in ("ointment", "cream", "gel", "lotion")):
+            form = "Topical"
+        elif any(w in low for w in ("inhaler", "spray", "rotacap")):
+            form = "Inhaler"
+        else:
+            form = "Tablet"
+
+    return {
+        "drug_name": cleaned,
+        "strength": strength,
+        "form": form,
+        "default_frequency": freq,
+        "default_timing": timing,
+        "default_duration": duration,
+    }
+
+
+async def _drug_row_for(session, doctor_id: str, drug_name: str, strength: str = ""):
+    """Find an existing drug-bank row (name + strength when strength is known)."""
+    stmt = sa.select(DrugHistoryModel).where(
+        DrugHistoryModel.doctor_id == doctor_id,
+        DrugHistoryModel.drug_name == drug_name,
+    )
+    if strength:
+        stmt = stmt.where(DrugHistoryModel.strength == strength)
+    return (await session.execute(stmt)).scalars().first()
+
+
+async def _learn_drugs(rx_text: str, doctor_id: str):
+    """Parse Rx text and store each drug in the drug bank (bumps use_count)."""
     if not rx_text or not doctor_id:
         return
     now_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
-
-    _FREQ = re.compile(r"\b(OD|BD|TDS|QID|HS|SOS|STAT)\b", re.IGNORECASE)
-    _TIMING = re.compile(
-        r"\b(before food|after food|with food|empty stomach|after meals|before meals|morning|afternoon|evening|night|bedtime|at night)\b",
-        re.IGNORECASE,
-    )
-    _DURATION = re.compile(r"(?:x\s*)?(\d+)\s*(?:days?|weeks?|months?)", re.IGNORECASE)
-    _STRENGTH = re.compile(r"\b(\d+(?:\.\d+)?\s*(?:mg|mcg|microg|ml|g|gm|iu|units?))\b", re.IGNORECASE)
-    _FORM_PREFIX = re.compile(
-        r"^(?:tab(?:let)?s?|cap(?:sule)?s?|syp(?:rup)?s?|susp(?:ension)?s?|inj(?:ection)?s?|drops?|inh(?:aler)?s?|oint(?:ment)?s?|creams?|gels?|lotions?|sprays?)\b[.\s]*",
-        re.IGNORECASE,
-    )
-
-    def infer_form(text: str, strength: str) -> str:
-        low = (text + " " + strength).lower()
-        if "syrup" in low or "syp" in low or " ml" in low: return "Syrup"
-        if "injection" in low or " inj" in low: return "Injection"
-        if "capsule" in low or "cap" in low: return "Capsule"
-        if "drops" in low or "drop" in low: return "Drops"
-        if "cream" in low or "ointment" in low or "gel" in low or "lotion" in low: return "Topical"
-        if "inhaler" in low or "spray" in low: return "Inhaler"
-        return "Tablet"
-
     try:
         async with async_session_factory() as session:
-            for line in rx_text.split("\n"):
-                line = line.strip()
-                if not line or len(line) < 3:
+            for raw in rx_text.split("\n"):
+                parsed = _parse_rx_line(raw)
+                if not parsed:
                     continue
-                cleaned = re.sub(r"^\d+[\.\)\s]*", "", line)
-                cleaned = _FORM_PREFIX.sub("", cleaned).strip()
-
-                strength = ""
-                m = _STRENGTH.search(cleaned)
-                if m:
-                    strength = m.group(1)
-                    cleaned = cleaned.replace(m.group(0), " ", 1)
-
-                freq = ""
-                m = _FREQ.search(cleaned)
-                if m:
-                    freq = m.group(1).upper()
-                    cleaned = cleaned.replace(m.group(0), " ", 1)
-
-                timing = ""
-                m = _TIMING.search(cleaned)
-                if m:
-                    timing = m.group(1).strip()
-                    cleaned = cleaned.replace(m.group(0), " ", 1)
-
-                duration = ""
-                m = _DURATION.search(cleaned)
-                if m:
-                    duration = f"{m.group(1)} days"
-                    cleaned = cleaned.replace(m.group(0), " ", 1)
-
-                cleaned = re.sub(r"[-–—|]+", " ", cleaned)
-                cleaned = re.sub(r"\([^)]*\)", " ", cleaned)  # strip (Brand) from name
-                cleaned = re.sub(r"^\d+\s*(?:tab|tablet|caps?|syp|inj|drops?)\b", "", cleaned, flags=re.IGNORECASE)
-                cleaned = re.sub(r"\s+", " ", cleaned).strip()
-
-                drug = cleaned.strip()
-                if len(drug) < 3 or not re.search(r"[A-Za-z]", drug):
-                    continue
-
-                form = infer_form(drug, strength)
-
-                existing = (await session.execute(
-                    sa.select(DrugHistoryModel).where(
-                        DrugHistoryModel.doctor_id == doctor_id,
-                        DrugHistoryModel.drug_name == drug,
-                    )
-                )).scalar_one_or_none()
-
+                existing = await _drug_row_for(
+                    session, doctor_id, parsed["drug_name"], parsed["strength"]
+                )
                 if existing:
                     existing.use_count = (existing.use_count or 0) + 1
                     existing.last_used = now_str
-                    if strength and not existing.strength: existing.strength = strength
-                    if freq and not existing.default_frequency: existing.default_frequency = freq
-                    if timing and not existing.default_timing: existing.default_timing = timing
-                    if duration and not existing.default_duration: existing.default_duration = duration
-                    if form and not existing.form: existing.form = form
-                    if not existing.dose and strength: existing.dose = strength
+                    for field in ("strength", "form", "default_frequency",
+                                  "default_timing", "default_duration"):
+                        if parsed[field] and not getattr(existing, field):
+                            setattr(existing, field, parsed[field])
+                    if not existing.dose and parsed["strength"]:
+                        existing.dose = parsed["strength"]
                     existing.active = True
                 else:
                     session.add(DrugHistoryModel(
                         doctor_id=doctor_id,
-                        drug_name=drug,
-                        strength=strength,
-                        form=form,
-                        dose=strength,
-                        default_frequency=freq,
-                        default_timing=timing,
-                        default_duration=duration,
+                        drug_name=parsed["drug_name"],
+                        strength=parsed["strength"],
+                        form=parsed["form"],
+                        dose=parsed["strength"],
+                        default_frequency=parsed["default_frequency"],
+                        default_timing=parsed["default_timing"],
+                        default_duration=parsed["default_duration"],
                         active=True,
                         use_count=1,
                         last_used=now_str,
@@ -1123,6 +1182,93 @@ async def _learn_drugs(rx_text: str, doctor_id: str):
             await session.commit()
     except Exception as e:
         logger.error("Learn drugs error: %s", e)
+
+
+async def _backfill_drugs(doctor_id: str, limit: int = 300) -> dict:
+    """Populate the drug bank from the doctor's past prescriptions.
+
+    Safe to re-run: existing rows only get missing fields filled, so use_count
+    is never inflated by a second run. New rows start at their history count
+    so the most-prescribed drugs rank first in autocomplete.
+    """
+    if not doctor_id:
+        return {"ok": False, "error": "doctor_id required"}
+    counts: dict = {}
+    scanned = 0
+    try:
+        async with async_session_factory() as session:
+            rows = (await session.execute(
+                sa.select(OpdPrescriptionModel.medicines)
+                .where(OpdPrescriptionModel.doctor_id == doctor_id)
+                .order_by(OpdPrescriptionModel.created_at.desc())
+                .limit(limit)
+            )).scalars().all()
+            scanned = len(rows)
+
+            for text in rows:
+                for raw in (text or "").split("\n"):
+                    parsed = _parse_rx_line(raw)
+                    if not parsed:
+                        continue
+                    key = (parsed["drug_name"].lower(), parsed["strength"])
+                    if key in counts:
+                        counts[key]["n"] += 1
+                    else:
+                        counts[key] = {"n": 1, "data": parsed}
+
+            added = 0
+            filled = 0
+            now_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
+            for item in counts.values():
+                parsed = item["data"]
+                existing = await _drug_row_for(
+                    session, doctor_id, parsed["drug_name"], parsed["strength"]
+                )
+                if existing:
+                    changed = False
+                    for field in ("strength", "form", "default_frequency",
+                                  "default_timing", "default_duration"):
+                        if parsed[field] and not getattr(existing, field):
+                            setattr(existing, field, parsed[field])
+                            changed = True
+                    if not existing.dose and parsed["strength"]:
+                        existing.dose = parsed["strength"]
+                        changed = True
+                    if changed:
+                        filled += 1
+                else:
+                    session.add(DrugHistoryModel(
+                        doctor_id=doctor_id,
+                        drug_name=parsed["drug_name"],
+                        strength=parsed["strength"],
+                        form=parsed["form"],
+                        dose=parsed["strength"],
+                        default_frequency=parsed["default_frequency"],
+                        default_timing=parsed["default_timing"],
+                        default_duration=parsed["default_duration"],
+                        active=True,
+                        use_count=item["n"],
+                        last_used=now_str,
+                    ))
+                    added += 1
+            await session.commit()
+        return {
+            "ok": True,
+            "prescriptions_scanned": scanned,
+            "drugs_found": len(counts),
+            "added": added,
+            "updated": filled,
+        }
+    except Exception as e:
+        logger.error("Backfill drugs error: %s", e)
+        return {"ok": False, "error": str(e)}
+
+
+@router.post("/api/drugs/backfill", include_in_schema=False)
+async def api_backfill_drugs(request: Request):
+    """Build the drug bank from past prescriptions (re-runnable, idempotent)."""
+    sess = _require_opd_session(request)
+    return await _backfill_drugs(sess["doctor_id"])
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
