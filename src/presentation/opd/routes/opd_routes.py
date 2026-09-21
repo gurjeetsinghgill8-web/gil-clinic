@@ -950,12 +950,11 @@ async def api_save_drug(request: Request):
         else:
             stmt = sa.select(DrugHistoryModel).where(
                 DrugHistoryModel.doctor_id == doctor_id,
-                DrugHistoryModel.drug_name == drug_name,
+                sa.func.lower(DrugHistoryModel.drug_name) == drug_name.lower(),
             )
             if strength:
                 stmt = stmt.where(DrugHistoryModel.strength == strength)
-            rows = (await session.execute(stmt)).scalars().all()
-            dh = rows[0] if rows else None
+            dh = (await session.execute(stmt)).scalars().first()
 
         if dh:
             dh.drug_name = drug_name
@@ -1031,16 +1030,16 @@ _RX_STRENGTH_RE = re.compile(
 )
 _RX_TRAILING_NUM_RE = re.compile(r"\s(\d+(?:\.\d+)?)\s*$")
 _RX_PREFIX_RE = re.compile(
-    r"^(tab(?:let)?s?|cap(?:sule)?s?|syp(?:rup)?s?|susp(?:ension)?s?|inj(?:ection)?s?|"
+    r"^(tab(?:let)?s?|cap(?:sule)?s?|syp|syr(?:up)?s?|susp(?:ension)?s?|inj(?:ection)?s?|"
     r"drops?|inh(?:aler)?s?|rotacaps?|oint(?:ment)?s?|creams?|gels?|lotions?|sprays?)"
     r"\b[.\s]*",
     re.IGNORECASE,
 )
 _FORM_FROM_PREFIX = {
-    "tab": "Tablet", "cap": "Capsule", "syp": "Syrup", "susp": "Syrup",
-    "inj": "Injection", "drop": "Drops", "inh": "Inhaler", "rotacap": "Inhaler",
-    "oint": "Topical", "cream": "Topical", "gel": "Topical",
-    "lotion": "Topical", "spray": "Topical",
+    "tab": "Tablet", "cap": "Capsule", "syp": "Syrup", "syr": "Syrup",
+    "susp": "Syrup", "inj": "Injection", "drop": "Drops", "inh": "Inhaler",
+    "rotacap": "Inhaler", "oint": "Topical", "cream": "Topical",
+    "gel": "Topical", "lotion": "Topical", "spray": "Topical",
 }
 
 
@@ -1131,10 +1130,14 @@ def _parse_rx_line(line: str) -> Optional[dict]:
 
 
 async def _drug_row_for(session, doctor_id: str, drug_name: str, strength: str = ""):
-    """Find an existing drug-bank row (name + strength when strength is known)."""
+    """Find an existing drug-bank row (name case-insensitive + strength when known).
+
+    Case-insensitive because the doctor types the same drug as "Dolo" / "dolo";
+    both must resolve to one library entry, not two.
+    """
     stmt = sa.select(DrugHistoryModel).where(
         DrugHistoryModel.doctor_id == doctor_id,
-        DrugHistoryModel.drug_name == drug_name,
+        sa.func.lower(DrugHistoryModel.drug_name) == (drug_name or "").strip().lower(),
     )
     if strength:
         stmt = stmt.where(DrugHistoryModel.strength == strength)
@@ -1184,12 +1187,15 @@ async def _learn_drugs(rx_text: str, doctor_id: str):
         logger.error("Learn drugs error: %s", e)
 
 
-async def _backfill_drugs(doctor_id: str, limit: int = 300) -> dict:
+async def _backfill_drugs(doctor_id: str, limit: int = 300, reset: bool = False) -> dict:
     """Populate the drug bank from the doctor's past prescriptions.
 
     Safe to re-run: existing rows only get missing fields filled, so use_count
     is never inflated by a second run. New rows start at their history count
     so the most-prescribed drugs rank first in autocomplete.
+
+    reset=True wipes this doctor's drug bank first and rebuilds it from scratch
+    (used once to clear badly-parsed legacy rows; it also discards manual edits).
     """
     if not doctor_id:
         return {"ok": False, "error": "doctor_id required"}
@@ -1197,6 +1203,10 @@ async def _backfill_drugs(doctor_id: str, limit: int = 300) -> dict:
     scanned = 0
     try:
         async with async_session_factory() as session:
+            if reset:
+                await session.execute(
+                    sa.delete(DrugHistoryModel).where(DrugHistoryModel.doctor_id == doctor_id)
+                )
             rows = (await session.execute(
                 sa.select(OpdPrescriptionModel.medicines)
                 .where(OpdPrescriptionModel.doctor_id == doctor_id)
@@ -1265,10 +1275,10 @@ async def _backfill_drugs(doctor_id: str, limit: int = 300) -> dict:
 
 
 @router.post("/api/drugs/backfill", include_in_schema=False)
-async def api_backfill_drugs(request: Request):
+async def api_backfill_drugs(request: Request, reset: bool = Query(False)):
     """Build the drug bank from past prescriptions (re-runnable, idempotent)."""
     sess = _require_opd_session(request)
-    return await _backfill_drugs(sess["doctor_id"])
+    return await _backfill_drugs(sess["doctor_id"], reset=reset)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
