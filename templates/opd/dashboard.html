@@ -880,7 +880,7 @@
                                 </div>
                                 <input type="text" class="med-brand" placeholder="Brand" style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;width:90px;">
                                 <input type="text" class="med-dose" placeholder="Dose (500mg / 1 tab)" style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;width:110px;">
-                                <select class="med-freq" style="padding:6px 8px;border:1px solid var(--border);border-radius:6px;font-size:13px;">
+                                <select class="med-freq" style="padding:6px 8px;border:1px solid var(--border);border-radius:6px;font-size:13px;width:150px;flex:0 0 auto;">
                                     <option value="OD">OD (once daily)</option>
                                     <option value="BD" selected>BD (twice daily)</option>
                                     <option value="TDS">TDS (thrice daily)</option>
@@ -889,7 +889,7 @@
                                     <option value="SOS">SOS (as needed)</option>
                                     <option value="STAT">STAT (single dose)</option>
                                 </select>
-                                <select class="med-food" style="padding:6px 8px;border:1px solid var(--border);border-radius:6px;font-size:13px;">
+                                <select class="med-food" style="padding:6px 8px;border:1px solid var(--border);border-radius:6px;font-size:13px;width:170px;flex:0 0 auto;">
                                     <option value="">— Timing —</option>
                                     <option value="before food">Before food</option>
                                     <option value="after food" selected>After food</option>
@@ -4300,8 +4300,8 @@ function addMedicineRow() {
         </div>
         <input type="text" class="med-brand" placeholder="Brand" style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;width:90px;">
         <input type="text" class="med-dose" placeholder="Dose (500mg / 1 tab)" style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;width:110px;">
-        <select class="med-freq" style="padding:6px 8px;border:1px solid var(--border);border-radius:6px;font-size:13px;">${medFreqOptions('BD')}</select>
-        <select class="med-food" style="padding:6px 8px;border:1px solid var(--border);border-radius:6px;font-size:13px;">${medTimingOptions('after food')}</select>
+        <select class="med-freq" style="padding:6px 8px;border:1px solid var(--border);border-radius:6px;font-size:13px;width:150px;flex:0 0 auto;">${medFreqOptions('BD')}</select>
+        <select class="med-food" style="padding:6px 8px;border:1px solid var(--border);border-radius:6px;font-size:13px;width:170px;flex:0 0 auto;">${medTimingOptions('after food')}</select>
         <input type="text" class="med-duration" placeholder="Duration (5 days)" style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;width:100px;">
         <button type="button" class="btn btn-sm btn-ghost" onclick="saveMedToLibrary(this)" title="Drug bank me save karo" style="color:#047857;padding:4px 8px;">💾</button>
         <button type="button" class="btn btn-sm btn-ghost" onclick="removeMedicineRow(this)" style="color:var(--danger);padding:4px 8px;">✕</button>
