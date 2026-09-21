@@ -860,73 +860,266 @@ async def api_roster(request: Request, filter: str = Query("today")):
 # API: DRUG AUTOCOMPLETE
 # ═══════════════════════════════════════════════════════════════════════════════
 
+def _drug_to_dict(r: DrugHistoryModel) -> dict:
+    """Serialize a drug-bank row for the frontend."""
+    return {
+        "id": r.id,
+        "drug_name": r.drug_name or "",
+        "brand_name": r.brand_name or "",
+        "strength": r.strength or "",
+        "salt_composition": r.salt_composition or "",
+        "form": r.form or "",
+        "dose": r.dose or "",
+        "default_frequency": r.default_frequency or "",
+        "default_timing": r.default_timing or "",
+        "default_duration": r.default_duration or "",
+        "active": True if r.active is None else bool(r.active),
+        "use_count": r.use_count or 0,
+        "last_used": r.last_used or "",
+    }
+
+
 @router.get("/api/drugs", include_in_schema=False)
 async def api_drug_suggestions(request: Request, q: str = Query("")):
     sess = _require_opd_session(request)
     doctor_id = sess["doctor_id"]
     q = q.strip()
-    if not q or len(q) < 2:
-        return []
 
     try:
         async with async_session_factory() as session:
-            rows = await session.execute(
-                sa.select(DrugHistoryModel)
-                .where(
-                    DrugHistoryModel.doctor_id == doctor_id,
-                    DrugHistoryModel.drug_name.ilike(f"%{q}%"),
-                )
-                .order_by(DrugHistoryModel.use_count.desc())
-                .limit(10)
-            )
-            return [
-                f"{r.drug_name} {r.dose}".strip()
-                for r in rows.scalars()
+            conditions = [
+                DrugHistoryModel.doctor_id == doctor_id,
+                sa.or_(
+                    DrugHistoryModel.active.is_(None),
+                    DrugHistoryModel.active == True,  # noqa: E712
+                ),
             ]
+            if q and len(q) >= 2:
+                like = f"%{q}%"
+                conditions.append(
+                    sa.or_(
+                        DrugHistoryModel.drug_name.ilike(like),
+                        DrugHistoryModel.brand_name.ilike(like),
+                        DrugHistoryModel.salt_composition.ilike(like),
+                    )
+                )
+            stmt = (
+                sa.select(DrugHistoryModel)
+                .where(*conditions)
+                .order_by(DrugHistoryModel.use_count.desc(), DrugHistoryModel.drug_name.asc())
+                .limit(200)
+            )
+            rows = await session.execute(stmt)
+            return [_drug_to_dict(r) for r in rows.scalars()]
     except Exception:
         return []
 
 
+@router.post("/api/drugs", include_in_schema=False)
+async def api_save_drug(request: Request):
+    """Save/upsert a medicine into the doctor's drug bank (one-tap save)."""
+    sess = _require_opd_session(request)
+    doctor_id = sess["doctor_id"]
+    try:
+        body = await request.json()
+    except Exception:
+        return {"ok": False, "error": "Invalid JSON"}
+
+    drug_name = str(body.get("drug_name") or "").strip()
+    if len(drug_name) < 3 or not re.search(r"[A-Za-z]", drug_name):
+        return {"ok": False, "error": "Medicine naam kam se kam 3 letters ka ho"}
+
+    now_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
+    strength = str(body.get("strength") or "").strip()
+    dose = str(body.get("dose") or body.get("default_dose") or "").strip()
+    drug_id = body.get("id")
+
+    async with async_session_factory() as session:
+        if drug_id:
+            try:
+                drug_id = int(drug_id)
+            except (TypeError, ValueError):
+                drug_id = None
+        if drug_id:
+            dh = (await session.execute(
+                sa.select(DrugHistoryModel).where(
+                    DrugHistoryModel.id == drug_id,
+                    DrugHistoryModel.doctor_id == doctor_id,
+                )
+            )).scalar_one_or_none()
+        else:
+            stmt = sa.select(DrugHistoryModel).where(
+                DrugHistoryModel.doctor_id == doctor_id,
+                DrugHistoryModel.drug_name == drug_name,
+            )
+            if strength:
+                stmt = stmt.where(DrugHistoryModel.strength == strength)
+            rows = (await session.execute(stmt)).scalars().all()
+            dh = rows[0] if rows else None
+
+        if dh:
+            dh.drug_name = drug_name
+            dh.brand_name = str(body.get("brand_name") or dh.brand_name or "").strip()
+            dh.strength = strength or (dh.strength or "")
+            dh.salt_composition = str(body.get("salt_composition") or dh.salt_composition or "").strip()
+            dh.form = str(body.get("form") or dh.form or "").strip()
+            if dose:
+                dh.dose = dose
+            dh.default_frequency = str(body.get("default_frequency") or dh.default_frequency or "").strip()
+            dh.default_timing = str(body.get("default_timing") or dh.default_timing or "").strip()
+            dh.default_duration = str(body.get("default_duration") or dh.default_duration or "").strip()
+            dh.active = True
+            dh.last_used = now_str
+        else:
+            dh = DrugHistoryModel(
+                doctor_id=doctor_id,
+                drug_name=drug_name,
+                brand_name=str(body.get("brand_name") or "").strip(),
+                strength=strength,
+                salt_composition=str(body.get("salt_composition") or "").strip(),
+                form=str(body.get("form") or "").strip(),
+                dose=dose or strength,
+                default_frequency=str(body.get("default_frequency") or "").strip(),
+                default_timing=str(body.get("default_timing") or "").strip(),
+                default_duration=str(body.get("default_duration") or "").strip(),
+                active=True,
+                use_count=1,
+                last_used=now_str,
+            )
+            session.add(dh)
+
+        await session.flush()
+        result = _drug_to_dict(dh)
+        await session.commit()
+        return {"ok": True, "drug": result}
+
+
+@router.delete("/api/drugs", include_in_schema=False)
+async def api_delete_drug(request: Request, drug_id: int = Query(...)):
+    """Deactivate a drug (hide from autocomplete) — past prescriptions intact."""
+    sess = _require_opd_session(request)
+    doctor_id = sess["doctor_id"]
+    async with async_session_factory() as session:
+        dh = (await session.execute(
+            sa.select(DrugHistoryModel).where(
+                DrugHistoryModel.id == drug_id,
+                DrugHistoryModel.doctor_id == doctor_id,
+            )
+        )).scalar_one_or_none()
+        if not dh:
+            return {"ok": False, "error": "Medicine nahi mili"}
+        dh.active = False
+        await session.commit()
+        return {"ok": True}
+
+
 async def _learn_drugs(rx_text: str, doctor_id: str):
-    """Parse Rx text and store each drug in drug_history for autocomplete."""
+    """Parse Rx text and store each drug in the drug bank for autocomplete.
+
+    Captures name + strength/dose + frequency + timing + duration when the
+    text has them, without overwriting richer fields already on a matched row.
+    """
     if not rx_text or not doctor_id:
         return
     now_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
+
+    _FREQ = re.compile(r"\b(OD|BD|TDS|QID|HS|SOS|STAT)\b", re.IGNORECASE)
+    _TIMING = re.compile(
+        r"\b(before food|after food|with food|empty stomach|after meals|before meals|morning|afternoon|evening|night|bedtime|at night)\b",
+        re.IGNORECASE,
+    )
+    _DURATION = re.compile(r"(?:x\s*)?(\d+)\s*(?:days?|weeks?|months?)", re.IGNORECASE)
+    _STRENGTH = re.compile(r"\b(\d+(?:\.\d+)?\s*(?:mg|mcg|microg|ml|g|gm|iu|units?))\b", re.IGNORECASE)
+    _FORM_PREFIX = re.compile(
+        r"^(?:tab(?:let)?s?|cap(?:sule)?s?|syp(?:rup)?s?|susp(?:ension)?s?|inj(?:ection)?s?|drops?|inh(?:aler)?s?|oint(?:ment)?s?|creams?|gels?|lotions?|sprays?)\b[.\s]*",
+        re.IGNORECASE,
+    )
+
+    def infer_form(text: str, strength: str) -> str:
+        low = (text + " " + strength).lower()
+        if "syrup" in low or "syp" in low or " ml" in low: return "Syrup"
+        if "injection" in low or " inj" in low: return "Injection"
+        if "capsule" in low or "cap" in low: return "Capsule"
+        if "drops" in low or "drop" in low: return "Drops"
+        if "cream" in low or "ointment" in low or "gel" in low or "lotion" in low: return "Topical"
+        if "inhaler" in low or "spray" in low: return "Inhaler"
+        return "Tablet"
+
     try:
         async with async_session_factory() as session:
             for line in rx_text.split("\n"):
                 line = line.strip()
-                # Match patterns like: "1. Tab. Metformin 500mg - BD - After meals - 30 Days"
-                m = re.match(
-                    r"\d+\.\s*(Tab\.|Cap\.|Syp\.|Inj\.|Drop\.|Cream\.|Gel\.)?\s*"
-                    r"([A-Za-z][A-Za-z0-9\s\-]+?)"
-                    r"(?:\s+(\d+\s*(?:mg|mcg|ml|g|IU|units)))?"
-                    r"(?:\s+-\s+(.+?))?(?:\s+-\s+(.+?))?(?:\s+-\s*(\d+\s*Days?))?$",
-                    line, re.IGNORECASE,
-                )
+                if not line or len(line) < 3:
+                    continue
+                cleaned = re.sub(r"^\d+[\.\)\s]*", "", line)
+                cleaned = _FORM_PREFIX.sub("", cleaned).strip()
+
+                strength = ""
+                m = _STRENGTH.search(cleaned)
                 if m:
-                    drug = (m.group(2) or "").strip()
-                    dose = (m.group(3) or "").strip()
-                    if drug and len(drug) > 2:
-                        existing = await session.execute(
-                            sa.select(DrugHistoryModel).where(
-                                DrugHistoryModel.doctor_id == doctor_id,
-                                DrugHistoryModel.drug_name == drug,
-                                DrugHistoryModel.dose == dose,
-                            )
-                        )
-                        dh = existing.scalar_one_or_none()
-                        if dh:
-                            dh.use_count = (dh.use_count or 0) + 1
-                            dh.last_used = now_str
-                        else:
-                            session.add(DrugHistoryModel(
-                                doctor_id=doctor_id,
-                                drug_name=drug,
-                                dose=dose,
-                                use_count=1,
-                                last_used=now_str,
-                            ))
+                    strength = m.group(1)
+                    cleaned = cleaned.replace(m.group(0), " ", 1)
+
+                freq = ""
+                m = _FREQ.search(cleaned)
+                if m:
+                    freq = m.group(1).upper()
+                    cleaned = cleaned.replace(m.group(0), " ", 1)
+
+                timing = ""
+                m = _TIMING.search(cleaned)
+                if m:
+                    timing = m.group(1).strip()
+                    cleaned = cleaned.replace(m.group(0), " ", 1)
+
+                duration = ""
+                m = _DURATION.search(cleaned)
+                if m:
+                    duration = f"{m.group(1)} days"
+                    cleaned = cleaned.replace(m.group(0), " ", 1)
+
+                cleaned = re.sub(r"[-–—|]+", " ", cleaned)
+                cleaned = re.sub(r"\([^)]*\)", " ", cleaned)  # strip (Brand) from name
+                cleaned = re.sub(r"^\d+\s*(?:tab|tablet|caps?|syp|inj|drops?)\b", "", cleaned, flags=re.IGNORECASE)
+                cleaned = re.sub(r"\s+", " ", cleaned).strip()
+
+                drug = cleaned.strip()
+                if len(drug) < 3 or not re.search(r"[A-Za-z]", drug):
+                    continue
+
+                form = infer_form(drug, strength)
+
+                existing = (await session.execute(
+                    sa.select(DrugHistoryModel).where(
+                        DrugHistoryModel.doctor_id == doctor_id,
+                        DrugHistoryModel.drug_name == drug,
+                    )
+                )).scalar_one_or_none()
+
+                if existing:
+                    existing.use_count = (existing.use_count or 0) + 1
+                    existing.last_used = now_str
+                    if strength and not existing.strength: existing.strength = strength
+                    if freq and not existing.default_frequency: existing.default_frequency = freq
+                    if timing and not existing.default_timing: existing.default_timing = timing
+                    if duration and not existing.default_duration: existing.default_duration = duration
+                    if form and not existing.form: existing.form = form
+                    if not existing.dose and strength: existing.dose = strength
+                    existing.active = True
+                else:
+                    session.add(DrugHistoryModel(
+                        doctor_id=doctor_id,
+                        drug_name=drug,
+                        strength=strength,
+                        form=form,
+                        dose=strength,
+                        default_frequency=freq,
+                        default_timing=timing,
+                        default_duration=duration,
+                        active=True,
+                        use_count=1,
+                        last_used=now_str,
+                    ))
             await session.commit()
     except Exception as e:
         logger.error("Learn drugs error: %s", e)

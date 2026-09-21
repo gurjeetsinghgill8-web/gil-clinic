@@ -76,10 +76,11 @@ class OpdPrescriptionModel(Base):
 
 
 class DrugHistoryModel(Base):
-    """Drug names for autocomplete — per doctor.
+    """Drug bank for autocomplete — per doctor.
 
-    Tracks usage frequency so most-used drugs appear first.
-    Mirrors master file's `drug_history` table.
+    Stores full medicine info (brand, strength, salt/composition, form,
+    default dose/frequency/timing/duration) so the doctor never re-types the
+    same drug. Tracks usage frequency so most-used drugs appear first.
     """
 
     __tablename__ = "opd_drug_history"
@@ -89,13 +90,26 @@ class DrugHistoryModel(Base):
         String(36), nullable=True, index=True
     )
     doctor_id: Mapped[str] = mapped_column(String(100), nullable=False, default="chief", index=True)
-    drug_name: Mapped[str] = mapped_column(String(200), nullable=False)
-    dose: Mapped[str] = mapped_column(String(100), nullable=False, default="")
+    drug_name: Mapped[str] = mapped_column(String(200), nullable=False)  # generic name
+    brand_name: Mapped[str] = mapped_column(String(200), nullable=False, default="")
+    strength: Mapped[str] = mapped_column(String(100), nullable=False, default="")
+    salt_composition: Mapped[str] = mapped_column(String(500), nullable=False, default="")
+    form: Mapped[str] = mapped_column(String(50), nullable=False, default="")
+    dose: Mapped[str] = mapped_column(String(100), nullable=False, default="")  # default dose
+    default_frequency: Mapped[str] = mapped_column(String(20), nullable=False, default="")
+    default_timing: Mapped[str] = mapped_column(String(100), nullable=False, default="")
+    default_duration: Mapped[str] = mapped_column(String(50), nullable=False, default="")
+    active: Mapped[bool] = mapped_column(Boolean, nullable=True, default=True)
     use_count: Mapped[int] = mapped_column(Integer, default=1)
     last_used: Mapped[str] = mapped_column(String(30), nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
     )
 
 

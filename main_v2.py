@@ -354,6 +354,16 @@ async def _migrate_missing_columns():
         ("opd_settings", "anthropic_api_key", "VARCHAR(500)", "''"),
         ("opd_settings", "deepseek_api_key", "VARCHAR(500)", "''"),
         ("opd_settings", "gemini_api_key", "VARCHAR(500)", "''"),
+        # ── Drug Bank upgrade: full medicine fields on opd_drug_history ──
+        ("opd_drug_history", "brand_name", "VARCHAR(200)", "''"),
+        ("opd_drug_history", "strength", "VARCHAR(100)", "''"),
+        ("opd_drug_history", "salt_composition", "VARCHAR(500)", "''"),
+        ("opd_drug_history", "form", "VARCHAR(50)", "''"),
+        ("opd_drug_history", "default_frequency", "VARCHAR(20)", "''"),
+        ("opd_drug_history", "default_timing", "VARCHAR(100)", "''"),
+        ("opd_drug_history", "default_duration", "VARCHAR(50)", "''"),
+        ("opd_drug_history", "active", "BOOLEAN", "TRUE"),
+        ("opd_drug_history", "updated_at", "TIMESTAMP WITH TIME ZONE", "NOW()"),
         # New tables that might need creation
         ("clinic_staff_pins", "id", "INTEGER", "NULL"),  # will cause skip if table exists
     ]

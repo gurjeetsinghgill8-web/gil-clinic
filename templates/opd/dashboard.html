@@ -866,30 +866,41 @@
                                 <label for="gallery-file-input" style="background:#2563eb;color:white;font-weight:700;padding:4px 10px;font-size:12px;border:none;border-radius:6px;cursor:pointer;display:inline-block;">
                                     🖼️ Upload Rx
                                 </label>
+                                <button class="btn btn-sm btn-ghost" onclick="openMedLibrary()" style="color:#047857;border-color:#a7f3d0;font-weight:600;">💊 Library</button>
                                 <button class="btn btn-sm btn-primary" onclick="addMedicineRow()">+ Add</button>
                             </div>
                         </div>
                         <div id="medicines-container">
-                            <div class="med-row" data-index="0" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:6px;">
-                                <input type="text" class="med-name" placeholder="Drug name" style="flex:2;min-width:140px;padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;">
-                                <input type="text" class="med-dose" placeholder="Dose (e.g. 500mg)" style="width:100px;padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;">
-                                <select class="med-freq" style="width:90px;padding:6px 8px;border:1px solid var(--border);border-radius:6px;font-size:13px;">
+                            <div class="med-row" data-index="0" style="display:flex;gap:6px;align-items:flex-start;flex-wrap:wrap;margin-bottom:6px;position:relative;">
+                                <div style="position:relative;flex:2;min-width:150px;">
+                                    <input type="text" class="med-name" placeholder="Drug name — type to search" style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;width:100%;box-sizing:border-box;">
+                                    <div class="med-suggest" style="display:none;position:absolute;top:100%;left:0;right:0;z-index:50;background:#fff;border:1px solid var(--border);border-radius:8px;box-shadow:0 6px 20px rgba(0,0,0,.15);max-height:240px;overflow:auto;"></div>
+                                </div>
+                                <input type="text" class="med-brand" placeholder="Brand" style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;width:90px;">
+                                <input type="text" class="med-dose" placeholder="Dose (500mg / 1 tab)" style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;width:110px;">
+                                <select class="med-freq" style="padding:6px 8px;border:1px solid var(--border);border-radius:6px;font-size:13px;">
                                     <option value="OD">OD (once daily)</option>
                                     <option value="BD" selected>BD (twice daily)</option>
                                     <option value="TDS">TDS (thrice daily)</option>
-                                    <option value="QID">QID (four times)</option>
+                                    <option value="QID">QID (4 times)</option>
                                     <option value="HS">HS (night)</option>
+                                    <option value="SOS">SOS (as needed)</option>
                                     <option value="STAT">STAT (single dose)</option>
                                 </select>
-                                <select class="med-food" style="width:120px;padding:6px 8px;border:1px solid var(--border);border-radius:6px;font-size:13px;">
+                                <select class="med-food" style="padding:6px 8px;border:1px solid var(--border);border-radius:6px;font-size:13px;">
                                     <option value="">— Timing —</option>
-                                    <option value="before food" selected>Before food</option>
-                                    <option value="after food">After food</option>
+                                    <option value="before food">Before food</option>
+                                    <option value="after food" selected>After food</option>
                                     <option value="with food">With food</option>
                                     <option value="empty stomach">Empty stomach</option>
+                                    <option value="Morning">Morning</option>
+                                    <option value="Morning + Evening">Morning + Evening</option>
+                                    <option value="Morning + Afternoon + Evening">Morning + Afternoon + Evening</option>
+                                    <option value="Bedtime">Bedtime</option>
                                 </select>
-                                <input type="text" class="med-duration" placeholder="Duration" style="width:100px;padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;">
-                                <button class="btn btn-sm btn-ghost" onclick="removeMedicineRow(this)" style="color:var(--danger);padding:4px 8px;">✕</button>
+                                <input type="text" class="med-duration" placeholder="Duration (5 days)" style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;width:100px;">
+                                <button type="button" class="btn btn-sm btn-ghost" onclick="saveMedToLibrary(this)" title="Drug bank me save karo" style="color:#047857;padding:4px 8px;">💾</button>
+                                <button type="button" class="btn btn-sm btn-ghost" onclick="removeMedicineRow(this)" style="color:var(--danger);padding:4px 8px;">✕</button>
                             </div>
                         </div>
                         <div class="flex-between mt-sm">
@@ -2314,7 +2325,7 @@ function toggleInv(btn) {
     document.getElementById('pt-investigations').value = Array.from(selectedInvs).join(', ');
 }
 
-// Drug autocomplete — Quick buttons (Upgrade 3)
+// Drug autocomplete — Quick buttons (drug bank, object API)
 let _drugButtonClickHandler = null;
 document.getElementById('pt-medicines').addEventListener('input', function() {
     const val = this.value.trim();
@@ -2328,16 +2339,17 @@ document.getElementById('pt-medicines').addEventListener('input', function() {
         .then(r => r.json())
         .then(data => {
             wrap.innerHTML = '';
-            if (data.length === 0) return;
+            if (!data || data.length === 0) return;
             // Show max 6 as clickable buttons
             data.slice(0, 6).forEach(d => {
                 const btn = document.createElement('button');
                 btn.className = 'drug-btn';
-                btn.textContent = d;
+                const sub = [d.brand_name, d.strength, d.form].filter(Boolean).join(' · ');
+                btn.textContent = d.drug_name + (sub ? ' — ' + sub : '');
                 btn.type = 'button';
                 btn.onclick = () => {
                     const lines = this.value.split('\n');
-                    lines[lines.length - 1] = d;
+                    lines[lines.length - 1] = formatDrugLine(d);
                     this.value = lines.join('\n');
                     wrap.innerHTML = '';
                     // Trigger input event so buttons refresh
@@ -2348,6 +2360,17 @@ document.getElementById('pt-medicines').addEventListener('input', function() {
             });
         });
 });
+
+// Build a one-line medicine text from a drug-bank entry (for the free-text box).
+function formatDrugLine(d) {
+    let line = d.drug_name || '';
+    if (d.brand_name) line += ' (' + d.brand_name + ')';
+    if (d.strength) line += ' ' + d.strength;
+    if (d.default_frequency) line += ' ' + d.default_frequency;
+    if (d.default_timing) line += ' ' + d.default_timing;
+    if (d.default_duration) line += ' x ' + d.default_duration;
+    return line;
+}
 
 // ════════════════════════════════════════════════════════════════
 // AI GENERATE PRESCRIPTION
@@ -4104,40 +4127,154 @@ function downloadCmePdf() {
 }
 
 // ════════════════════════════════════════════════════════════════
-// MEDICINE ROW MANAGEMENT — structured input with OD/BD/TDS + before/after food
+// MEDICINE ROW MANAGEMENT — drug-bank autocomplete + auto-fill + save-to-library
 // ════════════════════════════════════════════════════════════════
 let medRowCounter = 1;
+
+const MED_FREQS = ['OD', 'BD', 'TDS', 'QID', 'HS', 'SOS', 'STAT'];
+const MED_FREQ_LABELS = {
+    OD: 'OD (once daily)', BD: 'BD (twice daily)', TDS: 'TDS (thrice daily)',
+    QID: 'QID (4 times)', HS: 'HS (night)', SOS: 'SOS (as needed)', STAT: 'STAT (single dose)'
+};
+const MED_TIMINGS = ['', 'before food', 'after food', 'with food', 'empty stomach', 'Morning', 'Morning + Evening', 'Morning + Afternoon + Evening', 'Bedtime'];
+const MED_TIMING_LABELS = {
+    '': '— Timing —', 'before food': 'Before food', 'after food': 'After food',
+    'with food': 'With food', 'empty stomach': 'Empty stomach', 'Morning': 'Morning',
+    'Morning + Evening': 'Morning + Evening',
+    'Morning + Afternoon + Evening': 'Morning + Afternoon + Evening', 'Bedtime': 'Bedtime'
+};
+
+function medFreqOptions(selected) {
+    return MED_FREQS.map(f => `<option value="${f}" ${f === selected ? 'selected' : ''}>${MED_FREQ_LABELS[f] || f}</option>`).join('');
+}
+function medTimingOptions(selected) {
+    return MED_TIMINGS.map(t => `<option value="${t}" ${t === selected ? 'selected' : ''}>${MED_TIMING_LABELS[t] || t}</option>`).join('');
+}
+function inferMedForm(name, dose) {
+    const s = ((name || '') + ' ' + (dose || '')).toLowerCase();
+    if (s.includes('syrup') || s.includes('syp') || /ml\b/.test(s)) return 'Syrup';
+    if (s.includes('injection') || s.includes(' inj')) return 'Injection';
+    if (s.includes('capsule') || s.includes('cap')) return 'Capsule';
+    if (s.includes('drop')) return 'Drops';
+    if (s.includes('cream') || s.includes('ointment') || s.includes('gel') || s.includes('lotion')) return 'Topical';
+    if (s.includes('inhaler') || s.includes('spray')) return 'Inhaler';
+    return 'Tablet';
+}
 
 function addMedicineRow() {
     const container = document.getElementById('medicines-container');
     const idx = medRowCounter++;
     const row = document.createElement('div');
     row.className = 'med-row';
-    row.style.cssText = 'display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:6px;';
+    row.style.cssText = 'display:flex;gap:6px;align-items:flex-start;flex-wrap:wrap;margin-bottom:6px;position:relative;';
     row.dataset.index = idx;
     row.innerHTML = `
-        <input type="text" class="med-name" placeholder="Drug name" style="flex:2;min-width:140px;padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;">
-        <input type="text" class="med-dose" placeholder="Dose (e.g. 500mg)" style="width:100px;padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;">
-        <select class="med-freq" style="width:90px;padding:6px 8px;border:1px solid var(--border);border-radius:6px;font-size:13px;">
-            <option value="OD">OD (once daily)</option>
-            <option value="BD" selected>BD (twice daily)</option>
-            <option value="TDS">TDS (thrice daily)</option>
-            <option value="QID">QID (four times)</option>
-            <option value="HS">HS (night)</option>
-            <option value="STAT">STAT (single dose)</option>
-        </select>
-        <select class="med-food" style="width:120px;padding:6px 8px;border:1px solid var(--border);border-radius:6px;font-size:13px;">
-            <option value="">— Timing —</option>
-            <option value="before food" selected>Before food</option>
-            <option value="after food">After food</option>
-            <option value="with food">With food</option>
-            <option value="empty stomach">Empty stomach</option>
-        </select>
-        <input type="text" class="med-duration" placeholder="Duration" style="width:100px;padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;">
-        <button class="btn btn-sm btn-ghost" onclick="removeMedicineRow(this)" style="color:var(--danger);padding:4px 8px;">✕</button>
+        <div style="position:relative;flex:2;min-width:150px;">
+            <input type="text" class="med-name" placeholder="Drug name — type to search" style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;width:100%;box-sizing:border-box;">
+            <div class="med-suggest" style="display:none;position:absolute;top:100%;left:0;right:0;z-index:50;background:#fff;border:1px solid var(--border);border-radius:8px;box-shadow:0 6px 20px rgba(0,0,0,.15);max-height:240px;overflow:auto;"></div>
+        </div>
+        <input type="text" class="med-brand" placeholder="Brand" style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;width:90px;">
+        <input type="text" class="med-dose" placeholder="Dose (500mg / 1 tab)" style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;width:110px;">
+        <select class="med-freq" style="padding:6px 8px;border:1px solid var(--border);border-radius:6px;font-size:13px;">${medFreqOptions('BD')}</select>
+        <select class="med-food" style="padding:6px 8px;border:1px solid var(--border);border-radius:6px;font-size:13px;">${medTimingOptions('after food')}</select>
+        <input type="text" class="med-duration" placeholder="Duration (5 days)" style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;width:100px;">
+        <button type="button" class="btn btn-sm btn-ghost" onclick="saveMedToLibrary(this)" title="Drug bank me save karo" style="color:#047857;padding:4px 8px;">💾</button>
+        <button type="button" class="btn btn-sm btn-ghost" onclick="removeMedicineRow(this)" style="color:var(--danger);padding:4px 8px;">✕</button>
     `;
     container.appendChild(row);
+    attachMedRowHandlers(row);
     updateMedCount();
+}
+
+function attachMedRowHandlers(row) {
+    const nameInput = row.querySelector('.med-name');
+    const suggest = row.querySelector('.med-suggest');
+    let debounce = null;
+
+    nameInput.addEventListener('input', function () {
+        const q = this.value.trim();
+        clearTimeout(debounce);
+        if (q.length < 2) { suggest.style.display = 'none'; return; }
+        debounce = setTimeout(function () {
+            fetch('/opd/api/drugs?q=' + encodeURIComponent(q))
+                .then(r => r.json())
+                .then(function (data) {
+                    if (!data || data.length === 0) {
+                        suggest.innerHTML = '<div style="padding:8px 10px;font-size:12px;color:#64748b;">Library me nahi mila — bharo aur 💾 dabao</div>';
+                        suggest.style.display = 'block';
+                        return;
+                    }
+                    suggest.innerHTML = data.slice(0, 8).map(function (d) {
+                        const sub = [d.brand_name, d.strength, d.form].filter(Boolean).join(' · ');
+                        return '<div class="med-suggest-item" data-id="' + d.id + '" style="padding:7px 10px;cursor:pointer;font-size:13px;border-bottom:1px solid #f1f5f9;">' +
+                            '<div style="font-weight:600;">' + escapeHtml(d.drug_name) + '</div>' +
+                            (sub ? '<div style="font-size:11px;color:#64748b;">' + escapeHtml(sub) + '</div>' : '') +
+                            '</div>';
+                    }).join('');
+                    suggest.querySelectorAll('.med-suggest-item').forEach(function (el) {
+                        el.addEventListener('mousedown', function (e) {
+                            e.preventDefault();
+                            const drug = data.find(x => String(x.id) === String(el.dataset.id));
+                            pickMed(row, drug);
+                            suggest.style.display = 'none';
+                        });
+                    });
+                    suggest.style.display = 'block';
+                })
+                .catch(function () { suggest.style.display = 'none'; });
+        }, 200);
+    });
+
+    nameInput.addEventListener('blur', function () {
+        setTimeout(function () { suggest.style.display = 'none'; }, 200);
+    });
+}
+
+function pickMed(row, drug) {
+    if (!drug) return;
+    const name = row.querySelector('.med-name');
+    const brand = row.querySelector('.med-brand');
+    const dose = row.querySelector('.med-dose');
+    const freq = row.querySelector('.med-freq');
+    const food = row.querySelector('.med-food');
+    const duration = row.querySelector('.med-duration');
+    name.value = drug.drug_name || '';
+    if (drug.brand_name && !brand.value) brand.value = drug.brand_name;
+    if (drug.strength && !dose.value) dose.value = drug.strength;
+    else if (drug.dose && !dose.value) dose.value = drug.dose;
+    if (drug.default_frequency && freq) freq.value = drug.default_frequency;
+    if (drug.default_timing && food) food.value = drug.default_timing;
+    if (drug.default_duration && !duration.value) duration.value = drug.default_duration;
+    row.dataset.medId = drug.id || '';
+    showToast('💊 ' + drug.drug_name + ' auto-filled');
+}
+
+async function saveMedToLibrary(btn) {
+    const row = btn.closest('.med-row');
+    const name = row.querySelector('.med-name').value.trim();
+    const brand = row.querySelector('.med-brand').value.trim();
+    const dose = row.querySelector('.med-dose').value.trim();
+    const freq = row.querySelector('.med-freq').value;
+    const timing = row.querySelector('.med-food').value;
+    const duration = row.querySelector('.med-duration').value.trim();
+    if (name.length < 3 || !/[A-Za-z]/.test(name)) { showToast('❌ Pehle medicine ka naam bharo', 'error'); return; }
+    const strengthMatch = dose.match(/\d+(?:\.\d+)?\s*(?:mg|mcg|microg|ml|g|gm|iu|units?)/i);
+    const strength = strengthMatch ? strengthMatch[0].trim() : '';
+    const form = inferMedForm(name, dose);
+    const res = await fetch('/opd/api/drugs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            drug_name: name, brand_name: brand, strength: strength, dose: dose,
+            default_frequency: freq, default_timing: timing, default_duration: duration, form: form
+        })
+    }).then(r => r.json());
+    if (res.ok) {
+        row.dataset.medId = res.drug.id;
+        showToast('💾 "' + name + '" drug bank me save — agli baar auto-fill');
+    } else {
+        showToast('❌ ' + (res.error || 'Save nahi hua'), 'error');
+    }
 }
 
 function removeMedicineRow(btn) {
@@ -4160,12 +4297,14 @@ function buildMedicinesText() {
     const lines = [];
     rows.forEach(row => {
         const name = row.querySelector('.med-name').value.trim();
+        const brand = row.querySelector('.med-brand').value.trim();
         const dose = row.querySelector('.med-dose').value.trim();
         const freq = row.querySelector('.med-freq').value;
         const food = row.querySelector('.med-food').value;
         const duration = row.querySelector('.med-duration').value.trim();
         if (!name) return;
         let line = name;
+        if (brand) line += ' (' + brand + ')';
         if (dose) line += ' ' + dose;
         line += ' ' + freq;
         if (food) line += ' ' + food;
@@ -4176,6 +4315,10 @@ function buildMedicinesText() {
     textarea.value = lines.join('\n');
     showToast('✅ Medicine text generated!');
 }
+
+// Attach autocomplete to any pre-rendered rows + ensure at least one row.
+document.querySelectorAll('#medicines-container .med-row').forEach(attachMedRowHandlers);
+if (document.querySelectorAll('#medicines-container .med-row').length === 0) addMedicineRow();
 
 // ════════════════════════════════════════════════════════════════
 // TAB SWITCHING HELPER
@@ -5558,5 +5701,148 @@ function pmLink(patientId, name, phone) {
     </p>
   </div>
 </div>
+
+<!-- 💊 Medicine Library Modal -->
+<div id="med-library-modal" style="display:none; position:fixed; inset:0; z-index:10000; background:rgba(15,23,42,.55); align-items:center; justify-content:center;">
+  <div style="background:#fff;border-radius:14px;box-shadow:0 10px 40px rgba(0,0,0,.3);width:min(680px,94vw);max-height:86vh;display:flex;flex-direction:column;padding:16px 18px;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+      <h3 style="margin:0;font-size:16px;">💊 Medicine Library (Drug Bank)</h3>
+      <button onclick="closeMedLibrary()" style="background:none;border:none;font-size:20px;cursor:pointer;">✕</button>
+    </div>
+    <div style="display:flex;gap:8px;margin-bottom:10px;">
+      <input id="med-lib-search" type="text" placeholder="Search medicine…" style="flex:1;padding:7px 10px;border:1px solid #cbd5e1;border-radius:8px;font-size:13px;" oninput="renderMedLibrary()">
+      <button class="btn btn-sm btn-primary" onclick="openMedLibraryForm()">+ Add</button>
+    </div>
+    <div id="med-library-list" style="overflow:auto;flex:1;"></div>
+  </div>
+</div>
+
+<!-- 💊 Medicine Library Add/Edit Form -->
+<div id="med-library-form-modal" style="display:none; position:fixed; inset:0; z-index:10001; background:rgba(15,23,42,.55); align-items:center; justify-content:center;">
+  <div style="background:#fff;border-radius:14px;box-shadow:0 10px 40px rgba(0,0,0,.3);width:min(560px,94vw);max-height:88vh;overflow:auto;padding:16px 18px;">
+    <h3 style="margin:0 0 10px;font-size:16px;" id="med-lib-form-title">Add Medicine</h3>
+    <input type="hidden" id="med-lib-form-id">
+    <label style="font-size:12px;font-weight:600;">Generic name *</label>
+    <input id="med-lib-form-name" type="text" placeholder="e.g. Telmisartan" style="width:100%;margin:4px 0 8px;padding:7px 10px;border:1px solid #cbd5e1;border-radius:8px;font-size:13px;">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+      <div><label style="font-size:12px;font-weight:600;">Brand</label><input id="med-lib-form-brand" type="text" placeholder="e.g. Telma" style="width:100%;margin:4px 0 8px;padding:7px 10px;border:1px solid #cbd5e1;border-radius:8px;font-size:13px;"></div>
+      <div><label style="font-size:12px;font-weight:600;">Strength</label><input id="med-lib-form-strength" type="text" placeholder="e.g. 40 mg" style="width:100%;margin:4px 0 8px;padding:7px 10px;border:1px solid #cbd5e1;border-radius:8px;font-size:13px;"></div>
+    </div>
+    <label style="font-size:12px;font-weight:600;">Salt / Composition</label>
+    <input id="med-lib-form-salt" type="text" placeholder="e.g. Telmisartan 40mg" style="width:100%;margin:4px 0 8px;padding:7px 10px;border:1px solid #cbd5e1;border-radius:8px;font-size:13px;">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+      <div><label style="font-size:12px;font-weight:600;">Form</label>
+        <select id="med-lib-form-form" style="width:100%;margin:4px 0 8px;padding:7px 8px;border:1px solid #cbd5e1;border-radius:8px;font-size:13px;">
+          <option>Tablet</option><option>Capsule</option><option>Syrup</option><option>Injection</option><option>Drops</option><option>Topical</option><option>Inhaler</option>
+        </select></div>
+      <div><label style="font-size:12px;font-weight:600;">Default frequency</label>
+        <select id="med-lib-form-freq" style="width:100%;margin:4px 0 8px;padding:7px 8px;border:1px solid #cbd5e1;border-radius:8px;font-size:13px;">
+          <option>OD</option><option>BD</option><option>TDS</option><option>QID</option><option>HS</option><option>SOS</option><option>STAT</option>
+        </select></div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+      <div><label style="font-size:12px;font-weight:600;">Default dose</label><input id="med-lib-form-dose" type="text" placeholder="e.g. 1 tablet" style="width:100%;margin:4px 0 8px;padding:7px 10px;border:1px solid #cbd5e1;border-radius:8px;font-size:13px;"></div>
+      <div><label style="font-size:12px;font-weight:600;">Default timing</label><input id="med-lib-form-timing" type="text" placeholder="e.g. After food" style="width:100%;margin:4px 0 8px;padding:7px 10px;border:1px solid #cbd5e1;border-radius:8px;font-size:13px;"></div>
+    </div>
+    <label style="font-size:12px;font-weight:600;">Default duration</label>
+    <input id="med-lib-form-duration" type="text" placeholder="e.g. 30 days" style="width:100%;margin:4px 0 12px;padding:7px 10px;border:1px solid #cbd5e1;border-radius:8px;font-size:13px;">
+    <div style="display:flex;gap:8px;justify-content:flex-end;">
+      <button class="btn btn-ghost" onclick="closeMedLibraryForm()">Cancel</button>
+      <button class="btn btn-primary" onclick="saveMedLibraryForm()">💾 Save</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// 💊 Medicine Library (Drug Bank) — management UI
+let _medLibCache = [];
+
+function openMedLibrary() {
+  document.getElementById('med-library-modal').style.display = 'flex';
+  loadMedLibrary();
+}
+function closeMedLibrary() {
+  document.getElementById('med-library-modal').style.display = 'none';
+}
+async function loadMedLibrary() {
+  try {
+    const data = await fetch('/opd/api/drugs').then(r => r.json());
+    _medLibCache = Array.isArray(data) ? data : [];
+  } catch (e) { _medLibCache = []; }
+  renderMedLibrary();
+}
+function renderMedLibrary() {
+  const q = (document.getElementById('med-lib-search').value || '').trim().toLowerCase();
+  const list = _medLibCache.filter(d => !q || ((d.drug_name||'') + ' ' + (d.brand_name||'') + ' ' + (d.salt_composition||'') + ' ' + (d.strength||'')).toLowerCase().includes(q));
+  const el = document.getElementById('med-library-list');
+  if (list.length === 0) {
+    el.innerHTML = '<div style="padding:16px;color:#64748b;font-size:13px;">Koi medicine nahi mili — "+ Add" se nayi daalo.</div>';
+    return;
+  }
+  el.innerHTML = list.map(d => {
+    const meta = [d.brand_name, d.strength, d.form, d.dose, d.default_frequency, d.default_timing].filter(Boolean).join(' · ');
+    return '<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 4px;border-bottom:1px solid #f1f5f9;">' +
+      '<div style="min-width:0;"><div style="font-weight:600;font-size:13px;">' + escapeHtml(d.drug_name) + '</div>' +
+      (meta ? '<div style="font-size:11px;color:#64748b;">' + escapeHtml(meta) + '</div>' : '') +
+      '</div>' +
+      '<div style="display:flex;gap:4px;flex-shrink:0;">' +
+      '<button class="btn btn-sm btn-ghost" onclick="editMedLibrary(' + d.id + ')" title="Edit">✏️</button>' +
+      '<button class="btn btn-sm btn-ghost" style="color:#dc2626;" onclick="deleteMedLibrary(' + d.id + ')" title="Hide/Delete">🗑</button>' +
+      '</div></div>';
+  }).join('');
+}
+function openMedLibraryForm() {
+  document.getElementById('med-lib-form-id').value = '';
+  document.getElementById('med-lib-form-title').textContent = 'Add Medicine';
+  ['med-lib-form-name','med-lib-form-brand','med-lib-form-strength','med-lib-form-salt','med-lib-form-dose','med-lib-form-timing','med-lib-form-duration'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('med-lib-form-form').value = 'Tablet';
+  document.getElementById('med-lib-form-freq').value = 'OD';
+  document.getElementById('med-library-form-modal').style.display = 'flex';
+}
+function editMedLibrary(id) {
+  const d = _medLibCache.find(x => String(x.id) === String(id));
+  if (!d) return;
+  document.getElementById('med-lib-form-id').value = d.id;
+  document.getElementById('med-lib-form-title').textContent = 'Edit Medicine';
+  document.getElementById('med-lib-form-name').value = d.drug_name || '';
+  document.getElementById('med-lib-form-brand').value = d.brand_name || '';
+  document.getElementById('med-lib-form-strength').value = d.strength || '';
+  document.getElementById('med-lib-form-salt').value = d.salt_composition || '';
+  document.getElementById('med-lib-form-form').value = d.form || 'Tablet';
+  document.getElementById('med-lib-form-freq').value = d.default_frequency || 'OD';
+  document.getElementById('med-lib-form-dose').value = d.dose || '';
+  document.getElementById('med-lib-form-timing').value = d.default_timing || '';
+  document.getElementById('med-lib-form-duration').value = d.default_duration || '';
+  document.getElementById('med-library-form-modal').style.display = 'flex';
+}
+function closeMedLibraryForm() {
+  document.getElementById('med-library-form-modal').style.display = 'none';
+}
+async function saveMedLibraryForm() {
+  const id = document.getElementById('med-lib-form-id').value;
+  const body = {
+    id: id ? Number(id) : undefined,
+    drug_name: document.getElementById('med-lib-form-name').value.trim(),
+    brand_name: document.getElementById('med-lib-form-brand').value.trim(),
+    strength: document.getElementById('med-lib-form-strength').value.trim(),
+    salt_composition: document.getElementById('med-lib-form-salt').value.trim(),
+    form: document.getElementById('med-lib-form-form').value,
+    dose: document.getElementById('med-lib-form-dose').value.trim(),
+    default_frequency: document.getElementById('med-lib-form-freq').value,
+    default_timing: document.getElementById('med-lib-form-timing').value.trim(),
+    default_duration: document.getElementById('med-lib-form-duration').value.trim()
+  };
+  const res = await fetch('/opd/api/drugs', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }).then(r => r.json());
+  if (res.ok) { closeMedLibraryForm(); await loadMedLibrary(); showToast('💾 Medicine library me save ho gayi'); }
+  else showToast('❌ ' + (res.error || 'Save nahi hua'), 'error');
+}
+async function deleteMedLibrary(id) {
+  const d = _medLibCache.find(x => String(x.id) === String(id));
+  if (!confirm('Delete "' + (d ? d.drug_name : '') + '" from library? Past prescriptions par koi asar nahi.')) return;
+  const res = await fetch('/opd/api/drugs?drug_id=' + id, { method: 'DELETE' }).then(r => r.json());
+  if (res.ok) { await loadMedLibrary(); showToast('🗑 Medicine library se hata di'); }
+  else showToast('❌ ' + (res.error || 'Delete nahi hua'), 'error');
+}
+</script>
 </body>
 </html>
