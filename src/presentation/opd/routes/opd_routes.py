@@ -549,7 +549,26 @@ async def api_test_key(request: Request):
             msg = f"❌ {p['label']} error ({sc}) — {detail}"
         return {"ok": False, "error": msg, "status": sc, "provider": provider}
     except Exception as e:
-        return {"ok": False, "error": f"{p['label']} tak pahunch nahi paye (network/timeout): {e}"}
+        msg = str(e) or type(e).__name__
+        low = (msg + " " + type(e).__name__).lower()
+        if "connect" in low or "timeout" in low or "timed out" in low or "getaddrinfo" in low:
+            # PythonAnywhere (free) outbound block — BYOK keys yahan kaam nahi karti.
+            return {
+                "ok": False,
+                "provider": provider,
+                "outbound_blocked": True,
+                "error": (
+                    f"⚠️ {p['label']} tak pahunch nahi paye — server ka outbound internet block lagta hai.\n"
+                    "PythonAnywhere FREE plan sirf whitelisted hosts tak internet deta hai, is liye "
+                    "Groq/DeepSeek/OpenAI/Gemini ke API is server se block hain (key sahi hone par bhi).\n"
+                    "👉 Aaj hi AI chalane ke liye: Puter use karo — wo DOCTOR KE BROWSER se chalta hai, "
+                    "is server block se affect nahi hota.\n"
+                    "👉 Apni paid key chalani hai to: (a) PA ko whitelist request bhejo "
+                    "(project me pa_whitelist_request.txt ready hai → pythonanywhere.com → Help → Send feedback), "
+                    "ya (b) PA Hacker plan ($5/mo) lo — usmein outbound block nahi hota."
+                ),
+            }
+        return {"ok": False, "error": f"{p['label']} tak pahunch nahi paye: {msg}"}
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

@@ -64,8 +64,17 @@
 - **100 CPU-second / din** → bhaari AI usage quota khatam kar sakti hai (us din app band)
 - **Scheduled tasks allowed nahi** (403) → daily backup app ke in-built auto-backup se hota hai
 - **Custom domain nahi** → address `gillhopitalsoftware1.pythonanywhere.com` hi rahega
-- **Outbound internet sirf whitelist** → AI/WhatsApp ke liye `pa_whitelist_request.txt` bhejna padta hai
-  (AI feature error de to samajhna whitelist pending hai; **patient portal ko AI ki zaroorat nahi**)
+- **Outbound internet sirf whitelist — SABSE BADA AI BLOCKER** → PA free server sirf whitelisted hosts
+  tak internet deta hai. Is liye **BYOK API keys (Groq / DeepSeek / OpenAI / Gemini) PA par kaam NAHI karti** —
+  key bilkul sahi hone par bhi "connection failed" aata hai, kyunki server provider tak pahunch hi nahi sakta.
+  - Live par confirm kiya (21-Sep-2026): `POST /opd/api/test-key` (Groq key saved thi) →
+    `"Groq (Llama) tak pahunch nahi paye: All connection attempts failed"`
+  - **AI chalane ka ekmatra FREE rasta = Puter** — wo **doctor ke BROWSER** se chalta hai, is server block se
+    affect nahi hota. Isi liye app ka default `ai_mode = puter` hai.
+  - Apni paid key chalani ho to: **(a)** PA ko whitelist request bhejo — project me `pa_whitelist_request.txt`
+    ready hai (pythonanywhere.com → **Help → Send feedback** me paste karo), ya **(b)** PA ka **Hacker plan ($5/mo)**
+    lo — usme outbound block nahi hota.
+  - **Patient portal ko AI ki zaroorat nahi** — wo is block se bilkul affect nahi hota (verified).
 
 ---
 
@@ -212,3 +221,22 @@ Drug naam **case-insensitive** match hota hai ("Dolo" = "dolo" → ek hi entry, 
 1. Settings → **"🆕 Naya Account banao"** → puter.com par email/Google se free account banao → phir **"🔌 Connect Puter"** dabao.
 2. **Puter bilkul hi na chale to** → Settings → "My own API keys" me **Groq key** (free — console.groq.com) daal do.
    Usme **koi login, koi popup hi nahi** chahiye aur AI seedha chalta hai. **Yahi sabse bharosemand rasta hai.**
+
+> ⚠️ **Par dhyan rahe:** PA free par Groq/DeepSeek key **kaam nahi karegi** (upar section 2 ka outbound block).
+> Is liye PA par **Puter hi asli rasta hai**. Groq/DeepSeek key sirf tab kaam karegi jab whitelist approve ho
+> ya PA paid plan par shift karo. **Doctor ko galat ummeed mat do** — pehle `🧪 Test` se check karwao.
+
+### 9.1 Key save/test ka naya UI (21-Sep-2026)
+
+Doctor ki shikayat thi: *"deepseek api daali paid but vo save nahi ho rahi"* — jabki key **save ho chuki thi**,
+sirf UI usko dikha nahi raha tha. Is liye 3 cheezein add ki:
+
+| Cheez | Kya kiya |
+|---|---|
+| Save confirmation | Save karte hi har key label me **✅ saved** turant dikhta hai (pehle sirf page reload par dikhta tha) |
+| **🧪 Test button** | Har key ke saath — `POST /opd/api/test-key` se **chhota REAL call** karke batata hai: key sahi / galat / balance khatam / outbound block |
+| AI Mode warning | Key save hote waqt agar `ai_mode = puter` hai to warning + **ek click me "Auto (BYOK)" switch** ka offer |
+| Puter dummy account | `puterStatus()` ab **guest flag** deta hai — dummy/guest account ko "Puter Attached" nahi dikhata, warning + **🔄 Re-login (apni ID se)** button deta hai |
+
+**Sabak:** key ka **save** hona ≠ key ka **chalna**. Is liye (1) save par turant confirmation,
+(2) real Test button, (3) `ai_mode` ka check — teenon zaroori hain.
