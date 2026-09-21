@@ -505,8 +505,10 @@ def route_chat(settings: Optional[Dict[str, Any]], messages: List[Any], feature:
             errors.append(f"{p['label']}: {err}")
 
     # ── System emergency fallback (GIL CLINIC legacy keys) ──
-    # Wallet mode mein fallback nahi — wallet ke andar hi balance kata hai
-    if not is_wallet and system_fallback_enabled():
+    # Wallet mode mein fallback nahi — wallet ke andar hi balance kata hai.
+    # Clinic ke paas apni key hai to fallback chalao hi mat — seedha browser
+    # handoff (neeche) → PA free par bekaar ke connection retries ka time bachta hai.
+    if not is_wallet and not providers and system_fallback_enabled():
         try:
             from src.ai_engine.groq_client import call_groq_with_error
 

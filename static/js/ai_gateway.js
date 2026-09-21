@@ -404,6 +404,34 @@
     return '';
   }
 
+  // Tiny real call from the BROWSER to verify a key (Settings "🧪 Test").
+  async function byokTest(providerId, key) {
+    var p = null;
+    BYOK_PROVIDERS.forEach(function (x) { if (x.id === providerId) p = x; });
+    if (!p) return { ok: false, error: 'Ye provider browser se supported nahi hai (OpenAI/Anthropic CORS block karte hain). DeepSeek/Groq/Gemini use karo.' };
+    if (!key || !String(key).trim()) return { ok: false, error: 'Key khali hai — pehle key bharo' };
+    try {
+      var url = p.base.replace(/\/$/, '') + '/chat/completions';
+      var resp = await fetch(url, {
+        method: 'POST',
+        headers: { 'Authorization': 'Bearer ' + String(key).trim(), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ model: p.model, messages: [{ role: 'user', content: 'Reply with exactly: OK' }], temperature: 0, max_tokens: 5 }),
+      });
+      if (resp.status === 401) return { ok: false, error: p.label + ': key GALAT hai (401) — nayi key banao' };
+      if (resp.status === 403) return { ok: false, error: p.label + ': access denied (403) — billing/credits check karo' };
+      if (resp.status === 402) return { ok: false, error: p.label + ': balance khatam (402)' };
+      if (resp.status === 429) return { ok: false, error: p.label + ': key sahi hai par rate-limit (429) — thodi der baad' };
+      if (!resp.ok) return { ok: false, error: p.label + ': HTTP ' + resp.status };
+      var data = await resp.json();
+      var c = (data.choices && data.choices[0]) || {};
+      var content = c.message && c.message.content;
+      if (typeof content === 'string' && content.trim()) return { ok: true, message: '✅ ' + p.label + ' key SAHI hai — browser se seedha chal rahi hai' };
+      return { ok: true, message: '✅ ' + p.label + ' key SAHI hai (reply mila)' };
+    } catch (e) {
+      return { ok: false, error: p.label + ': ' + ((e && e.message) || e) };
+    }
+  }
+
   async function doChat(prompt, model) {
     var res = await window.puter.ai.chat(prompt, { model: model || 'gpt-4o-mini' });
     return extractText(res);
@@ -605,4 +633,5 @@
   window.puterAvailable = puterAvailable;
   window.puterGetToken = getToken;
   window.puterSaveToken = saveTokenManual;
+  window.byokTest = byokTest;
 })();

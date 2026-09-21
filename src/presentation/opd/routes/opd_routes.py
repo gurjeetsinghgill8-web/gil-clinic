@@ -280,6 +280,22 @@ async def opd_dashboard(request: Request, tab: str = "rx"):
     # Get settings
     settings_dict = await _get_settings(doctor_id)
 
+    # Raw (decrypted) AI keys → sent ONLY to this authenticated doctor's own
+    # dashboard, so their key auto-syncs to this browser (localStorage) and the
+    # browser-side BYOK path can call the provider directly (PA free fix).
+    raw_ai_keys = {}
+    try:
+        raw_settings = await _get_settings(doctor_id, masked=False)
+        raw_ai_keys = {
+            "groq": decrypt_key(str(raw_settings.get("groq_api_key") or "")),
+            "openai": decrypt_key(str(raw_settings.get("openai_api_key") or "")),
+            "anthropic": decrypt_key(str(raw_settings.get("anthropic_api_key") or "")),
+            "deepseek": decrypt_key(str(raw_settings.get("deepseek_api_key") or "")),
+            "gemini": decrypt_key(str(raw_settings.get("gemini_api_key") or "")),
+        }
+    except Exception:
+        raw_ai_keys = {}
+
     # Get today's patient count
     today_count = 0
     today_revenue = 0
@@ -312,6 +328,7 @@ async def opd_dashboard(request: Request, tab: str = "rx"):
         doctor_id=doctor_id,
         doc_name=name,
         settings=settings_dict,
+        raw_ai_keys=raw_ai_keys,
         tab=tab,
         today_count=today_count,
         today_revenue=today_revenue,

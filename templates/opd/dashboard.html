@@ -4,6 +4,18 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Smart OPD — {{ settings.doc_name or 'Doctor' }}</title>
+    <script>
+    // Doctor ki apni AI key server se aayi hai → is browser ke localStorage me
+    // sync karo, taaki browser-side BYOK (DeepSeek/Groq/Gemini) seedha chale
+    // aur Puter popup/tab ki zaroorat hi na pade (PA free fix).
+    try {
+        var _rawKeys = {{ raw_ai_keys | tojson }};
+        Object.keys(_rawKeys || {}).forEach(function (p) {
+            var k = String(_rawKeys[p] || '').trim();
+            if (k) { try { localStorage.setItem('gilclinic.byok.' + p, k); } catch (e) {} }
+        });
+    } catch (e) {}
+    </script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700&display=swap');
         * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -3864,15 +3876,19 @@ document.addEventListener('DOMContentLoaded', function () {
 
 async function testAIKey(provider) {
     const box = document.getElementById('key-test-' + provider);
-    if (box) { box.textContent = '⏳ Test chal raha hai… (chhota real call)'; box.style.color = '#475569'; box.style.fontWeight = '600'; }
+    if (box) { box.textContent = '⏳ Test chal raha hai… (browser se seedha)'; box.style.color = '#475569'; box.style.fontWeight = '600'; }
     try {
-        const res = await fetch('/opd/api/test-key', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ provider: provider }),
-        }).then(r => r.json());
+        // Key: input me abhi likhi ho to wahi, warna browser localStorage se.
+        const input = document.getElementById('set-' + provider + '-key');
+        let key = (input && input.value || '').trim();
+        if (!key) { try { key = localStorage.getItem('gilclinic.byok.' + provider) || ''; } catch (e) {} }
+        if (!key) {
+            if (box) { box.textContent = '⚠️ Pehle key bharo aur "💾 Save All Settings" dabao'; box.style.color = '#b45309'; box.style.fontWeight = '600'; }
+            return;
+        }
+        const res = await window.byokTest(provider, key);
         if (box) {
-            box.textContent = res.ok ? res.message : ('❌ ' + (res.error || 'Test fail'));
+            box.textContent = res.ok ? res.message : ('❌ ' + res.error);
             box.style.color = res.ok ? '#047857' : '#dc2626';
             box.style.fontWeight = '600';
         }
