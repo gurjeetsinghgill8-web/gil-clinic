@@ -40,6 +40,7 @@ import uuid
 from pathlib import Path
 from typing import Optional
 
+import httpx
 import sqlalchemy as sa
 from fastapi import APIRouter, Depends, Form, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
@@ -92,6 +93,7 @@ from src.infrastructure.queue.models.queue_entry_model import QueueEntryModel
 # ── AI Engine ────────────────────────────────────────────────────────────────
 from src.ai_engine.groq_client import parse_ai_json  # noqa: F401 (legacy parser reuse)
 from src.ai_engine.provider_router import (
+    PROVIDERS,
     ai_config_summary,
     decrypt_key,
     encrypt_key,
@@ -459,6 +461,95 @@ async def api_save_settings(request: Request):
         return {"ok": True}
     except Exception as e:
         return {"ok": False, "error": str(e)}
+
+
+@router.post("/api/test-key", include_in_schema=False)
+async def api_test_key(request: Request):
+    """Saved API key sach me chalti hai ya nahi — ek chhota REAL call karke batao.
+
+    Doctor ko yakeen dilane ke liye: key save hui ya nahi, aur chalegi ya nahi.
+    (Sirf 5 token ka call — kharcha na ke barabar.)
+    """
+    sess = _require_opd_session(request)
+    try:
+        body = await request.json()
+    except Exception:
+        return {"ok": False, "error": "Invalid JSON"}
+
+    provider = str(body.get("provider") or "").strip().lower()
+    if provider not in PROVIDERS:
+        return {"ok": False, "error": "Unknown provider"}
+    p = PROVIDERS[provider]
+
+    settings = await _ai_settings_for(sess["doctor_id"])
+    raw = settings.get(p["key_field"]) or ""
+    key = decrypt_key(raw) if raw else ""
+    if not key:
+        return {"ok": False, "error": f"{p['label']} key saved nahi hai — pehle key daal kar 'Save All Settings' dabao"}
+
+    try:
+        if provider == "anthropic":
+            url = p["base_url"].rstrip("/") + "/messages"
+            headers = {
+                "x-api-key": key,
+                "anthropic-version": "2023-06-01",
+                "Content-Type": "application/json",
+            }
+            payload = {
+                "model": p["model"],
+                "max_tokens": 5,
+                "messages": [{"role": "user", "content": "Reply with the single word: OK"}],
+            }
+        else:
+            url = p["base_url"].rstrip("/") + "/chat/completions"
+            headers = {"Authorization": f"Bearer {key}", "Content-Type": "application/json"}
+            payload = {
+                "model": p["model"],
+                "max_tokens": 5,
+                "temperature": 0,
+                "messages": [{"role": "user", "content": "Reply with the single word: OK"}],
+            }
+
+        async with httpx.AsyncClient(timeout=30) as client:
+            r = await client.post(url, headers=headers, json=payload)
+        sc = r.status_code
+
+        if sc == 200:
+            txt = ""
+            try:
+                j = r.json()
+                txt = (j["choices"][0]["message"]["content"] or "").strip()
+            except Exception:
+                try:
+                    txt = (r.json()["content"][0]["text"] or "").strip()
+                except Exception:
+                    txt = ""
+            return {
+                "ok": True,
+                "provider": provider,
+                "model": p["model"],
+                "message": f"✅ {p['label']} key SAHI hai — reply aaya: \"{(txt or 'OK')[:40]}\". AI chalega.",
+            }
+
+        detail = ""
+        try:
+            detail = str((r.json().get("error") or {}).get("message") or "")[:160]
+        except Exception:
+            detail = r.text[:160]
+
+        if sc in (401, 403):
+            msg = f"❌ {p['label']} key galat ya block hai — provider ke dashboard par nayi key banao."
+        elif sc == 402:
+            msg = f"⚠️ {p['label']} ka balance/credit khatam hai — account me paisa daalo."
+        elif sc == 429:
+            msg = f"⚠️ {p['label']} key SAHI hai par limit/rate-limit khatam (429) — thodi der baad try karo."
+        elif sc == 404:
+            msg = f"⚠️ {p['label']} key theek lagti hai, par model '{p['model']}' nahi mila (404)."
+        else:
+            msg = f"❌ {p['label']} error ({sc}) — {detail}"
+        return {"ok": False, "error": msg, "status": sc, "provider": provider}
+    except Exception as e:
+        return {"ok": False, "error": f"{p['label']} tak pahunch nahi paye (network/timeout): {e}"}
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

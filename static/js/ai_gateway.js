@@ -463,13 +463,33 @@
     try {
       if (!puterAvailable()) return null;
       if (!(await isSignedIn())) return null;
-      var u = await window.puter.auth.getUser();
-      return { username: u && u.username, email: u && u.email };
+      var u = await puterUser();
+      // Puter "temporary/dummy" guest = signed in par email NAHI (auto naam jaise
+      // lavender_doll). Guest ko "connected" dikhana hi asli bug tha — doctor ko
+      // lagna tha account ban gaya, jabki wo dummy tha.
+      if (u === undefined || !u.email) {
+        return { guest: true, username: (u && u.username) || '', email: '' };
+      }
+      return { guest: false, username: u.username || '', email: u.email || '' };
     } catch (e) { return null; }
+  }
+
+  // Apni asli ID se dobara login — pehle guest/adhura session saaf karke tab-login.
+  async function reconnect() {
+    if (!puterAvailable()) throw new Error('Puter SDK not loaded (internet required)');
+    clearPuterSession();
+    try {
+      if (window.puter && window.puter.auth && window.puter.auth.signOut) {
+        await window.puter.auth.signOut();
+      }
+    } catch (e) { /* ignore */ }
+    await signInViaTab();
+    return true;
   }
 
   window.aiFetch = aiFetch;
   window.puterConnect = signIn;
+  window.puterReconnect = reconnect;
   window.puterIsSignedIn = isSignedIn;
   window.puterStatus = puterStatus;
   window.puterAvailable = puterAvailable;

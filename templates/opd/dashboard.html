@@ -1451,6 +1451,7 @@
                                     <button type="button" class="btn btn-sm" style="background:#7c3aed;color:#fff;" onclick="connectPuter()">🔌 Connect Puter</button>
                                     <button type="button" class="btn btn-sm" style="background:#059669;color:#fff;font-weight:700;" onclick="window.open('https://puter.com/login','_blank')" title="Puter par naya FREE account banao (email ya Google se) — sign-in popup blank aaye to yahi asli rasta hai">🆕 Naya Account banao</button>
                                     <button type="button" class="btn btn-sm" style="background:#0b57d0;color:#fff;" onclick="window.open('https://puter.com','_blank')" title="Puter account ka billing/recharge page kholega">💳 Recharge Puter</button>
+                                    <button type="button" class="btn btn-sm" style="background:#b45309;color:#fff;font-weight:700;" onclick="reloginPuter()" title="Dummy/guest session saaf karke apni asli ID se dobara login (tablet par bhi chalta hai)">🔄 Re-login (apni ID se)</button>
                                     <span id="puter-status" class="text-sm text-muted">Not connected</span>
                                 </div>
                                 <span id="puter-usage-info" class="text-sm" style="color:#047857;font-weight:600;"></span>
@@ -1470,42 +1471,57 @@
                             <label>🔑 My own API keys (BYOK — AES-encrypted, never shared)</label>
                             <div class="form-row-2">
                                 <div class="form-group">
-                                    <label>Groq <code>gsk_...</code> {% if settings.has_groq %}✅ saved{% endif %}</label>
+                                    <label>Groq <code>gsk_...</code> <span id="key-badge-groq" style="color:#047857;font-weight:700;">{% if settings.has_groq %}✅ saved{% endif %}</span></label>
                                     <div style="display:flex;gap:6px;">
                                         <input type="password" id="set-groq-key" autocomplete="off" placeholder="{% if settings.has_groq %}•••••••• (saved){% else %}gsk_...{% endif %}">
-                                        {% if settings.has_groq %}<button type="button" class="btn btn-sm btn-ghost" onclick="clearAIKey('groq')">✕</button>{% endif %}
+                                        <button type="button" class="btn btn-sm btn-ghost" onclick="testAIKey('groq')" title="Saved key sach me chalti hai ya nahi — real test">🧪 Test</button>
+                                        <button type="button" class="btn btn-sm btn-ghost" id="key-clear-groq" onclick="clearAIKey('groq')" {% if not settings.has_groq %}style="display:none;"{% endif %}>✕</button>
                                     </div>
+                                    <div class="text-sm" id="key-test-groq" style="margin-top:4px;"></div>
                                 </div>
                                 <div class="form-group">
-                                    <label>OpenAI <code>sk-...</code> {% if settings.has_openai %}✅ saved{% endif %}</label>
+                                    <label>OpenAI <code>sk-...</code> <span id="key-badge-openai" style="color:#047857;font-weight:700;">{% if settings.has_openai %}✅ saved{% endif %}</span></label>
                                     <div style="display:flex;gap:6px;">
                                         <input type="password" id="set-openai-key" autocomplete="off" placeholder="{% if settings.has_openai %}•••••••• (saved){% else %}sk-...{% endif %}">
-                                        {% if settings.has_openai %}<button type="button" class="btn btn-sm btn-ghost" onclick="clearAIKey('openai')">✕</button>{% endif %}
+                                        <button type="button" class="btn btn-sm btn-ghost" onclick="testAIKey('openai')" title="Saved key sach me chalti hai ya nahi — real test">🧪 Test</button>
+                                        <button type="button" class="btn btn-sm btn-ghost" id="key-clear-openai" onclick="clearAIKey('openai')" {% if not settings.has_openai %}style="display:none;"{% endif %}>✕</button>
                                     </div>
+                                    <div class="text-sm" id="key-test-openai" style="margin-top:4px;"></div>
                                 </div>
                                 <div class="form-group">
-                                    <label>Anthropic <code>sk-ant-...</code> {% if settings.has_anthropic %}✅ saved{% endif %}</label>
+                                    <label>Anthropic <code>sk-ant-...</code> <span id="key-badge-anthropic" style="color:#047857;font-weight:700;">{% if settings.has_anthropic %}✅ saved{% endif %}</span></label>
                                     <div style="display:flex;gap:6px;">
                                         <input type="password" id="set-anthropic-key" autocomplete="off" placeholder="{% if settings.has_anthropic %}•••••••• (saved){% else %}sk-ant-...{% endif %}">
-                                        {% if settings.has_anthropic %}<button type="button" class="btn btn-sm btn-ghost" onclick="clearAIKey('anthropic')">✕</button>{% endif %}
+                                        <button type="button" class="btn btn-sm btn-ghost" onclick="testAIKey('anthropic')" title="Saved key sach me chalti hai ya nahi — real test">🧪 Test</button>
+                                        <button type="button" class="btn btn-sm btn-ghost" id="key-clear-anthropic" onclick="clearAIKey('anthropic')" {% if not settings.has_anthropic %}style="display:none;"{% endif %}>✕</button>
                                     </div>
+                                    <div class="text-sm" id="key-test-anthropic" style="margin-top:4px;"></div>
                                 </div>
                                 <div class="form-group">
-                                    <label>DeepSeek <code>sk-...</code> {% if settings.has_deepseek %}✅ saved{% endif %}</label>
+                                    <label>DeepSeek <code>sk-...</code> <span id="key-badge-deepseek" style="color:#047857;font-weight:700;">{% if settings.has_deepseek %}✅ saved{% endif %}</span></label>
                                     <div style="display:flex;gap:6px;">
                                         <input type="password" id="set-deepseek-key" autocomplete="off" placeholder="{% if settings.has_deepseek %}•••••••• (saved){% else %}sk-...{% endif %}">
-                                        {% if settings.has_deepseek %}<button type="button" class="btn btn-sm btn-ghost" onclick="clearAIKey('deepseek')">✕</button>{% endif %}
+                                        <button type="button" class="btn btn-sm btn-ghost" onclick="testAIKey('deepseek')" title="Saved key sach me chalti hai ya nahi — real test">🧪 Test</button>
+                                        <button type="button" class="btn btn-sm btn-ghost" id="key-clear-deepseek" onclick="clearAIKey('deepseek')" {% if not settings.has_deepseek %}style="display:none;"{% endif %}>✕</button>
                                     </div>
+                                    <div class="text-sm" id="key-test-deepseek" style="margin-top:4px;"></div>
                                 </div>
                                 <div class="form-group">
-                                    <label>Google Gemini <code>AIza...</code> {% if settings.has_gemini %}✅ saved{% endif %}</label>
+                                    <label>Google Gemini <code>AIza...</code> <span id="key-badge-gemini" style="color:#047857;font-weight:700;">{% if settings.has_gemini %}✅ saved{% endif %}</span></label>
                                     <div style="display:flex;gap:6px;">
                                         <input type="password" id="set-gemini-key" autocomplete="off" placeholder="{% if settings.has_gemini %}•••••••• (saved){% else %}AIza...{% endif %}">
-                                        {% if settings.has_gemini %}<button type="button" class="btn btn-sm btn-ghost" onclick="clearAIKey('gemini')">✕</button>{% endif %}
+                                        <button type="button" class="btn btn-sm btn-ghost" onclick="testAIKey('gemini')" title="Saved key sach me chalti hai ya nahi — real test">🧪 Test</button>
+                                        <button type="button" class="btn btn-sm btn-ghost" id="key-clear-gemini" onclick="clearAIKey('gemini')" {% if not settings.has_gemini %}style="display:none;"{% endif %}>✕</button>
                                     </div>
+                                    <div class="text-sm" id="key-test-gemini" style="margin-top:4px;"></div>
                                 </div>
                             </div>
                             <span class="text-sm text-muted">Your clinic pays your own provider bill — no third-party cut, no GIL CLINIC involvement.</span>
+                            <div class="text-sm" style="margin-top:6px;color:#b45309;font-weight:600;line-height:1.5;">
+                                ⚠️ Ye keys sirf tab use hoti hain jab upar <b>AI Mode = "Auto — my own API keys"</b> ho.
+                                Agar AI Mode <b>"Puter"</b> par hai to key saved hone ke baad bhi wo <b>use nahi hogi</b>.
+                                <br>💡 Save karne ke baad <b>🧪 Test</b> dabao — turant pata chal jayega ki key sahi hai aur chalegi ya nahi.
+                            </div>
                         </div>
                         <div class="text-sm text-muted" id="ai-usage-info" style="margin-top:4px;">🤖 AI calls this month: loading…</div>
                         <div class="text-sm text-muted" style="margin-top:4px;">⚠️ Enabling AI sends patient data to the selected AI provider. By enabling, you consent on your clinic's behalf (DPDP Act 2023).</div>
@@ -3742,6 +3758,52 @@ function saveSettings() {
         if (res.ok) {
             showToast('✅ Settings saved!');
             document.getElementById('settings-status').textContent = '✅ Saved';
+
+            // ── Key badges turant update karo ──────────────────────────────
+            // Pehle ye sirf page load par (Jinja se) dikhta tha, is liye save
+            // karne ke baad doctor ko lagta tha ki key save hi nahi hui.
+            const justSaved = [];
+            AI_PROVIDERS.forEach(function (p) {
+                const el = document.getElementById('set-' + p + '-key');
+                const badge = document.getElementById('key-badge-' + p);
+                const clr = document.getElementById('key-clear-' + p);
+                const testBox = document.getElementById('key-test-' + p);
+                if (_clearAIKeys.includes(p)) {
+                    if (badge) badge.textContent = '';
+                    if (clr) clr.style.display = 'none';
+                    if (testBox) testBox.textContent = '';
+                    if (el) { el.value = ''; el.placeholder = 'sk-...'; }
+                } else if (el && el.value.trim()) {
+                    justSaved.push(p);
+                    el.value = '';
+                    el.placeholder = '•••••••• (saved)';
+                    if (badge) badge.textContent = '✅ saved';
+                    if (clr) clr.style.display = '';
+                }
+            });
+
+            // ── Sabse aam galti: key save ho gayi par AI Mode 'Puter' par hai,
+            //    is liye wo key use hi nahi hoti. Ek click me theek kar do. ──
+            const modeEl = document.getElementById('set-ai-mode');
+            const mode = modeEl ? modeEl.value : '';
+            const anyKeySaved = justSaved.length > 0 || AI_PROVIDERS.some(function (p) {
+                const b = document.getElementById('key-badge-' + p);
+                return b && b.textContent.indexOf('saved') !== -1;
+            });
+            if (mode === 'puter' && anyKeySaved) {
+                document.getElementById('settings-status').innerHTML =
+                    '✅ Saved — <b style="color:#b45309;">AI Mode abhi "Puter" par hai, is liye ye key use nahi hogi.</b>';
+                if (!window._aiModeSwitchAsked) {
+                    window._aiModeSwitchAsked = true;
+                    if (confirm('Key save ho gayi ✅\n\nLekin AI Mode abhi "Puter" par hai — is liye ye key use NAHI hogi.\n\nAbhi AI Mode "Auto — my own API keys" kar dein? (Recommended)')) {
+                        modeEl.value = 'auto';
+                        _clearAIKeys = [];
+                        saveSettings();
+                        return;
+                    }
+                }
+            }
+
             updateLetterheadPreview();
             _clearAIKeys = [];
             refreshAIStatus();
@@ -3749,6 +3811,34 @@ function saveSettings() {
             document.getElementById('settings-status').textContent = '❌ ' + (res.error || 'Failed');
         }
     });
+}
+
+// ── AI provider keys: turant test (saved key sach me chalti hai ya nahi) ──
+const AI_PROVIDERS = ['groq', 'openai', 'anthropic', 'deepseek', 'gemini'];
+
+// AI Mode badla to dobara pooch sakte hain
+document.addEventListener('DOMContentLoaded', function () {
+    const m = document.getElementById('set-ai-mode');
+    if (m) m.addEventListener('change', function () { window._aiModeSwitchAsked = false; });
+});
+
+async function testAIKey(provider) {
+    const box = document.getElementById('key-test-' + provider);
+    if (box) { box.textContent = '⏳ Test chal raha hai… (chhota real call)'; box.style.color = '#475569'; box.style.fontWeight = '600'; }
+    try {
+        const res = await fetch('/opd/api/test-key', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ provider: provider }),
+        }).then(r => r.json());
+        if (box) {
+            box.textContent = res.ok ? res.message : ('❌ ' + (res.error || 'Test fail'));
+            box.style.color = res.ok ? '#047857' : '#dc2626';
+            box.style.fontWeight = '600';
+        }
+    } catch (e) {
+        if (box) { box.textContent = '❌ Test fail: ' + e; box.style.color = '#dc2626'; }
+    }
 }
 
 // ── AI Provider helpers ────────────────────────────────────────────────
@@ -3791,8 +3881,19 @@ async function refreshAIStatus() {
     try {
         if (typeof window.puterAvailable === 'function' && window.puterAvailable()) {
             const st = await window.puterStatus();
-            if (statusEl && st) statusEl.textContent = '✅ ' + ((st.username || st.email) || 'Connected');
-            else if (statusEl) statusEl.textContent = 'Not connected';
+            if (statusEl && st && st.guest) {
+                // Puter ka dummy/temporary account — asli login nahi hua
+                statusEl.textContent = '⚠️ Dummy account (' + (st.username || '?') + ') — "🔄 Re-login" dabao';
+                statusEl.style.color = '#b45309';
+                statusEl.style.fontWeight = '700';
+            } else if (statusEl && st) {
+                statusEl.textContent = '✅ ' + ((st.email || st.username) || 'Connected');
+                statusEl.style.color = '#047857';
+                statusEl.style.fontWeight = '700';
+            } else if (statusEl) {
+                statusEl.textContent = 'Not connected';
+                statusEl.style.color = '';
+            }
         } else if (statusEl) {
             statusEl.textContent = 'Not connected';
         }
@@ -5410,15 +5511,26 @@ loadQueuePatients();
     let st = null;
     try { if (window.puterStatus) st = await window.puterStatus(); } catch (e) {}
     if (!st) {
-      try { await puterConnect(); } catch (e) {}
+      try { await puterConnect(); } catch (e) { showToast('Puter: ' + ((e && e.message) || e), 'error'); }
+    } else if (st.guest) {
+      // Puter ne dummy/temporary account bana diya — apni ID se login karwao
+      try {
+        if (typeof window.puterReconnect === 'function') await window.puterReconnect();
+        else await puterConnect();
+      } catch (e) { showToast('Puter: ' + ((e && e.message) || e), 'error'); }
     }
     updatePuterChip();
   }
   async function reloginPuter() {
     try {
-      if (window.puter && window.puter.auth && window.puter.auth.signOut) await window.puter.auth.signOut();
-    } catch (e) {}
-    try { await puterConnect(); } catch (e) {}
+      if (typeof window.puterReconnect === 'function') {
+        // guest/adhura session saaf karke seedha full-tab login (blank popup nahi)
+        await window.puterReconnect();
+      } else {
+        if (window.puter && window.puter.auth && window.puter.auth.signOut) await window.puter.auth.signOut();
+        await puterConnect();
+      }
+    } catch (e) { showToast('Puter re-login: ' + ((e && e.message) || e), 'error'); }
     updatePuterChip();
   }
   async function updatePuterChip() {
@@ -5431,7 +5543,12 @@ loadQueuePatients();
       if (typeof window.puterAvailable === 'function') available = window.puterAvailable();
       if (available && window.puterStatus) st = await window.puterStatus();
     } catch (e) {}
-    if (available && st) {
+    if (available && st && st.guest) {
+      // Puter ne dummy/temporary account diya (email nahi) — ise "Attached" na dikhao
+      chip.style.background = '#b45309';
+      txt.textContent = '⚠️ Dummy account (' + (st.username || '?') + ') — apni ID se login karo';
+      rel.style.display = 'inline-block';
+    } else if (available && st) {
       chip.style.background = '#059669';
       let usageTxt = '';
       try {
@@ -5441,7 +5558,7 @@ loadQueuePatients();
           if (pct >= 80 && !_usageWarned) { _usageWarned = true; showToast('⚠️ Puter credits ' + pct + '% use ho gaye — 💳 Recharge karo', 'warning'); }
         }
       } catch (e) {}
-      txt.textContent = '🟢 Puter Attached: ' + ((st.username || st.email) || 'user') + usageTxt;
+      txt.textContent = '🟢 Puter Attached: ' + ((st.email || st.username) || 'user') + usageTxt;
       rel.style.display = 'inline-block';
     } else if (available) {
       chip.style.background = '#dc2626';
