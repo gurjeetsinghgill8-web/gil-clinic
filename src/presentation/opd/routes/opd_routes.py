@@ -296,6 +296,13 @@ async def opd_dashboard(request: Request, tab: str = "rx"):
     except Exception:
         raw_ai_keys = {}
 
+    # Build stamp — static JS ko cache-bust karne ke liye (har deploy par naya ?v=).
+    try:
+        from main_v2 import BUILD_STAMP
+        build_stamp = BUILD_STAMP
+    except Exception:
+        build_stamp = "dev"
+
     # Get today's patient count
     today_count = 0
     today_revenue = 0
@@ -329,6 +336,7 @@ async def opd_dashboard(request: Request, tab: str = "rx"):
         doc_name=name,
         settings=settings_dict,
         raw_ai_keys=raw_ai_keys,
+        build_stamp=build_stamp,
         tab=tab,
         today_count=today_count,
         today_revenue=today_revenue,
