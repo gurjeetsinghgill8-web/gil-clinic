@@ -357,7 +357,7 @@
   var BYOK_PROVIDERS = [
     { id: 'groq', label: 'Groq', base: 'https://api.groq.com/openai/v1', model: 'llama-3.3-70b-versatile', vision: true, visionModel: 'meta-llama/llama-4-scout-17b-16e-instruct' },
     { id: 'deepseek', label: 'DeepSeek', base: 'https://api.deepseek.com/v1', model: 'deepseek-chat', vision: false },
-    { id: 'gemini', label: 'Gemini', base: 'https://generativelanguage.googleapis.com/v1beta/openai', model: 'gemini-2.0-flash', vision: true, visionModel: 'gemini-2.0-flash', nativeBase: 'https://generativelanguage.googleapis.com/v1beta' },
+    { id: 'gemini', label: 'Gemini', base: 'https://generativelanguage.googleapis.com/v1beta/openai', model: 'gemini-3-flash', vision: true, visionModel: 'gemini-3-flash', nativeBase: 'https://generativelanguage.googleapis.com/v1beta', modelCandidates: ['gemini-3-flash', 'gemini-2.5-flash', 'gemini-2.0-flash'] },
   ];
 
   function getLocalByokKeys() {
@@ -375,30 +375,34 @@
     var last = '';
     for (var i = 0; i < providers.length; i++) {
       var p = providers[i];
-      try {
-        var url = p.base.replace(/\/$/, '') + '/chat/completions';
-        var resp = await fetch(url, {
-          method: 'POST',
-          headers: { 'Authorization': 'Bearer ' + p.key, 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            model: p.model,
-            messages: [{ role: 'user', content: prompt }],
-            temperature: 0.3,
-            max_tokens: 4000,
-          }),
-        });
-        if (resp.status === 401) { last = p.label + ': invalid key'; continue; }
-        if (resp.status === 403) { last = p.label + ': access denied (billing/credits)'; continue; }
-        if (resp.status === 429) { last = p.label + ': rate limited'; continue; }
-        if (!resp.ok) { last = p.label + ': HTTP ' + resp.status; continue; }
-        var data = await resp.json();
-        var choice = (data.choices && data.choices[0]) || {};
-        var content = choice.message && choice.message.content;
-        if (typeof content === 'string' && content.trim()) return content.trim();
-        if (Array.isArray(content)) return content.map(function (x) { return (x && x.text) || ''; }).join('').trim();
-        last = p.label + ': empty response';
-      } catch (e) {
-        last = p.label + ': ' + ((e && e.message) || e);
+      var models = p.modelCandidates || [p.model];
+      for (var mi = 0; mi < models.length; mi++) {
+        try {
+          var url = p.base.replace(/\/$/, '') + '/chat/completions';
+          var resp = await fetch(url, {
+            method: 'POST',
+            headers: { 'Authorization': 'Bearer ' + p.key, 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              model: models[mi],
+              messages: [{ role: 'user', content: prompt }],
+              temperature: 0.3,
+              max_tokens: 4000,
+            }),
+          });
+          if (resp.status === 404) { last = p.label + ': model ' + models[mi] + ' nahi mila (404)'; continue; }
+          if (resp.status === 401) { last = p.label + ': invalid key'; break; }
+          if (resp.status === 403) { last = p.label + ': access denied (billing/credits)'; break; }
+          if (resp.status === 429) { last = p.label + ': rate limited'; continue; }
+          if (!resp.ok) { last = p.label + ': HTTP ' + resp.status; continue; }
+          var data = await resp.json();
+          var choice = (data.choices && data.choices[0]) || {};
+          var content = choice.message && choice.message.content;
+          if (typeof content === 'string' && content.trim()) return content.trim();
+          if (Array.isArray(content)) return content.map(function (x) { return (x && x.text) || ''; }).join('').trim();
+          last = p.label + ': empty response';
+        } catch (e) {
+          last = p.label + ': ' + ((e && e.message) || e);
+        }
       }
     }
     return '';
@@ -415,20 +419,25 @@
         if (p.id === 'gemini') {
           var b64 = String(dataUrl).split(',')[1] || '';
           var mime = (String(dataUrl).match(/^data:([^;]+)/) || [])[1] || 'image/jpeg';
-          var url = p.nativeBase + '/models/' + p.visionModel + ':generateContent';
-          var resp = await fetch(url, {
-            method: 'POST',
-            headers: { 'x-goog-api-key': p.key, 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              contents: [{ parts: [{ text: prompt }, { inline_data: { mime_type: mime, data: b64 } }] }],
-            }),
-          });
-          if (resp.status === 400 || resp.status === 403) { last = p.label + ': key/format galat (' + resp.status + ')'; continue; }
-          if (!resp.ok) { last = p.label + ': HTTP ' + resp.status; continue; }
-          var d = await resp.json();
-          var cands = d.candidates || [];
-          var parts = (cands[0] && cands[0].content && cands[0].content.parts) || [];
-          text = parts.map(function (x) { return x.text || ''; }).join('').trim();
+          var gmodels = p.modelCandidates || [p.visionModel];
+          for (var gi = 0; gi < gmodels.length; gi++) {
+            var url = p.nativeBase + '/models/' + gmodels[gi] + ':generateContent';
+            var resp = await fetch(url, {
+              method: 'POST',
+              headers: { 'x-goog-api-key': p.key, 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                contents: [{ parts: [{ text: prompt }, { inline_data: { mime_type: mime, data: b64 } }] }],
+              }),
+            });
+            if (resp.status === 404) { last = p.label + ': model ' + gmodels[gi] + ' nahi mila (404)'; continue; }
+            if (resp.status === 400 || resp.status === 403) { last = p.label + ': key/format galat (' + resp.status + ')'; break; }
+            if (!resp.ok) { last = p.label + ': HTTP ' + resp.status; continue; }
+            var d = await resp.json();
+            var cands = d.candidates || [];
+            var parts = (cands[0] && cands[0].content && cands[0].content.parts) || [];
+            text = parts.map(function (x) { return x.text || ''; }).join('').trim();
+            if (text) break;
+          }
         } else {
           var url2 = p.base.replace(/\/$/, '') + '/chat/completions';
           var resp2 = await fetch(url2, {
@@ -464,22 +473,27 @@
     if (!p) return { ok: false, error: 'Ye provider browser se supported nahi hai (OpenAI/Anthropic CORS block karte hain). DeepSeek/Groq/Gemini use karo.' };
     if (!key || !String(key).trim()) return { ok: false, error: 'Key khali hai — pehle key bharo' };
     try {
-      var url = p.base.replace(/\/$/, '') + '/chat/completions';
-      var resp = await fetch(url, {
-        method: 'POST',
-        headers: { 'Authorization': 'Bearer ' + String(key).trim(), 'Content-Type': 'application/json' },
-        body: JSON.stringify({ model: p.model, messages: [{ role: 'user', content: 'Reply with exactly: OK' }], temperature: 0, max_tokens: 5 }),
-      });
-      if (resp.status === 401) return { ok: false, error: p.label + ': key GALAT hai (401) — nayi key banao' };
-      if (resp.status === 403) return { ok: false, error: p.label + ': access denied (403) — billing/credits check karo' };
-      if (resp.status === 402) return { ok: false, error: p.label + ': balance khatam (402)' };
-      if (resp.status === 429) return { ok: false, error: p.label + ': key sahi hai par rate-limit (429) — thodi der baad' };
-      if (!resp.ok) return { ok: false, error: p.label + ': HTTP ' + resp.status };
-      var data = await resp.json();
-      var c = (data.choices && data.choices[0]) || {};
-      var content = c.message && c.message.content;
-      if (typeof content === 'string' && content.trim()) return { ok: true, message: '✅ ' + p.label + ' key SAHI hai — browser se seedha chal rahi hai' };
-      return { ok: true, message: '✅ ' + p.label + ' key SAHI hai (reply mila)' };
+      var models = p.modelCandidates || [p.model];
+      for (var mi = 0; mi < models.length; mi++) {
+        var url = p.base.replace(/\/$/, '') + '/chat/completions';
+        var resp = await fetch(url, {
+          method: 'POST',
+          headers: { 'Authorization': 'Bearer ' + String(key).trim(), 'Content-Type': 'application/json' },
+          body: JSON.stringify({ model: models[mi], messages: [{ role: 'user', content: 'Reply with exactly: OK' }], temperature: 0, max_tokens: 5 }),
+        });
+        if (resp.status === 404) continue;
+        if (resp.status === 401) return { ok: false, error: p.label + ': key GALAT hai (401) — nayi key banao' };
+        if (resp.status === 403) return { ok: false, error: p.label + ': access denied (403) — billing/credits check karo' };
+        if (resp.status === 402) return { ok: false, error: p.label + ': balance khatam (402)' };
+        if (resp.status === 429) return { ok: false, error: p.label + ': key sahi hai par rate-limit (429) — thodi der baad' };
+        if (!resp.ok) continue;
+        var data = await resp.json();
+        var c = (data.choices && data.choices[0]) || {};
+        var content = c.message && c.message.content;
+        if (typeof content === 'string' && content.trim()) return { ok: true, message: '✅ ' + p.label + ' key SAHI hai — browser se seedha chal rahi hai (model: ' + models[mi] + ')' };
+        return { ok: true, message: '✅ ' + p.label + ' key SAHI hai (reply mila, model: ' + models[mi] + ')' };
+      }
+      return { ok: false, error: p.label + ': model mila hi nahi (404) — shayad model name purana hai' };
     } catch (e) {
       return { ok: false, error: p.label + ': ' + ((e && e.message) || e) };
     }
