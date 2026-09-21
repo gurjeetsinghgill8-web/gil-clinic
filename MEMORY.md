@@ -293,8 +293,8 @@ karke token tablet par paste → "💾 Save Token". Ek baar me permanent (reload
   Code me `doChat/doOcr/doTranscribe` Puter **fallback** ke roop me reh gaye (sirf tab chalti jab koi key hi na ho).
 - **Browser-side OCR (`byokOcr`)**: image read ab Gemini (native) ya Groq (vision) se browser me hota hai — Puter nahi.
   DeepSeek ka **koi vision nahi** — image ke liye Groq/Gemini key chahiye.
-- **Gemini model = `gemini-3-flash`** (Google ne 2.0 family 1-June-2026 retire kiya → `gemini-2.0-flash` 404 deta hai).
-  Auto-fallback: `gemini-3-flash → gemini-2.5-flash → gemini-2.0-flash` (`modelCandidates`) — model rename se kabhi nahi atkega.
+- **Gemini model auto-discovery (`getGeminiModels`)**: Google API `/v1beta/models?key=...` se live supported models discover karta hai (preferring `gemini-1.5-flash`, `gemini-2.5-flash`, `gemini-3.8-flash`, `gemini-1.5-pro`, `gemini-1.5-flash-8b`, `gemini-2.0-flash`). Is se future model retirements/renames me 404 kabhi nahi aayega.
+- **Gemini URL + Key**: `nativeBase + '/models/' + model + ':generateContent?key=' + encodeURIComponent(key)` + `x-goog-api-key` header for 100% CORS & proxy compatibility. Key discovery se invalid keys par direct clear error dikhta hai.
 - **Key auto-sync**: dashboard render par server **raw (decrypted) key** browser localStorage me daal deta hai
   (`opd_routes.py` → `raw_ai_keys` context → dashboard head `<script>` → `gilclinic.byok.*`). Dobara type nahi karna padta.
 - **Local key > Puter**: `ai_gateway.js` me local BYOK key hamesha Puter se pehle try hoti hai (chat + OCR dono me).

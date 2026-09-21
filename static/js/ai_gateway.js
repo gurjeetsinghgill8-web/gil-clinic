@@ -357,15 +357,65 @@
   var BYOK_PROVIDERS = [
     { id: 'groq', label: 'Groq', base: 'https://api.groq.com/openai/v1', model: 'llama-3.3-70b-versatile', vision: true, visionModel: 'meta-llama/llama-4-scout-17b-16e-instruct' },
     { id: 'deepseek', label: 'DeepSeek', base: 'https://api.deepseek.com/v1', model: 'deepseek-chat', vision: false },
-    { id: 'gemini', label: 'Gemini', base: 'https://generativelanguage.googleapis.com/v1beta/openai', model: 'gemini-2.5-flash', vision: true, visionModel: 'gemini-2.5-flash', nativeBase: 'https://generativelanguage.googleapis.com/v1beta', modelCandidates: ['gemini-2.5-flash', 'gemini-3-flash', 'gemini-2.0-flash'] },
+    { id: 'gemini', label: 'Gemini', base: 'https://generativelanguage.googleapis.com/v1beta/openai', model: 'gemini-1.5-flash', vision: true, visionModel: 'gemini-1.5-flash', nativeBase: 'https://generativelanguage.googleapis.com/v1beta', modelCandidates: ['gemini-1.5-flash', 'gemini-2.5-flash', 'gemini-3.8-flash', 'gemini-1.5-pro', 'gemini-1.5-flash-8b', 'gemini-2.0-flash'] },
   ];
+
+  var _cachedGeminiModels = {};
+
+  async function getGeminiModels(p, key) {
+    var k = String(key || (p && p.key) || '').trim();
+    if (_cachedGeminiModels[k] && _cachedGeminiModels[k].length) {
+      return _cachedGeminiModels[k];
+    }
+    var fallback = (p && p.modelCandidates) || ['gemini-1.5-flash', 'gemini-2.5-flash', 'gemini-3.8-flash', 'gemini-1.5-pro', 'gemini-1.5-flash-8b', 'gemini-2.0-flash'];
+    if (!k) return fallback;
+
+    try {
+      var nBase = (p && p.nativeBase) || 'https://generativelanguage.googleapis.com/v1beta';
+      var url = nBase + '/models?key=' + encodeURIComponent(k);
+      var resp = await fetch(url, {
+        method: 'GET',
+        headers: { 'Content-Type': 'application/json', 'x-goog-api-key': k },
+      });
+      if (resp.ok) {
+        var data = await resp.json();
+        var models = (data && data.models) || [];
+        var supported = [];
+        models.forEach(function (m) {
+          var name = (m.name || '').replace(/^models\//, '');
+          var methods = m.supportedGenerationMethods || [];
+          if (methods.indexOf('generateContent') !== -1 && name) {
+            supported.push(name);
+          }
+        });
+        if (supported.length) {
+          var priority = ['gemini-1.5-flash', 'gemini-2.5-flash', 'gemini-3.8-flash', 'gemini-2.0-flash', 'gemini-1.5-flash-8b', 'gemini-1.5-pro'];
+          supported.sort(function (a, b) {
+            var ia = priority.indexOf(a);
+            var ib = priority.indexOf(b);
+            if (ia !== -1 && ib !== -1) return ia - ib;
+            if (ia !== -1) return -1;
+            if (ib !== -1) return 1;
+            return a.localeCompare(b);
+          });
+          _cachedGeminiModels[k] = supported;
+          return supported;
+        }
+      }
+    } catch (e) {
+      // ignore, fall back to candidate list
+    }
+    return fallback;
+  }
 
   function getLocalByokKeys() {
     var out = [];
     try {
       BYOK_PROVIDERS.forEach(function (p) {
         var k = localStorage.getItem(BYOK_LS_PREFIX + p.id);
-        if (k && k.trim()) out.push({ id: p.id, label: p.label, base: p.base, model: p.model, key: k.trim() });
+        if (k && k.trim()) {
+          out.push(Object.assign({}, p, { key: k.trim() }));
+        }
       });
     } catch (e) {}
     return out;
@@ -375,13 +425,14 @@
     var last = '';
     for (var i = 0; i < providers.length; i++) {
       var p = providers[i];
-      var models = p.modelCandidates || [p.model];
+      var models = (p.id === 'gemini') ? await getGeminiModels(p, p.key) : (p.modelCandidates || [p.model]);
       for (var mi = 0; mi < models.length; mi++) {
         try {
           var text = '';
           if (p.id === 'gemini') {
-            // Native Gemini generateContent (canonical — OpenAI-compat 404 karta hai).
-            var url = p.nativeBase + '/models/' + models[mi] + ':generateContent';
+            // Native Gemini generateContent with ?key= + x-goog-api-key for universal compatibility
+            var nBase = p.nativeBase || 'https://generativelanguage.googleapis.com/v1beta';
+            var url = nBase + '/models/' + models[mi] + ':generateContent?key=' + encodeURIComponent(p.key);
             var resp = await fetch(url, {
               method: 'POST',
               headers: { 'x-goog-api-key': p.key, 'Content-Type': 'application/json' },
@@ -439,9 +490,10 @@
         if (p.id === 'gemini') {
           var b64 = String(dataUrl).split(',')[1] || '';
           var mime = (String(dataUrl).match(/^data:([^;]+)/) || [])[1] || 'image/jpeg';
-          var gmodels = p.modelCandidates || [p.visionModel];
+          var gmodels = await getGeminiModels(p, p.key);
+          var nBase = p.nativeBase || 'https://generativelanguage.googleapis.com/v1beta';
           for (var gi = 0; gi < gmodels.length; gi++) {
-            var url = p.nativeBase + '/models/' + gmodels[gi] + ':generateContent';
+            var url = nBase + '/models/' + gmodels[gi] + ':generateContent?key=' + encodeURIComponent(p.key);
             var resp = await fetch(url, {
               method: 'POST',
               headers: { 'x-goog-api-key': p.key, 'Content-Type': 'application/json' },
@@ -491,32 +543,50 @@
     var p = null;
     BYOK_PROVIDERS.forEach(function (x) { if (x.id === providerId) p = x; });
     if (!p) return { ok: false, error: 'Ye provider browser se supported nahi hai (OpenAI/Anthropic CORS block karte hain). DeepSeek/Groq/Gemini use karo.' };
-    if (!key || !String(key).trim()) return { ok: false, error: 'Key khali hai — pehle key bharo' };
+    var cleanKey = String(key || '').trim();
+    if (!cleanKey) return { ok: false, error: 'Key khali hai — pehle key bharo' };
     try {
-      var models = p.modelCandidates || [p.model];
-      for (var mi = 0; mi < models.length; mi++) {
-        var content = '';
-        if (p.id === 'gemini') {
-          var url = p.nativeBase + '/models/' + models[mi] + ':generateContent';
+      if (p.id === 'gemini') {
+        var nBase = p.nativeBase || 'https://generativelanguage.googleapis.com/v1beta';
+        var models = await getGeminiModels(p, cleanKey);
+        var lastStatus = 0;
+        var lastErrorMsg = '';
+
+        for (var mi = 0; mi < models.length; mi++) {
+          var modelName = models[mi];
+          var url = nBase + '/models/' + modelName + ':generateContent?key=' + encodeURIComponent(cleanKey);
           var resp = await fetch(url, {
             method: 'POST',
-            headers: { 'x-goog-api-key': String(key).trim(), 'Content-Type': 'application/json' },
+            headers: { 'x-goog-api-key': cleanKey, 'Content-Type': 'application/json' },
             body: JSON.stringify({ contents: [{ parts: [{ text: 'Reply with exactly: OK' }] }] }),
           });
+          lastStatus = resp.status;
           if (resp.status === 404) continue;
-          if (resp.status === 400 || resp.status === 403) return { ok: false, error: p.label + ': key/access galat (' + resp.status + ') — nayi key banao' };
-          if (resp.status === 429) return { ok: false, error: p.label + ': key sahi hai par rate-limit (429) — thodi der baad' };
-          if (!resp.ok) continue;
+          if (resp.status === 400 || resp.status === 403) {
+            var errJson = {};
+            try { errJson = await resp.json(); } catch(e) {}
+            var msg = (errJson.error && errJson.error.message) || ('HTTP ' + resp.status);
+            return { ok: false, error: p.label + ': key galat hai ya access nahi (' + msg + ') — Google AI Studio se nayi key copy karo' };
+          }
+          if (resp.status === 429) return { ok: false, error: p.label + ': key sahi hai par rate-limit (429) — thodi der baad dobara try karo' };
+          if (!resp.ok) {
+            try { var ej = await resp.json(); lastErrorMsg = (ej.error && ej.error.message) || ('HTTP ' + resp.status); } catch(e) {}
+            continue;
+          }
           var d = await resp.json();
           var cands = d.candidates || [];
           var parts = (cands[0] && cands[0].content && cands[0].content.parts) || [];
-          content = parts.map(function (x) { return x.text || ''; }).join('').trim();
-          if (content) return { ok: true, message: '✅ ' + p.label + ' key SAHI hai — browser se seedha chal rahi hai (model: ' + models[mi] + ')' };
-        } else {
+          var content = parts.map(function (x) { return x.text || ''; }).join('').trim();
+          if (content) return { ok: true, message: '✅ ' + p.label + ' key SAHI hai — browser se seedha chal rahi hai (model: ' + modelName + ')' };
+        }
+        return { ok: false, error: p.label + ': connect nahi hua (' + (lastErrorMsg || ('status ' + lastStatus)) + ') — Google AI Studio par key check karo' };
+      } else {
+        var models = p.modelCandidates || [p.model];
+        for (var mi = 0; mi < models.length; mi++) {
           var url2 = p.base.replace(/\/$/, '') + '/chat/completions';
           var resp2 = await fetch(url2, {
             method: 'POST',
-            headers: { 'Authorization': 'Bearer ' + String(key).trim(), 'Content-Type': 'application/json' },
+            headers: { 'Authorization': 'Bearer ' + cleanKey, 'Content-Type': 'application/json' },
             body: JSON.stringify({ model: models[mi], messages: [{ role: 'user', content: 'Reply with exactly: OK' }], temperature: 0, max_tokens: 5 }),
           });
           if (resp2.status === 404) continue;
@@ -527,12 +597,11 @@
           if (!resp2.ok) continue;
           var d2 = await resp2.json();
           var c = (d2.choices && d2.choices[0]) || {};
-          content = c.message && c.message.content;
+          var content = c.message && c.message.content;
           if (typeof content === 'string' && content.trim()) return { ok: true, message: '✅ ' + p.label + ' key SAHI hai — browser se seedha chal rahi hai (model: ' + models[mi] + ')' };
         }
-        if (content && String(content).trim()) return { ok: true, message: '✅ ' + p.label + ' key SAHI hai (reply mila, model: ' + models[mi] + ')' };
+        return { ok: false, error: p.label + ': model mila hi nahi (404) — shayad model name purana hai' };
       }
-      return { ok: false, error: p.label + ': model mila hi nahi (404) — shayad model name purana hai' };
     } catch (e) {
       return { ok: false, error: p.label + ': ' + ((e && e.message) || e) };
     }

@@ -64,9 +64,9 @@ PROVIDERS: Dict[str, Dict[str, Any]] = {
     "gemini": {
         "label": "Google Gemini",
         "base_url": "https://generativelanguage.googleapis.com/v1beta/openai/",
-        "model": "gemini-2.0-flash",
-        "vision_model": "gemini-2.0-flash",
-        "audio_model": "gemini-2.0-flash",
+        "model": "gemini-1.5-flash",
+        "vision_model": "gemini-1.5-flash",
+        "audio_model": "gemini-1.5-flash",
         "supports_vision": True,
         "supports_audio": True,
         "key_field": "gemini_api_key",
