@@ -1536,16 +1536,16 @@
                                 Agar AI Mode <b>"Puter"</b> par hai to key saved hone ke baad bhi wo <b>use nahi hogi</b>.
                                 <br>💡 Save karne ke baad <b>🧪 Test</b> dabao — turant pata chal jayega ki key sahi hai aur chalegi ya nahi.
                             </div>
-                            <div class="text-sm" style="margin-top:6px;color:#991b1b;font-weight:600;line-height:1.55;background:#fef2f2;border:1px solid #fca5a5;border-radius:8px;padding:8px 10px;">
-                                🚧 <b>Zaroori: PythonAnywhere FREE plan par ye BYOK keys kaam NAHI karti.</b><br>
-                                PA free server sirf whitelisted hosts tak outbound internet deta hai — is liye
-                                <code>api.groq.com</code> / <code>api.deepseek.com</code> / Gemini block hain.
-                                Key bilkul sahi hone par bhi "Test" fail dega (connection error).
-                                <br>✅ <b>Aaj hi AI chalane ke liye:</b> upar <b>Puter</b> use karo — wo
-                                <b>doctor ke browser</b> se chalta hai, is server block se affect nahi hota.
-                                <br>✅ <b>Apni paid key chalani hai to:</b> (a) PA ko whitelist request bhejo —
-                                project me <code>pa_whitelist_request.txt</code> ready hai (pythonanywhere.com → Help → Send feedback),
-                                ya (b) PA ka <b>Hacker plan ($5/mo)</b> lo — usme outbound block nahi hota.
+                            <div class="text-sm" style="margin-top:6px;color:#065f46;font-weight:600;line-height:1.55;background:#ecfdf5;border:1px solid #6ee7b7;border-radius:8px;padding:8px 10px;">
+                                ✅ <b>Ye keys ab is browser se seedha chalti hain (browser-side BYOK).</b><br>
+                                PythonAnywhere FREE ka server provider tak nahi pahunch sakta (outbound whitelist),
+                                is liye app ab <b>aapke browser</b> se DeepSeek/Groq/Gemini ko seedha call karti hai.
+                                Key <b>is device ke browser me hi save</b> hoti hai (server pe nahi) — isliye
+                                <b>har doctor apni key apne device par daale, aur uska bill usi ka hoga.</b>
+                                <br>• <b>Key is device me chalana hai to:</b> key bharo → 💾 Save → AI Mode = "Auto" rakho.
+                                <br>• <b>Har device par alag key bharo</b> (har doctor ka apna bill). "🧪 Test" server se test karta hai
+                                (PA par connection error dikha sakta hai) — par asli AI call browser se chalegi.
+                                <br>• <b>Bina key ke bhi AI chahiye</b> → upar <b>Puter</b> mode (free credits).
                             </div>
                         </div>
                         <div class="text-sm text-muted" id="ai-usage-info" style="margin-top:4px;">🤖 AI calls this month: loading…</div>
@@ -3746,6 +3746,20 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 });
 
+// Apni API key is browser me bhi save karo (localStorage) — taaki AI seedha
+// doctor ke browser se chale (PA free ka outbound block bypass), bina Puter ke.
+function storeLocalByokKeys(data) {
+    try {
+        const map = { groq: 'groq_api_key', deepseek: 'deepseek_api_key', gemini: 'gemini_api_key', openai: 'openai_api_key', anthropic: 'anthropic_api_key' };
+        Object.keys(map).forEach(function (p) {
+            const k = (data && data[map[p]]) || '';
+            const cleared = data && data['clear_' + p];
+            if (k) localStorage.setItem('gilclinic.byok.' + p, k);
+            else if (cleared) localStorage.removeItem('gilclinic.byok.' + p);
+        });
+    } catch (e) {}
+}
+
 function saveSettings() {
     const data = {
         clinic_name: document.getElementById('set-clinic-name').value.trim(),
@@ -3781,6 +3795,7 @@ function saveSettings() {
     .then(r => r.json())
     .then(res => {
         if (res.ok) {
+            storeLocalByokKeys(data);
             showToast('✅ Settings saved!');
             document.getElementById('settings-status').textContent = '✅ Saved';
 

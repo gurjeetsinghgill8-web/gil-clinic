@@ -519,6 +519,21 @@ def route_chat(settings: Optional[Dict[str, Any]], messages: List[Any], feature:
         except Exception as e:
             errors.append(f"system fallback error: {e}")
 
+    # ── Browser-side BYOK handoff ──
+    # On outbound-blocked hosts (PythonAnywhere free) the server cannot reach any
+    # provider even with valid keys. Hand the prompt back to the browser gateway
+    # so it can retry with the doctor's OWN key stored locally in that browser
+    # (BYOK), or fall back to Puter. This keeps per-doctor "own key" working
+    # everywhere with zero server outbound. `providers` here = clinic keys that
+    # exist but all failed server-side.
+    if not is_wallet and providers:
+        return {
+            "text": "", "error": "", "provider": "puter", "model": puter_model_id(settings),
+            "usage": {}, "puter_needed": True, "code": "PUTER_CHAT",
+            "prompt": _messages_to_puter_prompt(messages),
+            "byok_browser": True,
+        }
+
     return {
         "text": "", "provider": "", "model": "",
         "error": "; ".join(errors) or "No AI provider configured. Clinic owner: Settings → AI Provider → add a key.",

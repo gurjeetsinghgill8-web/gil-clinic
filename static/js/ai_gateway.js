@@ -349,6 +349,61 @@
     } catch (e) {}
   }
 
+  // ── Browser-side BYOK (doctor's own key, called directly from this browser) ──
+  // On PA free the server can't reach providers, so the gateway calls them here.
+  // Only CORS-verified providers are tried (DeepSeek/Groq/Gemini allow browser
+  // calls; OpenAI/Anthropic block browser CORS so they are intentionally absent).
+  var BYOK_LS_PREFIX = 'gilclinic.byok.';
+  var BYOK_PROVIDERS = [
+    { id: 'groq', label: 'Groq', base: 'https://api.groq.com/openai/v1', model: 'llama-3.3-70b-versatile' },
+    { id: 'deepseek', label: 'DeepSeek', base: 'https://api.deepseek.com/v1', model: 'deepseek-chat' },
+    { id: 'gemini', label: 'Gemini', base: 'https://generativelanguage.googleapis.com/v1beta/openai', model: 'gemini-2.0-flash' },
+  ];
+
+  function getLocalByokKeys() {
+    var out = [];
+    try {
+      BYOK_PROVIDERS.forEach(function (p) {
+        var k = localStorage.getItem(BYOK_LS_PREFIX + p.id);
+        if (k && k.trim()) out.push({ id: p.id, label: p.label, base: p.base, model: p.model, key: k.trim() });
+      });
+    } catch (e) {}
+    return out;
+  }
+
+  async function byokChat(prompt, providers) {
+    var last = '';
+    for (var i = 0; i < providers.length; i++) {
+      var p = providers[i];
+      try {
+        var url = p.base.replace(/\/$/, '') + '/chat/completions';
+        var resp = await fetch(url, {
+          method: 'POST',
+          headers: { 'Authorization': 'Bearer ' + p.key, 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            model: p.model,
+            messages: [{ role: 'user', content: prompt }],
+            temperature: 0.3,
+            max_tokens: 4000,
+          }),
+        });
+        if (resp.status === 401) { last = p.label + ': invalid key'; continue; }
+        if (resp.status === 403) { last = p.label + ': access denied (billing/credits)'; continue; }
+        if (resp.status === 429) { last = p.label + ': rate limited'; continue; }
+        if (!resp.ok) { last = p.label + ': HTTP ' + resp.status; continue; }
+        var data = await resp.json();
+        var choice = (data.choices && data.choices[0]) || {};
+        var content = choice.message && choice.message.content;
+        if (typeof content === 'string' && content.trim()) return content.trim();
+        if (Array.isArray(content)) return content.map(function (x) { return (x && x.text) || ''; }).join('').trim();
+        last = p.label + ': empty response';
+      } catch (e) {
+        last = p.label + ': ' + ((e && e.message) || e);
+      }
+    }
+    return '';
+  }
+
   async function doChat(prompt, model) {
     var res = await window.puter.ai.chat(prompt, { model: model || 'gpt-4o-mini' });
     return extractText(res);
@@ -416,6 +471,35 @@
         }
         hops++;
         continue;
+      }
+
+      if (code === 'PUTER_CHAT' && res.byok_browser) {
+        // Doctor's OWN key in this browser → call provider directly (no Puter,
+        // no popup, no third-party cookie). Works on tablets + PA free.
+        var byokKeys = getLocalByokKeys();
+        if (byokKeys.length) {
+          try {
+            var byokText = await byokChat(res.prompt, byokKeys);
+            if (!byokText) {
+              final = { ok: false, error: 'Apni key se AI jawab nahi aaya — key sahi hai ya balance hai? Settings me dobara bharo / 🧪 Test karo. (Ya AI Mode "Puter" kar do.)' };
+              break;
+            }
+            payload = mergeBody(basePayload, {
+              puter_result: byokText,
+              stage: res.stage,
+              puter_specialty: res.puter_specialty,
+              _structured: res._structured,
+              _raw_ocr: res._raw_ocr,
+            });
+            logUsage(path, opts.feature, true, '');
+            hops++;
+            continue;
+          } catch (e) {
+            final = { ok: false, error: 'Apni key se AI error: ' + ((e && e.message) || e) };
+            break;
+          }
+        }
+        // No local key → fall through to the Puter path below.
       }
 
       if (!puterAvailable()) {
