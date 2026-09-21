@@ -355,9 +355,9 @@
   // calls; OpenAI/Anthropic block browser CORS so they are intentionally absent).
   var BYOK_LS_PREFIX = 'gilclinic.byok.';
   var BYOK_PROVIDERS = [
-    { id: 'groq', label: 'Groq', base: 'https://api.groq.com/openai/v1', model: 'llama-3.3-70b-versatile' },
-    { id: 'deepseek', label: 'DeepSeek', base: 'https://api.deepseek.com/v1', model: 'deepseek-chat' },
-    { id: 'gemini', label: 'Gemini', base: 'https://generativelanguage.googleapis.com/v1beta/openai', model: 'gemini-2.0-flash' },
+    { id: 'groq', label: 'Groq', base: 'https://api.groq.com/openai/v1', model: 'llama-3.3-70b-versatile', vision: true, visionModel: 'meta-llama/llama-4-scout-17b-16e-instruct' },
+    { id: 'deepseek', label: 'DeepSeek', base: 'https://api.deepseek.com/v1', model: 'deepseek-chat', vision: false },
+    { id: 'gemini', label: 'Gemini', base: 'https://generativelanguage.googleapis.com/v1beta/openai', model: 'gemini-2.0-flash', vision: true, visionModel: 'gemini-2.0-flash', nativeBase: 'https://generativelanguage.googleapis.com/v1beta' },
   ];
 
   function getLocalByokKeys() {
@@ -397,6 +397,59 @@
         if (typeof content === 'string' && content.trim()) return content.trim();
         if (Array.isArray(content)) return content.map(function (x) { return (x && x.text) || ''; }).join('').trim();
         last = p.label + ': empty response';
+      } catch (e) {
+        last = p.label + ': ' + ((e && e.message) || e);
+      }
+    }
+    return '';
+  }
+
+  // Browser-side vision/OCR — Gemini (native inline image) + Groq (OpenAI-
+  // compatible image_url). DeepSeek has NO vision, so it's skipped automatically.
+  async function byokOcr(prompt, dataUrl, providers) {
+    var last = '';
+    for (var i = 0; i < providers.length; i++) {
+      var p = providers[i];
+      try {
+        var text = '';
+        if (p.id === 'gemini') {
+          var b64 = String(dataUrl).split(',')[1] || '';
+          var mime = (String(dataUrl).match(/^data:([^;]+)/) || [])[1] || 'image/jpeg';
+          var url = p.nativeBase + '/models/' + p.visionModel + ':generateContent';
+          var resp = await fetch(url, {
+            method: 'POST',
+            headers: { 'x-goog-api-key': p.key, 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              contents: [{ parts: [{ text: prompt }, { inline_data: { mime_type: mime, data: b64 } }] }],
+            }),
+          });
+          if (resp.status === 400 || resp.status === 403) { last = p.label + ': key/format galat (' + resp.status + ')'; continue; }
+          if (!resp.ok) { last = p.label + ': HTTP ' + resp.status; continue; }
+          var d = await resp.json();
+          var cands = d.candidates || [];
+          var parts = (cands[0] && cands[0].content && cands[0].content.parts) || [];
+          text = parts.map(function (x) { return x.text || ''; }).join('').trim();
+        } else {
+          var url2 = p.base.replace(/\/$/, '') + '/chat/completions';
+          var resp2 = await fetch(url2, {
+            method: 'POST',
+            headers: { 'Authorization': 'Bearer ' + p.key, 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              model: p.visionModel,
+              messages: [{ role: 'user', content: [{ type: 'text', text: prompt }, { type: 'image_url', image_url: { url: dataUrl } }] }],
+              temperature: 0.1,
+              max_tokens: 2500,
+            }),
+          });
+          if (resp2.status === 401) { last = p.label + ': invalid key'; continue; }
+          if (!resp2.ok) { last = p.label + ': HTTP ' + resp2.status; continue; }
+          var d2 = await resp2.json();
+          var c2 = (d2.choices && d2.choices[0]) || {};
+          text = c2.message && c2.message.content;
+          if (typeof text !== 'string') text = Array.isArray(text) ? text.map(function (x) { return x.text || ''; }).join('') : '';
+        }
+        if (text && text.trim()) return text.trim();
+        last = p.label + ': empty';
       } catch (e) {
         last = p.label + ': ' + ((e && e.message) || e);
       }
@@ -528,6 +581,28 @@
           }
         }
         // No local key → fall through to the Puter path below.
+      }
+
+      if (code === 'PUTER_OCR') {
+        // Vision-capable local key (Groq/Gemini) → read the image in-browser.
+        var visionKeys = getLocalByokKeys().filter(function (p) { return p.vision; });
+        if (visionKeys.length) {
+          try {
+            var imgSrc = basePayload && (basePayload.image || basePayload.image_b64 || basePayload.imageData);
+            if (!imgSrc) { final = { ok: false, error: 'Image OCR ke liye image nahi mili' }; break; }
+            var ocrDataUrl = await compressDataUrl(imgSrc);
+            var ocrText = await byokOcr(res.prompt || '', ocrDataUrl, visionKeys);
+            if (!ocrText) { final = { ok: false, error: 'Image OCR nahi hua — Groq/Gemini key sahi hai ya balance hai? (DeepSeek image NAHI padh sakta — Groq ya Gemini key lagao.)' }; break; }
+            payload = mergeBody(basePayload, { puter_ocr_result: ocrText });
+            logUsage(path, opts.feature, true, '');
+            hops++;
+            continue;
+          } catch (e) {
+            final = { ok: false, error: 'Image OCR error: ' + ((e && e.message) || e) };
+            break;
+          }
+        }
+        // No vision key → fall through to Puter OCR below.
       }
 
       if (!puterAvailable()) {

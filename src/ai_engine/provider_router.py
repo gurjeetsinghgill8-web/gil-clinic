@@ -593,7 +593,7 @@ def route_vision(settings: Optional[Dict[str, Any]], image, feature: str = "",
         if err:
             errors.append(f"{p['label']}: {err}")
 
-    if not is_wallet and system_fallback_enabled():
+    if not is_wallet and not providers and system_fallback_enabled():
         try:
             from src.ai_engine.groq_client import call_vision_with_fallback
 
@@ -605,6 +605,17 @@ def route_vision(settings: Optional[Dict[str, Any]], image, feature: str = "",
                 errors.append(f"system fallback: {err}")
         except Exception as e:
             errors.append(f"system fallback error: {e}")
+
+    # ── Browser-side BYOK handoff (vision) ──
+    # PA free server can't reach vision providers; hand the prompt back so the
+    # browser gateway calls Groq/Gemini vision directly with the doctor's key.
+    if not is_wallet and providers:
+        return {
+            "text": "", "error": "", "provider": "puter", "model": puter_model_id(settings),
+            "usage": {}, "puter_needed": True, "code": "PUTER_OCR",
+            "prompt": prompt_text,
+            "byok_browser": True,
+        }
 
     return {
         "text": "", "provider": "",

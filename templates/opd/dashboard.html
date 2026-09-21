@@ -1438,8 +1438,7 @@
                             <div class="form-group">
                                 <label>AI Mode</label>
                                 <select id="set-ai-mode">
-                                    <option value="auto" {% if settings.ai_mode == 'auto' %}selected{% endif %}>Auto — my own API keys (clinic pays)</option>
-                                    <option value="puter" {% if settings.ai_mode == 'puter' %}selected{% endif %}>Puter Free AI — no key needed (clinic's Puter account pays)</option>
+                                    <option value="auto" {% if settings.ai_mode == 'auto' or settings.ai_mode == 'puter' %}selected{% endif %}>Auto — my own API keys (clinic pays)</option>
                                     <option value="gilwallet" {% if settings.ai_mode == 'gilwallet' %}selected{% endif %}>GIL AI Wallet — sasta backup (UPI recharge, hamari keys)</option>
                                     <option value="off" {% if settings.ai_mode == 'off' %}selected{% endif %}>Off — no AI</option>
                                 </select>
@@ -1457,7 +1456,7 @@
                                 <div id="wallet-approvals" style="margin-top:8px;"></div>
                                 {% endif %}
                             </div>
-                            <div class="form-group">
+                            <div class="form-group" style="display:none;">
                                 <label>Puter — Free AI (optional)</label>
                                 <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
                                     <button type="button" class="btn btn-sm" style="background:#7c3aed;color:#fff;" onclick="connectPuter()">🔌 Connect Puter</button>
@@ -5577,13 +5576,8 @@ loadQueuePatients();
 <script>
   (function () {
     function checkPuter() {
-      if (!window.puterStatus) { setTimeout(checkPuter, 800); return; }
-      window.puterStatus().then(function (st) {
-        if (window.puter && window.puter.ai && !st) {
-          var b = document.getElementById('puter-banner');
-          if (b) b.style.display = 'block';
-        }
-      }).catch(function () {});
+      // Puter UI disabled — doctor apni key use karta hai. Banner kabhi mat dikhao.
+      return;
     }
     if (document.readyState === 'loading') {
       document.addEventListener('DOMContentLoaded', checkPuter);
@@ -5626,42 +5620,9 @@ loadQueuePatients();
     updatePuterChip();
   }
   async function updatePuterChip() {
+    // Puter chip bhi band — doctor ko Puter bilkul na dikhe (apni key wala mode).
     const chip = document.getElementById('puter-chip');
-    const txt = document.getElementById('puter-chip-text');
-    const rel = document.getElementById('puter-chip-relogin');
-    if (!chip || !txt) return;
-    let st = null, available = false;
-    try {
-      if (typeof window.puterAvailable === 'function') available = window.puterAvailable();
-      if (available && window.puterStatus) st = await window.puterStatus();
-    } catch (e) {}
-    if (available && st && st.guest) {
-      // Puter ne dummy/temporary account diya (email nahi) — ise "Attached" na dikhao
-      chip.style.background = '#b45309';
-      txt.textContent = '⚠️ Dummy account (' + (st.username || '?') + ') — apni ID se login karo';
-      rel.style.display = 'inline-block';
-    } else if (available && st) {
-      chip.style.background = '#059669';
-      let usageTxt = '';
-      try {
-        const pct = await fetchPuterUsagePct();
-        if (pct !== null) {
-          usageTxt = ' · AI ' + pct + '%';
-          if (pct >= 80 && !_usageWarned) { _usageWarned = true; showToast('⚠️ Puter credits ' + pct + '% use ho gaye — 💳 Recharge karo', 'warning'); }
-        }
-      } catch (e) {}
-      txt.textContent = '🟢 Puter Attached: ' + ((st.email || st.username) || 'user') + usageTxt;
-      rel.style.display = 'inline-block';
-    } else if (available) {
-      chip.style.background = '#dc2626';
-      txt.textContent = '🔴 Puter Detached — Sign In karo';
-      rel.style.display = 'none';
-    } else {
-      chip.style.background = '#92400e';
-      txt.textContent = '⚠️ Puter script load nahi hua (internet check karo)';
-      rel.style.display = 'none';
-    }
-    chip.style.display = 'block';
+    if (chip) chip.style.display = 'none';
   }
   updatePuterChip();
   setInterval(updatePuterChip, 20000);
