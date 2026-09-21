@@ -1461,6 +1461,20 @@
                                     <br>• Puter ki taraf se sign-up me dikkat aa rahi hai (<a href="https://github.com/HeyPuter/puter/issues/1430" target="_blank" rel="noopener">known Puter bug</a>) — hamare app ki galti nahi. Sign-in window blank aaye to tab band mat karo, login pura karke wapas aao (app khud pakad lega).
                                     <br>• <b>Puter bilkul hi na chale to</b> neeche "My own API keys" me <b>Groq key</b> (free — console.groq.com) daal do: usme <b>koi login, koi popup hi nahi</b> chahiye aur AI seedha chalta hai.
                                 </div>
+                                <div style="margin-top:10px;padding-top:10px;border-top:1px dashed #cbd5e1;">
+                                    <label>📲 <b>Tablet / phone par Puter BINA popup ke — Direct Token Paste</b></label>
+                                    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;">
+                                        <input type="password" id="puter-token-input" autocomplete="off" placeholder="Puter Auth Token yahan paste karo…" style="flex:1;min-width:200px;font-family:monospace;font-size:13px;">
+                                        <button type="button" class="btn btn-sm" style="background:#0f766e;color:#fff;font-weight:700;" onclick="savePuterTokenUI()">💾 Save Token</button>
+                                        <button type="button" class="btn btn-sm btn-ghost" onclick="copyPuterTokenUI()" title="Is device par jo Puter login hai uska token copy karo (phir tablet par paste kar do)">📋 Copy my token</button>
+                                    </div>
+                                    <span id="puter-token-status" class="text-sm text-muted"></span>
+                                    <div class="text-sm text-muted" style="line-height:1.5;margin-top:4px;">
+                                        <b>Tablet par AI nahi chal raha?</b> Puter ka login <b>har device par alag</b> hota hai — mobile ka login tablet par apne aap nahi jata.
+                                        <br>• Jin device par Puter chal raha hai (mobile) → wahan <b>📋 Copy my token</b> dabao.
+                                        <br>• Tablet par yahan token <b>paste</b> karo → <b>💾 Save Token</b> → ab AI seedha chalega, <b>koi login / popup / cookie nahi</b>.
+                                    </div>
+                                </div>
                             </div>
                         </div>
                         <div class="form-group">
@@ -3883,6 +3897,42 @@ async function connectPuter() {
         } else {
             showToast('Puter connect nahi hua — ya "🆕 Naya Account banao" try karo, ya Groq key lagao (usme koi login nahi chahiye)', 'error');
         }
+    }
+}
+
+// ── Direct Puter token paste (tablet / zero-popup fail-safe) ──
+// Mobile ka Puter login tablet par nahi jata (har device alag). Ye button
+// working device se token copy karke tablet par paste kar deta hai — bina
+// kisi popup/cookie ke AI seedha chal jata hai.
+async function savePuterTokenUI() {
+    const inp = document.getElementById('puter-token-input');
+    const st = document.getElementById('puter-token-status');
+    const v = ((inp && inp.value) || '').trim();
+    if (!v) { if (st) st.textContent = '⚠️ Pehle token paste karo'; return; }
+    try {
+        if (typeof window.puterSaveToken !== 'function') throw new Error('Puter SDK load nahi hua (internet check karo)');
+        await window.puterSaveToken(v);
+        if (st) st.innerHTML = '✅ Token save ho gaya — ab AI seedha chalega';
+        if (typeof updatePuterChip === 'function') updatePuterChip();
+        if (typeof showToast === 'function') showToast('✅ Puter token save ho gaya — AI ready');
+    } catch (e) {
+        if (st) st.textContent = 'Token save nahi hua: ' + ((e && e.message) || e);
+    }
+}
+
+async function copyPuterTokenUI() {
+    const st = document.getElementById('puter-token-status');
+    try {
+        const t = (typeof window.puterGetToken === 'function') ? window.puterGetToken() : '';
+        if (!t) {
+            if (st) st.textContent = '⚠️ Is device par abhi Puter token nahi mila — pehle "🔌 Connect Puter" se login karo';
+            return;
+        }
+        await navigator.clipboard.writeText(t);
+        if (st) st.textContent = '📋 Token copy ho gaya — ab tablet par paste karo';
+        if (typeof showToast === 'function') showToast('📋 Puter token copied — tablet par paste karo');
+    } catch (e) {
+        if (st) st.textContent = 'Copy nahi hua: ' + ((e && e.message) || e);
     }
 }
 

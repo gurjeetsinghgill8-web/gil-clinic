@@ -44,7 +44,14 @@
     try {
       var standalone = (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) ||
         (navigator.standalone === true);
-      return standalone || /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+      var ua = String(navigator.userAgent || '');
+      // iPadOS 13+ reports "Macintosh" (not "iPad") but is a touch tablet.
+      // Without this, an iPad takes the DESKTOP popup path → blank popup → 25s
+      // hang before the full-tab login — exactly the "tablet me nahi chal ra" bug.
+      var touchTablet = /Macintosh/i.test(ua) && !/iPhone/i.test(ua) &&
+        (typeof navigator.maxTouchPoints === 'number' ? navigator.maxTouchPoints : 0) > 1;
+      var mobileUa = /Android|iPhone|iPad|iPod/i.test(ua) || touchTablet;
+      return standalone || mobileUa;
     } catch (e) { return false; }
   }
 
@@ -100,6 +107,25 @@
         if (appUid) localStorage.setItem('puter.app.id', appUid);
       }
     } catch (e) {}
+  }
+
+  // ── Direct token paste (tablet / zero-popup fail-safe) ──
+  // Puter login is PER-DEVICE: a phone that is signed in does NOT sign in a
+  // tablet. This path lets the doctor copy the token from the working device
+  // ("📋 Copy my token") and paste it on the tablet ("💾 Save token"). The
+  // token lives in first-party localStorage, so it survives reloads with NO
+  // popup and NO third-party cookie. Ported from the proven "nano clinic" ref.
+  function getToken() {
+    try { return localStorage.getItem('puter.auth.token.v2') || ''; }
+    catch (e) { return ''; }
+  }
+
+  function saveTokenManual(token) {
+    var clean = String(token || '').trim();
+    if (!clean) throw new Error('Token khali hai');
+    if (!puterAvailable()) throw new Error('Puter SDK not loaded (internet required)');
+    savePuterToken(clean);
+    return true;
   }
 
   async function signIn() {
@@ -493,4 +519,6 @@
   window.puterIsSignedIn = isSignedIn;
   window.puterStatus = puterStatus;
   window.puterAvailable = puterAvailable;
+  window.puterGetToken = getToken;
+  window.puterSaveToken = saveTokenManual;
 })();
