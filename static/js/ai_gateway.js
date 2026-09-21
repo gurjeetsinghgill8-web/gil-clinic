@@ -501,9 +501,9 @@
         continue;
       }
 
-      if (code === 'PUTER_CHAT' && res.byok_browser) {
+      if (code === 'PUTER_CHAT') {
         // Doctor's OWN key in this browser → call provider directly (no Puter,
-        // no popup, no third-party cookie). Works on tablets + PA free.
+        // no popup, no third-party cookie). Local key ALWAYS wins over Puter.
         var byokKeys = getLocalByokKeys();
         if (byokKeys.length) {
           try {
