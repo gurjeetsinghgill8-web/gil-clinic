@@ -64,9 +64,9 @@ PROVIDERS: Dict[str, Dict[str, Any]] = {
     "gemini": {
         "label": "Google Gemini",
         "base_url": "https://generativelanguage.googleapis.com/v1beta/openai/",
-        "model": "gemini-1.5-flash",
-        "vision_model": "gemini-1.5-flash",
-        "audio_model": "gemini-1.5-flash",
+        "model": "gemini-3.8-flash",
+        "vision_model": "gemini-3.8-flash",
+        "audio_model": "gemini-3.8-flash",
         "supports_vision": True,
         "supports_audio": True,
         "key_field": "gemini_api_key",
@@ -294,6 +294,17 @@ def _mode_of(settings: Optional[Dict[str, Any]]) -> str:
     return ((settings or {}).get("ai_mode") or "auto").strip().lower()
 
 
+def is_outbound_blocked() -> bool:
+    """True on PythonAnywhere free tier or any host where outbound to external AI APIs is blocked."""
+    return bool(
+        os.getenv("PYTHONANYWHERE_SITE")
+        or os.getenv("PYTHONANYWHERE_DOMAIN")
+        or "pythonanywhere" in os.getenv("APP_BASE_URL", "").lower()
+        or os.path.exists("/home/gillhopitalsoftware1")
+        or os.path.exists("/var/www/gillhopitalsoftware1_pythonanywhere_com_wsgi.py")
+    )
+
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # KEY RESOLUTION
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -424,16 +435,16 @@ def _call_openai_compat(p: Dict[str, Any], model: str, messages: List[Dict[str, 
     headers = {"Authorization": f"Bearer {p['key']}", "Content-Type": "application/json"}
     payload = {"model": model, "messages": messages, "temperature": temp, "max_tokens": max_tokens}
     _min_gap(p["id"])
-    for attempt in range(3):
+    for attempt in range(2):
         try:
-            resp = requests.post(url, headers=headers, json=payload, timeout=90)
+            resp = requests.post(url, headers=headers, json=payload, timeout=12)
             if resp.status_code == 401:
                 return "", {}, f"Invalid API key for {p['label']}."
             if resp.status_code == 403:
                 return "", {}, f"{p['label']} access denied — check billing/credits on the clinic's own account."
             if resp.status_code == 429:
                 wait = (2 ** (attempt + 1)) + 0.5
-                logger.warning("%s rate limited (attempt %d/3, wait %.1fs)", p["id"], attempt + 1, wait)
+                logger.warning("%s rate limited (attempt %d/2, wait %.1fs)", p["id"], attempt + 1, wait)
                 time.sleep(wait)
                 continue
             if not resp.ok:
@@ -452,11 +463,11 @@ def _call_openai_compat(p: Dict[str, Any], model: str, messages: List[Dict[str, 
             return "", usage, f"{p['label']} returned empty content."
         except requests.exceptions.Timeout:
             logger.warning("%s timeout (attempt %d)", p["id"], attempt + 1)
-            time.sleep(2)
+            time.sleep(1)
         except requests.exceptions.RequestException as e:
             logger.error("%s error (attempt %d): %s", p["id"], attempt + 1, e)
-            time.sleep(2 ** (attempt + 1))
-    return "", {}, f"{p['label']} failed after 3 attempts."
+            time.sleep(1)
+    return "", {}, f"{p['label']} failed after 2 attempts."
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -494,6 +505,15 @@ def route_chat(settings: Optional[Dict[str, Any]], messages: List[Any], feature:
         if not ok:
             return {"text": "", "error": f"Wallet balance kam hai (₹{bal/100:.2f}) — UPI se Recharge karo (Settings → GIL Wallet).", "provider": "", "model": "", "usage": {}, "wallet_low": True}
 
+    # On PythonAnywhere free tier, outbound is blocked by proxy. Hand off immediately to browser BYOK.
+    if is_outbound_blocked() and not is_wallet and providers:
+        return {
+            "text": "", "error": "", "provider": "puter", "model": puter_model_id(settings),
+            "usage": {}, "puter_needed": True, "code": "PUTER_CHAT",
+            "prompt": _messages_to_puter_prompt(messages),
+            "byok_browser": True,
+        }
+
     for p in providers:
         pmodel = override or model or p["model"]
         text, usage, err = _call_openai_compat(p, pmodel, _build_openai_messages(messages), temp, max_tokens)
@@ -505,9 +525,6 @@ def route_chat(settings: Optional[Dict[str, Any]], messages: List[Any], feature:
             errors.append(f"{p['label']}: {err}")
 
     # ── System emergency fallback (GIL CLINIC legacy keys) ──
-    # Wallet mode mein fallback nahi — wallet ke andar hi balance kata hai.
-    # Clinic ke paas apni key hai to fallback chalao hi mat — seedha browser
-    # handoff (neeche) → PA free par bekaar ke connection retries ka time bachta hai.
     if not is_wallet and not providers and system_fallback_enabled():
         try:
             from src.ai_engine.groq_client import call_groq_with_error
@@ -522,12 +539,6 @@ def route_chat(settings: Optional[Dict[str, Any]], messages: List[Any], feature:
             errors.append(f"system fallback error: {e}")
 
     # ── Browser-side BYOK handoff ──
-    # On outbound-blocked hosts (PythonAnywhere free) the server cannot reach any
-    # provider even with valid keys. Hand the prompt back to the browser gateway
-    # so it can retry with the doctor's OWN key stored locally in that browser
-    # (BYOK), or fall back to Puter. This keeps per-doctor "own key" working
-    # everywhere with zero server outbound. `providers` here = clinic keys that
-    # exist but all failed server-side.
     if not is_wallet and providers:
         return {
             "text": "", "error": "", "provider": "puter", "model": puter_model_id(settings),
@@ -575,6 +586,16 @@ def route_vision(settings: Optional[Dict[str, Any]], image, feature: str = "",
             return {"text": "", "error": f"Wallet balance kam hai (₹{bal/100:.2f}) — UPI se Recharge karo.", "provider": "", "usage": {}, "wallet_low": True}
 
     prompt_text = prompt_text or _image_to_puter_prompt(context)
+
+    # On PythonAnywhere free tier, outbound is blocked by proxy. Hand off immediately to browser BYOK.
+    if is_outbound_blocked() and not is_wallet and providers:
+        return {
+            "text": "", "error": "", "provider": "puter", "model": puter_model_id(settings),
+            "usage": {}, "puter_needed": True, "code": "PUTER_OCR",
+            "prompt": prompt_text,
+            "byok_browser": True,
+        }
+
     vision_messages = [{
         "role": "user",
         "content": [
@@ -607,8 +628,6 @@ def route_vision(settings: Optional[Dict[str, Any]], image, feature: str = "",
             errors.append(f"system fallback error: {e}")
 
     # ── Browser-side BYOK handoff (vision) ──
-    # PA free server can't reach vision providers; hand the prompt back so the
-    # browser gateway calls Groq/Gemini vision directly with the doctor's key.
     if not is_wallet and providers:
         return {
             "text": "", "error": "", "provider": "puter", "model": puter_model_id(settings),

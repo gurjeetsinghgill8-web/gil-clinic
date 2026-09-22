@@ -355,9 +355,9 @@
   // calls; OpenAI/Anthropic block browser CORS so they are intentionally absent).
   var BYOK_LS_PREFIX = 'gilclinic.byok.';
   var BYOK_PROVIDERS = [
+    { id: 'gemini', label: 'Gemini', base: 'https://generativelanguage.googleapis.com/v1beta/openai', model: 'gemini-3.8-flash', vision: true, visionModel: 'gemini-3.8-flash', nativeBase: 'https://generativelanguage.googleapis.com/v1beta', modelCandidates: ['gemini-3.8-flash', 'gemini-3.6-flash', 'gemini-1.5-flash', 'gemini-2.5-flash', 'gemini-1.5-pro'] },
     { id: 'groq', label: 'Groq', base: 'https://api.groq.com/openai/v1', model: 'llama-3.3-70b-versatile', vision: true, visionModel: 'meta-llama/llama-4-scout-17b-16e-instruct' },
     { id: 'deepseek', label: 'DeepSeek', base: 'https://api.deepseek.com/v1', model: 'deepseek-chat', vision: false },
-    { id: 'gemini', label: 'Gemini', base: 'https://generativelanguage.googleapis.com/v1beta/openai', model: 'gemini-1.5-flash', vision: true, visionModel: 'gemini-1.5-flash', nativeBase: 'https://generativelanguage.googleapis.com/v1beta', modelCandidates: ['gemini-1.5-flash', 'gemini-2.5-flash', 'gemini-3.8-flash', 'gemini-1.5-pro', 'gemini-1.5-flash-8b', 'gemini-2.0-flash'] },
   ];
 
   var _cachedGeminiModels = {};
@@ -367,7 +367,7 @@
     if (_cachedGeminiModels[k] && _cachedGeminiModels[k].length) {
       return _cachedGeminiModels[k];
     }
-    var fallback = (p && p.modelCandidates) || ['gemini-1.5-flash', 'gemini-2.5-flash', 'gemini-3.8-flash', 'gemini-1.5-pro', 'gemini-1.5-flash-8b', 'gemini-2.0-flash'];
+    var fallback = (p && p.modelCandidates) || ['gemini-3.8-flash', 'gemini-3.6-flash', 'gemini-1.5-flash', 'gemini-2.5-flash', 'gemini-1.5-pro'];
     if (!k) return fallback;
 
     try {
@@ -389,7 +389,7 @@
           }
         });
         if (supported.length) {
-          var priority = ['gemini-1.5-flash', 'gemini-2.5-flash', 'gemini-3.8-flash', 'gemini-2.0-flash', 'gemini-1.5-flash-8b', 'gemini-1.5-pro'];
+          var priority = ['gemini-3.8-flash', 'gemini-3.6-flash', 'gemini-1.5-flash', 'gemini-2.5-flash', 'gemini-1.5-pro'];
           supported.sort(function (a, b) {
             var ia = priority.indexOf(a);
             var ib = priority.indexOf(b);
@@ -414,7 +414,13 @@
       BYOK_PROVIDERS.forEach(function (p) {
         var k = localStorage.getItem(BYOK_LS_PREFIX + p.id);
         if (k && k.trim()) {
-          out.push(Object.assign({}, p, { key: k.trim() }));
+          var clean = k.trim();
+          // Filter out accidental doctor PIN inputs like "5554" or invalid keys
+          if (clean.length < 15) return;
+          if (p.id === 'groq' && !clean.startsWith('gsk_')) return;
+          if (p.id === 'gemini' && !clean.startsWith('AIza')) return;
+          if (p.id === 'deepseek' && !clean.startsWith('sk-')) return;
+          out.push(Object.assign({}, p, { key: clean }));
         }
       });
     } catch (e) {}

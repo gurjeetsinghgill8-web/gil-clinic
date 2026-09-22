@@ -1919,6 +1919,9 @@ async function processAllScansSequential(files, statusEl) {
     };
 
     const total = files.length;
+    let successCount = 0;
+    let lastError = '';
+
     for (let i = 0; i < total; i++) {
         const file = files[i];
         const percent = Math.round(((i + 1) / total) * 100);
@@ -1933,6 +1936,7 @@ async function processAllScansSequential(files, statusEl) {
             }).then(r => r.json());
 
             if (res.ok && res.parsed) {
+                successCount++;
                 const p = res.parsed;
                 if (p.patient_name) combinedParsed.patient_name = p.patient_name;
                 if (p.phone) combinedParsed.phone = p.phone;
@@ -1944,15 +1948,25 @@ async function processAllScansSequential(files, statusEl) {
                 if (p.medicines) combinedParsed.medicines.push(p.medicines);
                 if (p.investigations) combinedParsed.investigations.push(p.investigations);
                 if (p.advice) combinedParsed.advice.push(p.advice);
+            } else {
+                lastError = (res && res.error) || 'Scan parse nahi hua';
+                console.error('Scan error on file ' + file.name, res);
+                showToast(`⚠️ ${file.name}: ${lastError}`, 'error');
             }
         } catch (err) {
+            lastError = String(err);
             console.error('Scan error on file ' + file.name, err);
+            showToast(`❌ ${file.name}: ${err}`, 'error');
         }
     }
 
-    statusEl.innerHTML = `✅ <strong>All ${total} document(s) scanned successfully!</strong> Auto-filling prescription...`;
-    applyParsedDataToForm(combinedParsed);
-    showToast(`🎉 Sequential scan of ${total} document(s) complete!`);
+    if (successCount > 0) {
+        statusEl.innerHTML = `✅ <strong>${successCount} of ${total} document(s) scanned successfully!</strong> Auto-filling prescription...`;
+        applyParsedDataToForm(combinedParsed);
+        showToast(`🎉 Sequential scan of ${successCount} document(s) complete!`);
+    } else {
+        statusEl.innerHTML = `❌ <strong>Scan complete nahi hua</strong>: ${lastError || 'Settings me Gemini key check karein'}`;
+    }
 }
 
 function applyParsedDataToForm(p) {
