@@ -418,7 +418,7 @@
           // Filter out accidental doctor PIN inputs like "5554" or invalid keys
           if (clean.length < 15) return;
           if (p.id === 'groq' && !clean.startsWith('gsk_')) return;
-          if (p.id === 'gemini' && !clean.startsWith('AIza')) return;
+          if (p.id === 'gemini' && clean.length < 25) return;
           if (p.id === 'deepseek' && !clean.startsWith('sk-')) return;
           out.push(Object.assign({}, p, { key: clean }));
         }
@@ -837,4 +837,7 @@
   window.puterGetToken = getToken;
   window.puterSaveToken = saveTokenManual;
   window.byokTest = byokTest;
+  window.byokOcr = byokOcr;
+  window.byokChat = byokChat;
+  window.getLocalByokKeys = getLocalByokKeys;
 })();
