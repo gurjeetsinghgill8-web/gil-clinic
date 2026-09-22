@@ -346,7 +346,7 @@ def cmd_ship(args):
         ).stdout.strip()
         print("==> [2/5] git skip (--no-git) - upload %s..%s" % (old_head[:7], new_head[:7]))
     else:
-        old_head = subprocess.run(
+        old_head = args.since or subprocess.run(
             ["git", "rev-parse", "HEAD"], cwd=BASE_DIR, capture_output=True, text=True
         ).stdout.strip()
 
