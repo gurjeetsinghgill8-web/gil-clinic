@@ -1,0 +1,56 @@
+TO: [Friend's Email ID / Partner's Email ID]
+CC: gurjeetsinghgill8@gmail.com, mcgillpharma@gmail.com
+SUBJECT: Technical Evaluation & Architecture Overview: GHOS (Patient Flow OS) — Partnership & Co-Founding Review
+
+Dear [Partner Name / Friend's Name],
+
+I hope you are doing well.
+
+As discussed, we are preparing to collaborate as a 3-person team to incorporate our private limited company and scale this healthcare software commercially. 
+
+Over the past months, I have conceived, architected, and built the complete working system — **GHOS (Gurjas Hospital Operating System) / GIL CLINIC Smart OPD / CardioQueue**, which is already operational and deployed live at:
+🔗 https://gillhopitalsoftware1.pythonanywhere.com
+
+To facilitate your technical evaluation as an IT professional and co-founder, I am sharing the core architectural specifications, the Feature & Issue Registry (FIR) documentation, and the system blueprint.
+
+================================================================================
+KEY HIGHLIGHTS OF THE SYSTEM:
+================================================================================
+1. Zero-Cost Patient Flow OS (CardioQueue):
+   - Patients track real-time queue position via mobile QR codes (no app download required).
+   - Staff trigger browser-native acoustic chime & vibration alerts directly in the patient's browser without paying SMS/WhatsApp API charges.
+2. Clinical AI Vision & Prescription OCR (FIR-01):
+   - Automatic client-side image compression (<10MB ceiling) and handwriting OCR to convert doctor prescription photos into structured digital records.
+3. Self-Learning Drug Bank & Prescription Auto-Complete (FIR-02):
+   - Dynamic medication schema (Brand, Strength, Form, Frequency, Timing, Salt/Composition).
+   - Automatic frequency ranking (`use_count`) and prescription-to-library auto-seeding.
+4. Harness Engineering Pattern:
+   - Clean, decoupled architecture (FastAPI PWA UI -> Use-Case Command Harness -> Domain Entities -> DB/Infra) preventing dependency tangling.
+5. The FIR (Feature & Issue Registry) Protocol:
+   - A disciplined clinical engineering log that tracks every issue from doctor statement to root cause analysis, single-brick resolution, and verified live deployment.
+
+================================================================================
+PURPOSE OF SHARING & CONFIDENTIALITY TERMS (NDA):
+================================================================================
+As we are in the pre-incorporation phase, this documentation and codebase are shared strictly for the purpose of technical evaluation, system auditing, and structuring our prospective partnership.
+
+Please note the following important terms:
+1. Confidentiality: The shared source code, blueprints, and algorithms are proprietary trade secrets and confidential information.
+2. IP Ownership: All prior intellectual property, copyright, and architecture remain 100% exclusively with Dr. Gurjeet Singh Gill until our company is officially incorporated and we formally execute our definitive Shareholders' Agreement (SHA) and IP Assignment Agreements.
+3. Restrictions: You agree not to copy, fork, duplicate, distribute, decompile, or commercially utilize any part of this code or concept outside our evaluation.
+4. Evaluation Agreement: Please review the attached Non-Disclosure & Partnership Evaluation Agreement (NDA).
+
+================================================================================
+ATTACHMENTS:
+================================================================================
+1. 02_GHOS_FIR_AND_SYSTEM_DISCLOSURE.pdf / .md (Detailed technical breakdown of FIR-01 to FIR-04, APIs, and workflows)
+2. 03_NON_DISCLOSURE_AND_PARTNERSHIP_EVALUATION_AGREEMENT.pdf / .md (Formal pre-incorporation NDA)
+3. Technical Architecture Overview & Module Map
+
+Looking forward to your review and feedback on how we can structure the tech stack, scale the infrastructure, and build a massive healthcare venture together.
+
+Warm regards,
+
+Dr. Gurjeet Singh Gill (Gurjas Singh Gill)
+Founder & Architect — GHOS / GIL CLINIC
+Email: gurjeetsinghgill8@gmail.com | mcgillpharma@gmail.com

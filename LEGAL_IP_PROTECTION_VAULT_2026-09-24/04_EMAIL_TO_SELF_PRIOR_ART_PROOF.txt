@@ -1,0 +1,59 @@
+TO: gurjeetsinghgill8@gmail.com, mcgillpharma@gmail.com
+FROM: gurjeetsinghgill8@gmail.com
+SUBJECT: [OFFICIAL IP RECORD & PRIOR ART] GHOS / GIL CLINIC - Sole Ownership & Timestamp Proof - Dr. Gurjeet Singh Gill (24-Sep-2026 17:35 IST)
+
+ATTACHMENTS:
+1. GHOS_LEGAL_IP_VAULT_2026-09-24.zip (Legal declarations, FIR registry, architecture specifications, SHA-256 manifests)
+2. GHOS_FULL_CODEBASE_SNAPSHOT_2026-09-24.zip (Full sanitized source code snapshot of GHOS / GIL CLINIC)
+
+================================================================================
+OFFICIAL ELECTRONIC RECORD & PROOF OF PRIOR CREATION / INTELLECTUAL PROPERTY
+Under Indian Copyright Act, 1957 & Information Technology Act, 2000
+================================================================================
+
+DATE & TIMESTAMP OF RECORD: 24 September 2026, 17:35:00 IST (UTC +05:30)
+AUTHOR & CREATOR: Dr. Gurjeet Singh Gill (Gurjas Singh Gill)
+SYSTEM NAME: GHOS (Gurjas Hospital Operating System) / GIL CLINIC Smart OPD / CardioQueue
+LIVE DEPLOYMENT: https://gillhopitalsoftware1.pythonanywhere.com
+
+PURPOSE OF THIS TRANSMISSION:
+This email is transmitted to establish an immutable, verifiable, and third-party timestamped electronic record (with Google Mail RFC822 headers and DKIM digital cryptographic signatures) certifying that:
+
+1. I, Dr. Gurjeet Singh Gill (Gurjas Singh Gill), am the sole author, architect, inventor, and 100% intellectual property owner of the GHOS / GIL CLINIC Patient Flow Operating System, its source code, algorithms, database schemas, and documentation.
+2. This complete system exists, operates, and was fully developed by me prior to this timestamp.
+3. This transmission precedes any planned technical review, code sharing, or partnership evaluation with my prospective co-founders/group members (for our proposed 3-person company) or any IT professional.
+4. No rights, ownership, equity, copyright, or licenses have been transferred or assigned to any third party.
+5. All future sharing with partners/IT consultants is strictly governed by the attached Non-Disclosure & Partnership Evaluation Agreement (NDA).
+
+CRYPTOGRAPHIC SHA-256 SYSTEM MANIFEST (SNAPSHOT AT 17:35 IST, 24-SEP-2026):
+--------------------------------------------------------------------------------
+3390675a0d32114e4e61267f08d17f7112147c4ad66c0065576cd2a66e59a1f2  FIR_PRODUCT_DEVELOPMENT.md
+ed34e687ec8466833e576c89f0f8b88420a9aaa9170fa892fb56d543a5287430  GIL_CLINIC_PRODUCT_DEVELOPMENT.md
+8523ad0dd0b46b6bc213cad15eb4135e9d772f7b5684c5807e1eae692c342c9e  SMART_OPD_MASTER_REFERENCE.md
+ea99d5f38acd86e410266a777d73a51173c32f9dcc0708c9d24eadd0fc2f0149  PRODUCT_UPGRADATION_PLAN.md
+08d616b2921351d3de0c9f3c1d426c92b044c9be2c6feb884a95e6e768ba99b6  V2_ARCHITECTURE.md
+9b7aa9b713b1889988b105c130d11dd985b0060dc86dd7aed671f19b244958d0  MEMORY.md
+86cc92837657fdba330bd84d1a13b03d6d1b17f2304e85cb34cd496570f910dc  main_v2.py
+a7e3d118fa2673e82677569356059016c2cf4a98c95aba31a36bc033cce485de  llm_harness.py
+075ee5adc8bf70373f29fba7bdf8e05d2fbc132025a55f73de538cd7e13b204f  pa_deploy.py
+6f6447b6a86502d9624b19f60379fb1e0821fb3d86df421f74d3fda3f02a30a0  start_tunnel.py
+a7abbb0c76f9fea22a80008f1f338f026342bc9ba42499a8cd2a93b978b74cd3  src/ai_engine/provider_router.py
+ad640b56329ae7d2f420fbdda3994dae7f17db7aa05df0305123dae1c6ea3f5e  src/presentation/opd/routes/opd_routes.py
+1c34f04e0ec81a5b6030467481144d29882b09db298726f11584433f7d269165  src/infrastructure/opd/models/opd_models.py
+ea27d1141708da277efa5685ec909bc6359b4b15f8e9de95f6fcdf899bca2d86  templates/opd/dashboard.html
+1abca5b3d36a4b775c082548cd5ff90ebaf7569bba6a470e6c8b26feef561ae8  static/js/ai_gateway.js
+a1fc9d193a1f068f3707f5c9e29fa5032d64cf386695e8148957f25e1a4d480c  patient-pwa/app.js
+65e6b446651888ff3caa2ec5c6fd88e0c4354e9b940f9a89b6c1c1df35c13355  patient-pwa/index.html
+--------------------------------------------------------------------------------
+
+SUMMARY OF ATTACHED ASSETS:
+1. 01_IP_AND_OWNERSHIP_DEED_OF_CREATION.md — Complete legal certificate of ownership.
+2. 02_GHOS_FIR_AND_SYSTEM_DISCLOSURE.md — Detailed technical architecture & FIR registry breakdown.
+3. 03_NON_DISCLOSURE_AND_PARTNERSHIP_EVALUATION_AGREEMENT.md — Pre-incorporation confidentiality contract.
+4. Full clean source code zip snapshot.
+
+Any unauthorized copying, leakage, commercialization, or derivative works by third parties will be prosecuted under Section 63 of the Indian Copyright Act, 1957 and Section 43/66/72A of the Information Technology Act, 2000.
+
+Recorded & Confirmed by:
+Dr. Gurjeet Singh Gill (Gurjas Singh Gill)
+Sole Owner & Creator
