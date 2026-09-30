@@ -82,10 +82,28 @@ Traditional wait math is wrong. GHOS weights **complexity**:
 
 ---
 
+## 4A. The Compliance Moat — Competitor Features We Must Absorb 🕳️
+
+Competitor marketing research (EKA DOC · Tatvacare · VCDoctor) ka outcome. Ye features competitors apne **headline** banate hain aur hamare paas **missing/partial** hain:
+
+| Area | Who has it | Priority |
+|------|-----------|----------|
+| **ABDM compliance** — ABHA ID + HPR/HFR registry + HIP/HIU + Consent Manager | EKA DOC, VCDoctor, Tatvacare | 🟢 P0 |
+| **FHIR R4 interoperability** | EKA DOC | 🟢 P0 |
+| **NHA approval / Milestone certification** | EKA DOC, VCDoctor | 🟢 P0 |
+| **DHIS — earn govt incentive on ABDM adoption** | Tatvacare | 🟢 P0 |
+| **Smart Rx pad + AI scribe + teleconsult + external lab network** | Tatvacare, EKA, VCDoctor | 🟠 P1 |
+| **PubMed/journals + practice analytics** | Tatvacare, VCDoctor | 🟡 P2 |
+
+> **Full numbered register:** `COMPETITOR_GAP_ANALYSIS_MISSING_FEATURES.md` — **GAP-01 → GAP-15**, har item ek-ek karke tick hoga (Pending → Done). Abhi **no code** — list + plan ready.
+
+---
+
 ## 5. Execution Plan (Step-by-Step)
 
 | Step | Action | Reference |
 |------|--------|-----------|
+| **0** | **Compliance moat first** — ABDM/FHIR/NHA/DHIS (GAP-01 → GAP-05), kyunki yehi government incentive + trust deta hai | `COMPETITOR_GAP_ANALYSIS_MISSING_FEATURES.md` |
 | **1** | Harmonize the **Unified Health Card** → Doctor App mobile-number instant search | `DEEP_RESEARCH_PRODUCT_DEVELOPMENT.md` §5 |
 | **2** | Wire the **live queue feed** into the marketplace (replace demo `_live_signal()`) | §3, `marketplace_routes.py` |
 | **3** | Add **availability + geofence** (open/close, lat/long, "open now", distance sort) | schema §6.1/6.5 |

@@ -241,6 +241,26 @@ CREATE TABLE health_card_access (
 );
 ```
 
+### 6.5a ABDM / National compliance (GAP-01 → GAP-05)
+
+```sql
+-- ABHA health ID on the patient record
+ALTER TABLE patients ADD COLUMN abha_id VARCHAR(20);
+-- HPR (doctor) + HFR (facility) registry IDs
+ALTER TABLE clinics ADD COLUMN hpr_id VARCHAR(50);
+ALTER TABLE clinics ADD COLUMN hfr_id VARCHAR(50);
+
+-- Consent artefacts (DPDP + ABDM consent manager)
+CREATE TABLE consent_artefacts (
+    id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    patient_id  UUID NOT NULL REFERENCES patients(id),
+    purpose     VARCHAR(100),
+    hip_id      VARCHAR(50),
+    granted_at  TIMESTAMPTZ DEFAULT now(),
+    revoked_at  TIMESTAMPTZ
+);
+```
+
 ### 6.5 Geolocation distance (Postgres)
 
 ```sql
@@ -259,6 +279,7 @@ FROM clinics ORDER BY is_partner DESC, distance_km ASC;
 |-------|--------|-----------|------|
 | **P0 — Marketplace** | Now | Find a Doctor page + API + landing link | ✅ done |
 | **P0.5 — Live feed** | Next 2 weeks | Replace `_live_signal()` demo with real `queue_entries` read | backend |
+| **P0.6 — Compliance moat** | Weeks 2–8 | ABDM (ABHA/HPR/HFR/HIP-HIU/Consent) + FHIR R4 + NHA approval + DHIS incentive — **GAP-01 → GAP-05** | `COMPETITOR_GAP_ANALYSIS_MISSING_FEATURES.md` |
 | **P1 — Availability** | Month 1 | Add `open_time`/`close_time` + "open now" filter | schema §6.1 |
 | **P1 — Geofence** | Month 1–2 | Lat/long per clinic + distance sort + "leave now" alert | schema §6.5 |
 | **P2 — Slots + EWT** | Month 2–3 | `appointment_slots` + complexity-weighted EWT in Doctor's View | §6.2/6.3 |
@@ -277,6 +298,25 @@ FROM clinics ORDER BY is_partner DESC, distance_km ASC;
 | Avg patient wait (partner) | ~60 min | < 15 min |
 | Health Card share rate | — | ≥ 20% of visits |
 | Tier-2 → Tier-1 upgrade rate | — | ≥ 5% / month |
+
+---
+
+## 9. Competitor Gap Analysis — Numbered Missing-Features Register
+
+Competitors (EKA DOC · Tatvacare · VCDoctor) ki marketing se collect karke compare kiya gaya. **Full numbered register** (GAP-01 → GAP-15, har item ek-ek tick hoga) alag file me hai:
+
+> 📄 **`COMPETITOR_GAP_ANALYSIS_MISSING_FEATURES.md`**
+
+### Summary (priority-wise)
+
+| Block | GAP# | Theme | Priority |
+|-------|------|-------|----------|
+| 🔴 Compliance | 01–05 | ABDM core, FHIR R4, NHA approval, ABHA/Health Locker, **DHIS govt incentive** | P0 |
+| 🟠 Clinical parity | 06–10 | Smart Rx pad, AI scribe, teleconsult, external lab network, patient engagement | P1 |
+| 🟡 Records | 11–12 | FHIR-native EMR, IPD | P2 |
+| 🟡 Growth/trust | 13–15 | Analytics, PubMed journals, ISO/AWS security posture | P2 |
+
+> **Verdict:** sabse bada missing = **ABDM/FHIR/NHA compliance** (teeno competitors ka headline). Yeh **government DHIS incentive + trust + tender eligibility** deta hai — isliye ab compliance pehle, clinical baad me. Abhi **no code**; aap bolo to GAP-01 se shuru karte hain.
 
 ---
 
