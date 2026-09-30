@@ -162,6 +162,9 @@ from src.presentation.admin.routes.dashboard_routes import router as admin_dashb
 from src.presentation.admin.routes.doctor_routes import router as admin_doctor_router
 from src.presentation.admin.routes.auth_routes import seed_default_admins
 
+# -- Marketplace (Find a Doctor — public city directory) --
+from src.presentation.marketplace.routes.marketplace_routes import router as marketplace_router
+
 
 # =========================================================================
 # Database Setup
@@ -488,6 +491,9 @@ app.include_router(patient_portal_doctor_router)
 app.include_router(admin_auth_router)
 app.include_router(admin_dashboard_router)
 app.include_router(admin_doctor_router)
+
+# Marketplace — Find a Doctor (public, no login)
+app.include_router(marketplace_router)
 
 # Serve static files from experience/pwa
 pwa_static = Path(__file__).parent / "src" / "experience" / "pwa"
