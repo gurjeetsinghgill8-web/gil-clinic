@@ -372,6 +372,7 @@ async def _get_settings(doctor_id: str, masked: bool = True) -> dict:
         "clinic_id": "",
         "wa_reception": "", "wa_manager": "", "wa_doctor": "",
         "wa_dietitian": "",
+        "latitude": "", "longitude": "", "hpr_id": "", "hfr_id": "",
     }
     try:
         async with async_session_factory() as session:
@@ -380,6 +381,7 @@ async def _get_settings(doctor_id: str, masked: bool = True) -> dict:
             )
             s = row.scalar_one_or_none()
             if s:
+                geo = await _clinic_geo_fields(session, s.clinic_id)
                 key_fields = {
                     "groq_api_key": s.groq_api_key,
                     "openai_api_key": getattr(s, "openai_api_key", ""),
@@ -414,10 +416,50 @@ async def _get_settings(doctor_id: str, masked: bool = True) -> dict:
                     "wa_manager": s.wa_manager or "",
                     "wa_doctor": s.wa_doctor or "",
                     "wa_dietitian": s.wa_dietitian or "",
+                    **geo,
                 }
     except Exception:
         pass
     return defaults
+
+
+async def _clinic_geo_fields(session, clinic_id: str | None) -> dict:
+    """ClinicModel se latitude/longitude/hpr_id/hfr_id (agar clinic_id linked hai).
+
+    Ye clinic-level fields hain (multi-tenant ClinicModel par), is liye inhe
+    SettingsModel se nahi, ClinicModel se padhte hain. Doctor ki Settings screen
+    par backfill karne ke liye.
+    """
+    out = {"latitude": "", "longitude": "", "hpr_id": "", "hfr_id": ""}
+    if not clinic_id:
+        return out
+    try:
+        import uuid as _uuid
+
+        from src.infrastructure.clinic.models.clinic_model import ClinicModel
+
+        cid = _uuid.UUID(str(clinic_id))
+        row = await session.execute(sa.select(ClinicModel).where(ClinicModel.id == cid))
+        c = row.scalar_one_or_none()
+        if c is not None:
+            out["latitude"] = "" if c.latitude is None else str(c.latitude)
+            out["longitude"] = "" if c.longitude is None else str(c.longitude)
+            out["hpr_id"] = c.hpr_id or ""
+            out["hfr_id"] = c.hfr_id or ""
+    except Exception:
+        pass
+    return out
+
+
+def _parse_coord(value) -> float | None:
+    """String → float coordinate, ya None (empty/invalid)."""
+    v = str(value or "").strip()
+    if not v:
+        return None
+    try:
+        return float(v)
+    except (ValueError, TypeError):
+        return None
 
 
 async def _ai_settings_for(doctor_id: str) -> dict:
@@ -481,6 +523,27 @@ async def api_save_settings(request: Request):
                 if not val or val in _MASK_PLACEHOLDERS or val.startswith("enc:v1:"):
                     continue
                 setattr(s, fld, encrypt_key(val))
+
+            # ── Clinic-level geo + ABDM fields (backfill without re-onboarding) ──
+            if any(k in body for k in ("latitude", "longitude", "hpr_id", "hfr_id")):
+                if s.clinic_id:
+                    try:
+                        import uuid as _uuid
+
+                        from src.infrastructure.clinic.models.clinic_model import ClinicModel
+
+                        c = await session.get(ClinicModel, _uuid.UUID(str(s.clinic_id)))
+                        if c is not None:
+                            if "latitude" in body:
+                                c.latitude = _parse_coord(body.get("latitude"))
+                            if "longitude" in body:
+                                c.longitude = _parse_coord(body.get("longitude"))
+                            if "hpr_id" in body:
+                                c.hpr_id = str(body.get("hpr_id") or "").strip()
+                            if "hfr_id" in body:
+                                c.hfr_id = str(body.get("hfr_id") or "").strip()
+                    except Exception:
+                        pass
 
             await session.commit()
         return {"ok": True}

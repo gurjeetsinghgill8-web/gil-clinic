@@ -1443,6 +1443,29 @@
                         </div>
                     </div>
                     <div class="card" style="grid-column:1/3;">
+                        <div class="card-title">📍 Location & ABDM (Find a Doctor + NHA)</div>
+                        <p class="text-sm text-muted" style="margin:0 0 10px;">Location → "Find a Doctor" distance sorting. HPR/HFR → ABDM (NHA) registry IDs. Optional.</p>
+                        <div class="form-row-2">
+                            <div class="form-group">
+                                <label>Latitude</label>
+                                <input type="text" id="set-lat" value="{{ settings.latitude or '' }}" placeholder="e.g. 26.9124">
+                            </div>
+                            <div class="form-group">
+                                <label>Longitude</label>
+                                <input type="text" id="set-lon" value="{{ settings.longitude or '' }}" placeholder="e.g. 75.7873">
+                            </div>
+                            <div class="form-group">
+                                <label>HPR ID (Doctor Registry)</label>
+                                <input type="text" id="set-hpr" value="{{ settings.hpr_id or '' }}" placeholder="ABDM HPR ID">
+                            </div>
+                            <div class="form-group">
+                                <label>HFR ID (Facility Registry)</label>
+                                <input type="text" id="set-hfr" value="{{ settings.hfr_id or '' }}" placeholder="ABDM HFR ID">
+                            </div>
+                        </div>
+                        <button type="button" class="btn btn-sm btn-ghost" onclick="getSettingsLocation()" style="margin-top:4px;">📍 Use my current location</button>
+                    </div>
+                    <div class="card" style="grid-column:1/3;">
                         <div class="card-title">🤖 AI Provider — Who Pays for AI?</div>
                         <div class="form-row-2">
                             <div class="form-group">
@@ -3795,6 +3818,19 @@ function storeLocalByokKeys(data) {
     } catch (e) {}
 }
 
+function getSettingsLocation() {
+    if (!navigator.geolocation) { showToast('Geolocation not supported', 'error'); return; }
+    navigator.geolocation.getCurrentPosition(
+        pos => {
+            document.getElementById('set-lat').value = pos.coords.latitude.toFixed(6);
+            document.getElementById('set-lon').value = pos.coords.longitude.toFixed(6);
+            showToast('📍 Location captured — Save dabayein');
+        },
+        () => showToast('Location permission denied', 'error'),
+        { timeout: 6000 }
+    );
+}
+
 function saveSettings() {
     const data = {
         clinic_name: document.getElementById('set-clinic-name').value.trim(),
@@ -3806,6 +3842,10 @@ function saveSettings() {
         doc_email: document.getElementById('set-email').value.trim(),
         doc_phone: document.getElementById('set-phone').value.trim(),
         clinic_address: document.getElementById('set-address').value.trim(),
+        latitude: document.getElementById('set-lat').value.trim(),
+        longitude: document.getElementById('set-lon').value.trim(),
+        hpr_id: document.getElementById('set-hpr').value.trim(),
+        hfr_id: document.getElementById('set-hfr').value.trim(),
         wa_reception: document.getElementById('set-wa-reception').value.trim(),
         wa_manager: document.getElementById('set-wa-manager').value.trim(),
         wa_doctor: document.getElementById('set-wa-doctor').value.trim(),
