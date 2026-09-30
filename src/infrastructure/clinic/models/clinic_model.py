@@ -12,7 +12,7 @@ from __future__ import annotations
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import Boolean, Date, DateTime, Integer, String, Text, func
+from sqlalchemy import Boolean, Date, DateTime, Float, Integer, String, Text, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -68,6 +68,17 @@ class ClinicModel(Base):
     state: Mapped[str] = mapped_column(
         String(100), nullable=False, default=""
     )
+
+    # ── Geolocation (for "Find a Doctor" distance sort) ──────────────────────
+    # Populated from the admin onboarding form / geocoding. Null until set.
+    latitude: Mapped[float | None] = mapped_column(Float, nullable=True)
+    longitude: Mapped[float | None] = mapped_column(Float, nullable=True)
+
+    # ── ABDM registry IDs (National Health Authority) ────────────────────────
+    # HPR = Healthcare Professionals Registry (doctor) · HFR = Health Facility
+    # Registry (clinic). Empty until the facility is registered on ABDM sandbox.
+    hpr_id: Mapped[str] = mapped_column(String(50), nullable=False, default="")
+    hfr_id: Mapped[str] = mapped_column(String(50), nullable=False, default="")
 
     # ── Auth Credentials (auto-generated) ─────────────────────────────────
     clinic_username: Mapped[str] = mapped_column(

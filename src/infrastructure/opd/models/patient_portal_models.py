@@ -151,6 +151,37 @@ class PatientShareModel(Base):
         return f"<PatientShare {self.patient_id} exp={self.expires_at}>"
 
 
+class HealthCardModel(Base):
+    """Universal Health Card — portable patient summary (`/card/<uid>`).
+
+    Ek unguessable uid se patient ki poori history (vitals readings + prescriptions)
+    kisi bhi doctor ko read-only dikhai ja sakti hai. `active=0` ya expiry se revoke.
+    """
+
+    __tablename__ = "health_cards"
+    __table_args__ = (
+        Index("idx_health_cards_uid", "uid", unique=True),
+        Index("idx_health_cards_patient", "patient_id"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    clinic_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
+    uid: Mapped[str] = mapped_column(String(80), unique=True, nullable=False)
+    patient_id: Mapped[str] = mapped_column(String(30), nullable=False, index=True)
+    patient_name: Mapped[str] = mapped_column(String(200), nullable=False, default="")
+    phone: Mapped[str] = mapped_column(String(20), nullable=False, default="")
+    active: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    created_by: Mapped[str] = mapped_column(String(100), nullable=False, default="")
+    expires_at: Mapped[datetime.datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    view_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    created_at: Mapped[datetime.datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+
+    def __repr__(self) -> str:  # pragma: no cover
+        return f"<HealthCard {self.patient_id} active={self.active}>"
+
+
 class PatientRequestModel(Base):
     """(Phase 4) Patient ki appointment / follow-up request + doctor ka reply."""
 

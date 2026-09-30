@@ -165,6 +165,27 @@ from src.presentation.admin.routes.auth_routes import seed_default_admins
 # -- Marketplace (Find a Doctor — public city directory) --
 from src.presentation.marketplace.routes.marketplace_routes import router as marketplace_router
 
+# -- Universal Health Card (shareable patient summary) --
+from src.presentation.health_card.routes.health_card_routes import (
+    router as health_card_router,
+    doctor_router as health_card_doctor_router,
+)
+
+# -- ABDM compliance (NHA scaffold) --
+from src.presentation.abdm.routes.abdm_routes import (
+    router as abdm_router,
+    page_router as abdm_page_router,
+)
+
+# -- Smart Prescription Pad (print-ready Rx) --
+from src.presentation.rx_pad.routes.rx_pad_routes import router as rx_pad_router
+
+# -- External Lab Network (order → result → patient phone) --
+from src.presentation.lab_network.routes.lab_network_routes import (
+    router as lab_network_router,
+    doctor_router as lab_network_doctor_router,
+)
+
 
 # =========================================================================
 # Database Setup
@@ -225,6 +246,7 @@ from src.infrastructure.opd.models.opd_models import (  # noqa: F401
 from src.infrastructure.opd.models.ai_usage_model import AIUsageModel  # noqa: F401
 # Patient Portal tables — patient self-readings, portal links, share snapshots
 from src.infrastructure.opd.models.patient_portal_models import (  # noqa: F401
+    HealthCardModel,
     PatientPortalLinkModel,
     PatientReadingModel,
     PatientRequestModel,
@@ -243,6 +265,14 @@ from src.infrastructure.identity.models.admin_user_model import AdminUserModel  
 from src.infrastructure.clinic.models.clinic_model import ClinicModel  # noqa: F401
 # Staff PIN model — per-clinic role PINs
 from src.infrastructure.clinic.models.staff_pin_model import StaffPinModel  # noqa: F401
+# ABDM compliance models — abha_links, consent_artefacts, abdm_transactions
+from src.infrastructure.abdm.models import (  # noqa: F401
+    AbdmTransactionModel,
+    AbhaLinkModel,
+    ConsentArtefactModel,
+)
+# External lab network model — lab_orders
+from src.infrastructure.lab.models import LabOrderModel  # noqa: F401
 
 
 # =========================================================================
@@ -375,6 +405,12 @@ async def _migrate_missing_columns():
         ("opd_specialty_upgrades", "clinic_id", "VARCHAR(36)", "NULL"),
         ("opd_pending_scans", "clinic_id", "VARCHAR(36)", "NULL"),
         ("staff_users", "clinic_id", "VARCHAR(36)", "NULL"),
+        # ── Marketplace geolocation (Find a Doctor distance sort) ──
+        ("clinics", "latitude", "DOUBLE PRECISION", "NULL"),
+        ("clinics", "longitude", "DOUBLE PRECISION", "NULL"),
+        # ── ABDM registry IDs (HPR/HFR) ──
+        ("clinics", "hpr_id", "VARCHAR(50)", "''"),
+        ("clinics", "hfr_id", "VARCHAR(50)", "''"),
         # ── AI Provider upgrade (BYOK): new encrypted key columns + mode ──
         ("opd_settings", "ai_mode", "VARCHAR(20)", "'auto'"),
         ("opd_settings", "ai_model", "VARCHAR(100)", "''"),
@@ -494,6 +530,21 @@ app.include_router(admin_doctor_router)
 
 # Marketplace — Find a Doctor (public, no login)
 app.include_router(marketplace_router)
+
+# Universal Health Card (public card + doctor create endpoint)
+app.include_router(health_card_router)
+app.include_router(health_card_doctor_router)
+
+# ABDM compliance (API + status page)
+app.include_router(abdm_router)
+app.include_router(abdm_page_router)
+
+# Smart Prescription Pad
+app.include_router(rx_pad_router)
+
+# External Lab Network
+app.include_router(lab_network_router)
+app.include_router(lab_network_doctor_router)
 
 # Serve static files from experience/pwa
 pwa_static = Path(__file__).parent / "src" / "experience" / "pwa"

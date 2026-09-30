@@ -6,10 +6,12 @@ with a two-tier ranking:
     Tier 1  — partner clinics (active SaaS license)  → "LIVE QUEUE ACTIVE"
     Tier 2  — directory-only clinics (license inactive/expired) → "call directly"
 
-Endpoints:
-    GET /find-doctor                       → patient-facing HTML marketplace
-    GET /api/v1/marketplace/doctors        → JSON directory (city/specialty filters)
-    GET /api/v1/marketplace/meta           → distinct cities + specialties
+End-to-end (real data):
+    GET  /find-doctor                        → patient-facing HTML marketplace
+    GET  /api/v1/marketplace/meta            → distinct cities + specialties
+    GET  /api/v1/marketplace/doctors         → directory + REAL live queue depth
+    POST /api/v1/marketplace/book            → 1-tap booking (creates a real
+                                               OPD queue entry + tracking link)
 
 This is deliberately public (no login) because finding a doctor must never
 require an account. Only safe, non-sensitive clinic fields are returned.
@@ -19,14 +21,17 @@ from __future__ import annotations
 
 import hashlib
 import logging
+import uuid
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 import sqlalchemy as sa
-from fastapi import APIRouter, Query
-from fastapi.responses import HTMLResponse
+from fastapi import APIRouter, Query, Request
+from fastapi.responses import HTMLResponse, JSONResponse
 
 from src.infrastructure.clinic.models.clinic_model import ClinicModel
+from src.infrastructure.queue.models.queue_entry_model import QueueEntryModel
 from src.shared.infrastructure.database import async_session_factory
 
 logger = logging.getLogger(__name__)
@@ -63,6 +68,9 @@ PROBLEM_TO_SPECIALTY: dict[str, str] = {
     "acidity": "Gastroenterology", "digest": "Gastroenterology",
 }
 
+# Average minutes per OPD patient — used to turn "patients ahead" into EWT.
+MINUTES_PER_PATIENT = 7
+
 
 def _detect_specialty(problem: str | None) -> str | None:
     """Map a plain-language problem to a specialty, or return None."""
@@ -75,31 +83,66 @@ def _detect_specialty(problem: str | None) -> str | None:
     return None
 
 
-# ── LIVE QUEUE SIGNAL (demo + deterministic) ───────────────────────────────
-# The real product reads live token / patients-ahead / EWT from the Queue
-# Engine (`queue_entries`). Until that data is exposed per clinic, we derive a
-# stable, deterministic estimate from the clinic id so the marketplace always
-# renders a believable live signal for partner clinics. Swap this function for
-# the real Queue Engine read when the live feed is wired up.
-def _live_signal(clinic_id: str) -> dict[str, Any]:
-    digest = hashlib.sha256(clinic_id.encode("utf-8")).digest()
-    # token currently being served (14–42)
-    serving_token = 14 + digest[0] % 29
-    # patients ahead of a hypothetical new walk-in (1–8)
-    patients_ahead = 1 + digest[1] % 8
-    # estimated wait in minutes = patients_ahead * per-patient time (5–9 min)
-    wait_minutes = patients_ahead * (5 + digest[2] % 5)
-    return {
-        "serving_token": serving_token,
-        "patients_ahead": patients_ahead,
-        "wait_minutes": wait_minutes,
-        "chamber": f"Room {1 + digest[3] % 4}",
-    }
+# ── REAL LIVE QUEUE (end-to-end) ───────────────────────────────────────────
+# Reads the actual queue_entries table: "patients ahead" = active OPD entries
+# for a clinic (not yet completed/delivered); "serving token" = the highest
+# active OPD token (the one currently being worked). No fake numbers.
+async def _queue_map(clinic_ids: list[str]) -> dict[str, dict[str, Any]]:
+    """Return {clinic_id: {patients_ahead, serving_token}} for active OPD queues."""
+    out: dict[str, dict[str, Any]] = {}
+    if not clinic_ids:
+        return out
+    try:
+        async with async_session_factory() as session:
+            rows = await session.execute(
+                sa.select(
+                    QueueEntryModel.clinic_id,
+                    sa.func.count(QueueEntryModel.id),
+                    sa.func.max(QueueEntryModel.token_number),
+                )
+                .where(
+                    QueueEntryModel.clinic_id.in_(clinic_ids),
+                    QueueEntryModel.completed_at.is_(None),
+                    QueueEntryModel.delivered_at.is_(None),
+                    QueueEntryModel.service_code == "OPD",
+                )
+                .group_by(QueueEntryModel.clinic_id)
+            )
+            for clinic_id, cnt, max_token in rows.all():
+                out[str(clinic_id)] = {
+                    "patients_ahead": int(cnt or 0),
+                    "serving_token": int(max_token or 0),
+                }
+    except Exception as e:  # pragma: no cover - defensive (older DBs)
+        logger.warning("marketplace queue map failed: %s", e)
+    return out
 
 
-def _to_public(clinic: ClinicModel, lat: float | None = None, lon: float | None = None) -> dict[str, Any]:
+def _to_public(
+    clinic: ClinicModel,
+    queue: dict[str, Any] | None,
+    lat: float | None = None,
+    lon: float | None = None,
+) -> dict[str, Any]:
     """Project a ClinicModel row into a safe, public JSON shape."""
     partner = bool(clinic.is_license_active and clinic.is_active)
+    live: dict[str, Any] | None = None
+    if partner:
+        q = queue or {}
+        ahead = int(q.get("patients_ahead") or 0)
+        serving = int(q.get("serving_token") or 0)
+        live = {
+            "serving_token": serving,
+            "patients_ahead": ahead,
+            "wait_minutes": ahead * MINUTES_PER_PATIENT,
+            "chamber": "OPD",
+            "real": True,
+        }
+
+    distance_km = None
+    if lat is not None and lon is not None and clinic.latitude is not None and clinic.longitude is not None:
+        distance_km = round(_haversine(lat, lon, float(clinic.latitude), float(clinic.longitude)), 1)
+
     return {
         "id": str(clinic.id),
         "clinic_name": clinic.clinic_name or "",
@@ -112,14 +155,21 @@ def _to_public(clinic: ClinicModel, lat: float | None = None, lon: float | None 
         "phone": (clinic.doctor_phone or "").strip(),
         "partner": partner,
         "tier": 1 if partner else 2,
-        # availability today is derived from the SaaS license (see docs: add
-        # explicit `open_time` / `close_time` columns for real availability)
         "availability": "OPEN" if partner else "DIRECTORY",
-        # live signal only for partner clinics
-        "live": _live_signal(str(clinic.id)) if partner else None,
-        # geolocation-ready; populated once clinics gain lat/long columns
-        "distance_km": None,
+        "live": live,
+        "distance_km": distance_km,
     }
+
+
+def _haversine(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    """Great-circle distance in km."""
+    import math
+
+    r = 6371.0
+    p1, p2 = math.radians(lat1), math.radians(lat2)
+    dp, dl = math.radians(lat2 - lat1), math.radians(lon2 - lon1)
+    a = math.sin(dp / 2) ** 2 + math.cos(p1) * math.cos(p2) * math.sin(dl / 2) ** 2
+    return 2 * r * math.asin(math.sqrt(a))
 
 
 @router.get("/api/v1/marketplace/meta")
@@ -165,8 +215,7 @@ async def marketplace_doctors(
     """Public doctor directory with city / specialty / plain-language filters.
 
     Ranking: partner clinics (active license) always first, then directory
-    listings. Both tiers are returned so patients can still see (and call)
-    clinics that are not yet on the live queue network.
+    listings. Live queue depth is read from the real `queue_entries` table.
     """
     resolved_specialty = _detect_specialty(problem) or specialty
 
@@ -186,7 +235,8 @@ async def marketplace_doctors(
                 ClinicModel.doctor_name.asc(),
             )
             rows = (await session.execute(stmt)).scalars().all()
-            doctors = [_to_public(c, lat, lon) for c in rows]
+            queue = await _queue_map([str(c.id) for c in rows])
+            doctors = [_to_public(c, queue.get(str(c.id)), lat, lon) for c in rows]
     except Exception as e:  # pragma: no cover - defensive
         logger.exception("marketplace doctors query failed")
         note = f"Directory temporarily unavailable ({type(e).__name__}). Please try again."
@@ -198,6 +248,163 @@ async def marketplace_doctors(
         "resolved_specialty": resolved_specialty,
         "note": note,
     }
+
+
+@router.post("/api/v1/marketplace/book")
+async def marketplace_book(request: Request):
+    """1-tap booking — creates a REAL OPD queue entry for the clinic.
+
+    Body: {clinic_id, name, phone, problem?, specialty?}
+    Returns the token number + a live tracking link the patient can open.
+    """
+    from src.infrastructure.patient.models.patient_model import PatientModel
+    from src.shared.domain.base_entity import uuid7
+
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+
+    clinic_id = str(body.get("clinic_id") or "").strip()
+    name = str(body.get("name") or "").strip()
+    phone = str(body.get("phone") or "").strip()
+    complaints = str(body.get("problem") or "").strip()
+    if not clinic_id or not name:
+        return JSONResponse({"ok": False, "error": "Clinic aur patient name chahiye."}, status_code=400)
+    if phone and len(phone) < 10:
+        return JSONResponse({"ok": False, "error": "10-digit phone number chahiye."}, status_code=400)
+
+    try:
+        clinic_uuid = uuid.UUID(clinic_id)
+    except (ValueError, AttributeError, TypeError):
+        return JSONResponse({"ok": False, "error": "Clinic nahi mila."}, status_code=404)
+
+    now = datetime.now(timezone.utc)
+    date_prefix = now.strftime("%Y%m%d")
+    phone_hash = hashlib.sha256(phone.encode()).hexdigest() if phone else ""
+
+    async with async_session_factory() as session:
+        clinic = await session.get(ClinicModel, clinic_uuid)
+        if clinic is None or not clinic.is_active:
+            return JSONResponse({"ok": False, "error": "Clinic nahi mila."}, status_code=404)
+
+        # ── patient: reuse by phone, else create ──
+        existing = None
+        if phone:
+            row = await session.execute(
+                sa.select(PatientModel).where(PatientModel.phone_hash == phone_hash)
+            )
+            existing = row.scalar_one_or_none()
+
+        if existing is not None:
+            patient_id = existing.patient_id
+            patient_uuid = str(existing.id)
+            patient_name = existing.name
+            existing.total_visits = (existing.total_visits or 0) + 1
+            existing.last_visit_at = now
+        else:
+            seq_row = await session.execute(
+                sa.select(sa.func.count(PatientModel.id)).where(
+                    PatientModel.patient_id.like(f"CQ-{date_prefix}-%")
+                )
+            )
+            seq = (seq_row.scalar() or 0) + 1
+            patient_id = f"CQ-{date_prefix}-{seq:03d}"
+            patient_uuid_obj = uuid7()
+            patient_uuid = str(patient_uuid_obj)
+            patient_name = name
+            patient = PatientModel(
+                id=patient_uuid_obj,
+                patient_id=patient_id,
+                name=name,
+                age=30,
+                gender="Not Specified",
+                date_of_birth="",
+                phone=phone,
+                phone_hash=phone_hash,
+                address="",
+                status="active",
+                total_visits=1,
+                last_visit_at=now,
+                reception_inquiry=complaints,
+                version=1,
+                created_at=now,
+                updated_at=now,
+            )
+            session.add(patient)
+
+        # ── next OPD token for this clinic's OPD queue ──
+        token_row = await session.execute(
+            sa.select(sa.func.coalesce(sa.func.max(QueueEntryModel.token_number), 0)).where(
+                QueueEntryModel.service_code == "OPD",
+                QueueEntryModel.visit_id.like(f"VIS-{date_prefix}-%"),
+            )
+        )
+        token = (token_row.scalar() or 0) + 1
+
+        visit_id = f"VIS-{date_prefix}-{uuid7().hex[:6]}"
+        entry = QueueEntryModel(
+            id=uuid7(),
+            clinic_id=str(clinic.id),
+            visit_id=visit_id,
+            patient_id=patient_id,
+            patient_uuid=patient_uuid,
+            patient_name=patient_name,
+            service_code="OPD",
+            token_number=token,
+            department="OPD",
+            room="",
+            status="WAITING",
+            priority=0,
+            display_order=0,
+            notes=complaints or "",
+            created_by="marketplace",
+            updated_by="marketplace",
+            version=1,
+            created_at=now,
+            updated_at=now,
+        )
+        session.add(entry)
+        await session.commit()
+
+        ahead_row = await session.execute(
+            sa.select(sa.func.count(QueueEntryModel.id)).where(
+                QueueEntryModel.clinic_id == str(clinic.id),
+                QueueEntryModel.completed_at.is_(None),
+                QueueEntryModel.delivered_at.is_(None),
+                QueueEntryModel.service_code == "OPD",
+                QueueEntryModel.token_number < token,
+            )
+        )
+        ahead = int(ahead_row.scalar() or 0)
+
+    # ── live tracking link (same one the clinic reception uses) ──
+    tracking_url = ""
+    try:
+        from src.presentation.staff.routes.staff_routes import make_tracking_token
+        from src.utils.public_url import public_base_url
+
+        tracking_url = f"{public_base_url(request)}/track/{make_tracking_token(patient_id)}"
+    except Exception:  # pragma: no cover
+        tracking_url = ""
+
+    return JSONResponse(
+        {
+            "ok": True,
+            "token": token,
+            "patients_ahead": ahead,
+            "wait_minutes": ahead * MINUTES_PER_PATIENT,
+            "visit_id": visit_id,
+            "patient_id": patient_id,
+            "clinic_name": clinic.clinic_name,
+            "doctor_name": clinic.doctor_name,
+            "tracking_url": tracking_url,
+            "message": (
+                f"Token #{token} booked for {patient_name} at {clinic.clinic_name}. "
+                f"{ahead} patient(s) ahead — est. {ahead * MINUTES_PER_PATIENT} min."
+            ),
+        }
+    )
 
 
 @router.get("/find-doctor", include_in_schema=False)

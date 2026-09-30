@@ -7,6 +7,18 @@
 
 ---
 
+## 📅 Update Log
+
+| Date | What shipped |
+|------|--------------|
+| **30 Sep 2026** | ✅ **GAP-01 → GAP-05 scaffold built** — `src/infrastructure/abdm/` (models: `abha_links`, `consent_artefacts`, `abdm_transactions`) + `src/presentation/abdm/routes/abdm_routes.py` (status, ABHA link, FHIR Patient/Practitioner, consent create/list/revoke, DHIS transaction log) + `clinic.hpr_id`/`hfr_id` + `/abdm` status page. **Real NHA sandbox connect ke liye sirf `ABDM_*` credentials baaki hain.** |
+| **30 Sep 2026** | ✅ Find a Doctor marketplace (live queue + booking + geolocation) + Universal Health Card `/card/{uid}` + doctor dashboard "🪪 Health Card" button. |
+| **30 Sep 2026** | ✅ **GAP-06 Smart Rx Pad** — `src/presentation/rx_pad/` + `templates/rx_pad.html`: clinic letterhead (name/degree/reg no/address) par print-ready prescription pad, WhatsApp share + print. Dashboard "📝 Letterhead Rx" button. **GAP-08 video consult** — free Jitsi meet room ("📹 Video" button). **GAP-07 note:** voice→text scribe pehle se maujood hai (🎙️ Record → `/opd/api/transcribe`). |
+| **30 Sep 2026** | ✅ **GAP-09 External Lab Network** — `src/infrastructure/lab/` (lab_orders) + `src/presentation/lab_network/`: order → send-to-lab (stub) → result submit → patient phone result view `/lab/{token}`. Dashboard "🧪 Lab Order" button + modal. |
+| **30 Sep 2026** | ✅ **Admin onboarding form wired** — `templates/admin/onboard_doctor.html` + `doctor_routes.py` ab `latitude`, `longitude` (📍 Use my location button), `hpr_id`, `hfr_id` capture karta hai. Ab Find-a-Doctor distance sorting aur ABDM registry IDs UI se populate hote hain. |
+
+---
+
 ## 📚 Source Competitors (researched)
 
 | Competitor | Product type | Their highlighted features |
