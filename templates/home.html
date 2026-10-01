@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#0f172a">
+<meta name="description" content="GIL CLINIC — India ka AI-powered Smart Hospital Operating System. Live queue, digital prescriptions, universal health card.">
+<title>GIL CLINIC — Smart Hospital Operating System</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700;14..32,800;14..32,900&display=swap');
+  *{margin:0;padding:0;box-sizing:border-box}
+  :root{
+    --ink:#0f172a; --muted:#94a3b8; --line:rgba(255,255,255,.10);
+    --brand:#667eea; --brand2:#764ba2; --green:#22c55e; --amber:#fbbf24;
+    --grad:linear-gradient(135deg,#667eea,#764ba2);
+  }
+  body{font-family:'Inter',system-ui,sans-serif;background:#0b1120;color:#e2e8f0;-webkit-font-smoothing:antialiased;overflow-x:hidden}
+  a{text-decoration:none;color:inherit}
+
+  /* ── Nav ── */
+  nav{position:sticky;top:0;z-index:50;display:flex;align-items:center;justify-content:space-between;
+      padding:14px 22px;background:rgba(11,17,32,.82);backdrop-filter:blur(12px);border-bottom:1px solid var(--line)}
+  .brand{display:flex;align-items:center;gap:10px;font-weight:900;font-size:15px;letter-spacing:.2px}
+  .brand .logo{width:34px;height:34px;border-radius:10px;background:var(--grad);display:flex;align-items:center;justify-content:center;font-size:18px}
+  .nav-links{display:flex;align-items:center;gap:8px}
+  .nav-links a{font-size:13.5px;font-weight:600;color:var(--muted);padding:8px 12px;border-radius:9px;transition:.15s}
+  .nav-links a:hover{color:#fff;background:rgba(255,255,255,.06)}
+  .nav-links a.cta{background:var(--grad);color:#fff;box-shadow:0 6px 18px rgba(102,126,234,.35)}
+  @media(max-width:640px){ .nav-links a.hide-sm{display:none} }
+
+  /* ── Hero ── */
+  .hero{position:relative;padding:64px 22px 52px;text-align:center;overflow:hidden}
+  .hero::before{content:"";position:absolute;inset:-40% 20% 40% 20%;background:radial-gradient(ellipse at 50% 0%,rgba(102,126,234,.30),transparent 62%);pointer-events:none}
+  .hero-inner{position:relative;max-width:840px;margin:0 auto}
+  .pill{display:inline-flex;align-items:center;gap:8px;font-size:12px;font-weight:800;letter-spacing:.6px;text-transform:uppercase;
+        background:rgba(34,197,94,.13);color:#4ade80;border:1px solid rgba(34,197,94,.3);padding:6px 14px;border-radius:999px}
+  h1{font-size:clamp(30px,6.2vw,54px);font-weight:900;letter-spacing:-1.6px;line-height:1.06;margin:20px 0 14px;color:#f8fafc}
+  h1 .g{background:var(--grad);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+  .lede{font-size:clamp(15px,2.3vw,18px);color:var(--muted);max-width:620px;margin:0 auto;line-height:1.6}
+  .cta-row{display:flex;flex-wrap:wrap;gap:12px;justify-content:center;margin-top:30px}
+  .btn{display:inline-flex;align-items:center;gap:9px;padding:15px 26px;border-radius:13px;font-size:15px;font-weight:800;transition:.16s}
+  .btn:active{transform:scale(.98)}
+  .btn-primary{background:var(--grad);color:#fff;box-shadow:0 12px 34px rgba(102,126,234,.4)}
+  .btn-primary:hover{transform:translateY(-2px);box-shadow:0 16px 40px rgba(102,126,234,.5)}
+  .btn-ghost{background:rgba(255,255,255,.06);color:#e2e8f0;border:1px solid var(--line)}
+  .btn-ghost:hover{background:rgba(255,255,255,.11)}
+
+  /* ── Live stats ── */
+  .stats{display:flex;flex-wrap:wrap;gap:14px;justify-content:center;margin:38px auto 0;max-width:680px}
+  .stat{flex:1 1 130px;background:rgba(255,255,255,.04);border:1px solid var(--line);border-radius:15px;padding:16px 12px}
+  .stat .n{font-size:28px;font-weight:900;background:var(--grad);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+  .stat .l{font-size:11.5px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.5px;margin-top:3px}
+
+  /* ── Sections ── */
+  section{max-width:1060px;margin:0 auto;padding:56px 22px}
+  .sec-head{text-align:center;margin-bottom:34px}
+  .sec-head h2{font-size:clamp(22px,4vw,32px);font-weight:900;letter-spacing:-.8px;color:#f8fafc}
+  .sec-head p{color:var(--muted);font-size:15px;margin-top:8px}
+
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:15px}
+  .card{background:rgba(255,255,255,.035);border:1px solid var(--line);border-radius:17px;padding:20px;transition:.18s}
+  .card:hover{background:rgba(255,255,255,.06);transform:translateY(-3px);border-color:rgba(102,126,234,.4)}
+  .card .ic{font-size:26px;margin-bottom:11px}
+  .card h3{font-size:15.5px;font-weight:800;color:#f1f5f9;margin-bottom:8px}
+  .card ul{list-style:none;display:flex;flex-direction:column;gap:6px}
+  .card li{font-size:13px;color:#cbd5e1;line-height:1.5;padding-left:16px;position:relative}
+  .card li::before{content:"•";position:absolute;left:2px;color:var(--brand);font-weight:900}
+  .card li b{color:#fff;font-weight:700}
+
+  /* ── Difference ── */
+  .diff{display:grid;grid-template-columns:1fr 1fr;gap:15px;max-width:820px;margin:0 auto}
+  @media(max-width:640px){ .diff{grid-template-columns:1fr} }
+  .diff-box{border-radius:17px;padding:22px;border:1px solid var(--line)}
+  .diff-box.old{background:rgba(239,68,68,.07);border-color:rgba(239,68,68,.25)}
+  .diff-box.new{background:rgba(34,197,94,.08);border-color:rgba(34,197,94,.3)}
+  .diff-box h3{font-size:15px;font-weight:900;margin-bottom:10px}
+  .diff-box.old h3{color:#f87171} .diff-box.new h3{color:#4ade80}
+  .diff-box p{font-size:13.5px;color:#cbd5e1;line-height:1.65}
+
+  /* ── Quick links ── */
+  .links{display:flex;flex-wrap:wrap;gap:12px;justify-content:center}
+  .link-card{background:rgba(255,255,255,.04);border:1px solid var(--line);border-radius:14px;padding:16px 20px;min-width:180px;transition:.16s}
+  .link-card:hover{background:rgba(255,255,255,.09);transform:translateY(-2px)}
+  .link-card .t{font-size:14px;font-weight:800;color:#f1f5f9}
+  .link-card .s{font-size:11.5px;color:var(--muted);margin-top:3px}
+
+  footer{border-top:1px solid var(--line);padding:30px 22px 40px;text-align:center;color:#64748b;font-size:12.5px;line-height:1.8}
+  footer a{color:#94a3b8;font-weight:600}
+  footer a:hover{color:#e2e8f0}
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="brand"><span class="logo">🏥</span> GIL CLINIC</div>
+  <div class="nav-links">
+    <a href="#features" class="hide-sm">Features</a>
+    <a href="#difference" class="hide-sm">Why GHOS</a>
+    <a href="/login" class="hide-sm">Staff Login</a>
+    <a href="/find-doctor" class="cta">🩺 Find a Doctor</a>
+  </div>
+</nav>
+
+<div class="hero">
+  <div class="hero-inner">
+    <span class="pill">🟢 Live on production</span>
+    <h1>India ka <span class="g">Smart Hospital</span><br>Operating System</h1>
+    <p class="lede">
+      <b>“Uber for Healthcare”</b> — patient ko queue mein intezaar nahi, doctor ko paperwork nahi.
+      Live queue, digital prescriptions, universal health card aur ABDM-ready compliance — sab ek platform mein.
+    </p>
+    <div class="cta-row">
+      <a href="/find-doctor" class="btn btn-primary">🩺 Find a Doctor — Live Demo</a>
+      <a href="/opd/dashboard" class="btn btn-ghost">🔐 Doctor Cockpit</a>
+    </div>
+
+    <div class="stats">
+      <div class="stat"><div class="n">{{ doctors }}</div><div class="l">Doctors</div></div>
+      <div class="stat"><div class="n">{{ cities }}</div><div class="l">Cities</div></div>
+      <div class="stat"><div class="n">{{ specialties }}</div><div class="l">Specialties</div></div>
+      <div class="stat"><div class="n">15s</div><div class="l">Prescription</div></div>
+    </div>
+  </div>
+</div>
+
+<section id="features">
+  <div class="sec-head">
+    <h2>Poora Hospital, Ek Platform Mein</h2>
+    <p>Patient se doctor, reception se billing — sab connected.</p>
+  </div>
+
+  <div class="grid">
+    <div class="card">
+      <div class="ic">🧑‍🤝‍🧑</div>
+      <h3>Patient ke liye</h3>
+      <ul>
+        <li><b>Find a Doctor</b> — city + specialty + apni bhasha mein problem</li>
+        <li><b>Live queue</b> — “Token #14 andar, 3 aage, 18 min”</li>
+        <li><b>1-tap booking</b> — asli queue mein entry</li>
+        <li><b>Universal Health Card</b> — ek link, poori history</li>
+        <li>Zero app download — WhatsApp link se khulta hai</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <div class="ic">👨‍⚕️</div>
+      <h3>Doctor ke liye</h3>
+      <ul>
+        <li><b>Live cockpit</b> — waiting queue + wait time</li>
+        <li><b>AI prescription</b> — 15 second mein</li>
+        <li><b>50,000+ Drug Bank</b> — auto-fill dose/timing</li>
+        <li><b>Smart Rx Pad</b> — apne letterhead par print-ready</li>
+        <li><b>500ms quick-lookup</b> — mobile daalo, history turant</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <div class="ic">🚶</div>
+      <h3>Reception / Staff</h3>
+      <ul>
+        <li><b>30-second registration</b></li>
+        <li>Auto token + department routing</li>
+        <li>Patient ko WhatsApp tracking link</li>
+        <li>Full queue ek nazar mein</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <div class="ic">🔬</div>
+      <h3>Clinical modules</h3>
+      <ul>
+        <li>OPD · Lab · Pharmacy</li>
+        <li>ECG · Echo · TMT · X-Ray · Ultrasound</li>
+        <li><b>Multi-department auto-dispatch</b> — ECG likha → patient khud ECG queue mein</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <div class="ic">💰</div>
+      <h3>Business &amp; Admin</h3>
+      <ul>
+        <li>Billing + GST + Invoice PDF</li>
+        <li>Inventory · Purchase · Vendor</li>
+        <li>HR · Payroll · Attendance</li>
+        <li>Analytics — revenue, patient flow</li>
+        <li><b>Multi-clinic SaaS</b> — 30 sec mein naya doctor onboard</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <div class="ic">🇮🇳</div>
+      <h3>Compliance (ABDM / NHA)</h3>
+      <ul>
+        <li><b>ABHA</b> health ID integration</li>
+        <li><b>HPR / HFR</b> registry</li>
+        <li><b>FHIR R4</b> data standard</li>
+        <li>Consent Manager + DPDP ready</li>
+        <li>💰 <b>DHIS</b> — government incentive tracking</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <div class="ic">🤖</div>
+      <h3>AI features</h3>
+      <ul>
+        <li>AI Voice Receptionist</li>
+        <li>AI Triage — symptom se department</li>
+        <li>AI Follow-up reminders</li>
+        <li>AI Report Explainer</li>
+        <li>🎙️ Voice-to-Text — bolkar likhwaye</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <div class="ic">🛡️</div>
+      <h3>Security &amp; Reliability</h3>
+      <ul>
+        <li>Data encryption + audit log</li>
+        <li>Auto daily backup</li>
+        <li>Role-based access</li>
+        <li><b>Offline-first</b> — internet band ho to bhi chalti rahe</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<section id="difference">
+  <div class="sec-head">
+    <h2>Sabse Bada Difference</h2>
+    <p>Booking app aur live queue — zameen aasman ka farak.</p>
+  </div>
+  <div class="diff">
+    <div class="diff-box old">
+      <h3>❌ Booking apps (Practo type)</h3>
+      <p>Naam + time slot dete hain. 4 PM ka appointment, 5:30 PM tak waiting room.
+      <b>Appointment ek jhooth hai</b> — naya case 20 min leta hai, follow-up 6 min.</p>
+    </div>
+    <div class="diff-box new">
+      <h3>🟢 GHOS — Live Queue</h3>
+      <p>“3 patients aage hain, ~18 minute, <b>abhi niklo</b>.”
+      Ghar baithe wait karo, turn par WhatsApp alert.
+      <b>Booking app = intezaar. GHOS = zero waiting.</b></p>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="sec-head"><h2>Khud Try Karo</h2></div>
+  <div class="links">
+    <a href="/find-doctor" class="link-card"><div class="t">🩺 Find a Doctor</div><div class="s">Patient marketplace</div></a>
+    <a href="/opd/dashboard" class="link-card"><div class="t">🔐 Doctor Cockpit</div><div class="s">Live OPD dashboard</div></a>
+    <a href="/abdm" class="link-card"><div class="t">🇮🇳 ABDM Status</div><div class="s">Compliance dashboard</div></a>
+    <a href="/presentation" class="link-card"><div class="t">📑 Presentation</div><div class="s">32-slide master deck</div></a>
+    <a href="/manual" class="link-card"><div class="t">📖 User Manual</div><div class="s">Operations guide</div></a>
+    <a href="/health" class="link-card"><div class="t">📊 System Status</div><div class="s">Build &amp; uptime</div></a>
+  </div>
+</section>
+
+<footer>
+  <b style="color:#cbd5e1">GIL CLINIC — Gill Hospital OS</b><br>
+  “One Patient. One Journey. One Platform.”<br>
+  <a href="/login">Staff Login</a> · <a href="/find-doctor">Find a Doctor</a> · <a href="/abdm">ABDM</a> · <a href="/health">Status</a>
+</footer>
+
+</body>
+</html>

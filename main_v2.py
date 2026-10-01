@@ -572,12 +572,54 @@ if _dash_static.exists():
 
 @app.get("/", include_in_schema=False)
 async def root():
-    """Landing page — Super Admin or Clinic Login."""
+    """Public landing / demo page (friend/client ko bhejne ke liye)."""
+    return HTMLResponse(content=await _render_home())
+
+
+@app.get("/login", include_in_schema=False)
+@app.get("/portal", include_in_schema=False)
+async def staff_login_page():
+    """Staff login — Super Admin or Clinic Login."""
     return HTMLResponse(content=_render_landing())
 
 
+async def _render_home() -> str:
+    """Public demo landing page — live stats (doctors/cities/specialties) ke saath."""
+    import jinja2
+    import sqlalchemy as sa
+
+    from src.infrastructure.clinic.models.clinic_model import ClinicModel
+    from src.shared.infrastructure.database import async_session_factory
+
+    stats = {"doctors": 0, "cities": 0, "specialties": 0}
+    try:
+        async with async_session_factory() as session:
+            active = ClinicModel.is_active == True  # noqa: E712
+            stats["doctors"] = int(
+                (await session.execute(
+                    sa.select(sa.func.count()).select_from(ClinicModel).where(active)
+                )).scalar() or 0
+            )
+            stats["cities"] = int(
+                (await session.execute(
+                    sa.select(sa.func.count(sa.distinct(ClinicModel.city))).where(active)
+                )).scalar() or 0
+            )
+            stats["specialties"] = int(
+                (await session.execute(
+                    sa.select(sa.func.count(sa.distinct(ClinicModel.specialty))).where(active)
+                )).scalar() or 0
+            )
+    except Exception as e:  # pragma: no cover - stats are cosmetic
+        print(f"[GHOS] home stats skipped: {e}")
+
+    _loader = jinja2.FileSystemLoader(str(Path(__file__).parent / "templates"))
+    _env = jinja2.Environment(loader=_loader, auto_reload=True)
+    return _env.get_template("home.html").render(**stats)
+
+
 def _render_landing() -> str:
-    """Render the 2-button landing page."""
+    """Render the staff login page (buttons)."""
     import jinja2
     _loader = jinja2.FileSystemLoader(str(Path(__file__).parent / "templates"))
     _env = jinja2.Environment(loader=_loader, auto_reload=True)
