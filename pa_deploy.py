@@ -376,6 +376,7 @@ def cmd_ship(args):
     )
     skipped = 0
     ok_count = 0
+    failed = []
     for f in files:
         path = os.path.join(BASE_DIR, f)
         if not os.path.isfile(path):
@@ -389,11 +390,28 @@ def cmd_ship(args):
             continue
         with open(path, "rb") as fh:
             data = fh.read()
-        r = api("POST", V0 + "/files/path/home/%s/gil-clinic/" % USERNAME + f, files={"content": data})
-        if r.ok:
+        # Retry + pacing: PythonAnywhere API transient 5xx / rate-limits par
+        # ek file ke fail hone se poora ship crash na ho.
+        r = None
+        for attempt in range(4):
+            try:
+                r = api("POST", V0 + "/files/path/home/%s/gil-clinic/" % USERNAME + f, files={"content": data})
+            except Exception as e:
+                print("   %s -> EXC %s (try %d)" % (f, type(e).__name__, attempt + 1))
+                r = None
+            if r is not None and r.ok:
+                break
+            time.sleep(2 + attempt * 2)
+        if r is not None and r.ok:
             ok_count += 1
-        print("   %s -> %s" % (f, r.status_code))
-    print("   uploaded: %d, skipped: %d" % (ok_count, skipped))
+            print("   %s -> %s" % (f, r.status_code))
+        else:
+            failed.append(f)
+            print("   %s -> FAIL (%s)" % (f, getattr(r, "status_code", "exc")))
+        time.sleep(0.4)
+    print("   uploaded: %d, skipped: %d, failed: %d" % (ok_count, skipped, len(failed)))
+    if failed:
+        print("   FAILED FILES: %s" % ", ".join(failed))
 
     # ── BUILD STAMP ──────────────────────────────────────────────────────
     # Har ship par ek naya build_info.json banta + upload hota hai. Isse live

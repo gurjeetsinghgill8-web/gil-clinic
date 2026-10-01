@@ -18,7 +18,7 @@ India ka apna AI-powered clinic operating system —
 *patient ko queue mein intezaar nahi, doctor ko paperwork nahi.*
 
 🔗 *Live demo dekho:*
-https://gillhopitalsoftware1.pythonanywhere.com/find-doctor
+https://gillhopitalsoftware1.pythonanywhere.com/
 
 ━━━━━━━━━━━━━━
 ⚡ *Kya khaas hai (3 cheezein):*
@@ -47,7 +47,8 @@ Baaki sab neeche detail mein likha hai 👇
 🏥 *GIL CLINIC — Smart Hospital Operating System*
 _"One Patient. One Journey. One Platform."_
 
-🔗 *LIVE DEMO:* https://gillhopitalsoftware1.pythonanywhere.com/find-doctor
+🌐 *DEMO PAGE:* https://gillhopitalsoftware1.pythonanywhere.com/
+🩺 *FIND A DOCTOR:* https://gillhopitalsoftware1.pythonanywhere.com/find-doctor
 🔐 *DOCTOR COCKPIT:* https://gillhopitalsoftware1.pythonanywhere.com/opd/dashboard
 🇮🇳 *ABDM STATUS:* https://gillhopitalsoftware1.pythonanywhere.com/abdm
 
