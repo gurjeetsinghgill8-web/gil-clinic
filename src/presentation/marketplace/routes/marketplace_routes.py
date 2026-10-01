@@ -71,6 +71,29 @@ PROBLEM_TO_SPECIALTY: dict[str, str] = {
 # Average minutes per OPD patient — used to turn "patients ahead" into EWT.
 MINUTES_PER_PATIENT = 7
 
+# ── Demo clinics (marketplace ko turant "alive" dikhane ke liye) ─────────────
+# Idempotent seed — clinic_code se dedupe. Admin panel se edit/delete kar sakte hain.
+DEMO_CLINICS = [
+    ("DEMO-001", "Gill Heart & Multispeciality Clinic", "G.S. Gill", "MD, DM (Cardiology)",
+     "Cardiology", "Jodhpur", "Rajasthan", 26.2389, 73.0243, "9829012345"),
+    ("DEMO-002", "Sharma Family Clinic", "Anita Sharma", "MBBS, MD (Medicine)",
+     "General Physician", "Jodhpur", "Rajasthan", 26.2700, 73.0200, "9829023456"),
+    ("DEMO-003", "Gupta Ortho & Joint Care", "Ramesh Gupta", "MS (Orthopedics)",
+     "Orthopedics", "Jaipur", "Rajasthan", 26.9124, 75.7873, "9829034567"),
+    ("DEMO-004", "Verma Child Care", "Priya Verma", "MD (Pediatrics)",
+     "Pediatrics", "Jaipur", "Rajasthan", 26.9100, 75.7900, "9829045678"),
+    ("DEMO-005", "Mehta Skin & Hair Clinic", "Arjun Mehta", "MD (Dermatology)",
+     "Dermatology", "Ahmedabad", "Gujarat", 23.0225, 72.5714, "9829056789"),
+    ("DEMO-006", "Rao Women's Wellness", "Sunita Rao", "MS (Gynecology)",
+     "Gynecology", "Ahmedabad", "Gujarat", 23.0300, 72.5800, "9829067890"),
+    ("DEMO-007", "Patel General Clinic", "Karan Patel", "MBBS, MD",
+     "General Physician", "Delhi", "Delhi", 28.6139, 77.2090, "9829078901"),
+    ("DEMO-008", "Singh Cardiac Centre", "Neha Singh", "MD, DM (Cardiology)",
+     "Cardiology", "Delhi", "Delhi", 28.6200, 77.2100, "9829089012"),
+]
+
+SEED_TOKEN = "GIL-DEMO-SEED-2026"
+
 
 def _detect_specialty(problem: str | None) -> str | None:
     """Map a plain-language problem to a specialty, or return None."""
@@ -405,6 +428,48 @@ async def marketplace_book(request: Request):
             ),
         }
     )
+
+
+@router.post("/seed", include_in_schema=False)
+async def seed_demo_clinics(token: str = Query("")):
+    """One-time demo clinics seed — idempotent (clinic_code se dedupe).
+
+    Token-gated: `POST /api/v1/marketplace/seed?token=GIL-DEMO-SEED-2026`
+    Demo clinics admin panel se edit/delete kar sakte hain.
+    """
+    if token != SEED_TOKEN:
+        return JSONResponse({"ok": False, "error": "Unauthorized"}, status_code=401)
+    created = 0
+    skipped = 0
+    async with async_session_factory() as session:
+        for code, cname, dname, degree, spec, city, state, lat, lon, phone in DEMO_CLINICS:
+            row = await session.execute(
+                sa.select(ClinicModel).where(ClinicModel.clinic_code == code)
+            )
+            if row.scalar_one_or_none() is not None:
+                skipped += 1
+                continue
+            session.add(
+                ClinicModel(
+                    clinic_name=cname,
+                    clinic_code=code,
+                    doctor_name=dname,
+                    doctor_degree=degree,
+                    doctor_phone=phone,
+                    specialty=spec,
+                    city=city,
+                    state=state,
+                    address=f"{city}, {state}",
+                    latitude=lat,
+                    longitude=lon,
+                    is_license_active=True,
+                    is_active=True,
+                    created_by="demo_seed",
+                )
+            )
+            created += 1
+        await session.commit()
+    return JSONResponse({"ok": True, "created": created, "skipped": skipped})
 
 
 @router.get("/find-doctor", include_in_schema=False)
