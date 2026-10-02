@@ -1,0 +1,938 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="theme-color" content="#2c3e50">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <title>{{CLINIC_NAME}} — Doctor Workspace</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            background: #f0f2f5;
+            min-height: 100vh;
+            color: #2c3e50;
+        }
+
+        /* ── Header ──────────────────────────────────────────── */
+        .header {
+            background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%);
+            color: white;
+            padding: 16px 20px 18px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .header h1 { font-size: 20px; font-weight: 700; }
+        .header .sub { font-size: 13px; opacity: 0.7; margin-top: 2px; }
+        .header .clock { font-size: 14px; opacity: 0.8; font-weight: 600; }
+
+        /* ── Stats Row ───────────────────────────────────────── */
+        .stats-row {
+            display: flex;
+            gap: 8px;
+            padding: 0 16px;
+            margin-top: -14px;
+        }
+        .stat-card {
+            flex: 1;
+            background: white;
+            border-radius: 14px;
+            padding: 12px 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+            text-align: center;
+        }
+        .stat-card .num { font-size: 24px; font-weight: 800; }
+        .stat-card .label { font-size: 10px; color: #888; text-transform: uppercase; letter-spacing: 0.3px; margin-top: 1px; }
+        .stat-card.consult .num { color: #3498db; }
+        .stat-card.pending .num { color: #e67e22; }
+        .stat-card.ready .num { color: #2ecc71; }
+        .stat-card.total .num { color: #2c3e50; }
+
+        /* ── Tab Bar ─────────────────────────────────────────── */
+        .tab-bar {
+            display: flex;
+            margin: 12px 16px 0;
+            background: white;
+            border-radius: 12px;
+            padding: 4px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+        }
+        .tab-btn {
+            flex: 1;
+            padding: 10px 6px;
+            border: none;
+            border-radius: 10px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            background: transparent;
+            color: #888;
+            white-space: nowrap;
+        }
+        .tab-btn.active { background: #2c3e50; color: white; }
+        .tab-btn .badge {
+            display: inline-block;
+            font-size: 10px;
+            padding: 1px 6px;
+            border-radius: 8px;
+            margin-left: 3px;
+            font-weight: 700;
+        }
+        .tab-btn .badge.orange { background: #e67e22; color: white; }
+        .tab-btn .badge.blue { background: #3498db; color: white; }
+        .tab-btn .badge.green { background: #2ecc71; color: white; }
+        .tab-btn.active .badge { background: rgba(255,255,255,0.3); }
+
+        /* ── Content Area ────────────────────────────────────── */
+        .content-area { padding: 12px 16px 80px; }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+
+        /* ── Visit Cards ─────────────────────────────────────── */
+        .visit-card {
+            background: white;
+            border-radius: 14px;
+            padding: 16px;
+            margin-bottom: 10px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+            cursor: pointer;
+            transition: all 0.2s;
+            border-left: 4px solid #bdc3c7;
+        }
+        .visit-card:active { transform: scale(0.98); }
+        .visit-card.has-called { border-left-color: #3498db; }
+        .visit-card.completed-status { border-left-color: #e67e22; }
+        .visit-card.ready-status { border-left-color: #2ecc71; }
+
+        .visit-card .top-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+        }
+        .visit-card .name { font-size: 17px; font-weight: 700; }
+        .visit-card .meta { font-size: 12px; color: #888; margin-top: 1px; }
+        .visit-card .token-badge {
+            background: #2c3e50;
+            color: white;
+            font-size: 18px;
+            font-weight: 800;
+            padding: 3px 12px;
+            border-radius: 10px;
+            min-width: 40px;
+            text-align: center;
+        }
+        .visit-card .tests-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 4px;
+            margin-top: 8px;
+        }
+        .visit-card .test-tag {
+            font-size: 11px;
+            padding: 2px 8px;
+            border-radius: 6px;
+            background: #f0f2f5;
+            color: #555;
+        }
+        .visit-card .test-tag.done { background: #e8f5e9; color: #2e7d32; }
+        .visit-card .test-tag.waiting { background: #fff3e0; color: #e65100; }
+        .visit-card .test-tag.called { background: #e3f2fd; color: #1565c0; }
+        .visit-card .test-tag.active { background: #fce4ec; color: #c62828; }
+
+        .visit-card .time-info {
+            font-size: 11px;
+            color: #999;
+            margin-top: 6px;
+        }
+        .visit-card .alert-msg {
+            font-size: 12px;
+            color: #e74c3c;
+            margin-top: 6px;
+            padding: 6px 10px;
+            background: #fdf2f2;
+            border-radius: 8px;
+        }
+        .visit-card .quick-actions {
+            display: flex;
+            gap: 6px;
+            margin-top: 10px;
+            padding-top: 10px;
+            border-top: 1px solid #f0f2f5;
+        }
+        .visit-card .quick-btn {
+            flex: 1;
+            padding: 8px;
+            border: none;
+            border-radius: 8px;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            text-align: center;
+            transition: all 0.15s;
+        }
+        .quick-btn:active { transform: scale(0.96); }
+        .quick-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+        .quick-btn.green { background: #2ecc71; color: white; }
+        .quick-btn.blue { background: #3498db; color: white; }
+        .quick-btn.orange { background: #e67e22; color: white; }
+        .quick-btn.purple { background: #9b59b6; color: white; }
+        .quick-btn.red { background: #e74c3c; color: white; }
+        .quick-btn.grey { background: #95a5a6; color: white; }
+        .quick-btn.loading {
+            position: relative;
+            color: transparent !important;
+        }
+        .quick-btn.loading::after {
+            content: '';
+            position: absolute;
+            width: 16px; height: 16px;
+            top: 50%; left: 50%;
+            margin: -8px 0 0 -8px;
+            border: 3px solid rgba(255,255,255,0.3);
+            border-top-color: white;
+            border-radius: 50%;
+            animation: spin 0.6s linear infinite;
+        }
+
+        /* ── Modal (Patient Detail) ──────────────────────────── */
+        .modal-overlay {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.5);
+            z-index: 100;
+            display: none;
+            justify-content: center;
+            align-items: flex-end;
+            padding: 0;
+        }
+        .modal-overlay.show { display: flex; }
+
+        .modal-box {
+            background: white;
+            border-radius: 20px 20px 0 0;
+            padding: 24px 20px;
+            max-width: 520px;
+            width: 100%;
+            max-height: 88vh;
+            overflow-y: auto;
+            animation: slideUp 0.25s ease-out;
+        }
+        @keyframes slideUp {
+            from { transform: translateY(100%); }
+            to { transform: translateY(0); }
+        }
+
+        .modal-box .close-btn {
+            display: block;
+            width: 100%;
+            padding: 12px;
+            border: none;
+            border-radius: 12px;
+            background: #f0f2f5;
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+            margin-top: 16px;
+        }
+
+        .modal-box .section {
+            margin-bottom: 16px;
+        }
+        .modal-box .section-title {
+            font-size: 13px;
+            font-weight: 700;
+            color: #888;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 8px;
+        }
+        .modal-box .patient-name {
+            font-size: 22px;
+            font-weight: 800;
+        }
+        .modal-box .patient-id {
+            font-size: 13px;
+            color: #888;
+            margin-top: 2px;
+        }
+        .modal-box .info-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 6px;
+        }
+        .modal-box .info-item {
+            padding: 8px 10px;
+            background: #f8f9fa;
+            border-radius: 8px;
+        }
+        .modal-box .info-item .ilabel {
+            font-size: 10px;
+            color: #888;
+            text-transform: uppercase;
+        }
+        .modal-box .info-item .ivalue {
+            font-size: 14px;
+            font-weight: 600;
+            margin-top: 1px;
+        }
+        .modal-box .history-item {
+            font-size: 13px;
+            padding: 4px 0;
+            border-bottom: 1px solid #f0f2f5;
+        }
+        .modal-box .history-item .active-dot {
+            display: inline-block;
+            width: 8px; height: 8px;
+            border-radius: 50%;
+            margin-right: 6px;
+        }
+        .modal-box .history-item .active-dot.yes { background: #2ecc71; }
+        .modal-box .history-item .active-dot.no { background: #95a5a6; }
+
+        /* ── Timeline ─────────────────────────────────────────── */
+        .timeline {
+            position: relative;
+            padding-left: 20px;
+        }
+        .timeline::before {
+            content: '';
+            position: absolute;
+            left: 6px; top: 4px; bottom: 4px;
+            width: 2px;
+            background: #e0e0e0;
+        }
+        .tl-item {
+            position: relative;
+            padding: 0 0 10px 12px;
+            font-size: 13px;
+        }
+        .tl-item::before {
+            content: '';
+            position: absolute;
+            left: -17px; top: 4px;
+            width: 10px; height: 10px;
+            border-radius: 50%;
+            background: #ddd;
+        }
+        .tl-item.done::before { background: #2ecc71; }
+        .tl-item.current::before { background: #3498db; box-shadow: 0 0 6px #3498db; }
+        .tl-item .tl-label { font-weight: 600; }
+        .tl-item .tl-time { color: #888; font-size: 11px; }
+
+        /* ── Tests List ───────────────────────────────────────── */
+        .test-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 10px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            margin-bottom: 4px;
+        }
+        .test-item .tname { font-weight: 600; font-size: 14px; }
+        .test-item .tstatus { font-size: 12px; }
+        .test-item .tstatus.done { color: #2ecc71; }
+        .test-item .tstatus.waiting { color: #e67e22; }
+        .test-item .tstatus.called { color: #3498db; }
+
+        /* ── Notes Textarea ──────────────────────────────────── */
+        .notes-textarea {
+            width: 100%;
+            min-height: 80px;
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 10px;
+            font-size: 14px;
+            font-family: inherit;
+            resize: vertical;
+            transition: border-color 0.2s;
+        }
+        .notes-textarea:focus { outline: none; border-color: #2c3e50; }
+
+        /* ── Modal Actions ───────────────────────────────────── */
+        .modal-actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-top: 12px;
+        }
+        .modal-actions .ma-btn {
+            flex: 1;
+            min-width: 100px;
+            padding: 12px;
+            border: none;
+            border-radius: 10px;
+            font-size: 14px;
+            font-weight: 700;
+            cursor: pointer;
+            text-align: center;
+            transition: all 0.15s;
+        }
+        .ma-btn:active { transform: scale(0.97); }
+        .ma-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+        .ma-btn.loading {
+            position: relative;
+            color: transparent !important;
+        }
+        .ma-btn.loading::after {
+            content: '';
+            position: absolute;
+            width: 20px; height: 20px;
+            top: 50%; left: 50%;
+            margin: -10px 0 0 -10px;
+            border: 3px solid rgba(255,255,255,0.3);
+            border-top-color: white;
+            border-radius: 50%;
+            animation: spin 0.6s linear infinite;
+        }
+
+        /* ── Loading / Empty / Footer ────────────────────────── */
+        .loading-state {
+            text-align: center;
+            padding: 60px 0;
+            color: #888;
+        }
+        .loading-state .spinner {
+            width: 40px; height: 40px;
+            border: 4px solid #e0e0e0;
+            border-top-color: #2c3e50;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            margin: 0 auto 12px;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        .empty-state {
+            text-align: center;
+            padding: 40px 20px;
+            color: #bbb;
+        }
+        .empty-state .icon { font-size: 48px; margin-bottom: 6px; }
+        .empty-state .text { font-size: 15px; }
+
+        .footer {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            text-align: center;
+            padding: 10px;
+            font-size: 11px;
+            color: #bbb;
+            background: #f0f2f5;
+            border-top: 1px solid #e0e0e0;
+        }
+
+        /* ── Toast ───────────────────────────────────────────── */
+        .toast {
+            position: fixed;
+            bottom: 60px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #2c3e50;
+            color: white;
+            padding: 12px 24px;
+            border-radius: 12px;
+            font-size: 14px;
+            font-weight: 600;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+            opacity: 0;
+            transition: opacity 0.3s;
+            z-index: 200;
+            pointer-events: none;
+            max-width: 90%;
+            text-align: center;
+        }
+        .toast.show { opacity: 1; }
+        .toast.error { background: #e74c3c; }
+
+        /* ── Responsive ──────────────────────────────────────── */
+        @media (max-width: 480px) {
+            .stat-card .num { font-size: 20px; }
+            .stat-card .label { font-size: 9px; }
+            .tab-btn { font-size: 12px; padding: 8px 4px; }
+            .header h1 { font-size: 17px; }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- ═══ HEADER ═══ -->
+    <div class="header">
+        <div>
+            <h1>👨‍⚕️ {{CLINIC_NAME}} — Doctor</h1>
+            <div class="sub">Patient Consultation &amp; Report Review</div>
+        </div>
+        <div class="clock" id="liveClock"></div>
+    </div>
+
+    <!-- ═══ STATS ═══ -->
+    <div class="stats-row">
+        <div class="stat-card consult">
+            <div class="num" id="statConsult">--</div>
+            <div class="label">To See</div>
+        </div>
+        <div class="stat-card pending">
+            <div class="num" id="statPending">--</div>
+            <div class="label">Pending Review</div>
+        </div>
+        <div class="stat-card ready">
+            <div class="num" id="statReady">--</div>
+            <div class="label">To Deliver</div>
+        </div>
+        <div class="stat-card total">
+            <div class="num" id="statTotal">--</div>
+            <div class="label">Total</div>
+        </div>
+    </div>
+
+    <!-- ═══ TABS ═══ -->
+    <div class="tab-bar">
+        <button class="tab-btn active" onclick="switchTab('consult')">
+            🏥 To See <span class="badge blue" id="badgeConsult">0</span>
+        </button>
+        <button class="tab-btn" onclick="switchTab('review')">
+            📋 Review <span class="badge orange" id="badgeReview">0</span>
+        </button>
+        <button class="tab-btn" onclick="switchTab('deliver')">
+            ✅ Deliver <span class="badge green" id="badgeDeliver">0</span>
+        </button>
+    </div>
+
+    <!-- ═══ CONTENT ═══ -->
+    <div class="content-area" id="contentArea">
+        <div class="loading-state">
+            <div class="spinner"></div>
+            <div>Loading workspace...</div>
+        </div>
+    </div>
+
+    <!-- ═══ MODAL ═══ -->
+    <div class="modal-overlay" id="modalOverlay" onclick="closeModal(event)">
+        <div class="modal-box" id="modalBox"></div>
+    </div>
+
+    <!-- ═══ TOAST ═══ -->
+    <div class="toast" id="toast"></div>
+
+    <!-- ═══ FOOTER ═══ -->
+    <div class="footer" id="footerInfo">Loading...</div>
+
+    <script>
+        // ────────────────────────────────────────────────────────────
+        // Config
+        // ────────────────────────────────────────────────────────────
+        const API_BASE = '/api/v1/queue';
+        const REFRESH_SECONDS = 10;
+        let data = null;
+        let currentTab = 'consult';
+        let refreshInterval = null;
+
+        // ────────────────────────────────────────────────────────────
+        // Clock
+        // ────────────────────────────────────────────────────────────
+        function updateClock() {
+            const now = new Date();
+            document.getElementById('liveClock').textContent =
+                now.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true });
+        }
+        setInterval(updateClock, 10000);
+        updateClock();
+
+        // ────────────────────────────────────────────────────────────
+        // Toast
+        // ────────────────────────────────────────────────────────────
+        function showToast(msg, isError) {
+            const t = document.getElementById('toast');
+            t.textContent = msg;
+            t.className = 'toast' + (isError ? ' error' : '');
+            setTimeout(() => t.classList.add('show'), 10);
+            setTimeout(() => t.classList.remove('show'), 3000);
+        }
+
+        // ────────────────────────────────────────────────────────────
+        // Tab Switching
+        // ────────────────────────────────────────────────────────────
+        function switchTab(tab) {
+            currentTab = tab;
+            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+            const idx = { consult: 0, review: 1, deliver: 2 }[tab];
+            document.querySelectorAll('.tab-btn')[idx].classList.add('active');
+            renderCurrentTab();
+        }
+
+        // ────────────────────────────────────────────────────────────
+        // API Calls
+        // ────────────────────────────────────────────────────────────
+        async function fetchWorkspace() {
+            try {
+                const resp = await fetch(`${API_BASE}/doctor-workspace?limit=100`);
+                if (!resp.ok) { showToast('Failed to load workspace', true); return null; }
+                return resp.json();
+            } catch (e) {
+                showToast('Network error', true);
+                return null;
+            }
+        }
+
+        async function doAction(entryId, action, btn, reason) {
+            if (btn) { btn.disabled = true; btn.classList.add('loading'); }
+            try {
+                const body = { entry_id: entryId, action: action, updated_by: 'doctor' };
+                if (reason) body.reason = reason;
+
+                const resp = await fetch(`${API_BASE}/action`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body),
+                });
+                const result = await resp.json();
+                if (resp.ok) {
+                    showToast('✅ ' + (result.message || 'Done!'));
+                    closeModal(null);
+                    setTimeout(loadWorkspace, 800);
+                } else {
+                    showToast('❌ ' + (result.detail || 'Action failed'), true);
+                }
+            } catch (e) {
+                showToast('❌ Network error', true);
+            } finally {
+                if (btn) { btn.disabled = false; btn.classList.remove('loading'); }
+            }
+        }
+
+        async function saveNotes(entryId, notes, btn) {
+            try {
+                const resp = await fetch(`${API_BASE}/notes`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ entry_id: entryId, notes: notes }),
+                });
+                if (resp.ok) {
+                    showToast('✅ Notes saved');
+                    if (btn) btn.textContent = 'Saved ✓';
+                } else {
+                    showToast('❌ Failed to save notes', true);
+                }
+            } catch (e) {
+                showToast('❌ Network error saving notes', true);
+            }
+        }
+
+        // ────────────────────────────────────────────────────────────
+        // Modal
+        // ────────────────────────────────────────────────────────────
+        function closeModal(e) {
+            if (e && e.target !== document.getElementById('modalOverlay')) return;
+            document.getElementById('modalOverlay').classList.remove('show');
+        }
+
+        function openVisitModal(visit) {
+            const overlay = document.getElementById('modalOverlay');
+            const box = document.getElementById('modalBox');
+            const ageGender = [visit.age, visit.gender ? visit.gender.charAt(0).toUpperCase() : '']
+                .filter(Boolean).join('/') || '--';
+            const phone = visit.phone || '--';
+            const blood = visit.blood_group || '--';
+
+            // Timeline
+            let timelineHtml = '';
+            const steps = [
+                { label: 'Registered', time: visit.created_at, done: true },
+                { label: 'Called', time: visit.called_at, done: !!visit.called_at },
+                { label: 'In Progress', time: visit.started_at, done: !!visit.started_at },
+                { label: 'Completed', time: visit.completed_at, done: !!visit.completed_at },
+                { label: 'Report Ready', time: visit.report_ready_at, done: !!visit.report_ready_at },
+            ];
+            let lastDone = -1;
+            steps.forEach((s, i) => { if (s.done) lastDone = i; });
+            steps.forEach((s, i) => {
+                const cls = i < lastDone ? 'done' : i === lastDone ? 'current' : '';
+                const timeStr = s.time ? new Date(s.time).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }) : '--';
+                timelineHtml += `<div class="tl-item ${cls}"><span class="tl-label">${s.label}</span><span class="tl-time"> ${timeStr}</span></div>`;
+            });
+
+            // Tests in this visit
+            let testsHtml = '';
+            const tests = visit.tests || [];
+            if (tests.length === 0) {
+                testsHtml = `<div class="test-item"><span class="tname">${visit.service_name}</span><span class="tstatus ${visit.status === 'COMPLETED' ? 'done' : visit.status === 'WAITING' ? 'waiting' : 'called'}">${visit.status_display}</span></div>`;
+            } else {
+                tests.forEach(t => {
+                    const cls = t.status === 'COMPLETED' || t.status === 'REPORT_READY' ? 'done' : t.status === 'WAITING' ? 'waiting' : 'called';
+                    testsHtml += `<div class="test-item"><span class="tname">${t.service_name}</span><span class="tstatus ${cls}">${t.status_display}</span></div>`;
+                });
+            }
+
+            // Medical history
+            let historyHtml = '';
+            (visit.medical_history || []).forEach(h => {
+                historyHtml += `<div class="history-item"><span class="active-dot ${h.is_active ? 'yes' : 'no'}"></span>${h.condition}</div>`;
+            });
+            if (!historyHtml) historyHtml = '<div style="color:#bbb;font-size:13px;">No medical history recorded</div>';
+
+            // Alert message (rejection reason)
+            let alertHtml = '';
+            if (visit.alert_message) {
+                alertHtml = `<div style="padding:8px 12px;background:#fdf2f2;border-radius:8px;font-size:13px;color:#e74c3c;margin-bottom:12px;">⚠️ ${visit.alert_message}</div>`;
+            }
+
+            // Actions
+            const actionsHtml = buildModalActions(visit);
+
+            box.innerHTML = `
+                ${alertHtml}
+                <div class="section">
+                    <div class="patient-name">${visit.patient_name}</div>
+                    <div class="patient-id">${visit.patient_id} · Token #${visit.token_number}</div>
+                </div>
+
+                <div class="section">
+                    <div class="section-title">Patient Info</div>
+                    <div class="info-grid">
+                        <div class="info-item"><div class="ilabel">Age / Gender</div><div class="ivalue">${ageGender}</div></div>
+                        <div class="info-item"><div class="ilabel">Phone</div><div class="ivalue">${phone}</div></div>
+                        <div class="info-item"><div class="ilabel">Blood Group</div><div class="ivalue">${blood}</div></div>
+                        <div class="info-item"><div class="ilabel">Department</div><div class="ivalue">${visit.room || visit.department}</div></div>
+                    </div>
+                </div>
+
+                <div class="section">
+                    <div class="section-title">Medical History</div>
+                    ${historyHtml}
+                </div>
+
+                <div class="section">
+                    <div class="section-title">Tests in this Visit</div>
+                    ${testsHtml}
+                </div>
+
+                <div class="section">
+                    <div class="section-title">Timeline</div>
+                    <div class="timeline">${timelineHtml}</div>
+                </div>
+
+                <div class="section">
+                    <div class="section-title">Clinical Notes</div>
+                    <textarea class="notes-textarea" id="notesInput" placeholder="Enter consultation notes...">${visit.notes || ''}</textarea>
+                    <button class="quick-btn blue" style="margin-top:6px;padding:6px 12px;font-size:12px;" onclick="saveNotes('${visit.id}', document.getElementById('notesInput').value, this)">💾 Save Notes</button>
+                </div>
+
+                <div class="section">
+                    <div class="section-title">Actions</div>
+                    <div class="modal-actions">${actionsHtml}</div>
+                </div>
+
+                <button class="close-btn" onclick="document.getElementById('modalOverlay').classList.remove('show')">Close</button>
+            `;
+
+            overlay.classList.add('show');
+        }
+
+        function buildModalActions(visit) {
+            // Determine context from the first test's status
+            const tests = visit.tests || [];
+            const statuses = tests.map(t => t.status);
+            const hasWaiting = statuses.includes('WAITING');
+            const hasCalled = statuses.includes('CALLED');
+            const hasCompleted = statuses.includes('COMPLETED');
+            const hasAllComplete = statuses.every(s => s === 'COMPLETED');
+            const hasReportReady = statuses.includes('REPORT_READY');
+            const hasAllReportReady = statuses.every(s => s === 'REPORT_READY');
+
+            let btns = '';
+
+            if (hasWaiting || hasCalled) {
+                // Consultation queue
+                if (hasWaiting) {
+                    btns += `<button class="ma-btn" style="background:#3498db;color:white;" onclick="doAction('${visit.id}', 'call', this)">📞 Call Patient</button>`;
+                }
+                if (hasCalled) {
+                    btns += `<button class="ma-btn" style="background:#2ecc71;color:white;" onclick="doAction('${visit.id}', 'start', this)">▶️ Start Consultation</button>`;
+                }
+            }
+
+            if (hasCompleted && !hasAllComplete) {
+                // Mixed: some waiting, some completed — approve individual or all
+                btns += `<button class="ma-btn" style="background:#e67e22;color:white;" onclick="doAction('${visit.id}', 'report-ready', this)">📄 Approve Reports</button>`;
+            }
+
+            if (hasAllComplete && !hasReportReady) {
+                // All tests completed, pending review
+                btns += `<button class="ma-btn" style="background:#e67e22;color:white;" onclick="doAction('${visit.id}', 'report-ready', this)">📄 Approve All Reports</button>`;
+                btns += `<button class="ma-btn" style="background:#e74c3c;color:white;" onclick="rejectWithReason('${visit.id}')">🔄 Reject</button>`;
+            }
+
+            if (hasReportReady && !hasAllReportReady) {
+                btns += `<button class="ma-btn" style="background:#e67e22;color:white;" onclick="doAction('${visit.id}', 'report-ready', this)">📄 Approve Remaining</button>`;
+            }
+
+            if (hasAllReportReady) {
+                btns += `<button class="ma-btn" style="background:#2ecc71;color:white;" onclick="doAction('${visit.id}', 'deliver', this)">📋 Deliver Report</button>`;
+            }
+
+            if (!btns) {
+                btns = '<div style="color:#bbb;font-size:13px;">No actions available</div>';
+            }
+
+            if (hasWaiting || hasCalled) {
+                btns += `<button class="ma-btn" style="background:#95a5a6;color:white;" onclick="doAction('${visit.id}', 'cancel', this)">❌ Cancel</button>`;
+            }
+
+            return btns;
+        }
+
+        function rejectWithReason(entryId) {
+            const reason = prompt('Rejection reason (visible to technician):');
+            if (reason !== null) {
+                doAction(entryId, 'reject', null, reason || 'Needs correction');
+            }
+        }
+
+        // ────────────────────────────────────────────────────────────
+        // Render
+        // ────────────────────────────────────────────────────────────
+        function renderCurrentTab() {
+            if (!data) return;
+            const container = document.getElementById('contentArea');
+
+            let list = [];
+            let emptyMsg = '';
+
+            if (currentTab === 'consult') {
+                list = data.consultation_queue || [];
+                emptyMsg = '🏥 No patients waiting for consultation';
+            } else if (currentTab === 'review') {
+                list = data.pending_review || [];
+                emptyMsg = '📋 No reports pending review';
+            } else {
+                list = data.ready_for_delivery || [];
+                emptyMsg = '✅ No reports ready for delivery';
+            }
+
+            if (list.length === 0) {
+                container.innerHTML = `<div class="empty-state"><div class="icon">✨</div><div class="text">${emptyMsg}</div></div>`;
+                return;
+            }
+
+            let html = '';
+            list.forEach(v => {
+                const ageGender = [v.age, v.gender ? v.gender.charAt(0).toUpperCase() : '']
+                    .filter(Boolean).join('/') || '--';
+                const elapsed = v.elapsed_minutes != null
+                    ? (v.elapsed_minutes < 60 ? `${v.elapsed_minutes}m` : `${Math.floor(v.elapsed_minutes/60)}h ${v.elapsed_minutes%60}m`)
+                    : '--';
+
+                // Determine card style
+                let cardClass = 'visit-card';
+                const testStatuses = (v.tests || []).map(t => t.status);
+                if (testStatuses.includes('CALLED')) cardClass += ' has-called';
+                else if (testStatuses.includes('COMPLETED')) cardClass += ' completed-status';
+                else if (testStatuses.includes('REPORT_READY')) cardClass += ' ready-status';
+
+                // Test tags
+                let testTags = '';
+                (v.tests || []).forEach(t => {
+                    const cls = t.status === 'COMPLETED' || t.status === 'REPORT_READY' || t.status === 'DELIVERED' ? 'done'
+                        : t.status === 'CALLED' ? 'called' : t.status === 'IN_PROGRESS' ? 'active' : 'waiting';
+                    testTags += `<span class="test-tag ${cls}">${t.service_name}</span>`;
+                });
+                if (!testTags) {
+                    testTags = `<span class="test-tag ${v.status === 'COMPLETED' ? 'done' : 'waiting'}">${v.service_name}</span>`;
+                }
+
+                // Quick actions
+                const qActions = buildQuickActions(v);
+
+                // Alert message
+                const alertMsg = v.alert_message
+                    ? `<div class="alert-msg">⚠️ ${v.alert_message}</div>` : '';
+
+                html += `
+                    <div class="${cardClass}" onclick="openVisitModal(${JSON.stringify(v).replace(/'/g, "\\'").replace(/"/g, '&quot;')})">
+                        <div class="top-row">
+                            <div>
+                                <div class="name">${v.patient_name}</div>
+                                <div class="meta">${v.patient_id} · ${ageGender}</div>
+                            </div>
+                            <div class="token-badge">#${v.token_number}</div>
+                        </div>
+                        <div class="tests-row">${testTags}</div>
+                        <div class="time-info">⏱ ${elapsed} ago · ${v.room || v.department}</div>
+                        ${alertMsg}
+                        <div class="quick-actions" onclick="event.stopPropagation()">
+                            ${qActions}
+                        </div>
+                    </div>`;
+            });
+
+            container.innerHTML = html;
+        }
+
+        function buildQuickActions(visit) {
+            const tests = visit.tests || [];
+            const statuses = tests.map(t => t.status);
+            const hasWaiting = statuses.includes('WAITING');
+            const hasCalled = statuses.includes('CALLED');
+            const hasAllComplete = statuses.length > 0 && statuses.every(s => s === 'COMPLETED');
+            const hasAllReportReady = statuses.length > 0 && statuses.every(s => s === 'REPORT_READY');
+
+            let btns = '';
+
+            if (hasWaiting) {
+                btns += `<button class="quick-btn blue" onclick="doAction('${visit.id}', 'call', this)">📞 Call</button>`;
+            } else if (hasCalled) {
+                btns += `<button class="quick-btn green" onclick="doAction('${visit.id}', 'start', this)">▶️ Start</button>`;
+            }
+
+            if (hasAllComplete) {
+                btns += `<button class="quick-btn orange" onclick="doAction('${visit.id}', 'report-ready', this)">📄 Approve</button>`;
+                btns += `<button class="quick-btn red" onclick="event.stopPropagation();rejectWithReason('${visit.id}')">🔄 Reject</button>`;
+            }
+
+            if (hasAllReportReady) {
+                btns += `<button class="quick-btn green" onclick="doAction('${visit.id}', 'deliver', this)">📋 Deliver</button>`;
+            }
+
+            return btns || `<span style="color:#bbb;font-size:12px;">Tap to view details</span>`;
+        }
+
+        function renderStats(stats) {
+            document.getElementById('statConsult').textContent = stats.consultation;
+            document.getElementById('statPending').textContent = stats.pending_review;
+            document.getElementById('statReady').textContent = stats.ready_for_delivery;
+            document.getElementById('statTotal').textContent = stats.total;
+            document.getElementById('badgeConsult').textContent = stats.consultation;
+            document.getElementById('badgeReview').textContent = stats.pending_review;
+            document.getElementById('badgeDeliver').textContent = stats.ready_for_delivery;
+        }
+
+        // ────────────────────────────────────────────────────────────
+        // Load
+        // ────────────────────────────────────────────────────────────
+        async function loadWorkspace() {
+            const result = await fetchWorkspace();
+            if (result) {
+                data = result;
+                renderStats(result.stats);
+                renderCurrentTab();
+                document.getElementById('footerInfo').textContent =
+                    `Updated: ${new Date().toLocaleTimeString('en-IN', { hour12: false })} · Refresh: ${REFRESH_SECONDS}s`;
+            }
+        }
+
+        // ────────────────────────────────────────────────────────────
+        // Start
+        // ────────────────────────────────────────────────────────────
+        function start() {
+            loadWorkspace();
+            refreshInterval = setInterval(loadWorkspace, REFRESH_SECONDS * 1000);
+        }
+
+        start();
+    </script>
+</body>
+</html>

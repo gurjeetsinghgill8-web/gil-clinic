@@ -1,540 +1,969 @@
-# GLOBAL CLINIC SEARCH, MULTI-FACTOR RANKING & DYNAMIC WAITING TIME ENGINE
-## Enterprise Architecture & Technical Specification Blueprint v4.0
+# 🌐 GLOBAL CLINIC SEARCH & QUEUE ENGINE — Master Architecture Blueprint
 
-**System Identification:** GHOS-MARKETPLACE-CORE  
-**Target Environment:** Cloud-Distributed Healthcare Operating System  
-**Compliance Standard:** ABDM (Ayushman Bharat Digital Mission), DISHA, HL7-FHIR, HIPAA-equivalent Zero-Trust  
-**Design Principle:** Deterministic Latency, Zero Hall Clutter, Mobile-First Ride-Hailing Queue Dispatch
+> **Owner:** Gurjas Singh Gill (Dr. G. S. Gill)
+> **Product:** GHOS — GIL CLINIC (`gillhopitalsoftware1.pythonanywhere.com`)
+> **Version:** **1.1** · **Date:** 02 Oct 2026
+> **One-liner:** *"Practo ek directory dikhata hai. GHOS ek ZINDA queue dikhata hai."*
+> **Mantra:** 🟢 **Live queue > khaali appointment slot.**
+
+> **Ye file kya hai:** poore "Global Clinic Search + Queue Engine" module ka **master architecture blueprint**.
+> **Part A** Search · **Part B** Queue Engine · **Part C** Bridge · **Part D** Real-world edge cases ·
+> **Part E** Module 6 (external doctor data ingestion).
+>
+> **Har section me saaf likha hai:** ✅ kya ban chuka · 📐 kya banana hai · 📁 kis file me.
+
+### 📝 Changelog
+
+| Ver | Kya badla |
+|-----|-----------|
+| 1.0 | Part A/B/C + data model + build order |
+| **1.1** | ➕ **Part D** — 9 real-world edge cases (doctor late arrival, token skip/HOLD, no-cron alert, multi-doctor collision) · ➕ **Part E** — Module 6 Crawl4AI ingestion (PA-free-safe architecture) · 🐞 **BUG-01** booking token counter · ✅ status vocabulary corrected (`IN_PROGRESS`, not `IN_CONSULT`) |
 
 ---
 
-# MODULE 1: GLOBAL CLINIC SEARCH ENGINE ARCHITECTURE
-
-## 1.1 Architectural Overview
-
-The Global Clinic Search engine serves as a distributed, location-aware query broker designed to resolve medical discovery queries across tier-1, tier-2, and tier-3 cities (e.g., Delhi NCR, Jodhpur, Ahmedabad, Jaipur, Mumbai). It bridges real-time clinic telemetries (live OPD chamber status) with static directory listings.
+## 0. TL;DR — 30 second me poora module
 
 ```
-                            [ PATIENT SEARCH QUERY ]
-           (City / Geolocation + Specialty / Natural Language Symptom)
-                                       │
-                                       ▼
-                       ┌───────────────────────────────┐
-                       │    API Gateway & Geocoder     │
-                       │   (Reverse IP / GPS Lat-Long) │
-                       └───────────────┬───────────────┘
-                                       │
-                    ┌──────────────────┴──────────────────┐
-                    ▼                                     ▼
-        ┌───────────────────────┐             ┌───────────────────────┐
-        │  Geographic Filter    │             │   Specialty / NLP     │
-        │  • H3 Geohash (Res 7) │             │   • Medical Taxonomy  │
-        │  • Haversine Distance │             │   • Symptom Vectorize │
-        │  • Municipal Boundary │             │   • Urgency Classifier│
-        └───────────┬───────────┘             └───────────┬───────────┘
-                    └──────────────────┬──────────────────┘
-                                       │
-                                       ▼
-                       ┌───────────────────────────────┐
-                       │   Candidate Matching Broker   │
-                       └───────────────┬───────────────┘
-                                       │
-                 ┌─────────────────────┴─────────────────────┐
-                 ▼                                           ▼
-   ┌───────────────────────────┐               ┌───────────────────────────┐
-   │ TIER-1: PARTNER CLINICS   │               │ TIER-2: EXTERNAL CLINICS  │
-   │ (GHOS SaaS Live Telemetry)│               │ (Unverified Directory)    │
-   ├───────────────────────────┤               ├───────────────────────────┤
-   │ • Live Room Sensor Active │               │ • Standard Address / Phone│
-   │ • Dynamic Wait Time (EWT) │               │ • Call-to-Book Only       │
-   │ • Instant Digital Token   │               │ • Referral Gateway Link   │
-   │ • 100% Top Priority Sort  │               │ • Static Timings          │
-   └─────────────┬─────────────┘               └─────────────┬─────────────┘
-                 └─────────────────────┬─────────────────────┘
-                                       │
-                                       ▼
-                       ┌───────────────────────────────┐
-                       │  Multi-Factor Ranking Engine  │
-                       │   (Score Calculation & Sort)  │
-                       └───────────────┬───────────────┘
-                                       │
-                                       ▼
-                       ┌───────────────────────────────┐
-                       │   Decorated JSON Response     │
-                       │  (Custom Badges & Live Status)│
-                       └───────────────────────────────┘
+Patient phone par search karta hai  →  zinda queue dikhti hai  →  1 tap booking  →  token  →
+"3 patient bache, ab niklo"  →  doctor ke screen par live  →  consult  →  Health Card share  →  naya patient
 ```
 
----
-
-## 1.2 Multi-Layer Geographic & Specialty Filtering Logic
-
-### 1. Geographic Filtering Pipeline
-1. **Stage 1 (City Clamping)**: If user explicitly selects a city (e.g., "Delhi"), the query is bounded by the official administrative GeoJSON boundary polygon of that municipal territory.
-2. **Stage 2 (Spatial Indexing via Uber H3)**: When GPS coordinates are present, the patient's coordinates $(lat_p, lng_p)$ are mapped to an **H3 Hexagonal Spatial Index** at Resolution 7 (average hexagon area $\approx 5.16\text{ km}^2$, edge length $\approx 1.22\text{ km}$).
-3. **Stage 3 (Haversine Distance Filter)**:
-   $$d = 2R \cdot \arcsin\left(\sqrt{\sin^2\left(\frac{\Delta \phi}{2}\right) + \cos(\phi_1)\cos(\phi_2)\sin^2\left(\frac{\Delta \lambda}{2}\right)}\right)$$
-   Where $R = 6371\text{ km}$. Providers beyond search radius $R_{max}$ ($15\text{ km}$ default for urban, $35\text{ km}$ for rural) are filtered out unless specialty availability is zero within that boundary.
-
-### 2. Specialty & Colloquial Symptom Matching Pipeline
-- Queries are parsed through a bilingual (Hindi-English) medical entity normalizer:
-  - `"Chhati mein dard"` / `"Chest tightness"` $\rightarrow$ **Cardiology** [Severity: Critical]
-  - `"Ghutne ka dard"` / `"Knee pain"` $\rightarrow$ **Orthopedics** [Severity: Routine]
-  - `"Bache ko ulti/dast"` / `"Infant fever"` $\rightarrow$ **Pediatrics** [Severity: Urgent]
-- Canonical classification follows SNOMED-CT / ICD-10 specialty ontologies.
+| # | Layer | Kaam | Status |
+|---|-------|------|--------|
+| 1 | **Global Search** | City + specialty + "seene me dard" (plain Hindi) se doctor dhoondho | ✅ **LIVE** |
+| 2 | **Two-tier ranking** | Partner clinic (live queue) upar · baaki directory niche | ✅ **LIVE** |
+| 3 | **Live Queue Engine** | Asli `queue_entries` se token, patients-ahead, serving token | ✅ **LIVE** |
+| 4 | **1-tap Booking** | Search se seedha asli OPD token + tracking link | ✅ **LIVE** |
+| 5 | **EWT Engine** | Complexity-weighted wait time (6/15 min, delay-aware) | 📐 **BANANA HAI** |
+| 6 | **Availability + Geofence** | Open/close time, "open now", distance sort, leave-now alert | 🏷️ **PARTIAL** |
+| 7 | **Slot Booking** | `appointment_slots` + Doctor Live View slot grid | 📐 **BANANA HAI** |
+| 8 | **Edge Cases (Part D)** | Doctor late, token skip, multi-doctor, no-cron alert | 📐 **BANANA HAI** |
+| 9 | **ABDM/FHIR** | ABHA + HPR/HFR + FHIR R4 + DHIS incentive | 🏷️ **SCAFFOLD READY** |
+| 10 | **Module 6 Ingestion** | Crawl4AI se Tier-2 doctor data (GH Actions worker) | 📐 **NAYA MODULE** |
 
 ---
 
-## 1.3 Partner Priority Ingestion & Custom Sorting Tag System
+## 1. Vision — yeh module kyun hai
 
-The search broker segments results into two strict tiers, ensuring GHOS partner clinics dominate user visibility while maintaining total transparency.
+Do bilkul alag dard, ek hi engine se theek hote hain:
 
-### Partner Custom Display Tags
+**Patient ka dard** — *"4 baje ka appointment liya, 5:30 par bhi waiting room me hoon."*
+Appointment slot **jhooth** hai, kyunki wo maanta hai ki har patient 20 min lega.
+Naya case 20 min, follow-up 6 min — slot system ise ignore karta hai.
 
-| Tag Code | Display Label | Visual Badge | Business / Algorithmic Trigger |
-|---|---|---|---|
-| `TAG_PARTNER_PREMIER` | **GHOS Premier Partner** | 🥇 Gold Border + Verified Shield | Active GHOS SaaS subscription with 100% digital token compliance. |
-| `TAG_LIVE_TELEMETRY` | **Live OPD Chamber Active** | 🟢 Pulsing Green Indicator | Doctor is physically authenticated inside chamber; consultations ongoing. |
-| `TAG_INSTANT_TOKEN` | **Instant 1-Tap Booking** | ⚡ Cyan Lightning Badge | Queue is open; patient can secure live digital token with zero upfront fee. |
-| `TAG_ZERO_WAIT_VERIFIED`| **Zero-Wait Hall Verified** | ⏱️ Emerald Clock Badge | Historical average check-in to consult wait time $< 12\text{ minutes}$. |
-| `TAG_EMERGENCY_READY` | **Emergency Triage Ready** | 🚨 Crimson Heart Icon | Branch has ECG/Defibrillator and priority emergency jump protocol. |
+**Doctor ka dard** — *"Queue bahar chalti hai, andar ka pata nahi."* No-show, bheed, chaos.
 
-### External Directory Custom Tags
-
-| Tag Code | Display Label | Visual Badge | Business / Algorithmic Trigger |
-|---|---|---|---|
-| `TAG_EXTERNAL_OFFLINE` | **Unverified Offline Queue** | ⚠️ Muted Gray Warning | Non-partner clinic. No live queue telemetry. Walk-in queue required. |
-| `TAG_DIRECT_CALL_ONLY` | **Call Clinic Directly** | 📞 Slate Blue Phone Icon | Appointments cannot be booked digitally; user must call reception desk. |
-| `TAG_REFERRAL_ELIGIBLE`| **Digital Referral Route** | ↗️ Indigo Arrow Icon | Partner doctors can send electronic referral slips to this doctor. |
-
----
-
-# MODULE 2: MULTI-FACTOR DOCTOR RANKING ALGORITHM SPECIFICATION
-
-## 2.1 Composite Scoring Function
-
-To replace arbitrary pay-per-click sponsored listings with a meritocratic, efficiency-driven ranking, the system calculates a unified **Best-Match Score** $S_{\text{match}} \in [0, 100]$ for each provider $j$:
-
-$$S_{\text{match}}(j) = \Big( w_E \cdot E_j + w_R \cdot R_j + w_A \cdot A_j + w_D \cdot D_j + w_P \cdot P_j \Big) \times \Psi_{\text{cold-start}}(j)$$
-
-### Default Normalized Weights
-$$\sum w = 1.0 \quad \implies \quad w_E = 0.25, \; w_R = 0.25, \; w_A = 0.25, \; w_D = 0.15, \; w_P = 0.10$$
-
----
-
-## 2.2 Factor Definitions & Mathematical Formulations
-
-### 1. Appointment Efficiency Score ($E_j \in [0, 1]$)
-Measures the doctor's punctuality, consultation time predictability, and schedule fidelity over the last 30 operational days:
-
-$$E_j = 0.50 \cdot \Big( 1 - \min(1, \frac{|\overline{T}_{\text{actual}} - \overline{T}_{\text{slotted}}|}{\overline{T}_{\text{slotted}}}) \Big) + 0.30 \cdot \big( \text{On-Time Start Ratio} \big) + 0.20 \cdot \big( 1 - \text{No-Show Cancellation Rate} \big)$$
-
-### 2. Bayesian Patient Verified Rating Score ($R_j \in [0, 1]$)
-Prevents manipulation from doctors with only two 5-star reviews by anchoring ratings against the global specialty mean:
-
-$$R_j = \frac{v_j \cdot \overline{r}_j + m \cdot \mu_{\text{global}}}{v_j + m} \div 5.0$$
-
-Where:
-- $\overline{r}_j$: Arithmetic average of verified ratings from completed tokens for doctor $j$.
-- $v_j$: Total number of completed verified patient reviews.
-- $m$: Confidence threshold parameter (default: $m = 25$ reviews).
-- $\mu_{\text{global}}$: Mean rating of all registered doctors across the platform (default: $4.25$).
-
-### 3. Real-Time Availability Score ($A_j \in [0, 1]$)
-Gives immediate preference to providers who can see the patient right now:
-
-$$A_j = 
-\begin{cases} 
-1.00 & \text{if Doctor is in Chamber, Queue Open, and } EWT < 30\text{ min} \\
-0.75 & \text{if Doctor is in Chamber, Queue Open, and } 30\text{ min} \le EWT < 60\text{ min} \\
-0.50 & \text{if Doctor is scheduled today, starts within } 90\text{ min} \\
-0.20 & \text{if Queue is full today, next booking is tomorrow} \\
-0.05 & \text{if Offline / Unverified External Directory}
-\end{cases}$$
-
-### 4. Proximity & Travel Friction Score ($D_j \in [0, 1]$)
-Applies a Sigmoidal Distance Decay function:
-
-$$D_j = \frac{1}{1 + e^{\beta \cdot (d_j - d_{\text{mid}})}}$$
-
-Where $d_j$ is the Haversine distance in km, $d_{\text{mid}} = 8.0\text{ km}$, and $\beta = 0.35$.
-
-### 5. Partner Priority Weight ($P_j \in [0, 1]$)
-- $P_j = 1.0$ for GHOS SaaS Client Clinics (instantly yielding $+10.0$ raw score boost).
-- $P_j = 0.0$ for External Directory Clinics.
-
-### 6. Cold-Start Dampener ($\Psi_{\text{cold-start}}$)
-For doctors on-boarded within the last 14 days with $v_j < 10$:
-
-$$\Psi_{\text{cold-start}}(j) = 1.0 + 0.15 \cdot \Big( 1 - \frac{\text{Days Since Onboarding}}{14} \Big)$$
-
-This gives newly on-boarded clinics a temporary 14-day discovery lift to gather their initial 25 verified ratings.
-
----
-
-# MODULE 3: WAITING TIME ESTIMATOR (WTE) ARCHITECTURE
-
-## 3.1 Mathematical Engine: Stochastic Multi-Server Queue Model
-
-The Waiting Time Estimator (WTE) continuously calculates dynamic Estimated Waiting Time ($EWT$) for any queued patient $k$.
+**GHOS ka jawaab:** time **book** mat karo — **queue dikhao**.
 
 ```
-                       DYNAMIC EWT CALCULATION PIPELINE
-                       
- [Queue Snapshot: k Tokens Ahead]   ──┐
-                                      ├──► [ Bayesian Baseline: T_base ]
- [Historical Doctor Distribution]   ──┘           │
-                                                  ▼
- [Real-Time Velocity Monitor: V_t] ──────► [ Velocity Adjustment: T_base * V_t ]
-                                                  │
-                                                  ▼
- [Pre-Consultation Triage Multiplier: C_i] ─► [ Complexity Scale: D_hat_i ]
-                                                  │
-                                                  ▼
- [Active In-Chamber Elapsed Timer: t_el] ──► [ Residual Time: T_remaining ]
-                                                  │
-                                                  ▼
- [Parallel Diagnostic Delays: T_proc] ────► [ Summation + Surge Buffer ]
-                                                  │
-                                                  ▼
-                                      ┌───────────────────────┐
-                                      │ FINAL EWT FOR TOKEN k │
-                                      └───────────┬───────────┘
-                                                  │
-                  ┌───────────────────────────────┴───────────────────────────────┐
-                  ▼                                                               ▼
-    ┌───────────────────────────┐                                   ┌───────────────────────────┐
-    │  Mobile Patient PWA View  │                                   │    Transit Dispatch Ping  │
-    │  "Est. Wait: ~18 Minutes" │                                   │ "Leave Home Now (15m trip)│
-    │  Live Token Ticker: #14   │                                   │  Walk right into Chamber" │
-    └───────────────────────────┘                                   └───────────────────────────┘
+"Dr. G.S. Gill IN CHAMBER hai (Room 2).
+ Token #14 andar hai. Aapse 3 patient aage hain.
+ Aapka wait: ~18 minute."
 ```
 
-### The Universal EWT Prediction Equation
+Aur jab 3 patient bachein: 📲 *"Ab niklo — 15 min ka rasta, zero wait."*
 
-$$EWT(k, t) = T_{\text{residual}}(P_{\text{current}}, t) + \sum_{i=1}^{k-1} \Big( \overline{T}_{\text{base}}(doc, type_i) \times C_i \times V_t \Big) + \sum T_{\text{proc}}(i) + \delta_{\text{lag}} \cdot (k-1) + \Omega_{\text{delay}}(t)$$
+> **Yeh booking app nahi hai. Yeh OPD ka live marketplace hai — "Uber/Ola of OPD".**
 
 ---
 
-## 3.2 Dynamic Parameters & Operational Behavior
-
-### 1. In-Chamber Residual Time Calculation ($T_{\text{residual}}$)
-If patient $P_{\text{current}}$ entered the consultation room at timestamp $t_{\text{start}}$:
-
-$$t_{\text{elapsed}} = t - t_{\text{start}}$$
-$$T_{\text{residual}} = \max\left( 1.5\text{ min}, \quad \big(\hat{D}_{\text{current}} - t_{\text{elapsed}}\big) \times \exp\left(-\frac{t_{\text{elapsed}}}{2.5 \cdot \hat{D}_{\text{current}}}\right) \right)$$
-
-This exponential decay dampener prevents negative waiting times while ensuring that consultations running past their estimated duration project imminent completion rather than infinite delay.
-
-### 2. Instantaneous Velocity Ratio ($V_t$ — Dynamic Friction Factor)
-Computed over the last $N=5$ patients seen by this doctor today:
-
-$$V_t = \frac{\sum_{n=1}^{N} \text{Actual Duration}_n}{\sum_{n=1}^{N} \hat{D}_n}$$
-
-- $V_t = 1.0$: Clinic operating exactly on schedule.
-- $V_t = 1.4$: Doctor is handling complicated cases; downstream wait estimates dynamically expand by $40\%$.
-- $V_t = 0.7$: Doctor is clearing follow-ups quickly; downstream wait estimates compress by $30\%$.
-
-### 3. Patient Complexity Multipliers ($C_i$)
-Captured automatically during receptionist check-in or pre-consultation digital triage:
-- `COMPLEXITY_FIRST_VISIT` (New patient, unmapped history): $C = 1.35$
-- `COMPLEXITY_CARDIAC_SYMPTOMS` (Chest pain, shortness of breath): $C = 1.45$
-- `COMPLEXITY_FOLLOW_UP` (Routine check, medication refill): $C = 0.70$
-- `COMPLEXITY_REPORT_REVIEW` (Only ECG/Echo analysis): $C = 0.65$
-- `COMPLEXITY_GERIATRIC` (Patient age $> 75$): $C = 1.20$
-
----
-
-## 3.3 Dynamic Arrival Estimation & Mobile Dispatch ("Uber-Style")
-
-Rather than forcing patients into physical waiting rooms, the system operates a **Virtual Waiting Room** with intelligent departure alerts:
+## 2. System Map — poora module ek nazar me
 
 ```
-[PATIENT REGISTERED AT HOME]
-Token #18 | Distance: 5.4 km | Transit Time: 16 mins
-                  │
-                  ▼
-         [EWT Evaluation Loop]
-EWT = 42 mins ──► Status: "Relax at Home. You have 26 mins before departure."
-EWT = 28 mins ──► Status: "Prepare to leave. Departure in 12 mins."
-                  │
-                  ▼ (Trigger Threshold: EWT <= Transit Time + 8 mins)
-       [DEPARTURE ALERT BROADCAST]
-WhatsApp + Audio Web Push Notification:
-"🔔 Token #14 is inside. Your Token is #18.
-Traffic: 16 mins. Start travel NOW to arrive exactly at your turn."
-                  │
-                  ▼
-         [PATIENT ARRIVES]
-Geofence Arrival / Reception QR Scan ──► Marked "In Waiting Lobby"
-Wait Time in Lobby: < 5 Minutes
+┌──────────────────────────── PATIENT SIDE ────────────────────────────┐
+│  WhatsApp link ─┐                                                     │
+│  QR code ───────┼──►  /find-doctor   (templates/marketplace.html)      │
+│  Google search ─┘            │                                        │
+│                              ▼                                        │
+│                   GET /api/v1/marketplace/meta      ← city + specialty│
+│                   GET /api/v1/marketplace/doctors   ← directory+live  │
+│                              │                                        │
+│                              ▼                                        │
+│            ┌──────────── TIER 1: PARTNER CLINIC ────────────┐          │
+│            │ 🟢 LIVE QUEUE ACTIVE · token #14 · 3 ahead      │          │
+│            └────────────────────────────────────────────────┘          │
+│            ┌──────────── TIER 2: DIRECTORY ONLY ────────────┐          │
+│            │ ☎️ Call clinic · 📍 Directions · 📢 Invite       │          │
+│            └────────────────────────────────────────────────┘          │
+│                              │                                        │
+│                    POST /api/v1/marketplace/book                       │
+│                              ▼                                        │
+│              Token #17 + /track/<token>  (PWA, no install)             │
+│              📱 8s polling → Web Audio chime (cron-free alert!)        │
+└──────────────────────────────┬───────────────────────────────────────┘
+                               │
+┌──────────────────────────────▼──────── QUEUE ENGINE ──────────────────┐
+│  queue_entries  (per-clinic · per-doctor · service_code='OPD')         │
+│  WAITING → CALLED → IN_PROGRESS → COMPLETED → REPORT_READY → DELIVERED │
+│  side: HOLD (naya) · CANCELLED · NO_SHOW                               │
+│  priority score = token_number − (priority × 1000)   ← senior/emergency│
+│  chamber gate: doctor ▶ START OPD tak EWT countdown band               │
+│  delay engine: elapsed − avg_service_time → 🟡 5min / 🔴 10min         │
+│  EWT: complexity_weight × avg_service_time + live delay                │
+└──────────────────────────────┬───────────────────────────────────────┘
+                               │
+┌──────────────────────────────▼──────── DOCTOR SIDE ───────────────────┐
+│  /opd/dashboard   Live queue · Call next · ECG dispatch · Rx          │
+│  📱 Patient link · 🩺 Patient Monitor · 🪪 Health Card · 📝 Rx Pad     │
+│  🧪 Lab Order · 📹 Jitsi video · 🏥 ABDM status · ▶️ START OPD        │
+└──────────────────────────────┬───────────────────────────────────────┘
+                               │
+                    /card/<uid>  (Universal Health Card)
+                               ▼
+                 Share → naya patient → wapas Search par 🔁 (flywheel)
 ```
 
 ---
 
-# MODULE 4: TECHNICAL DATA CONTRACTS & API SPECIFICATIONS
+# PART A — GLOBAL CLINIC SEARCH
 
-## 4.1 Search API Request & Response Schema
+> **Kaam:** patient ko *apne shehar ka sahi doctor* dikhana — aur yeh bhi batana ki **abhi kitni der lagegi**.
 
-### `GET /api/v1/marketplace/search`
+## A1. Jo ban chuka hai (✅ LIVE)
 
-#### Query Parameters:
-```json
-{
-  "city": "Delhi",
-  "lat": 28.5672,
-  "lng": 77.2100,
-  "radius_km": 15,
-  "specialty": "Cardiology",
-  "query": "chest pain",
-  "tier_filter": "ALL",
-  "sort_by": "BEST_MATCH"
-}
-```
+| Cheez | File | Detail |
+|-------|------|--------|
+| Marketplace page | `templates/marketplace.html` (22 KB) | Mobile-first, city/specialty/problem filter |
+| Page route | `src/presentation/marketplace/routes/marketplace_routes.py` | `GET /find-doctor`, `GET /doctors` (alias) |
+| Meta API | same file | `GET /api/v1/marketplace/meta` → distinct cities + specialties |
+| Search API | same file | `GET /api/v1/marketplace/doctors?city=&specialty=&problem=&lat=&lon=` |
+| Booking API | same file | `POST /api/v1/marketplace/book` → asli token + tracking link |
+| Demo seed | same file | `POST /api/v1/marketplace/seed?token=GIL-DEMO-SEED-2026` (8 demo clinics, idempotent) |
+| Router wiring | `main_v2.py` line 532 | `app.include_router(marketplace_router)` |
+| Landing entry | `templates/landing.html` | Public landing page → "Find a Doctor" button |
 
-#### JSON Response Schema:
-```json
-{
-  "status": "success",
-  "timestamp": "2026-09-30T22:30:00Z",
-  "total_results": 14,
-  "partner_count": 3,
-  "results": [
-    {
-      "provider_id": "PRV-DEL-001",
-      "doctor_name": "Dr. Gurjeet Singh Gill",
-      "specialty": "Cardiology",
-      "qualifications": "MD, DM (Cardiology)",
-      "clinic_name": "GIL CLINIC — Heart & Vascular Centre",
-      "city": "Delhi",
-      "locality": "South Extension II",
-      "coordinates": { "lat": 28.5700, "lng": 77.2200 },
-      "distance_km": 2.1,
-      "tier": "TIER_1_PARTNER",
-      "ranking_score": 94.8,
-      "tags": [
-        { "code": "TAG_PARTNER_PREMIER", "label": "GHOS Premier Partner", "badge": "gold" },
-        { "code": "TAG_LIVE_TELEMETRY", "label": "Chamber Active", "badge": "green_pulse" },
-        { "code": "TAG_INSTANT_TOKEN", "label": "Instant 1-Tap Booking", "badge": "cyan" },
-        { "code": "TAG_ZERO_WAIT_VERIFIED", "label": "Zero-Wait Verified", "badge": "emerald" }
-      ],
-      "live_telemetry": {
-        "is_active": true,
-        "chamber_name": "Consultation Room 1",
-        "current_token_in_chamber": 14,
-        "next_available_token": 18,
-        "patients_waiting_count": 3,
-        "estimated_wait_minutes": 19,
-        "velocity_ratio": 1.05,
-        "booking_mode": "INSTANT_LIVE_TOKEN"
-      },
-      "verified_metrics": {
-        "rating": 4.92,
-        "total_verified_reviews": 184,
-        "on_time_start_rate": 0.96,
-        "avg_consult_duration_minutes": 14.5
-      }
-    },
-    {
-      "provider_id": "PRV-DEL-EXT-88",
-      "doctor_name": "Dr. S. K. Sharma",
-      "specialty": "Cardiology",
-      "qualifications": "MBBS, MD",
-      "clinic_name": "Sharma Heart Clinic",
-      "city": "Delhi",
-      "locality": "Lajpat Nagar IV",
-      "coordinates": { "lat": 28.5640, "lng": 77.2400 },
-      "distance_km": 3.8,
-      "tier": "TIER_2_EXTERNAL",
-      "ranking_score": 58.2,
-      "tags": [
-        { "code": "TAG_EXTERNAL_OFFLINE", "label": "Unverified Offline Queue", "badge": "gray" },
-        { "code": "TAG_DIRECT_CALL_ONLY", "label": "Call Clinic Directly", "badge": "slate" },
-        { "code": "TAG_REFERRAL_ELIGIBLE", "label": "Digital Referral Route", "badge": "indigo" }
-      ],
-      "live_telemetry": null,
-      "external_directory_info": {
-        "reception_phone": "+911129800000",
-        "consultation_timings": "10:00 AM - 01:00 PM",
-        "walk_in_notice": "Offline tokens issued at counter. Real-time waiting time unavailable.",
-        "nudge_doctor_url": "/api/v1/marketplace/nudge?provider_id=PRV-DEL-EXT-88"
-      },
-      "verified_metrics": {
-        "rating": 4.10,
-        "total_verified_reviews": 12,
-        "on_time_start_rate": null,
-        "avg_consult_duration_minutes": null
-      }
-    }
-  ]
-}
-```
+## A2. Plain-language problem → specialty (real code)
 
----
-
-## 4.2 Dynamic Waiting Time Telemetry Hook Schema
-
-### `POST /api/v1/queue/telemetry/calculate-ewt`
-
-#### Request Payload:
-```json
-{
-  "clinic_id": "GIL-DEL-01",
-  "doctor_id": "DOC-GILL-01",
-  "target_token_number": 21,
-  "patient_transit_origin": {
-    "lat": 28.5400,
-    "lng": 77.2000
-  }
-}
-```
-
-#### Response Payload:
-```json
-{
-  "status": "success",
-  "calculated_at": "2026-09-30T22:31:15Z",
-  "target_token": 21,
-  "queue_depth_ahead": 4,
-  "current_token_in_room": 16,
-  "current_token_elapsed_seconds": 490,
-  "doctor_velocity_ratio": 1.08,
-  "estimated_waiting_minutes": 31,
-  "estimated_call_timestamp": "2026-09-30T23:02:15Z",
-  "dispatch_recommendation": {
-    "estimated_transit_minutes": 17,
-    "recommended_departure_timestamp": "2026-09-30T22:42:00Z",
-    "departure_alert_scheduled": true,
-    "status": "WAIT_AT_HOME"
-  }
-}
-```
-
----
-
-# MODULE 5: RESILIENCE, FALLBACKS & COLD-START RECOVERY
-
-1. **Telemetry Feed Disconnect (Offline Edge Branch)**:  
-   If an edge branch clinic loses internet connectivity, the central search engine switches the clinic's badge from `TAG_LIVE_TELEMETRY` to `TAG_OFFLINE_CACHED_SCHEDULE`. Wait time prediction falls back to static Bayesian historic duration mode:
-   $$EWT_{\text{fallback}}(k) = k \times \overline{T}_{\text{base}}$$
-2. **Emergency Queue Suspension ("Code Blue" Protocol)**:  
-   When a doctor taps `[ EMERGENCY PAUSE: 20 MIN ]`, all connected patient tracking portals display an immediate visual banner with acoustic chime:  
-   *"Dr. Gill is attending an urgent emergency procedure. Your appointment is delayed by ~20 minutes. Updated time: 11:45 AM."*
-3. **Anti-Gaming Review Filter**:  
-   Ratings are accepted **strictly** via single-use cryptographic tokens generated upon doctor marking a token as `COMPLETED`. External unverified bot reviews are mathematically impossible.
-
----
-
-# MODULE 6: AUTONOMOUS EXTERNAL DOCTOR DATA INGESTION ENGINE (POWERED BY CRAWL4AI)
-
-## 6.1 Role of Crawl4AI in the GHOS Architecture
-Crawl4AI serves as the **Data Ingestion & Enrichment Pipeline** for Tier-2 External Clinics. Instead of hundreds of manual hours or brittle custom scrapers, Crawl4AI runs as an asynchronous worker daemon that crawls public hospital rosters, clinic websites, and medical registries, converting raw HTML into LLM-structured doctor profiles.
+`PROBLEM_TO_SPECIALTY` dict (marketplace_routes.py, line 46) — patient **Hindi** me likhta hai, hum specialty nikalte hain:
 
 ```
- ┌────────────────────────────────────────────────────────────────────────┐
- │            EXTERNAL WEB DATA SOURCES (Hospitals, Clinics, Registries)   │
- └───────────────────────────────────┬────────────────────────────────────┘
-                                     │ Raw Web Pages (JS-heavy, SPAs)
-                                     ▼
- ┌────────────────────────────────────────────────────────────────────────┐
- │                 CRAWL4AI ASYNCHRONOUS EXTRACTION WORKER                │
- │  • Headless Playwright Browser Context with Anti-Bot Bypassing        │
- │  • Heuristic HTML-to-Markdown Synthesizer (Zero Noise / No Ads)        │
- │  • Pydantic Schema-Guided LLM Extraction (Structured JSON Output)      │
- └───────────────────────────────────┬────────────────────────────────────┘
-                                     │ Validated Doctor JSON Entities
-                                     ▼
- ┌────────────────────────────────────────────────────────────────────────┐
- │           INGESTION & DEDUPLICATION BROKER (GHOS ETL SERVICE)           │
- │  • Duplicate Detection: Mobile Hash, Medical Council Registration ID   │
- │  • Geocoding Pipeline: Address to Lat-Long & H3 Hexagon Resolution 7  │
- │  • Tier-2 Tagging: Applied `TAG_EXTERNAL_OFFLINE` & `TAG_DIRECT_CALL`  │
- └───────────────────────────────────┬────────────────────────────────────┘
-                                     │ Structured Master Records
-                                     ▼
- ┌────────────────────────────────────────────────────────────────────────┐
- │        CENTRAL MARKETPLACE DATABASE (PostgreSQL / Search Index)        │
- │  • Accessible immediately by City & Specialty Search                   │
- │  • Ready for 1-Click Digital Referral & "Nudge Doctor to SaaS" Funnel  │
- └────────────────────────────────────────────────────────────────────────┘
+"seene me dard" / "dil" / "bp" / "ghabrahat"  → Cardiology
+"bukhar" / "khansi" / "sugar" / "sir dard"    → General Physician
+"ghutna" / "kamardard" / "haddi"              → Orthopedics
+"bachcha" / "baby"                            → Pediatrics
+"daant" / "kaan" / "aankh" / "twacha"         → Dental / ENT / Ophthalmology / Dermatology
+"pet" / "gas" / "acidity"                     → Gastroenterology
 ```
 
-## 6.2 Pydantic Extraction Schema (`DoctorProfileSchema`)
-Crawl4AI uses Pydantic schema validation to guarantee 100% type-safe JSON extraction without regex brittleness:
+> **Rule:** naya keyword add karna ho to **sirf yahi dict** chhedni hai — UI aur API dono apne aap sync rehte hain.
+
+## A3. Ranking algorithm (business moat)
+
+```
+STEP 1  FILTER : city (lower=) + specialty (lower=) + problem→specialty map
+STEP 2  RANK   : is_license_active DESC  (partner pehle)  →  doctor_name ASC
+STEP 3  LIVE   : partner ke liye _queue_map() se REAL numbers
+                 serving_token · patients_ahead · wait_minutes · chamber
+STEP 4  DISTANCE: lat/lon diya to haversine (km, 1 decimal)
+```
+
+| Tier | Kaun | Cost | Revenue lever |
+|------|------|------|---------------|
+| **Tier 1** | Paying GHOS clinics (active license) | ~₹0 — data queue engine me pehle se hai | Renewal + upgrade |
+| **Tier 2** | Non-network doctors (public info) | ~₹0 | **Growth loop** — patient demand unhe SaaS khareedne par majboor karti hai |
+
+> 🔁 **Flywheel:** free listing → demand data → listing paying partner banti hai → zyada live data → zyada patient.
+
+## A4. Live queue signal — asli hai, demo nahi
 
 ```python
-from pydantic import BaseModel, Field
-from typing import List, Optional
-
-class ClinicTiming(BaseModel):
-    days: str = Field(description="Operational days, e.g., 'Mon - Sat'")
-    morning_hours: Optional[str] = Field(description="Morning OPD hours, e.g., '09:00 AM - 01:00 PM'")
-    evening_hours: Optional[str] = Field(description="Evening OPD hours, e.g., '05:00 PM - 08:30 PM'")
-
-class DoctorProfileSchema(BaseModel):
-    doctor_name: str = Field(description="Full name of doctor with salutation, e.g., 'Dr. Rajesh Mehta'")
-    medical_degrees: List[str] = Field(description="Degrees, e.g., ['MBBS', 'MD', 'DM (Cardiology)']")
-    specialties: List[str] = Field(description="Clinical specialties, e.g., ['Cardiology', 'Interventional Cardiology']")
-    experience_years: Optional[int] = Field(description="Total years of clinical practice")
-    medical_council_reg_no: Optional[str] = Field(description="State/National Medical Council registration number")
-    clinic_or_hospital_name: str = Field(description="Clinic or hospital facility name")
-    full_address: str = Field(description="Complete street address including locality and landmark")
-    city: str = Field(description="City name, e.g., 'Delhi', 'Jodhpur', 'Ahmedabad'")
-    pincode: Optional[str] = Field(description="6-digit postal pincode")
-    reception_phone: Optional[str] = Field(description="Clinic reception phone or landline for appointment booking")
-    opd_consultation_fee: Optional[int] = Field(description="Approximate OPD consultation fee in INR")
-    timings: Optional[ClinicTiming] = Field(description="OPD clinic timing details")
+# marketplace_routes.py → _queue_map()
+SELECT clinic_id, COUNT(id), MAX(token_number)
+FROM queue_entries
+WHERE clinic_id IN (...) AND completed_at IS NULL AND delivered_at IS NULL
+  AND service_code = 'OPD'
+GROUP BY clinic_id
 ```
 
-## 6.3 Asynchronous Crawl4AI Python Ingestion Daemon
-The production-grade execution pattern to ingest hospital and clinic rosters:
+- `patients_ahead` = is clinic ke **asli** active OPD entries
+- `serving_token` = sabse ooncha active token (jo abhi andar hai)
+- ⚠️ **Purana `_live_signal()` demo (stable hash) hata diya gaya hai** — ab koi fake number nahi.
+- ⚠️ `MINUTES_PER_PATIENT = 7` **hardcoded** hai → yahi **Part B ka EWT Engine** replace karega.
+
+## A5. 📐 Jo Part A me banana hai
+
+| # | Kaam | Kahan | Kaise |
+|---|------|-------|-------|
+| A-1 | **Availability (Open Now)** | `ClinicModel` + `marketplace_routes.py` | `open_time`/`close_time` columns + `availability` ko `OPEN`/`CLOSED`/`DIRECTORY` banao + "🟢 Abhi khula" filter |
+| A-2 | **Rating** | `ClinicModel.rating` | Patient feedback se average (0109 analytics) — ranking me tie-breaker |
+| A-3 | **Department search** | meta API | City + specialty ke saath "Cardiology / ECG / Echo / Lab" facility filter |
+| A-4 | **City landing pages** | naya route `/doctors/<city>` | SEO — "Jodhpur me heart doctor" Google se traffic (static, cacheable) |
+| A-5 | **Tier-2 Growth Loop** | naya button + table | "📢 Is doctor ko GHOS Live Queue me invite karo" → `clinic_leads` table → Admin pipeline |
+| A-6 | **Departure Alert** | Part D · E-03 | 3 patient bache → **client-side** chime (server cron nahi chahiye) |
+
+---
+
+# PART B — QUEUE ENGINE
+
+> **Kaam:** ek token ka poora jeevan — banna, chalna, bulaya jaana, khatam hona — aur uska **sahi wait time**.
+
+## B1. Token lifecycle — **asli status vocabulary**
+
+Source of truth: `src/domain/queue/value_objects/queue_status.py` (✅ pehle se maujood)
+
+```
+WAITING  →  CALLED  →  IN_PROGRESS  →  COMPLETED  →  REPORT_READY  →  DELIVERED
+   │           │            │
+   └───────────┴────────────┴──►  CANCELLED  |  NO_SHOW   (terminal)
+
+Valid transitions (code me defined):
+  WAITING      → CALLED · CANCELLED · NO_SHOW
+  CALLED       → IN_PROGRESS · WAITING · CANCELLED · NO_SHOW
+  IN_PROGRESS  → COMPLETED · CANCELLED
+  COMPLETED    → REPORT_READY · IN_PROGRESS
+  REPORT_READY → DELIVERED
+```
+
+| Icon | Status | Matlab |
+|------|--------|--------|
+| 🟡 | `WAITING` | Line me khada hai |
+| 🔵 | `CALLED` | Naam pukara gaya (`called_at`) |
+| 🟠 | `IN_PROGRESS` | Andar hai (`started_at`) |
+| ✅ | `COMPLETED` | Consult khatam (`completed_at`) |
+| 📋 | `REPORT_READY` | Report taiyar |
+| 📄 | `DELIVERED` | Report mil gaya — queue se bahar (`delivered_at`) |
+| ❌🚫 | `CANCELLED` / `NO_SHOW` | Terminal — band |
+
+> ⚠️ **Correction (v1.0 → v1.1):** pehle is blueprint me `IN_CONSULT` likha tha — **galat**.
+> Asli naam **`IN_PROGRESS`** hai. Aur **`HOLD` abhi maujood NAHI hai** → Part D · E-02 me banana hai.
+
+## B2. Priority Engine (Code Red / Senior / Emergency)
+
+Do jagah maujood hai:
+
+**(a) Live app** — `queue_entries.priority` (int) + `display_order`
+
+**(b) Blueprint microservice** — `ghos/services/queue-engine/app/engine/priority.py`:
 
 ```python
-import asyncio
-import json
-from crawl4ai import AsyncWebCrawler
-from crawl4ai.extraction_strategy import LLMExtractionStrategy
-from pydantic import BaseModel
+score = token_number − (priority × 1000)      # chhota score = pehle
+# 0 Normal · 1 Senior (60+) · 2 Emergency · 3 VIP   ·  Staff family = −100 offset
+```
 
-async def ingest_hospital_doctor_roster(hospital_roster_url: str, gemini_api_key: str):
-    """
-    Crawls JS-rendered hospital OPD page and extracts verified doctor profiles.
-    """
-    # Configure LLM Schema-Guided Extraction Strategy
-    extraction_strategy = LLMExtractionStrategy(
-        provider="google/gemini-2.0-flash",
-        api_token=gemini_api_key,
-        schema=DoctorProfileSchema.model_json_schema(),
-        extraction_type="schema",
-        instruction="Extract all listed doctors with qualifications, OPD consultation timings, clinic address, and phone."
+| Level | Score | Kab |
+|-------|-------|-----|
+| 0 Normal | token | Aam patient |
+| 1 Senior | token − 1000 | 60+ |
+| 2 Emergency | token − 2000 | Chest pain / SpO₂ < 90% → **Code Red** (`#E-1`) + siren |
+| 3 VIP | token − 3000 | Owner/trustee referral |
+
+## B3. Delay Detection
+
+`ghos/services/queue-engine/app/engine/delay.py`:
+
+```
+delay = (abhi ka samay − called_at) − avg_service_time
+
+  < 0        → koi delay nahi
+  ≥ 5 min    → 🟡 warning
+  ≥ 10 min   → 🔴 critical  (staff screens par alert)
+```
+
+> Live app me abhi **delay alert wire nahi hua** — Part C ka kaam hai.
+
+## B4. 📐 EWT Engine — "Uber ETA for OPD" (BANANA HAI)
+
+**Problem:** `wait_minutes = patients_ahead × 7` — har patient ko 7 min maan leta hai. **Galat.**
+
+### B4.1 Formula (banane wala)
+
+```
+AVG = EWMA(completed_at − started_at)            ← is DOCTOR ka ASLI average (rolling)
+      (kam se kam 20 samples, warna default 7 min)
+
+EWT(mere liye) =
+      Σ  ( complexity_weight_i × AVG )            ← mere aage ke har patient ka
+   +  DELAY_PENALTY                               ← current patient AVG se zyada le raha hai
+                                                  (max +15 min cap)
+   −  ELAPSED_SINCE_CALLED                        ← agar main already CALLED hoon
+
+clamp: 0 se 180 min · 2 min se kam kabhi na dikhao
+GUARD: chamber band hai (doctor nahi aaya) → EWT = 0 · "Arrival Pending" dikhao (Part D · E-01)
+```
+
+### B4.2 Complexity weights (owner ke research se)
+
+| Visit type | Weight | Est. time | Kaise pata chalega |
+|------------|--------|-----------|--------------------|
+| Follow-up | 1× | 6–8 min | `visit_type='followup'` ya 30 din me visit |
+| Report review | 1× | 5–7 min | Lab/ECG report attach hai, naya diagnosis nahi |
+| New visit | 2× | 15–20 min | Pehli visit (`total_visits <= 1`) |
+| Procedure/ECG | 2× | 15–20 min | `service_code != 'OPD'` dispatched |
+
+### B4.3 Naye columns (additive)
+
+```sql
+ALTER TABLE queue_entries ADD COLUMN complexity_weight INT DEFAULT 1;   -- 1 / 2 / 3
+ALTER TABLE queue_entries ADD COLUMN estimated_minutes INT;             -- snapshot
+ALTER TABLE queue_entries ADD COLUMN visit_type        VARCHAR(20);     -- new|followup|report
+ALTER TABLE queue_entries ADD COLUMN doctor_id         VARCHAR(100);    -- ⚠️ Part D · E-04
+ALTER TABLE queue_entries ADD COLUMN sort_key          FLOAT;           -- ⚠️ Part D · E-02
+ALTER TABLE queue_entries ADD COLUMN requeue_count     INT DEFAULT 0;   -- ⚠️ Part D · E-02
+-- started_at / completed_at ABHI SE MAUJOOD HAIN — naya nahi chahiye
+```
+
+### B4.4 Nayi file
+
+```
+src/domain/queue/ewt.py          ← pure functions (koi DB/network nahi → test karna aasan)
+    avg_service_minutes(entries)         → EWMA
+    complexity_weight(entry, history)    → 1 | 2 | 3
+    estimate_wait(entry, ahead, avg)     → int (minutes)
+    eta_confidence(ahead, samples)       → "high" | "medium" | "low"
+```
+
+Phir `marketplace_routes._queue_map()` me `MINUTES_PER_PATIENT` ki jagah `estimate_wait()` lagega —
+**UI ko chhune ki zaroorat nahi**, kyunki wahi `wait_minutes` key return hoti rahegi.
+
+## B5. 📐 Slot Booking (BANANA HAI)
+
+```sql
+CREATE TABLE appointment_slots (
+    id          UUID PRIMARY KEY,
+    clinic_id   VARCHAR(36) NOT NULL,
+    doctor_id   VARCHAR(100),
+    slot_date   DATE      NOT NULL,
+    start_time  TIME      NOT NULL,
+    end_time    TIME      NOT NULL,
+    capacity    INT       NOT NULL DEFAULT 1,
+    booked      INT       NOT NULL DEFAULT 0,
+    is_active   BOOLEAN   NOT NULL DEFAULT TRUE,
+    created_at  TIMESTAMP DEFAULT now(),
+    UNIQUE (clinic_id, doctor_id, slot_date, start_time)
+);
+```
+
+**Rule:** slot **akela kabhi nahi** dikhega — saath me **live queue + EWT confidence** bhi:
+
+> *"2:30 PM slot · us waqt tak queue clear hone ka anumaan 🟢 high"*
+
+---
+
+# PART C — BRIDGE: Search → Booking → Live Queue → Health Card
+
+> Yeh **loop** poore module ki jaan hai. Har step ka asli code path neeche hai.
+
+```
+[1] PATIENT SEARCH
+    /find-doctor  →  GET /api/v1/marketplace/doctors?problem=seene%20me%20dard
+                     ↓  _detect_specialty() → "Cardiology"
+                     ↓  ClinicModel filter (city/specialty, is_active)
+                     ↓  _queue_map() → REAL live queue
+    ✅ Result: 🟢 "Gill Heart Clinic · Token #14 andar · 3 aage · ~18 min"
+    📐 Naya  : wait_minutes = ewt estimate (7-min hardcode hat jayega)
+
+[2] BOOKING (1 TAP)
+    POST /api/v1/marketplace/book {clinic_id, name, phone, problem}
+      → PatientModel: phone_hash se reuse, warna naya (CQ-YYYYMMDD-###)
+      → QueueEntryModel: service_code='OPD', status='WAITING', created_by='marketplace'
+      → token = MAX(token_number)+1     ⚠️ BUG-01 (Part D) — clinic filter chahiye
+      → tracking_url = /track/<tracking_token>
+    ✅ Result: "Token #17 booked · 3 patient aage · ~21 min"
+
+[3] WAIT AT HOME (Virtual Waiting Room)
+    Patient /track/<token> par baitha rehta hai — lobby me nahi
+    ✅ Ye page already /track/{token}/status ko har 8 second poll karta hai
+    📐 Naya: patients_ahead ≤ 3 → browser me chime + "🏃 AB NIKLO" (no server cron!)
+
+[4] DOCTOR'S LIVE VIEW
+    /opd/dashboard → ▶ START OPD (chamber gate) → ▶ CALL NEXT → called_at
+    📐 Naya: complexity-weighted EWT + slot grid + delay badge 🟡/🔴 + HOLD button
+
+[5] CONSULT → DISPATCH
+    started_at → ECG/Echo/TMT/Lab order → IN_PROGRESS → completed_at
+    ✅ Multi-department routing maujood hai (staff routes: /ecg /echo /tmt /lab /
+       live-board /tv) — reception par dobara queue nahi lagti
+
+[6] HEALTH CARD (retention + virality)
+    POST /opd/api/health-card → /card/<uid>
+    Card = identity (masked phone) + latest vitals + 8 latest prescriptions
+    ✅ Read-only · expiry 30 din · view_count track
+    📐 Naya: health_card_access audit + "🔒 revoke link" (DPDP Act 2023)
+
+[7] NEXT PATIENT (flywheel)
+    Shared card / WhatsApp → naya patient search par aata hai → wapas [1] 🔁
+```
+
+---
+
+# PART D — 🚨 REAL-WORLD EDGE CASES
+
+> **Kyun ye section hai:** blueprint 95% sahi tha, par **asli clinic chalte waqt** yeh 9 cheezein
+> system ko phasa sakti hain. Sab **code me verify** ki gayi hain (02-Oct-2026).
+
+---
+
+## E-01 🔴 Doctor "Late Arrival" — EWT ka sabse bada bug
+
+**Problem:** Clinic ka time 9:00 AM likha hai, doctor traffic/ward round se **9:40** par aaya.
+Agar 9:00–9:40 ke beech patient app kholega to system bolega *"Wait: 15 min"* — jabki
+**doctor room me hai hi nahi.** Patient gussa, trust khatam.
+
+**✅ Rule (Chamber Gate):**
+1. EWT countdown **tab tak shuru nahi hoga** jab tak doctor ne ▶️ **START OPD** na dabaya ho.
+2. Jab tak chamber band hai, patient ko dikhega:
+
+```
+⏳ Doctor Arrival Pending  (Scheduled: 9:00 AM)
+   Chamber abhi khula nahi hai — aapka number safe hai, wait count nahi ho raha.
+```
+
+3. Doctor login + START karte hi countdown **live** ho jayega — aur 9:00 se 9:40 ka
+   **intezaar EWT me count nahi** hoga (warna jhoota number banega).
+
+**📁 Implement:**
+```sql
+CREATE TABLE chamber_sessions (
+    id          UUID PRIMARY KEY,
+    clinic_id   VARCHAR(36) NOT NULL,
+    doctor_id   VARCHAR(100) NOT NULL,
+    session_date DATE       NOT NULL,
+    opened_at   TIMESTAMP   NOT NULL,      -- ▶️ START OPD
+    closed_at   TIMESTAMP,                 -- ⏹ END OPD
+    UNIQUE (clinic_id, doctor_id, session_date)
+);
+```
+- `GET /api/v1/marketplace/doctors` → `chamber_open: true|false` + `opened_at`
+- **Bonus:** `opened_at − scheduled_time` = **doctor ka average late-arrival** (owner ka analytics)
+
+---
+
+## E-02 🔴 Token Skip & Return — "washroom problem"
+
+**Problem:** Token #14 bulaya, patient washroom gaya tha. Doctor ne #15 bula liya.
+Ab #14 wapas aaya — to **sabse aakhir (#35)** me chala jayega? **Mareez jhagda karega!**
+
+**✅ Rule (Next + 1):**
+1. Bulane par patient na mile → **`HOLD`** (aakhir me nahi bhejna).
+2. Wapas aane par position = **jo abhi `IN_PROGRESS` hai uske theek agle number par** (Next + 1).
+3. **Abuse guard:** ek patient ko sirf **1 baar** free re-queue — doosri baar aakhir me.
+4. Agar `IN_PROGRESS` koi nahi, to `CALLED` ke baad, warna queue ke **shuru** me.
+
+**📁 Implement (O(1) insertion trick):**
+```python
+# sort_key FLOAT use karo (naya additive column)
+cur  = in_progress_entry.sort_key          # e.g. 14.0
+nxt  = next_waiting_sort_key(after=cur)    # e.g. 15.0
+entry.sort_key = (cur + nxt) / 2           # 14.5  ← beech me ghus gaya, koi shifting nahi
+entry.status = "WAITING"
+entry.requeue_count += 1
+```
+- `QueueStatus` me **`HOLD`** add karo (`waITING`/`CALLED` se `HOLD` allowed, `HOLD → WAITING` allowed)
+- ✅ Lucky baat: `CALLED → WAITING` transition **pehle se allowed** hai — base taiyar hai.
+
+---
+
+## E-03 🟠 Departure Alert — **server cron ke bina** (PA free ki majboori)
+
+**Problem:** Guardrail kehta hai *"PA free: no scheduled tasks (403) · 100 CPU-sec/din"* —
+par C4 kehta hai *"WhatsApp: ab niklo"*. **Server par cron/WhatsApp API chalega hi nahi.** Contradiction.
+
+**✅ Fix (dono raste, dono free):**
+
+**(1) Client-side trigger — sabse sahi:**
+```
+Patient ka /track/<token> page ALREADY har 8 second /track/<token>/status poll karta hai
+      ↓
+patients_ahead ≤ 3  →  browser khud:
+      🔊 Web Audio chime  (koi gateway cost nahi)
+      🏃 full-screen "AB NIKLO — 15 min ka rasta"
+      🔔 Notification API (agar permission di ho) + phone vibrate
+```
+> **Kuch bhi server par nahi chalta** — patient ka apna phone hisaab karta hai. PA ke 100 CPU-sec bhi safe.
+
+**(2) Reception 1-click WhatsApp:**
+- Reception screen par chhota icon — jab kisi patient ke `patients_ahead ≤ 3` ho to **green** ho jaye
+- Receptionist 1 tap → `https://wa.me/91<phone>?text=<ready message>` deep link
+- ✅ Koi paid gateway nahi, koi cron nahi — **insaan hi trigger hai**, system sirf signal deta hai
+
+**📁 Implement:** `templates/patient_track.html` (already 8s polling) + `staff_routes.py` public status me
+`patients_ahead` field + reception dashboard ka green icon.
+
+---
+
+## E-04 🔴 Multi-Doctor Chamber Collision
+
+**Problem:** GIL CLINIC me 2 doctor baithe hain (Dr. Gill – Cardiology, Dr. Sharma – General).
+Agar dono ka **Token #14** ho gaya to EWT mix ho jayega — Cardiology ka 20-min case
+General ke patient ko "20 min wait" dikhayega. **Galat.**
+
+**✅ Rule:** har token `(clinic_id, doctor_id, service_code)` teeno par partition ho.
+
+```
+C-14   → Cardiology (Dr. Gill)
+G-14   → General    (Dr. Sharma)
+E-01   → Emergency / Code Red
+```
+
+**🐞 Verified gap:** `doctor_id` **`queue_entries` me hai HI NAHI** —
+jabki OPD layer me har jagah maujood hai (`opd_settings.doctor_id`, `opd_prescriptions.doctor_id`,
+`opd_drug_history.doctor_id`, `lab_orders.doctor_id`).
+
+**📁 Implement:**
+```sql
+ALTER TABLE queue_entries ADD COLUMN doctor_id VARCHAR(100) DEFAULT 'chief';
+CREATE INDEX ix_queue_clinic_doctor_status ON queue_entries (clinic_id, doctor_id, status);
+```
+- Token generator: `MAX(token_number) WHERE clinic_id = ? AND doctor_id = ? AND service_code='OPD' AND date = today`
+- Display: `<specialty_prefix>-<token>` (C-14 / G-14)
+- EWT: strictly `(clinic_id, doctor_id)` — **doctors ka queue kabhi mix nahi**
+
+---
+
+## E-05 🐞 BUG-01 — Booking token counter **global** hai (naya bug mila)
+
+**Problem (code me mila):** `marketplace_routes.py` → `marketplace_book()`:
+
+```python
+token_row = await session.execute(
+    sa.select(sa.func.coalesce(sa.func.max(QueueEntryModel.token_number), 0)).where(
+        QueueEntryModel.service_code == "OPD",
+        QueueEntryModel.visit_id.like(f"VIS-{date_prefix}-%"),
+        # ❌ clinic_id filter NAHI hai!
     )
-
-    async with AsyncWebCrawler(headless=True, verbose=True) as crawler:
-        result = await crawler.arun(
-            url=hospital_roster_url,
-            extraction_strategy=extraction_strategy,
-            bypass_cache=True,
-            wait_for="css:.doctor-list, .team-member, .profile-card", # Wait for JS dynamic renders
-            delay_before_return_html=2.0
-        )
-
-        if result.success:
-            extracted_data = json.loads(result.extracted_content)
-            print(f"Successfully extracted {len(extracted_data)} doctor profiles.")
-            return extracted_data
-        else:
-            print(f"Crawl failed: {result.error_message}")
-            return []
+)
 ```
 
-## 6.4 Why Crawl4AI is the Winning Choice vs. Alternatives
-| Evaluated Tool | License | Strengths | Operational Bottlenecks | Decision for GHOS |
-|---|---|---|---|---|
-| **Crawl4AI** (github/unclecode) | **Apache 2.0 (100% Free)** | Ultra-fast async Playwright, native Markdown, schema-guided LLM extraction, self-hostable without paid API | Requires Python 3.10+ container (~1.8GB Playwright dependencies) | **SELECTED PRIMARY INGESTION ENGINE** |
-| **Firecrawl** (github/mendableai) | Apache 2.0 (Core) | Outstanding REST API, automatic site crawling (`/crawl`) | Heavy infrastructure stack (Redis, BullMQ, Supabase, Playwright worker cluster); paid cloud API | Secondary backup for API-only environments |
-| **ScrapeGraphAI** | MIT (Open Source) | Graph-based LLM pipeline | High LLM API token cost; invokes LLM on raw unfiltered HTML | Rejected (excessive API latency & cost) |
-| **Custom Cheerio / Playwright** | In-house | Lightweight, no external deps | **High Maintenance Nightmare**: breaks every time a hospital redesigns its CSS classes | Rejected (unnecessary engineering overhead) |
+**Result:** do alag clinics ek hi din me **ek hi token sequence** share kar rahi hain.
+Clinic A ko #17, Clinic B ko #18 — jabki B ka ye pehla patient hai. **Ye production bug hai.**
+
+**✅ Fix:**
+```python
+.where(
+    QueueEntryModel.clinic_id == str(clinic.id),       # ✅ per-clinic
+    QueueEntryModel.doctor_id == (doctor_id or "chief"),# ✅ per-doctor (E-04)
+    QueueEntryModel.service_code == "OPD",
+    QueueEntryModel.visit_id.like(f"VIS-{date_prefix}-%"),
+)
+```
+**Saath me:** `department="OPD"` hardcoded aur `room=""` chhoot gaya hai — ye clinic/doctor ke
+asli room se aana chahiye (warna doctor screen par galat chamber dikhega).
 
 ---
-*Blueprint formulated and verified as the authoritative architectural specification for GHOS Global Search, Ranking & Queue Dispatch.*
 
+## E-06 🟡 Clinic Holiday / Band din
+
+**Rule:** `clinics.is_open_today` (ya `holidays` table) → listing par **"🔴 Aaj band hai"**,
+booking **band**, aur `availability = CLOSED`. Patient ka time barbaad nahi hona chahiye.
+
+---
+
+## E-07 🟡 No-Show / Cancel — ghost entry se EWT kharab na ho
+
+**Rule:** `CALLED` ke baad **X min (default 8)** tak patient na aaye → auto **`NO_SHOW`** + EWT **turant recompute**.
+Warna ek bhoot entry poori line ka wait jhoota badha deti hai. (Status pehle se maujood hai: `NO_SHOW`.)
+
+---
+
+## E-08 🟡 Emergency Override (Code Red)
+
+**Rule:** Chest pain / SpO₂ < 90% → token **`#E-1`** + staff screens par **siren**
++ waiting patients ko ek tap me *"emergency case, 10 min extra"* message.
+(Product file me innovation #10 — ab EWT ke saath wire hoga.)
+
+---
+
+## E-09 🟡 Non-OPD services ka alag EWT
+
+**Rule:** ECG / Echo / TMT / Lab ka **apna** average hai (`service_code` partition).
+Unka wait OPD ke average se nahi nikalna — warna report-review patient ka number galat aayega.
+
+---
+
+### 📊 Part D summary register
+
+| # | Edge case | Severity | Status |
+|---|-----------|----------|--------|
+| E-01 | Doctor late arrival (chamber gate) | 🔴 Critical | 📐 |
+| E-02 | Token skip & return (HOLD → Next+1) | 🔴 Critical | 📐 |
+| E-03 | Departure alert **bina cron** | 🟠 High | 📐 |
+| E-04 | Multi-doctor collision (`doctor_id`) | 🔴 Critical | 📐 |
+| **E-05** | **BUG-01: global token counter** | 🔴 **Bug (live)** | 📐 |
+| E-06 | Holiday / closed day | 🟡 Medium | 📐 |
+| E-07 | No-show auto-detect | 🟡 Medium | 📐 |
+| E-08 | Emergency override | 🟡 Medium | 📐 |
+| E-09 | Non-OPD alag EWT | 🟡 Medium | 📐 |
+
+---
+
+# PART E — MODULE 6: AUTONOMOUS EXTERNAL DOCTOR DATA INGESTION
+
+> **Maqsad:** Tier-2 (non-network) doctors ka data **khud** bhar jaye — hazaron ghante manual
+> scraping ke bina. Crawler public hospital/clinic pages padhta hai, LLM usko structured
+> **doctor profile** me badalta hai, aur hamara marketplace use dikhata hai.
+
+## E1. Architecture — par ⚠️ pehle ek zaroori sachchai
+
+> ### 🚫 Crawl4AI **PythonAnywhere free par NAHI chal sakta** — 4 verified wajah:
+> | # | Rok | Kyun |
+> |---|-----|------|
+> | 1 | **Outbound internet sirf whitelist** | PA free ka server kisi bhi random hospital site par request nahi kar sakta (MEMORY §2) |
+> | 2 | **Scheduled tasks band (403)** | Crawl worker ko cron chahiye — PA free me nahi milta |
+> | 3 | **100 CPU-second / din** | Ek headless-browser crawl hi poora quota kha jayega |
+> | 4 | **Disk/RAM** | Playwright + Chromium ~400 MB — app ke saath fit nahi hoga |
+>
+> **Isliye Module 6 app ke andar nahi chalega — usko ek alag "worker" me chalana hoga.** ✅ Neeche 2 raste hain.
+
+### E1.1 Sahi architecture (2 raste — dono free)
+
+```
+┌─────────── WORKER (app ke bahar) ───────────┐        ┌──── GHOS APP (PA par) ────┐
+│                                             │        │                           │
+│  Option 1: GitHub Actions (cron)  ⭐        │        │  POST /api/v1/ingest/     │
+│    ├─ crawl4ai (headless Chromium)          │        │       doctors  (token)    │
+│    ├─ Gemini/LLM schema extraction          │───────►│        ↓                  │
+│    └─ normalize → JSON                      │  HTTPS │  clinics (Tier-2,          │
+│                                             │        │   source='crawl',         │
+│  Option 2: Clinic PC (3-din me 1 baar)      │        │   verified=0)             │
+│    └─ same script, `python ingest.py`       │        │        ↓                  │
+│                                             │        │  /find-doctor (Tier-2)    │
+└─────────────────────────────────────────────┘        │        ↓                  │
+                                                        │  📢 "Invite this doctor"  │
+                                                        │        ↓                  │
+                                                        │  claim → Tier-1 onboard   │
+                                                        └───────────────────────────┘
+```
+
+- ✅ **Option 1 (recommended):** aapka account **already GitHub Actions cron use karta hai**
+  (`auto-social-agent` repo) — wahi pattern yahan reuse hoga. **App par zero load, zero cost.**
+- ✅ **Option 2 (fallback):** clinic ka PC 3 din me 1 baar khulta hai — tab yeh script chal jaye.
+  Koi external dependency nahi.
+
+> **Rule:** app **sirf data leta hai** (ingest API), crawl **kabhi** app ke andar nahi.
+
+## E2. Ingest API (naya — app ke andar)
+
+| Method | Path | Kaam |
+|--------|------|------|
+| POST | `/api/v1/ingest/doctors` | Token-gated (`INGEST_TOKEN`) — crawl ka JSON push |
+| GET | `/api/v1/ingest/sources` | Kitne sources, kab crawl hua, kitne profile |
+| POST | `/api/v1/ingest/claim/{clinic_id}` | Doctor "ye mera profile hai" → claim → Tier-1 pipeline |
+| DELETE | `/api/v1/ingest/profile/{clinic_id}` | 🚫 **Opt-out** — doctor kehta hai hata do → turant delete |
+
+## E3. Schema (additive)
+
+```sql
+-- clinics par crawler ka meta
+ALTER TABLE clinics ADD COLUMN source        VARCHAR(30) DEFAULT 'manual';  -- manual | crawl | referral
+ALTER TABLE clinics ADD COLUMN source_url    VARCHAR(500) DEFAULT '';       -- kaunse page se aaya
+ALTER TABLE clinics ADD COLUMN verified      BOOLEAN DEFAULT TRUE;          -- crawl = FALSE
+ALTER TABLE clinics ADD COLUMN claim_status  VARCHAR(30) DEFAULT 'n/a';     -- unclaimed | claimed | opted_out
+ALTER TABLE clinics ADD COLUMN last_crawled_at TIMESTAMP;
+
+-- raw crawl audit (kya padha tha — proof)
+CREATE TABLE doctor_crawl_runs (
+    id           UUID PRIMARY KEY,
+    source_url   VARCHAR(500),
+    hospital_name VARCHAR(200),
+    raw_hash     VARCHAR(64),
+    profiles_found INT DEFAULT 0,
+    status       VARCHAR(20),      -- success | failed | blocked
+    error        TEXT,
+    created_at   TIMESTAMP DEFAULT now()
+);
+```
+
+## E4. Data contract (worker → app)
+
+```python
+class DoctorProfileSchema(BaseModel):          # ⚠️ aapke snippet me yeh DEFINE hi nahi tha
+    doctor_name: str
+    degree: str = ""
+    specialty: str = "General Physician"
+    reg_no: str = ""
+    clinic_name: str = ""
+    address: str = ""
+    city: str = ""
+    state: str = ""
+    phone: str = ""                # sirf PUBLIC clinic/business number
+    opd_days: str = ""             # "Mon-Sat"
+    opd_start: str = ""            # "09:00"
+    opd_end: str = ""              # "14:00"
+    source_url: str
+    confidence: float = 0.0        # LLM ka apna bharosa — 0.7 se kam = review queue
+```
+
+## E5. 🔧 Aapke code snippet me 6 technical corrections
+
+| # | Aapka code | Sahi | Kyun |
+|---|-----------|------|------|
+| 1 | `provider="google/gemini-2.0-flash"` | `provider="gemini/gemini-2.5-flash"` | litellm me `google/` = **Vertex AI** (service-account chahiye). Google AI Studio key ke liye prefix **`gemini/`** |
+| 2 | `DoctorProfileSchema` **undefined** | Class define karo (E4) | Warna `model_json_schema()` par `NameError` |
+| 3 | schema = ek single object | List chahiye → wrapper: `{"type":"array","items": DoctorProfileSchema.model_json_schema()}` | Page par **kai** doctor hain |
+| 4 | `wait_for="css:.doctor-list, .team-member, .profile-card"` | ek reliable selector + fallback (`delay_before_return_html`) | `wait_for` ek selector leta hai, "kya mila to chalega" nahi |
+| 5 | model hardcoded = `2.0-flash` | **model discovery fallback** (jaise `ai_gateway.js` me pehle se hai) | Purane model retire hote hain → 404 (yeh dard aap already jhel chuke ho) |
+| 6 | `headless=True` (seedha) | Pehle `playwright install chromium` + retry/backoff | CI par Chromium pre-install zaroori |
+
+**Plus:** `robots.txt` respect · per-host **rate limit (1 req/sec)** · saaf User-Agent
+(`GHOS-Crawler/1.0 (+contact)`) · retry 3 baar · `bypass_cache=True` rakho.
+
+## E6. ⚖️ Legal / DPDP guardrails (non-negotiable)
+
+1. **Sirf public professional info** — naam, degree, specialty, clinic address, **public clinic phone**, OPD timings.
+2. **Kabhi patient data nahi** — koi review, koi patient list, koi health info.
+3. **`source_url` + `last_crawled_at` har row par** — audit trail (kahan se aaya).
+4. **Opt-out endpoint** — doctor bole to **48 ghante me** delete (E2 ka DELETE route).
+5. **Attribution** — Tier-2 card par "public listing" label.
+6. **robots.txt + rate limit** — marammat se crawl, site par load nahi.
+7. **Claim flow** — doctor khud claim kare → tab hi Tier-1 marketing me use ho.
+
+## E7. 📊 Part E summary register
+
+| # | Item | Status |
+|---|------|--------|
+| M6-01 | GH Actions worker repo + crawl4ai + Gemini | 📐 |
+| M6-02 | `DoctorProfileSchema` + schema-guided extraction | 📐 |
+| M6-03 | `POST /api/v1/ingest/doctors` (token-gated) | 📐 |
+| M6-04 | `clinics` crawl columns + `doctor_crawl_runs` | 📐 |
+| M6-05 | Tier-2 listing par "public listing" label | 📐 |
+| M6-06 | Claim flow → Tier-1 onboarding pipeline | 📐 |
+| M6-07 | Opt-out / delete endpoint (DPDP) | 📐 |
+| M6-08 | NMC / state medical council + ABDM **HPR** registry source (authoritative) | 📐 |
+
+---
+
+## 3. Data Model — poora module ek schema me
+
+### 3.1 ✅ Jo maujood hai (chhedna nahi, sirf padhna)
+
+| Table | Kaam | File |
+|-------|------|------|
+| `clinics` | Multi-tenant registry + **lat/long + hpr_id + hfr_id** already hai | `src/infrastructure/clinic/models/clinic_model.py` |
+| `queue_entries` | Token + status + **saare timestamps** (`doctor_id` ❌ missing) | `src/infrastructure/queue/models/queue_entry_model.py` |
+| `patients` | Patient master (`phone_hash` se dedupe) | `src/infrastructure/patient/models/patient_model.py` |
+| `opd_prescriptions` | Rx history (Health Card ka source) | `src/infrastructure/opd/models/opd_models.py` |
+| `patient_readings` | Patient self-filled BP/sugar/weight | `src/infrastructure/opd/models/patient_portal_models.py` |
+| `patient_portal_links` / `patient_shares` | `/my/<token>` + `/s/<token>` | same |
+| `health_cards` | Universal Health Card | same |
+| `abha_links` · `consent_artefacts` · `abdm_transactions` | ABDM | `src/infrastructure/abdm/models.py` |
+| `lab_orders` | External lab network | `src/infrastructure/lab/models.py` |
+| `opd_drug_history` | Drug bank (auto-learn) | OPD engine |
+
+### 3.2 📐 Jo add karna hai (sirf **additive** — purana kuch nahi tootega)
+
+```sql
+-- (1) Availability + rating  → "Open now" filter, distance sort
+ALTER TABLE clinics ADD COLUMN open_time  VARCHAR(5);    -- "09:00"
+ALTER TABLE clinics ADD COLUMN close_time VARCHAR(5);    -- "20:00"
+ALTER TABLE clinics ADD COLUMN rating     FLOAT DEFAULT 0;
+
+-- (2) EWT engine + edge cases
+ALTER TABLE queue_entries ADD COLUMN complexity_weight INT DEFAULT 1;
+ALTER TABLE queue_entries ADD COLUMN estimated_minutes INT;
+ALTER TABLE queue_entries ADD COLUMN visit_type        VARCHAR(20);
+ALTER TABLE queue_entries ADD COLUMN doctor_id         VARCHAR(100) DEFAULT 'chief';  -- E-04
+ALTER TABLE queue_entries ADD COLUMN sort_key          FLOAT;                          -- E-02
+ALTER TABLE queue_entries ADD COLUMN requeue_count     INT DEFAULT 0;                  -- E-02
+CREATE INDEX ix_queue_clinic_doctor_status ON queue_entries (clinic_id, doctor_id, status);
+
+-- (3) Chamber gate (E-01)
+CREATE TABLE chamber_sessions (
+    id UUID PRIMARY KEY, clinic_id VARCHAR(36), doctor_id VARCHAR(100),
+    session_date DATE, opened_at TIMESTAMP NOT NULL, closed_at TIMESTAMP,
+    UNIQUE (clinic_id, doctor_id, session_date)
+);
+
+-- (4) Slot booking (B5)
+CREATE TABLE appointment_slots (...);
+
+-- (5) Health Card audit + revoke (DPDP)
+CREATE TABLE health_card_access (
+    id UUID PRIMARY KEY, card_id UUID NOT NULL, accessed_by VARCHAR(200),
+    ip_hash VARCHAR(64), accessed_at TIMESTAMP DEFAULT now()
+);
+
+-- (6) Growth loop + Module 6
+CREATE TABLE clinic_leads (...);
+ALTER TABLE clinics ADD COLUMN source VARCHAR(30) DEFAULT 'manual';
+ALTER TABLE clinics ADD COLUMN source_url VARCHAR(500) DEFAULT '';
+ALTER TABLE clinics ADD COLUMN verified BOOLEAN DEFAULT TRUE;
+ALTER TABLE clinics ADD COLUMN claim_status VARCHAR(30) DEFAULT 'n/a';
+ALTER TABLE clinics ADD COLUMN last_crawled_at TIMESTAMP;
+CREATE TABLE doctor_crawl_runs (...);
+```
+
+> **Migration rule:** har schema change ke saath `alembic/versions/` me ek migration file,
+> aur `main_v2.py` ka `Base.metadata.create_all()` naye tables khud bana deta hai (SQLite par yahi chalta hai).
+
+---
+
+## 4. API Contract — ek jagah saare endpoints
+
+### 4.1 ✅ LIVE (aaj kaam kar rahe hain)
+
+| Method | Path | Kaam |
+|--------|------|------|
+| GET | `/find-doctor` | Patient marketplace page (HTML) |
+| GET | `/api/v1/marketplace/meta` | Cities + specialties list |
+| GET | `/api/v1/marketplace/doctors` | Directory + **asli live queue** |
+| POST | `/api/v1/marketplace/book` | 1-tap booking → token + tracking link ⚠️ BUG-01 |
+| POST | `/api/v1/marketplace/seed` | Demo clinics (token-gated) |
+| GET | `/track/{token}` | Patient live tracking page |
+| GET | `/track/{token}/status` | **8s polling JSON** ← E-03 ka base |
+| GET | `/my/<token>` | Patient self-portal (BP/sugar/graphs/PDF) |
+| GET | `/s/<token>` | Doctor read-only share (7 din) |
+| GET | `/card/<uid>` | 🪪 Universal Health Card |
+| POST | `/opd/api/health-card` | Doctor: card banao + WhatsApp link |
+| GET | `/rx-pad` | 📝 Letterhead prescription pad |
+| POST | `/opd/api/lab-order` | 🧪 External lab order |
+| GET | `/lab/<token>` | Patient: lab result phone par |
+| GET | `/abdm` + `/abdm/{status,fhir/Patient,fhir/Practitioner,consent,dhis/transactions}` | ABDM registry + FHIR + consent + DHIS |
+
+### 4.2 📐 BANANE HAIN
+
+| Method | Path | Kaam | Kahan |
+|--------|------|------|-------|
+| GET | `/api/v1/marketplace/doctors?open_now=1` | Sirf khuli clinics | `marketplace_routes.py` |
+| GET | `/api/v1/marketplace/ewt?clinic_id=&doctor_id=` | EWT breakdown + chamber status | naya `ewt_routes.py` |
+| GET | `/api/v1/slots?clinic_id=&date=` | Free slots + confidence | naya `slots_routes.py` |
+| POST | `/api/v1/slots/book` | Slot → queue entry | same |
+| POST | `/opd/api/chamber/open` · `/close` | ▶️ START OPD (chamber gate · E-01) | naya `chamber_routes.py` |
+| POST | `/opd/api/queue/hold` · `/requeue` | Token HOLD → Next+1 (E-02) | same |
+| POST | `/opd/api/chamber/next-arrival-alert` | "Doctor aa gaye" — ek tap me sab waiting patients ko | same |
+| POST | `/opd/api/notify/leave-now` | Reception 1-click WhatsApp (E-03) | `opd_routes.py` helper |
+| POST | `/card/{uid}/revoke` | 🔒 Link band karo (DPDP) | `health_card_routes.py` |
+| GET | `/opd/api/queue-ewt` | Doctor Live View ka EWT feed | `opd_routes.py` |
+| POST | `/api/v1/marketplace/invite` | Tier-2 → `clinic_leads` | `marketplace_routes.py` |
+| POST | `/api/v1/ingest/doctors` | **Module 6 worker → app** (E2) | naya `ingest_routes.py` |
+| POST | `/api/v1/ingest/claim/{clinic_id}` | Doctor profile claim | same |
+| DELETE | `/api/v1/ingest/profile/{clinic_id}` | Opt-out (DPDP) | same |
+| GET | `/abdm/fhir/Bundle/{patient_id}` | Poora record ek FHIR bundle me | `abdm_routes.py` |
+| GET | `/abdm/dhis/claim-export` | DHIS incentive claim file | same |
+
+---
+
+## 5. 🔒 Guardrails — jo kabhi nahi todenge
+
+| # | Rule | Kyun |
+|---|------|------|
+| 1 | **Sirf additive schema** — koi column rename/drop nahi (`ADD COLUMN IF NOT EXISTS`) | Live production SQLite par purana data bacha rahe |
+| 2 | **`opd_routes.py` (3650+ lines) 🔒 LOCKED** — naya kaam naye module me | Sabse nazuk file |
+| 3 | **Naya code live = `python pa_deploy.py ship --since <commit>`** | PA par files-API upload + reload + health |
+| 4 | **Har deploy par BUILD stamp badle** | `/health` + dashboard footer se naya/purana turant pata chale |
+| 5 | **PA free:** 100 CPU-sec/din · **no scheduled tasks (403)** · outbound sirf whitelist | Bhaari loop/cron PA par nahi chalega |
+| 6 | **AI browser-side BYOK** — server se provider call PA par block hai | Har doctor apni key, owner ka ₹0 |
+| 7 | **Patient data public nahi** — phone masked, uid unguessable, read-only share | DPDP Act 2023 |
+| 8 | **Koi fake number nahi** — `_live_signal()` demo hata diya gaya | Bharosa = product |
+| 9 | **Naya keyword/specialty = sirf `PROBLEM_TO_SPECIALTY` dict** | UI + API sync rahe |
+| 10 | **Har feature ke saath ek test** (`tests/`, `scripts/integration_smoke_test.py`) | Live par todo mat |
+| **11** | **Server cron nahi** — sab kuch **client-side** (patient browser) ya **GH Actions worker** | PA free ki majboori (E-03) |
+| **12** | **Doctor absent = EWT band** — chamber gate ke bina countdown shuru nahi | Warna jhoota wait (E-01) |
+| **13** | **HOLD → Next+1**, aakhir me nahi (max 1 free re-queue) | Mareez ka jhagda band (E-02) |
+| **14** | **Har EWT strictly per `(clinic_id, doctor_id, service_code)`** | Do doctor ka queue kabhi mix nahi (E-04/E-09) |
+| **15** | **Crawler = sirf public professional info** · robots.txt · rate limit · `source_url` · opt-out | Legal + DPDP (Part E) |
+
+---
+
+## 6. Build Order — ek-ek karke tick hoga
+
+> Owner ka nirdesh: **queue/EWT pehle** (yahi asli moat hai), phir edge cases, phir slots, phir growth.
+
+### 🐞 BLOCK 0 — BUG-01 fix (sabse pehle, 1 ghante ka kaam)
+
+| # | Item | File | Effort |
+|---|------|------|--------|
+| BUG-01 | Token counter me `clinic_id` + `doctor_id` filter | `marketplace_routes.py` | XS |
+| BUG-02 | `department` + `room` hardcode hatao | same | XS |
+| BUG-03 | Is bug ke liye regression test | `tests/` | S |
+
+### 🔴 BLOCK 1 — EWT Engine + Edge Cases (P0) — *"Uber ETA for OPD"*
+
+| # | Item | File | Effort |
+|---|------|------|--------|
+| EWT-01 | `ewt.py` — rolling avg + complexity + estimate + confidence | **naya** `src/domain/queue/ewt.py` | M |
+| EWT-02 | `complexity_weight` · `estimated_minutes` · `visit_type` · `doctor_id` · `sort_key` · `requeue_count` | model + migration | S |
+| EWT-03 | `MINUTES_PER_PATIENT` hardcode → `estimate_wait()` | `marketplace_routes.py` | S |
+| EWT-04 | Booking par EWT snapshot save | same | S |
+| EWT-05 | Doctor Live View: EWT + delay badge 🟡/🔴 | `templates/opd/dashboard.html` | M |
+| EWT-06 | Patient page par EWT breakdown ("3 aage × ~6 min") | `marketplace.html` + `/track` | S |
+| **E-01** | **Chamber gate** — ▶️ START OPD + `chamber_sessions` + "Arrival Pending" | naya `chamber_routes.py` | M |
+| **E-02** | **HOLD → Next+1** (`sort_key` midpoint + HOLD status + abuse guard) | `queue_status.py` + queue routes | M |
+| **E-04** | **`doctor_id` partition** + token prefix (C-14 / G-14) | model + `marketplace_routes.py` | M |
+| EWT-07 | Unit tests: formula, chamber gate, hold-return, partition | `tests/test_ewt_calculation.py` | M |
+
+### 🟠 BLOCK 2 — Availability + Alert (P1)
+
+| # | Item | File | Effort |
+|---|------|------|--------|
+| AVL-01 | `open_time`/`close_time`/`rating` + admin form | clinic model + `onboard_doctor.html` | M |
+| AVL-02 | "🟢 Abhi khula hai" filter + `availability: OPEN/CLOSED` | `marketplace_routes.py` | S |
+| AVL-03 | Distance sort + "mere paas" button | `marketplace.html` | S |
+| **E-03** | **Departure alert client-side** (chime + "AB NIKLO") | `patient_track.html` + public status API | M |
+| **E-03b** | Reception 1-click WhatsApp (green icon) | reception dashboard + `staff_routes.py` | S |
+| E-06 | Holiday / closed day flag | clinic model + marketplace | S |
+| E-07 | No-show auto-detect (8 min) + EWT recompute | queue routes | S |
+
+### 🟡 BLOCK 3 — Slots + Doctor Live View (P1)
+
+| # | Item | File | Effort |
+|---|------|------|--------|
+| SLT-01 | `appointment_slots` + CRUD | model + migration | M |
+| SLT-02 | Slot booking API (capacity check → queue entry) | naya `slots_routes.py` | M |
+| SLT-03 | Doctor dashboard slot grid + EWT confidence | `dashboard.html` | M |
+| E-08 | Emergency override (`#E-1` + siren) | queue routes + dashboard | M |
+
+### 🔵 BLOCK 4 — Retention + Growth (P2)
+
+| # | Item | File | Effort |
+|---|------|------|--------|
+| GRW-01 | `health_card_access` audit + `/card/{uid}/revoke` (DPDP) | `health_card_routes.py` | S |
+| GRW-02 | `clinic_leads` + Tier-2 "📢 Invite" + Admin pipeline | marketplace + admin | M |
+| GRW-03 | City SEO pages `/doctors/<city>` | naya route | S |
+| GRW-04 | Family Health Locker (1 mobile → N profiles) | portal | L |
+
+### 🟣 BLOCK 5 — Module 6: Ingestion (P2, alag worker)
+
+| # | Item | File | Effort |
+|---|------|------|--------|
+| M6-01 | GH Actions worker: crawl4ai + Chromium + Gemini extraction | **naya repo/`workers/`** | L |
+| M6-02 | `DoctorProfileSchema` + array wrapper + model-discovery fallback | worker | S |
+| M6-03 | `POST /api/v1/ingest/doctors` + claim + opt-out | naya `ingest_routes.py` | M |
+| M6-04 | `clinics` crawl columns + `doctor_crawl_runs` | model + migration | S |
+| M6-05 | Tier-2 "public listing" label + claim button | `marketplace.html` | S |
+
+### ⚫ BLOCK 6 — Compliance wiring (P0, credentials ka intezaar)
+
+| # | Item | File | Effort |
+|---|------|------|--------|
+| ABD-01 | ABDM sandbox HFR + HPR register | `abdm_routes.py` | M |
+| ABD-02 | ABHA create + link live | same | M |
+| ABD-03 | FHIR Bundle export (offline bhi ban sakta hai ✅) | `fhir.py` + routes | M |
+| ABD-04 | DHIS claim export (incentive 💰) | `abdm_routes.py` | S |
+| ABD-05 | NHA Milestone certification apply | docs | M |
+
+> ⚠️ **ABD-01 se aage credentials ke bina nahi badh sakte** — `ABDM_CLIENT_ID` / `ABDM_CLIENT_SECRET`
+> (NHA sandbox) chahiye. Tab tak **ABD-03 offline FHIR export** ban sakta hai.
+
+---
+
+## 7. Success Metrics (North Star)
+
+| Metric | Aaj | 90-din target |
+|--------|-----|---------------|
+| Doctor search → booking conversion | — | ≥ 15% |
+| Partner clinics with live feed | 1 (GIL CLINIC) | 100% |
+| Average patient wait (partner) | ~60 min (industry) | **< 15 min** |
+| **EWT accuracy (actual vs predicted)** | — | **± 5 min** |
+| **Ghost wait (doctor absent me jhoota EWT)** | — | **0** |
+| Health Card share rate | — | ≥ 20% visits |
+| Tier-2 listings (Module 6 se) | 8 (demo) | 500+ |
+| Tier-2 → Tier-1 upgrade | 0 | ≥ 5% / month |
+| No-show rate | — | < 10% |
+
+---
+
+## 8. Ek line me
+
+> **Part A patient ko sahi doctor dikhata hai. Part B doctor ko sahi patient deta hai.
+> Part C dono ko jodta hai. Part D use asli duniya me chalne layak banata hai —
+> aur Part E naye doctors khud laata hai.** 🟢
+
+---
+
+*Files referenced in this blueprint (verified 02-Oct-2026):*
+`marketplace_routes.py` · `health_card_routes.py` · `abdm_routes.py` · `fhir.py` · `lab_network_routes.py` ·
+`rx_pad_routes.py` · `staff_routes.py` (`/track/{token}` + 8s polling) · `queue_entry_model.py` · `clinic_model.py` ·
+`queue_status.py` (asli status list) · `ghos/services/queue-engine/app/engine/{priority,delay,queue_engine}.py` ·
+`main_v2.py` · `templates/{marketplace,patient_track,health_card,landing,opd/dashboard}.html` ·
+`DEEP_RESEARCH_PRODUCT_DEVELOPMENT.md` · `PRODUCT_UPGRADATION_UBER_HEALTHCARE.md` ·
+`COMPETITOR_GAP_ANALYSIS_MISSING_FEATURES.md` · `MEMORY.md` (§2 PA limits)

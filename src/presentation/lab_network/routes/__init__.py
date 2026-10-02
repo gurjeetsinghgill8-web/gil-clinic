@@ -1,0 +1,1 @@
+"""Lab network HTTP routes."""

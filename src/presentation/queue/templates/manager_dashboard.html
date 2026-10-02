@@ -1,0 +1,610 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="theme-color" content="#1a1a2e">
+    <title>{{CLINIC_NAME}} — Manager Dashboard</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            background: #0f1123;
+            color: #e0e6ed;
+            padding: 16px;
+            min-height: 100vh;
+        }
+
+        /* ── Header ────────────────────────────────────────────── */
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 16px 24px;
+            background: linear-gradient(135deg, #1a1a3e, #2d1b69);
+            border-radius: 20px;
+            margin-bottom: 20px;
+            border: 1px solid rgba(255,255,255,0.06);
+        }
+        .header-left { display: flex; align-items: center; gap: 12px; }
+        .header-logo { font-size: 28px; }
+        .header-title h1 { font-size: 20px; font-weight: 700; color: #c4b5fd; }
+        .header-title .sub { font-size: 12px; opacity: 0.5; }
+        .header-right { text-align: right; font-size: 13px; opacity: 0.7; }
+        .header-right .clock { font-size: 18px; font-weight: 600; color: #a78bfa; }
+        .header-right .refresh-badge {
+            font-size: 11px; opacity: 0.5; display: block; margin-top: 2px;
+        }
+
+        /* ── KPI Stats Row ─────────────────────────────────────── */
+        .kpi-row {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 12px;
+            margin-bottom: 20px;
+        }
+        .kpi-card {
+            background: rgba(255,255,255,0.04);
+            border: 1px solid rgba(255,255,255,0.06);
+            border-radius: 16px;
+            padding: 20px;
+            text-align: center;
+        }
+        .kpi-card .num {
+            font-size: 32px;
+            font-weight: 800;
+            color: #c4b5fd;
+            line-height: 1.2;
+        }
+        .kpi-card .num.green { color: #6ee7b7; }
+        .kpi-card .num.blue { color: #60a5fa; }
+        .kpi-card .num.amber { color: #fcd34d; }
+        .kpi-card .num.pink { color: #f472b6; }
+        .kpi-card .lbl {
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            opacity: 0.6;
+            margin-top: 4px;
+        }
+
+        /* ── Section Title ─────────────────────────────────────── */
+        .section-title {
+            font-size: 14px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: #a78bfa;
+            margin-bottom: 12px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .section-title .badge {
+            font-size: 11px;
+            background: rgba(167,139,250,0.15);
+            color: #c4b5fd;
+            padding: 2px 10px;
+            border-radius: 10px;
+        }
+
+        /* ── Department Grid ───────────────────────────────────── */
+        .dept-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 12px;
+            margin-bottom: 20px;
+        }
+        .dept-card {
+            background: rgba(255,255,255,0.04);
+            border: 1px solid rgba(255,255,255,0.06);
+            border-radius: 14px;
+            padding: 16px;
+        }
+        .dept-card .dc-name {
+            font-size: 14px;
+            font-weight: 700;
+            margin-bottom: 8px;
+        }
+        .dept-card .dc-stats {
+            display: flex;
+            gap: 12px;
+            font-size: 12px;
+        }
+        .dept-card .dc-stats span {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .dept-card .dc-stats .val { font-size: 18px; font-weight: 700; }
+        .dept-card .dc-stats .lbl { font-size: 10px; opacity: 0.5; text-transform: uppercase; }
+        .dept-card .dc-bar {
+            margin-top: 10px;
+            height: 4px;
+            background: rgba(255,255,255,0.08);
+            border-radius: 2px;
+            overflow: hidden;
+        }
+        .dept-card .dc-bar-fill {
+            height: 100%;
+            border-radius: 2px;
+            background: linear-gradient(90deg, #a78bfa, #7c3aed);
+            transition: width 0.5s;
+        }
+
+        /* ── Two-column layout ─────────────────────────────────── */
+        .two-col {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+            margin-bottom: 20px;
+        }
+        .panel {
+            background: rgba(255,255,255,0.04);
+            border: 1px solid rgba(255,255,255,0.06);
+            border-radius: 16px;
+            padding: 16px;
+        }
+
+        /* ── Activity Table ────────────────────────────────────── */
+        .activity-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 12px;
+        }
+        .activity-table th {
+            text-align: left;
+            padding: 8px 6px;
+            border-bottom: 1px solid rgba(255,255,255,0.08);
+            font-size: 10px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            opacity: 0.5;
+        }
+        .activity-table td {
+            padding: 6px;
+            border-bottom: 1px solid rgba(255,255,255,0.04);
+            white-space: nowrap;
+        }
+        .activity-table tr:hover td {
+            background: rgba(167,139,250,0.05);
+        }
+        .act-time { font-size: 11px; opacity: 0.6; }
+        .act-action { font-weight: 600; }
+        .act-actor { opacity: 0.6; font-size: 11px; }
+        .act-patient { }
+        .act-service {
+            display: inline-block;
+            padding: 1px 8px;
+            border-radius: 6px;
+            background: rgba(167,139,250,0.12);
+            font-size: 11px;
+        }
+
+        /* ── CSS Bar Chart (7-day trend) ───────────────────────── */
+        .bar-chart {
+            display: flex;
+            align-items: flex-end;
+            gap: 6px;
+            height: 120px;
+            padding-top: 10px;
+        }
+        .bar-col {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            height: 100%;
+            justify-content: flex-end;
+        }
+        .bar-col .bars {
+            display: flex;
+            gap: 3px;
+            align-items: flex-end;
+            height: 100px;
+        }
+        .bar-col .bar-created {
+            width: 14px;
+            background: linear-gradient(180deg, #60a5fa, #3b82f6);
+            border-radius: 3px 3px 0 0;
+            min-height: 2px;
+            transition: height 0.5s;
+        }
+        .bar-col .bar-completed {
+            width: 14px;
+            background: linear-gradient(180deg, #6ee7b7, #10b981);
+            border-radius: 3px 3px 0 0;
+            min-height: 2px;
+            transition: height 0.5s;
+        }
+        .bar-col .bar-label {
+            font-size: 10px;
+            opacity: 0.5;
+            margin-top: 4px;
+        }
+        .legend {
+            display: flex;
+            gap: 16px;
+            justify-content: center;
+            font-size: 11px;
+            margin-top: 8px;
+        }
+        .legend-item { display: flex; align-items: center; gap: 4px; }
+        .legend-dot {
+            width: 8px; height: 8px; border-radius: 2px; display: inline-block;
+        }
+        .legend-dot.blue { background: #60a5fa; }
+        .legend-dot.green { background: #6ee7b7; }
+
+        /* ── Service Table ─────────────────────────────────────── */
+        .service-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 12px;
+        }
+        .service-table th {
+            text-align: left;
+            padding: 8px 6px;
+            border-bottom: 1px solid rgba(255,255,255,0.08);
+            font-size: 10px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            opacity: 0.5;
+        }
+        .service-table td {
+            padding: 6px;
+            border-bottom: 1px solid rgba(255,255,255,0.04);
+        }
+        .service-table tr:hover td {
+            background: rgba(167,139,250,0.05);
+        }
+        .svc-code {
+            display: inline-block;
+            padding: 1px 8px;
+            border-radius: 6px;
+            background: rgba(167,139,250,0.12);
+            font-weight: 600;
+        }
+
+        /* ── Action Buttons ────────────────────────────────────── */
+        .action-bar {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 16px;
+        }
+        .btn {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 10px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .btn:hover { transform: translateY(-1px); }
+        .btn-primary {
+            background: linear-gradient(135deg, #7c3aed, #6d28d9);
+            color: white;
+        }
+        .btn-outline {
+            background: transparent;
+            border: 1px solid rgba(167,139,250,0.3);
+            color: #c4b5fd;
+        }
+        .btn-outline:hover {
+            background: rgba(167,139,250,0.1);
+            border-color: rgba(167,139,250,0.5);
+        }
+
+        /* ── Toast ─────────────────────────────────────────────── */
+        .toast {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0,0,0,0.85);
+            color: white;
+            padding: 10px 24px;
+            border-radius: 12px;
+            font-size: 13px;
+            z-index: 9999;
+            opacity: 0;
+            transition: opacity 0.3s;
+            pointer-events: none;
+        }
+        .toast.show { opacity: 1; }
+
+        /* ── Empty state ───────────────────────────────────────── */
+        .empty {
+            text-align: center;
+            padding: 24px;
+            opacity: 0.4;
+            font-size: 14px;
+        }
+
+        /* ── Responsive ────────────────────────────────────────── */
+        @media (max-width: 768px) {
+            .kpi-row { grid-template-columns: repeat(2, 1fr); }
+            .two-col { grid-template-columns: 1fr; }
+            .header { flex-direction: column; gap: 8px; text-align: center; }
+            .header-right { text-align: center; }
+            .dept-grid { grid-template-columns: repeat(2, 1fr); }
+            .bar-col .bars { height: 70px; }
+            .bar-chart { height: 90px; }
+        }
+        @media (max-width: 480px) {
+            .kpi-row { grid-template-columns: 1fr 1fr; }
+            .dept-grid { grid-template-columns: 1fr; }
+            .kpi-card .num { font-size: 24px; }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- ── Header ──────────────────────────────────────────────── -->
+    <div class="header">
+        <div class="header-left">
+            <span class="header-logo">{{CLINIC_LOGO}}</span>
+            <div class="header-title">
+                <h1>📊 Manager Dashboard</h1>
+                <div class="sub">{{CLINIC_NAME}} · {{CLINIC_SPECIALTY}}</div>
+            </div>
+        </div>
+        <div class="header-right">
+            <div class="clock" id="liveClock">--:--:--</div>
+            <span class="refresh-badge" id="refreshBadge">auto-refresh every 30s</span>
+        </div>
+    </div>
+
+    <!-- ── Action Bar ──────────────────────────────────────────── -->
+    <div class="action-bar">
+        <button class="btn btn-primary" onclick="exportCSV()">📥 Download CSV</button>
+        <button class="btn btn-outline" onclick="loadDashboard()">🔄 Refresh Now</button>
+    </div>
+
+    <!-- ── KPI Stats ───────────────────────────────────────────── -->
+    <div class="kpi-row" id="kpiRow">
+        <div class="kpi-card">
+            <div class="num blue" id="kpiPatients">—</div>
+            <div class="lbl">Patients Today</div>
+        </div>
+        <div class="kpi-card">
+            <div class="num amber" id="kpiTests">—</div>
+            <div class="lbl">Tests Today</div>
+        </div>
+        <div class="kpi-card">
+            <div class="num pink" id="kpiWait">—</div>
+            <div class="lbl">Avg Wait (min)</div>
+        </div>
+        <div class="kpi-card">
+            <div class="num green" id="kpiCompletion">—</div>
+            <div class="lbl">Completion Rate</div>
+        </div>
+    </div>
+
+    <!-- ── Department Load ─────────────────────────────────────── -->
+    <div class="section-title">
+        <span>🏛️ Department Load</span>
+        <span class="badge" id="deptBadge">0 active</span>
+    </div>
+    <div class="dept-grid" id="deptGrid"></div>
+
+    <!-- ── Two-column: Activity + Trend ────────────────────────── -->
+    <div class="two-col">
+        <!-- Recent Activity -->
+        <div class="panel">
+            <div class="section-title">
+                <span>📋 Recent Activity</span>
+                <span class="badge" id="activityBadge">0</span>
+            </div>
+            <div id="activityPanel">
+                <div class="empty">Loading...</div>
+            </div>
+        </div>
+
+        <!-- 7-Day Trend -->
+        <div class="panel">
+            <div class="section-title">
+                <span>📈 7-Day Trend</span>
+                <span class="badge" id="trendBadge">7 days</span>
+            </div>
+            <div id="trendPanel">
+                <div class="bar-chart" id="barChart"></div>
+                <div class="legend">
+                    <span class="legend-item"><span class="legend-dot blue"></span> Created</span>
+                    <span class="legend-item"><span class="legend-dot green"></span> Completed</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ── Service Performance ─────────────────────────────────── -->
+    <div class="section-title">
+        <span>⚡ Service Performance</span>
+        <span class="badge" id="svcBadge">0 services</span>
+    </div>
+    <div class="panel" style="overflow-x:auto;">
+        <div id="servicePanel">
+            <div class="empty">Loading...</div>
+        </div>
+    </div>
+
+    <!-- ── Toast ───────────────────────────────────────────────── -->
+    <div class="toast" id="toast"></div>
+
+    <script>
+        // ── Constants ────────────────────────────────────────────
+        const API_BASE = '/api/v1/queue';
+        const REFRESH_SECONDS = 30;
+        let refreshInterval = null;
+
+        // ── Helpers ──────────────────────────────────────────────
+        function $(id) { return document.getElementById(id); }
+
+        function showToast(msg, type) {
+            const t = $('toast');
+            t.textContent = msg;
+            t.style.background = type === 'error' ? 'rgba(220,38,38,0.9)' : 'rgba(0,0,0,0.85)';
+            t.classList.add('show');
+            setTimeout(() => t.classList.remove('show'), 3000);
+        }
+
+        function updateClock() {
+            const now = new Date();
+            $('liveClock').textContent = now.toLocaleTimeString('en-IN', { hour12: false });
+        }
+
+        // ── API call ─────────────────────────────────────────────
+        async function apiCall(url) {
+            const resp = await fetch(url);
+            if (!resp.ok) {
+                const body = await resp.text();
+                throw new Error(`${resp.status}: ${body.slice(0, 100)}`);
+            }
+            return await resp.json();
+        }
+
+        // ── Render: KPI Stats ───────────────────────────────────
+        function renderStats(s) {
+            $('kpiPatients').textContent = s.patients_today ?? '—';
+            $('kpiTests').textContent = s.tests_today ?? '—';
+            $('kpiWait').textContent = (s.avg_wait_minutes ?? '—') + 'm';
+            $('kpiCompletion').textContent = (s.completion_rate_pct ?? 0) + '%';
+        }
+
+        // ── Render: Department Load ─────────────────────────────
+        function renderDepartments(depts) {
+            const grid = $('deptGrid');
+            if (!depts || depts.length === 0) {
+                grid.innerHTML = '<div class="empty">No departments loaded</div>';
+                $('deptBadge').textContent = '0';
+                return;
+            }
+            $('deptBadge').textContent = depts.length + ' depts';
+            grid.innerHTML = depts.map(d => `
+                <div class="dept-card">
+                    <div class="dc-name">${d.name}</div>
+                    <div class="dc-stats">
+                        <span><span class="val" style="color:#fcd34d">${d.waiting}</span><span class="lbl">Wait</span></span>
+                        <span><span class="val" style="color:#60a5fa">${d.called}</span><span class="lbl">Called</span></span>
+                        <span><span class="val" style="color:#f472b6">${d.in_progress}</span><span class="lbl">Active</span></span>
+                        <span><span class="val" style="color:#6ee7b7">${d.completed}</span><span class="lbl">Done</span></span>
+                    </div>
+                    <div class="dc-bar">
+                        <div class="dc-bar-fill" style="width:${d.load_pct}%"></div>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        // ── Render: Recent Activity ─────────────────────────────
+        function renderActivity(activities) {
+            const panel = $('activityPanel');
+            if (!activities || activities.length === 0) {
+                panel.innerHTML = '<div class="empty">No activity today yet</div>';
+                $('activityBadge').textContent = '0';
+                return;
+            }
+            $('activityBadge').textContent = activities.length;
+            panel.innerHTML = `
+                <table class="activity-table">
+                    <thead><tr>
+                        <th>Time</th><th>Action</th><th>Patient</th><th>Service</th><th>Actor</th>
+                    </tr></thead>
+                    <tbody>
+                        ${activities.map(a => {
+                            const time = a.time ? new Date(a.time).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }) : '—';
+                            return `<tr>
+                                <td><span class="act-time">${time}</span></td>
+                                <td><span class="act-action">${a.action_label || a.action}</span></td>
+                                <td class="act-patient">${a.patient_name || '—'}</td>
+                                <td>${a.service_code ? `<span class="act-service">${a.service_code}</span>` : '—'}</td>
+                                <td><span class="act-actor">${a.actor || '—'}</span></td>
+                            </tr>`;
+                        }).join('')}
+                    </tbody>
+                </table>
+            `;
+        }
+
+        // ── Render: 7-Day Trend (CSS bar chart) ────────────────
+        function renderTrend(trend) {
+            const chart = $('barChart');
+            if (!trend || trend.length === 0) {
+                chart.innerHTML = '<div class="empty">No data</div>';
+                return;
+            }
+            const maxVal = Math.max(...trend.map(d => Math.max(d.created, d.completed, 1)));
+            chart.innerHTML = trend.map(d => {
+                const hCreated = Math.round((d.created / maxVal) * 100);
+                const hCompleted = Math.round((d.completed / maxVal) * 100);
+                const label = d.date ? d.date.slice(5) : '—'; // MM-DD
+                return `<div class="bar-col">
+                    <div class="bars">
+                        <div class="bar-created" style="height:${Math.max(hCreated, 2)}px" title="Created: ${d.created}"></div>
+                        <div class="bar-completed" style="height:${Math.max(hCompleted, 2)}px" title="Completed: ${d.completed}"></div>
+                    </div>
+                    <div class="bar-label">${label}</div>
+                </div>`;
+            }).join('');
+        }
+
+        // ── Render: Service Stats ───────────────────────────────
+        function renderServices(svcs) {
+            const panel = $('servicePanel');
+            if (!svcs || svcs.length === 0) {
+                panel.innerHTML = '<div class="empty">No test data today</div>';
+                $('svcBadge').textContent = '0';
+                return;
+            }
+            $('svcBadge').textContent = svcs.length + ' services';
+            panel.innerHTML = `
+                <table class="service-table">
+                    <thead><tr>
+                        <th>Service</th><th>Today Count</th><th>Avg Wait (min)</th>
+                    </tr></thead>
+                    <tbody>
+                        ${svcs.map(s => `<tr>
+                            <td><span class="svc-code">${s.service_code}</span> ${s.service_name}</td>
+                            <td><strong>${s.count}</strong></td>
+                            <td>${s.avg_wait_minutes}m</td>
+                        </tr>`).join('')}
+                    </tbody>
+                </table>
+            `;
+        }
+
+        // ── Main Load ───────────────────────────────────────────
+        async function loadDashboard() {
+            try {
+                const data = await apiCall(API_BASE + '/manager-dashboard?days=7');
+                renderStats(data.stats);
+                renderDepartments(data.department_load);
+                renderActivity(data.recent_activity);
+                renderTrend(data.daily_trend);
+                renderServices(data.service_stats);
+            } catch (err) {
+                showToast('⚠️ Failed to load: ' + err.message, 'error');
+            }
+        }
+
+        // ── CSV Export ──────────────────────────────────────────
+        function exportCSV() {
+            const url = API_BASE + '/manager-export?department=Cardiology&limit=5000';
+            window.open(url, '_blank');
+            showToast('📥 CSV download started');
+        }
+
+        // ── Start / Stop ────────────────────────────────────────
+        async function start() {
+            updateClock();
+            setInterval(updateClock, 1000);
+            await loadDashboard();
+            refreshInterval = setInterval(loadDashboard, REFRESH_SECONDS * 1000);
+        }
+
+        // ── Boot ────────────────────────────────────────────────
+        document.addEventListener('DOMContentLoaded', start);
+    </script>
+</body>
+</html>

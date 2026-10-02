@@ -1,0 +1,1271 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="theme-color" content="#667eea">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <link rel="manifest" href="/experience/manifest.json">
+    <link rel="apple-touch-icon" href="/static/icons/icon-192.png">
+    <title>{{CLINIC_NAME}} — My Status</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            background: #f5f7fa;
+            min-height: 100vh;
+            min-height: 100dvh;
+            color: #333;
+        }
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 24px 20px 32px;
+            border-radius: 0 0 28px 28px;
+        }
+        .header-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+        }
+        .header-row { display: flex; justify-content: space-between; align-items: flex-start; }
+        .hospital-name { font-size: 13px; opacity: 0.85; font-weight: 500; }
+        .patient-name { font-size: 24px; font-weight: 700; margin-top: 4px; }
+        .patient-meta { font-size: 14px; opacity: 0.8; margin-top: 2px; }
+        .header-actions { display: flex; gap: 8px; }
+        .lang-btn {
+            background: rgba(255,255,255,0.2);
+            border: 1px solid rgba(255,255,255,0.3);
+            color: white;
+            padding: 8px 12px;
+            border-radius: 20px;
+            font-size: 13px;
+            cursor: pointer;
+        }
+        .logout-btn {
+            background: rgba(255,255,255,0.2);
+            border: 1px solid rgba(255,255,255,0.3);
+            color: white;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 13px;
+            cursor: pointer;
+        }
+        .content { padding: 20px; max-width: 480px; margin: 0 auto; }
+        .status-card {
+            background: white;
+            border-radius: 16px;
+            padding: 20px;
+            margin-bottom: 16px;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+            transition: all 0.3s;
+        }
+        .status-card:active { transform: scale(0.98); }
+        .status-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+        .test-name { font-size: 18px; font-weight: 700; }
+        .status-badge {
+            padding: 4px 14px;
+            border-radius: 20px;
+            font-size: 13px;
+            font-weight: 600;
+        }
+        .status-waiting { background: #fff8e1; color: #f9a825; }
+        .status-called { background: #e3f2fd; color: #1e88e5; }
+        .status-in_progress { background: #fff3e0; color: #ef6c00; }
+        .status-completed { background: #e8f5e9; color: #43a047; }
+        .status-report_ready { background: #e8eaf6; color: #3949ab; }
+        .status-delivered { background: #f3e5f5; color: #8e24aa; }
+        .status-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 6px 0;
+            font-size: 14px;
+            color: #666;
+        }
+        .status-row .value { color: #333; font-weight: 500; }
+        .eta-box {
+            background: #f0f4ff;
+            border-radius: 12px;
+            padding: 12px 16px;
+            margin-top: 12px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .eta-label { font-size: 12px; color: #888; }
+        .eta-time { font-size: 18px; font-weight: 700; color: #667eea; }
+        .called-banner {
+            background: #e3f2fd;
+            border: 2px solid #1e88e5;
+            border-radius: 12px;
+            padding: 14px;
+            text-align: center;
+            margin-top: 12px;
+            animation: pulse 2s infinite;
+        }
+        .called-banner h3 { color: #1e88e5; font-size: 16px; }
+        .called-banner p { color: #666; font-size: 13px; margin-top: 4px; }
+        @keyframes pulse {
+            0% { box-shadow: 0 0 0 0 rgba(30,136,229,0.4); }
+            70% { box-shadow: 0 0 0 10px rgba(30,136,229,0); }
+            100% { box-shadow: 0 0 0 0 rgba(30,136,229,0); }
+        }
+        .visit-info {
+            background: white;
+            border-radius: 16px;
+            padding: 16px 20px;
+            margin-bottom: 16px;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .visit-label { font-size: 13px; color: #888; }
+        .visit-value { font-size: 20px; font-weight: 700; color: #667eea; }
+        .inquiry-btn {
+            width: 100%;
+            padding: 14px;
+            background: white;
+            border: 2px dashed #d0d5f0;
+            border-radius: 14px;
+            font-size: 15px;
+            color: #667eea;
+            cursor: pointer;
+            transition: all 0.3s;
+            margin-bottom: 16px;
+        }
+        .inquiry-btn:active { border-color: #667eea; background: #f0f4ff; }
+        .inquiry-active {
+            background: #fff8e1;
+            border-color: #f9a825;
+            color: #f9a825;
+        }
+        .loading { text-align: center; padding: 40px; color: #888; }
+        .loading .spinner {
+            width: 40px; height: 40px;
+            border: 4px solid #e0e0e0;
+            border-top-color: #667eea;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            margin: 0 auto 12px;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .nav-bar {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 16px;
+        }
+        .nav-btn {
+            flex: 1;
+            padding: 10px;
+            background: white;
+            border: none;
+            border-radius: 12px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+            transition: all 0.2s;
+        }
+        .nav-btn.active { background: #667eea; color: white; }
+        .nav-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+        .no-tests {
+            text-align: center;
+            padding: 40px 20px;
+            color: #888;
+        }
+        .no-tests .icon { font-size: 48px; margin-bottom: 12px; }
+        .register-link {
+            display: inline-block;
+            margin-top: 16px;
+            padding: 12px 24px;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            border-radius: 12px;
+            text-decoration: none;
+            font-weight: 600;
+        }
+        .last-updated { text-align: center; font-size: 12px; color: #bbb; margin-top: 24px; }
+
+        /* ─── Feedback Tab ───────────────────────────────── */
+        .feedback-section { text-align: center; }
+        .feedback-section h3 { font-size: 18px; margin-bottom: 4px; }
+        .feedback-section p.sub { font-size: 13px; color: #888; margin-bottom: 16px; }
+        .star-rating {
+            display: flex;
+            justify-content: center;
+            gap: 8px;
+            margin-bottom: 16px;
+            flex-direction: row-reverse;
+        }
+        .star-rating input { display: none; }
+        .star-rating label {
+            font-size: 40px;
+            cursor: pointer;
+            color: #ddd;
+            transition: color 0.2s;
+        }
+        .star-rating label:hover,
+        .star-rating label:hover ~ label,
+        .star-rating input:checked ~ label {
+            color: #f9a825;
+        }
+        .feedback-textarea {
+            width: 100%;
+            padding: 14px;
+            border: 2px solid #e0e0e0;
+            border-radius: 12px;
+            font-size: 14px;
+            resize: vertical;
+            min-height: 80px;
+            outline: none;
+            font-family: inherit;
+            transition: border-color 0.3s;
+        }
+        .feedback-textarea:focus { border-color: #667eea; }
+        .feedback-btn {
+            width: 100%;
+            padding: 14px;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            border: none;
+            border-radius: 14px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            margin-top: 12px;
+            transition: transform 0.2s;
+        }
+        .feedback-btn:active { transform: scale(0.98); }
+        .feedback-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        .feedback-thanks {
+            background: #e8f5e9;
+            border-radius: 16px;
+            padding: 24px;
+            text-align: center;
+        }
+        .feedback-thanks .icon { font-size: 48px; }
+        .feedback-thanks h3 { color: #43a047; margin: 8px 0 4px; }
+        .feedback-thanks p { color: #666; font-size: 14px; }
+
+        /* ─── Reports Tab ─────────────────────────────────── */
+        .report-card {
+            background: white;
+            border-radius: 16px;
+            padding: 16px 20px;
+            margin-bottom: 12px;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .report-card .report-name { font-weight: 600; }
+        .report-card .report-status { font-size: 13px; color: #888; }
+        .report-btn {
+            padding: 8px 16px;
+            background: #e8eaf6;
+            color: #3949ab;
+            border: none;
+            border-radius: 10px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+        }
+        .no-reports {
+            text-align: center;
+            padding: 40px 20px;
+            color: #888;
+        }
+        .no-reports .icon { font-size: 48px; margin-bottom: 12px; }
+
+        /* ─── Timeline Tab ──────────────────────────────────── */
+        .timeline-section { padding-bottom: 16px; }
+        .tl-visit {
+            background: white;
+            border-radius: 16px;
+            padding: 16px 20px;
+            margin-bottom: 14px;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+        }
+        .tl-visit-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #f0f0f0;
+        }
+        .tl-visit-date { font-size: 13px; color: #888; font-weight: 500; }
+        .tl-visit-services { display: flex; gap: 6px; flex-wrap: wrap; }
+        .tl-service-tag {
+            font-size: 11px;
+            padding: 2px 10px;
+            border-radius: 10px;
+            background: #e8eaf6;
+            color: #3949ab;
+            font-weight: 600;
+        }
+        .tl-list {
+            position: relative;
+            padding-left: 22px;
+        }
+        .tl-list::before {
+            content: '';
+            position: absolute;
+            left: 7px; top: 6px; bottom: 6px;
+            width: 2px;
+            background: #e0e0e0;
+        }
+        .tl-list.has-active::before {
+            background: linear-gradient(to bottom, #2ecc71, #3498db 80%, #e0e0e0);
+        }
+        .tl-item {
+            position: relative;
+            padding: 0 0 10px 14px;
+            font-size: 13px;
+        }
+        .tl-item:last-child { padding-bottom: 0; }
+        .tl-item::before {
+            content: '';
+            position: absolute;
+            left: -19px; top: 4px;
+            width: 12px; height: 12px;
+            border-radius: 50%;
+            background: #e0e0e0;
+            border: 2px solid #e0e0e0;
+            transition: all 0.3s;
+        }
+        .tl-item.done::before {
+            background: #2ecc71;
+            border-color: #2ecc71;
+        }
+        .tl-item.current::before {
+            background: #3498db;
+            border-color: #3498db;
+            box-shadow: 0 0 0 3px rgba(52,152,219,0.2), 0 0 8px rgba(52,152,219,0.3);
+            animation: tl-pulse 2s infinite;
+        }
+        .tl-item.cancelled::before {
+            background: #e53935;
+            border-color: #e53935;
+        }
+        @keyframes tl-pulse {
+            0% { box-shadow: 0 0 0 0 rgba(52,152,219,0.4); }
+            70% { box-shadow: 0 0 0 8px rgba(52,152,219,0); }
+            100% { box-shadow: 0 0 0 0 rgba(52,152,219,0); }
+        }
+        .tl-item .tl-icon { margin-right: 4px; }
+        .tl-item .tl-label { font-weight: 600; color: #333; }
+        .tl-item .tl-time {
+            color: #999;
+            font-size: 11px;
+            margin-left: 6px;
+        }
+        .tl-item .tl-service {
+            display: inline-block;
+            font-size: 10px;
+            padding: 1px 8px;
+            border-radius: 8px;
+            background: #f0f0f0;
+            color: #888;
+            margin-left: 4px;
+            vertical-align: middle;
+        }
+        .tl-item.done .tl-label { color: #2e7d32; }
+        .tl-item.current .tl-label { color: #1565c0; }
+        .tl-item.cancelled .tl-label { color: #c62828; text-decoration: line-through; }
+        .tl-empty {
+            text-align: center;
+            padding: 40px 20px;
+            color: #888;
+        }
+        .tl-empty .icon { font-size: 48px; margin-bottom: 12px; }
+
+        /* ─── Offline Banner ───────────────────────────────── */
+            background: #fff3e0;
+            color: #ef6c00;
+            padding: 10px 16px;
+            text-align: center;
+            font-size: 13px;
+            font-weight: 600;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="offline-banner" id="offlineBanner">📴 Offline — showing last update</div>
+
+    <div class="header">
+        <div class="header-top">
+            <div>
+                <div class="hospital-name">{{CLINIC_LOGO}} {{CLINIC_NAME}} — {{CLINIC_SPECIALTY}}</div>
+                <div class="patient-name" id="patientName">Loading...</div>
+                <div class="patient-meta" id="patientMeta"></div>
+            </div>
+            <div class="header-actions">
+                <button class="lang-btn" id="langBtn" onclick="toggleLang()">🔤 हिन्दी</button>
+                <button class="logout-btn" onclick="logout()">Logout</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="content">
+        <div class="loading" id="loadingScreen">
+            <div class="spinner"></div>
+            <div id="loadingText">Loading your status...</div>
+        </div>
+
+        <div id="dashboardContent" style="display:none;">
+            <!-- Visit Info -->
+            <div class="visit-info">
+                <div>
+                    <div class="visit-label" id="lblTotalVisits">Total Visits</div>
+                    <div class="visit-value" id="totalVisits">0</div>
+                </div>
+                <div style="text-align:right;">
+                    <div class="visit-label" id="lblLastVisit">Last Visit</div>
+                    <div class="visit-value" style="font-size:14px;" id="lastVisit">—</div>
+                </div>
+            </div>
+
+            <!-- Navigation 4 tabs -->
+            <div class="nav-bar">
+                <button class="nav-btn active" onclick="switchTab('status', this)" id="tabStatus">📊 <span class="tab-label">Status</span></button>
+                <button class="nav-btn" onclick="switchTab('slip', this)" id="tabSlip">🎫 <span class="tab-label">Token Slip</span></button>
+                <button class="nav-btn" onclick="switchTab('reports', this)" id="tabReports">📄 <span class="tab-label">Reports</span></button>
+                <button class="nav-btn" onclick="switchTab('feedback', this)" id="tabFeedback">⭐ <span class="tab-label">Feedback</span></button>
+                <button class="nav-btn" onclick="switchTab('timeline', this)" id="tabTimeline">⏱️ <span class="tab-label">Timeline</span></button>
+            </div>
+
+            <!-- Status Tab -->
+            <div id="statusTab">
+                <div id="testsList"></div>
+                <div id="noTests" class="no-tests hidden">
+                    <div class="icon">🩺</div>
+                    <p id="noTestsText">No active tests found.</p>
+                    <p style="font-size:13px; color:#bbb; margin-top:8px;" id="noTestsHint">
+                        Please visit reception to register.
+                    </p>
+                </div>
+
+                <button class="inquiry-btn" id="inquiryBtn" onclick="sendInquiry()">
+                    💬 <span class="tab-label">Ask Reception</span>
+                </button>
+            </div>
+
+            <!-- Token Slip Tab -->
+            <div id="slipTab" style="display:none;">
+                <div id="slipContent"></div>
+            </div>
+
+            <!-- Reports Tab -->
+            <div id="reportsTab" style="display:none;">
+                <div id="reportsList"></div>
+                <div id="noReports" class="no-reports hidden">
+                    <div class="icon">📋</div>
+                    <p id="noReportsText">No completed reports yet.</p>
+                </div>
+            </div>
+
+            <!-- Feedback Tab -->
+            <div id="feedbackTab" style="display:none;">
+                <div id="feedbackForm">
+                    <div class="feedback-section">
+                        <h3 id="fbTitle">How was your experience?</h3>
+                        <p class="sub" id="fbSub">Your feedback helps us improve.</p>
+                        <div class="star-rating" id="starRating">
+                            <input type="radio" id="star5" name="rating" value="5">
+                            <label for="star5" title="5 stars">★</label>
+                            <input type="radio" id="star4" name="rating" value="4">
+                            <label for="star4" title="4 stars">★</label>
+                            <input type="radio" id="star3" name="rating" value="3">
+                            <label for="star3" title="3 stars">★</label>
+                            <input type="radio" id="star2" name="rating" value="2">
+                            <label for="star2" title="2 stars">★</label>
+                            <input type="radio" id="star1" name="rating" value="1">
+                            <label for="star1" title="1 star">★</label>
+                        </div>
+                        <textarea class="feedback-textarea" id="fbComment" placeholder="Tell us more (optional)..." maxlength="2000"></textarea>
+                        <button class="feedback-btn" id="fbSubmitBtn" onclick="submitFeedback()">Submit Feedback</button>
+                    </div>
+                </div>
+                <div id="feedbackThanks" style="display:none;">
+                    <div class="feedback-thanks">
+                        <div class="icon">🙏</div>
+                        <h3 id="fbThanksTitle">Thank you for your feedback!</h3>
+                        <p id="fbThanksText">We appreciate your input.</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Timeline Tab -->
+            <div id="timelineTab" style="display:none;">
+                <div class="timeline-section" id="timelineContent">
+                    <div class="loading"><div class="spinner"></div><p>Loading timeline...</p></div>
+                </div>
+                <div id="tlEmpty" class="tl-empty hidden">
+                    <div class="icon">🗺️</div>
+                    <p id="tlEmptyText">No journey data yet.</p>
+                    <p style="font-size:13px; color:#bbb; margin-top:8px;" id="tlEmptyHint">Timeline will appear once you register for tests.</p>
+                </div>
+            </div>
+
+            <div class="last-updated" id="lastUpdated">Updating...</div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = '/api/v1/experience';
+        let sessionToken = localStorage.getItem('session_token');
+        let refreshInterval = null;
+        const REFRESH_SECONDS = 10;
+        let currentLang = localStorage.getItem('lang') || 'en';
+
+        // ─── Language Strings ────────────────────────────────────
+        const LANG = {
+            en: {
+                loading: 'Loading your status...',
+                totalVisits: 'Total Visits',
+                lastVisit: 'Last Visit',
+                tabStatus: 'Status',
+                tabSlip: 'Token Slip',
+                tabReports: 'Reports',
+                tabFeedback: 'Feedback',
+                tabTimeline: 'Timeline',
+                noTests: 'No active tests found.',
+                noTestsHint: 'Please visit reception to register.',
+                inquiry: 'Ask Reception',
+                inquirySent: '✅ Sent! Reception will respond shortly.',
+                inquirySending: '⏳ Sending...',
+                fbTitle: 'How was your experience?',
+                fbSub: 'Your feedback helps us improve.',
+                fbPlaceholder: 'Tell us more (optional)...',
+                fbSubmit: 'Submit Feedback',
+                fbThanks: 'Thank you for your feedback!',
+                fbThanksSub: 'We appreciate your input.',
+                fbSubmitting: 'Submitting...',
+                noReports: 'No completed reports yet.',
+                viewReport: 'View',
+                btnLang: '🔤 हिन्दी',
+                offline: '📴 Offline — showing last update',
+                firstVisit: 'First visit',
+                logout: 'Logout',
+                lastUpdated: 'Last updated',
+                calledTitle: '🔵 PLEASE PROCEED NOW',
+                calledGo: 'Go to',
+                etaLabel: 'Estimated Time',
+                waitLabel: 'Wait',
+                tlLoading: 'Loading timeline...',
+                tlNoData: 'No journey data yet.',
+                tlNoDataHint: 'Timeline will appear once you register for tests.',
+                tlVisitLabel: 'Visit',
+                tlServices: 'Services',
+                pendingReview: 'Pending Review',
+                readyForCollection: 'Ready for Collection',
+                delivered: 'Delivered ✓',
+                doctorNotes: "Doctor's Notes",
+                printReport: 'Print this Report',
+                reportNotFound: 'Report not found.',
+                failedToLoadReport: 'Could not load report. Please try again.',
+                noAccess: 'You do not have access to this report.',
+            },
+            hi: {
+                loading: 'आपकी स्थिति लोड हो रही है...',
+                totalVisits: 'कुल विज़िट',
+                lastVisit: 'पिछली विज़िट',
+                tabStatus: 'स्थिति',
+                tabSlip: 'टोकन स्लिप',
+                tabReports: 'रिपोर्ट',
+                tabFeedback: 'प्रतिक्रिया',
+                tabTimeline: 'समयरेखा',
+                noTests: 'कोई सक्रिय परीक्षण नहीं मिला।',
+                noTestsHint: 'कृपया रिसेप्शन पर पंजीकरण कराएं।',
+                inquiry: 'रिसेप्शन से पूछें',
+                inquirySent: '✅ भेज दिया गया! रिसेप्शन जल्द ही जवाब देगा।',
+                inquirySending: '⏳ भेज रहे हैं...',
+                fbTitle: 'आपका अनुभव कैसा रहा?',
+                fbSub: 'आपकी प्रतिक्रिया से हमें सुधार करने में मदद मिलती है।',
+                fbPlaceholder: 'और बताएं (वैकल्पिक)...',
+                fbSubmit: 'प्रतिक्रिया भेजें',
+                fbThanks: 'आपकी प्रतिक्रिया के लिए धन्यवाद!',
+                fbThanksSub: 'हम आपके इनपुट की सराहना करते हैं।',
+                fbSubmitting: 'भेज रहे हैं...',
+                noReports: 'अभी तक कोई रिपोर्ट तैयार नहीं है।',
+                viewReport: 'देखें',
+                btnLang: '🔤 English',
+                offline: '📴 ऑफ़लाइन — पिछली जानकारी दिखाई जा रही है',
+                firstVisit: 'पहली विज़िट',
+                logout: 'लॉग आउट',
+                lastUpdated: 'अंतिम अपडेट',
+                calledTitle: '🔵 कृपया अभी जाएं',
+                calledGo: 'यहाँ जाएं',
+                etaLabel: 'अनुमानित समय',
+                waitLabel: 'प्रतीक्षा',
+                tlLoading: 'समयरेखा लोड हो रही है...',
+                tlNoData: 'अभी तक कोई यात्रा डेटा नहीं है।',
+                tlNoDataHint: 'परीक्षणों के लिए पंजीकरण करने के बाद समयरेखा दिखाई देगी।',
+                tlVisitLabel: 'विज़िट',
+                tlServices: 'सेवाएं',
+                pendingReview: 'समीक्षा हेतु लंबित',
+                readyForCollection: 'संग्रह के लिए तैयार',
+                delivered: 'वितरित ✓',
+                doctorNotes: 'डॉक्टर के नोट्स',
+                printReport: 'यह रिपोर्ट प्रिंट करें',
+                reportNotFound: 'रिपोर्ट नहीं मिली।',
+                failedToLoadReport: 'रिपोर्ट लोड नहीं हो सकी। कृपया पुनः प्रयास करें।',
+                noAccess: 'आपके पास इस रिपोर्ट तक पहुंच नहीं है।',
+            }
+        };
+
+        function __(key) {
+            return LANG[currentLang][key] || LANG.en[key] || key;
+        }
+
+        function toggleLang() {
+            currentLang = currentLang === 'en' ? 'hi' : 'en';
+            localStorage.setItem('lang', currentLang);
+            applyLang();
+            // Re-render tests with new language
+            loadDashboard();
+        }
+
+        function applyLang() {
+            document.getElementById('langBtn').textContent = __(currentLang === 'en' ? 'btnLang' : 'btnLang');
+            // The btnLang key always shows the OTHER language
+            document.getElementById('langBtn').textContent = currentLang === 'en' ? '🔤 हिन्दी' : '🔤 English';
+
+            document.getElementById('loadingText').textContent = __('loading');
+            document.getElementById('lblTotalVisits').textContent = __('totalVisits');
+            document.getElementById('lblLastVisit').textContent = __('lastVisit');
+
+            document.querySelectorAll('#tabStatus .tab-label').forEach(el => el.textContent = __('tabStatus'));
+            document.querySelectorAll('#tabSlip .tab-label').forEach(el => el.textContent = __('tabSlip'));
+            document.querySelectorAll('#tabReports .tab-label').forEach(el => el.textContent = __('tabReports'));
+            document.querySelectorAll('#tabFeedback .tab-label').forEach(el => el.textContent = __('tabFeedback'));
+            document.querySelectorAll('#tabTimeline .tab-label').forEach(el => el.textContent = __('tabTimeline'));
+
+            document.getElementById('tlEmptyText').textContent = __('tlNoData');
+            document.getElementById('tlEmptyHint').textContent = __('tlNoDataHint');
+
+            document.getElementById('noTestsText').textContent = __('noTests');
+            document.getElementById('noTestsHint').textContent = __('noTestsHint');
+            document.getElementById('inquiryBtn').innerHTML = `💬 <span class="tab-label">${__('inquiry')}</span>`;
+
+            document.getElementById('fbTitle').textContent = __('fbTitle');
+            document.getElementById('fbSub').textContent = __('fbSub');
+            document.getElementById('fbComment').placeholder = __('fbPlaceholder');
+            document.getElementById('fbSubmitBtn').textContent = __('fbSubmit');
+            document.getElementById('fbThanksTitle').textContent = __('fbThanks');
+            document.getElementById('fbThanksText').textContent = __('fbThanksSub');
+            document.getElementById('noReportsText').textContent = __('noReports');
+
+            document.getElementById('offlineBanner').textContent = __('offline');
+        }
+
+        // ─── Auth Check ──────────────────────────────────────────
+        if (!sessionToken) {
+            window.location.href = '/experience/';
+        }
+
+        // ─── API Call ────────────────────────────────────────────
+        async function apiCall(endpoint, options = {}) {
+            try {
+                const resp = await fetch(`${API_BASE}${endpoint}`, {
+                    ...options,
+                    headers: {
+                        'Authorization': 'Bearer ' + sessionToken,
+                        'Content-Type': 'application/json',
+                        ...(options.headers || {}),
+                    },
+                });
+                if (resp.status === 401) {
+                    localStorage.removeItem('session_token');
+                    window.location.href = '/experience/';
+                    return null;
+                }
+                const data = await resp.json();
+                // Cache for offline
+                if (endpoint === '/my-status' && resp.ok) {
+                    localStorage.setItem('cached_status', JSON.stringify(data));
+                }
+                document.getElementById('offlineBanner').style.display = 'none';
+                return data;
+            } catch (err) {
+                // Offline: try cache
+                const cached = localStorage.getItem('cached_status');
+                if (cached) {
+                    document.getElementById('offlineBanner').style.display = 'block';
+                    return JSON.parse(cached);
+                }
+                return null;
+            }
+        }
+
+        // ─── Dashboard Load ──────────────────────────────────────
+        async function loadDashboard() {
+            const data = await apiCall('/my-status');
+            if (!data) return;
+
+            document.getElementById('loadingScreen').style.display = 'none';
+            document.getElementById('dashboardContent').style.display = 'block';
+
+            // Patient info
+            if (data.patient) {
+                document.getElementById('patientName').textContent = data.patient.name;
+                document.getElementById('patientMeta').textContent =
+                    `👤 ${data.patient.age}y/${data.patient.gender} | 🆔 ${data.patient.patient_id}`;
+            }
+
+            // Visit info
+            if (data.visit) {
+                document.getElementById('totalVisits').textContent = data.visit.total_visits || 0;
+                document.getElementById('lastVisit').textContent =
+                    data.visit.last_visit_at ? new Date(data.visit.last_visit_at).toLocaleDateString() : __('firstVisit');
+            }
+
+            // Tests
+            const testsList = document.getElementById('testsList');
+            const noTests = document.getElementById('noTests');
+            const reportsList = document.getElementById('reportsList');
+            const noReports = document.getElementById('noReports');
+
+            if (data.tests && data.tests.length > 0) {
+                noTests.classList.add('hidden');
+                testsList.innerHTML = '';
+                let completedCount = 0;
+                data.tests.forEach(test => {
+                    renderTestCard(testsList, test);
+                    if (test.status === 'completed' || test.status === 'report_ready' || test.status === 'delivered') {
+                        completedCount++;
+                        renderReportCard(reportsList, test);
+                    }
+                });
+                if (completedCount > 0) {
+                    noReports.classList.add('hidden');
+                } else {
+                    noReports.classList.remove('hidden');
+                }
+            } else {
+                testsList.innerHTML = '';
+                noTests.classList.remove('hidden');
+                reportsList.innerHTML = '';
+                noReports.classList.remove('hidden');
+            }
+
+            document.getElementById('lastUpdated').textContent =
+                __('lastUpdated') + ': ' + new Date().toLocaleTimeString();
+        }
+
+        function renderTestCard(container, test) {
+            const statusClass = 'status-' + (test.status || 'waiting');
+            const etaHtml = test.status === 'called'
+                ? `<div class="called-banner"><h3>${__('calledTitle')}</h3><p>${__('calledGo')} ${test.room || 'your assigned room'}</p></div>`
+                : `<div class="eta-box">
+                    <div><div class="eta-label">${__('etaLabel')}</div><div class="eta-time">${test.expected_time || 'Now / अभी'}</div></div>
+                    <div style="text-align:right;"><div class="eta-label">${__('waitLabel')}</div><div class="eta-time" style="font-size:14px;">~${test.wait_minutes || 0} min</div></div>
+                   </div>`;
+
+            // Doctor notes
+            const notesHtml = test.doctor_notes
+                ? `<div class="status-row" style="margin-top:8px;padding-top:8px;border-top:1px solid #eee;">
+                    <span>👨‍⚕️ ${test.doctor_notes}</span>
+                   </div>`
+                : '';
+
+            const card = document.createElement('div');
+            card.className = 'status-card';
+            card.innerHTML = `
+                <div class="status-header">
+                    <span class="test-name">${test.test_name}</span>
+                    <span class="status-badge ${statusClass}">${test.status_display || test.status}</span>
+                </div>
+                <div class="status-row">
+                    <span>Token #</span>
+                    <span class="value">${test.token_number || '—'}</span>
+                </div>
+                <div class="status-row">
+                    <span>Room</span>
+                    <span class="value">${test.room || 'TBD'}</span>
+                </div>
+                ${notesHtml}
+                ${etaHtml}
+            `;
+            container.appendChild(card);
+        }
+
+        function renderReportCard(container, test) {
+            const card = document.createElement('div');
+            card.className = 'report-card';
+            let statusBadge = '';
+            let statusText = '';
+            if (test.status === 'completed') {
+                statusBadge = '🟡';
+                statusText = __('pendingReview') || 'Pending Review';
+            } else if (test.status === 'report_ready') {
+                statusBadge = '🟢';
+                statusText = __('readyForCollection') || 'Ready for Collection';
+            } else if (test.status === 'delivered') {
+                statusBadge = '✅';
+                statusText = __('delivered') || 'Delivered ✓';
+            } else {
+                statusBadge = '⚪';
+                statusText = test.status_display || 'Completed';
+            }
+            card.innerHTML = `
+                <div>
+                    <div class="report-name">${test.test_name}</div>
+                    <div class="report-status">${statusBadge} ${statusText}</div>
+                </div>
+                <button class="report-btn" onclick="viewReport('${test.id}', '${test.test_name.replace(/'/g, "\\'")}')">📄 ${__('viewReport')}</button>
+            `;
+            container.appendChild(card);
+        }
+
+        async function viewReport(entryId, testName) {
+            try {
+                const resp = await fetch(`${API_BASE}/report/${entryId}`);
+                if (!resp.ok) {
+                    if (resp.status === 403) {
+                        alert(__('noAccess') || 'You do not have access to this report.');
+                        return;
+                    }
+                    if (resp.status === 404) {
+                        alert(__('reportNotFound') || 'Report not found.');
+                        return;
+                    }
+                    throw new Error('Fetch failed');
+                }
+                const data = await resp.json();
+                renderReportView(data);
+            } catch (err) {
+                console.error('viewReport error:', err);
+                alert(__('failedToLoadReport') || 'Could not load report. Please try again.');
+            }
+        }
+
+        function renderReportView(data) {
+            const ts = data.timestamps || {};
+            const status = data.status || '';
+            const patientName = document.getElementById('patientName').textContent;
+
+            let statusBadge, statusColor;
+            if (status === 'completed') {
+                statusBadge = '🟡 Pending Review';
+                statusColor = '#f9a825';
+            } else if (status === 'report_ready') {
+                statusBadge = '🟢 Ready for Collection';
+                statusColor = '#43a047';
+            } else if (status === 'delivered') {
+                statusBadge = '✅ Delivered';
+                statusColor = '#757575';
+            } else {
+                statusBadge = status;
+                statusColor = '#666';
+            }
+
+            // Build timeline rows for each status with a timestamp
+            function tlRow(label, isoTime, icon) {
+                if (!isoTime) return '';
+                const d = new Date(isoTime);
+                const timeStr = d.toLocaleString();
+                return `<div class="tl-row"><span>${icon} ${label}</span><span style="color:#888;font-size:13px;">${timeStr}</span></div>`;
+            }
+
+            const timelineHtml = [
+                tlRow('Registered', ts.created_at, '📋'),
+                tlRow('Called', ts.called_at, '📞'),
+                tlRow('Test Started', ts.started_at, '▶️'),
+                tlRow('Completed', ts.completed_at, '✅'),
+                tlRow('Report Ready', ts.report_ready_at, '📄'),
+                tlRow('Delivered', ts.delivered_at, '📤'),
+            ].filter(Boolean).join('');
+
+            const notesHtml = data.notes
+                ? `<div class="notes-section">
+                    <h3 style="margin:16px 0 8px;font-size:15px;">👨‍⚕️ ${__('doctorNotes') || "Doctor's Notes"}</h3>
+                    <div style="background:#f5f7ff;padding:12px;border-radius:8px;font-size:14px;line-height:1.5;white-space:pre-wrap;">${data.notes}</div>
+                   </div>`
+                : '';
+
+            const reportHtml = `
+                <html><head><meta charset="UTF-8"><title>${data.service_name} — Report</title>
+                <style>
+                    *{box-sizing:border-box;}
+                    body{font-family:system-ui,-apple-system,sans-serif;padding:30px;color:#333;max-width:700px;margin:0 auto;}
+                    h1{color:#1a237e;font-size:22px;border-bottom:2px solid #667eea;padding-bottom:10px;margin-top:0;}
+                    .meta{color:#888;font-size:14px;margin-bottom:20px;}
+                    .status-badge{display:inline-block;padding:4px 14px;border-radius:20px;font-size:13px;font-weight:600;color:#fff;background:${statusColor};margin:8px 0 16px;}
+                    .info-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px 24px;margin:16px 0;font-size:14px;}
+                    .info-grid .label{color:#888;}
+                    .info-grid .value{font-weight:500;}
+                    .tl-section{margin:20px 0;padding:16px;background:#fafafa;border-radius:10px;}
+                    .tl-row{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #eee;font-size:14px;}
+                    .tl-row:last-child{border-bottom:none;}
+                    .notes-section{margin:16px 0;}
+                    .print-btn{display:block;width:100%;padding:12px;background:#1a237e;color:#fff;border:none;border-radius:8px;font-size:15px;font-weight:600;cursor:pointer;margin:20px 0;text-align:center;}
+                    .print-btn:hover{background:#283593;}
+                    @media print{body{padding:20px;}.print-btn{display:none;}}
+                </style></head>
+                <body>
+                    <h1>${data.service_name}</h1>
+                    <div class="meta">Patient: ${patientName} | Token #${data.token_number || '—'} | 📍 ${data.room || '—'}</div>
+                    <div class="status-badge">${statusBadge}</div>
+                    <div class="info-grid">
+                        <div><span class="label">Service</span><br><span class="value">${data.service_code || '—'}</span></div>
+                        <div><span class="label">Department</span><br><span class="value">${data.department || '—'}</span></div>
+                    </div>
+                    ${timelineHtml ? `<div class="tl-section"><h3 style="margin:0 0 8px;font-size:15px;">📅 Timeline</h3>${timelineHtml}</div>` : ''}
+                    ${notesHtml}
+                    <button class="print-btn" onclick="window.print()">🖨️ ${__('printReport') || 'Print this Report'}</button>
+                    <script>window.print && document.querySelector('.print-btn').addEventListener('click',function(){window.print()});<\/script>
+                </body></html>
+            `;
+            const w = window.open('', '_blank', 'width=850,height=700');
+            if (w) {
+                w.document.write(reportHtml);
+                w.document.close();
+            }
+        }
+
+        // ─── Tab Switching ───────────────────────────────────────
+        function switchTab(tab, btn) {
+            document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+
+            document.getElementById('statusTab').style.display = tab === 'status' ? 'block' : 'none';
+            document.getElementById('slipTab').style.display = tab === 'slip' ? 'block' : 'none';
+            document.getElementById('reportsTab').style.display = tab === 'reports' ? 'block' : 'none';
+            document.getElementById('feedbackTab').style.display = tab === 'feedback' ? 'block' : 'none';
+            document.getElementById('timelineTab').style.display = tab === 'timeline' ? 'block' : 'none';
+
+            if (tab === 'slip') loadTokenSlip();
+            if (tab === 'timeline') loadTimeline();
+        }
+
+        // ─── Timeline ───────────────────────────────────────────
+        const EVENT_ORDER = ['registered', 'waiting', 'called', 'in_progress', 'completed', 'report_ready', 'delivered'];
+        const EVENT_META = {
+            registered: { icon: '📝' },
+            waiting:    { icon: '⏳' },
+            called:     { icon: '🔵' },
+            recalled:   { icon: '🔁' },
+            in_progress:{ icon: '🟠' },
+            completed:  { icon: '✅' },
+            report_ready:{icon: '📋' },
+            delivered:  { icon: '📄' },
+            cancelled:  { icon: '❌' },
+            no_show:    { icon: '🚫' },
+        };
+        const TL_LABELS = {
+            en: {
+                registered: 'Registered', waiting: 'Waiting in Queue', called: 'Called',
+                recalled: 'Recalled', in_progress: 'Test Started', completed: 'Completed',
+                report_ready: 'Report Ready', delivered: 'Report Delivered',
+                cancelled: 'Cancelled', no_show: 'No Show',
+            },
+            hi: {
+                registered: 'पंजीकृत', waiting: 'कतार में प्रतीक्षा', called: 'बुलाया गया',
+                recalled: 'पुनः बुलाया गया', in_progress: 'परीक्षण शुरू', completed: 'पूर्ण',
+                report_ready: 'रिपोर्ट तैयार', delivered: 'रिपोर्ट दी गई',
+                cancelled: 'रद्द', no_show: 'उपस्थित नहीं',
+            }
+        };
+
+        function getTlLabel(type) {
+            return (TL_LABELS[currentLang] || TL_LABELS.en)[type] || type;
+        }
+
+        async function loadTimeline() {
+            const container = document.getElementById('timelineContent');
+            const empty = document.getElementById('tlEmpty');
+
+            const data = await apiCall('/my-timeline');
+            if (!data || !data.visits || data.visits.length === 0) {
+                container.innerHTML = '';
+                empty.classList.remove('hidden');
+                return;
+            }
+            empty.classList.add('hidden');
+
+            let html = '';
+            data.visits.forEach((visit) => {
+                const firstTs = visit.events.length > 0 ? visit.events[0].timestamp : null;
+                const visitDate = firstTs
+                    ? new Date(firstTs).toLocaleDateString(currentLang === 'hi' ? 'hi-IN' : 'en-IN', { day: 'numeric', month: 'short', year: 'numeric' })
+                    : '';
+
+                // Determine highest event index (for current step detection)
+                let maxIdx = -1;
+                const foundTypes = new Set();
+                visit.events.forEach(ev => {
+                    foundTypes.add(ev.type);
+                    const idx = EVENT_ORDER.indexOf(ev.type);
+                    if (idx > maxIdx) maxIdx = idx;
+                });
+
+                const hasCancelled = foundTypes.has('cancelled');
+                const hasNoShow = foundTypes.has('no_show');
+                const terminal = hasCancelled || hasNoShow;
+
+                html += `<div class="tl-visit">`;
+                html += `<div class="tl-visit-header">
+                    <div class="tl-visit-date">📅 ${visitDate}</div>
+                    <div class="tl-visit-services">${visit.services.map(s => `<span class="tl-service-tag">${s}</span>`).join('')}</div>
+                </div>`;
+                html += `<div class="tl-list${maxIdx >= 0 && !terminal ? ' has-active' : ''}">`;
+
+                // Walk through event order
+                EVENT_ORDER.forEach((etype, idx) => {
+                    const matching = visit.events.filter(e => e.type === etype);
+                    if (matching.length > 0) {
+                        matching.forEach(ev => {
+                            const meta = EVENT_META[ev.type] || { icon: '📌' };
+                            const isLast = idx === maxIdx;
+                            let cls = 'done';
+                            if (terminal) {
+                                cls = ev.type === 'cancelled' || ev.type === 'no_show' ? 'cancelled' : 'done';
+                            } else if (isLast) {
+                                cls = 'current';
+                            }
+                            const time = new Date(ev.timestamp).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
+                            const badge = visit.services.length > 1 ? `<span class="tl-service">${ev.service_code || ''}</span>` : '';
+                            html += `<div class="tl-item ${cls}">
+                                <span class="tl-icon">${meta.icon}</span>
+                                <span class="tl-label">${getTlLabel(ev.type)}</span>
+                                <span class="tl-time">${time}</span>${badge}
+                            </div>`;
+                        });
+                    } else if (idx > maxIdx && !terminal && maxIdx >= 0) {
+                        // Future step — show as grey
+                        const meta = EVENT_META[etype] || { icon: '○' };
+                        html += `<div class="tl-item" style="opacity:0.35;">
+                            <span class="tl-icon">${meta.icon}</span>
+                            <span class="tl-label">${getTlLabel(etype)}</span>
+                            <span class="tl-time">--:--</span>
+                        </div>`;
+                    }
+                });
+
+                html += `</div></div>`;
+            });
+
+            container.innerHTML = html;
+        }
+
+        // ─── Token Slip ──────────────────────────────────────────
+        async function loadTokenSlip() {
+            try {
+                const data = await apiCall('/token-slip/json');
+                if (!data) return;
+                document.getElementById('slipContent').innerHTML =
+                    `<iframe srcdoc="${data.html.replace(/"/g, '&quot;')}" style="width:100%; height:600px; border:none; border-radius:12px;"></iframe>`;
+            } catch (err) {
+                console.error(err);
+            }
+        }
+
+        // ─── Inquiry ─────────────────────────────────────────────
+        async function sendInquiry() {
+            const text = prompt(__('inquiry'));
+            if (!text || !text.trim()) return;
+
+            const btn = document.getElementById('inquiryBtn');
+            btn.innerHTML = `${__('inquirySending')}`;
+            btn.disabled = true;
+
+            const data = await apiCall('/inquiry', {
+                method: 'POST',
+                body: JSON.stringify({ inquiry_text: text.trim() }),
+            });
+
+            if (data) {
+                btn.innerHTML = `${__('inquirySent')}`;
+                btn.classList.add('inquiry-active');
+                setTimeout(() => {
+                    btn.innerHTML = `💬 <span class="tab-label">${__('inquiry')}</span>`;
+                    btn.classList.remove('inquiry-active');
+                    btn.disabled = false;
+                }, 3000);
+            } else {
+                btn.innerHTML = `💬 <span class="tab-label">${__('inquiry')}</span>`;
+                btn.disabled = false;
+            }
+        }
+
+        // ─── Feedback ────────────────────────────────────────────
+        async function submitFeedback() {
+            const ratingEl = document.querySelector('input[name="rating"]:checked');
+            if (!ratingEl) {
+                alert('Please select a rating (1-5 stars)');
+                return;
+            }
+            const rating = parseInt(ratingEl.value);
+            const comment = document.getElementById('fbComment').value.trim();
+
+            const btn = document.getElementById('fbSubmitBtn');
+            btn.disabled = true;
+            btn.textContent = __('fbSubmitting');
+
+            const data = await apiCall('/feedback', {
+                method: 'POST',
+                body: JSON.stringify({ rating, comment }),
+            });
+
+            if (data && data.status === 'submitted') {
+                document.getElementById('feedbackForm').style.display = 'none';
+                document.getElementById('feedbackThanks').style.display = 'block';
+            } else {
+                btn.disabled = false;
+                btn.textContent = __('fbSubmit');
+                alert('Failed to submit feedback. Please try again.');
+            }
+        }
+
+        // ─── Logout ──────────────────────────────────────────────
+        function logout() {
+            localStorage.removeItem('session_token');
+            localStorage.removeItem('patient_name');
+            localStorage.removeItem('patient_id');
+            localStorage.removeItem('cached_status');
+            if (refreshInterval) clearInterval(refreshInterval);
+            if (window.alertInterval) clearInterval(window.alertInterval);
+            window.location.href = '/experience/';
+        }
+
+        // ─── Alert System ────────────────────────────────────────
+        let alertBannerEl = null;
+
+        function playBeep() {
+            try {
+                const ctx = new (window.AudioContext || window.webkitAudioContext)();
+                const osc = ctx.createOscillator();
+                const gain = ctx.createGain();
+                osc.connect(gain);
+                gain.connect(ctx.destination);
+                osc.frequency.value = 800;
+                osc.type = 'sine';
+                gain.gain.value = 0.3;
+                osc.start(ctx.currentTime);
+                osc.stop(ctx.currentTime + 0.15);
+                const osc2 = ctx.createOscillator();
+                const gain2 = ctx.createGain();
+                osc2.connect(gain2);
+                gain2.connect(ctx.destination);
+                osc2.frequency.value = 1000;
+                osc2.type = 'sine';
+                gain2.gain.value = 0.3;
+                osc2.start(ctx.currentTime + 0.3);
+                osc2.stop(ctx.currentTime + 0.45);
+                const osc3 = ctx.createOscillator();
+                const gain3 = ctx.createGain();
+                osc3.connect(gain3);
+                gain3.connect(ctx.destination);
+                osc3.frequency.value = 1200;
+                osc3.type = 'sine';
+                gain3.gain.value = 0.3;
+                osc3.start(ctx.currentTime + 0.6);
+                osc3.stop(ctx.currentTime + 0.75);
+            } catch(e) { /* Audio not available */ }
+        }
+
+        function vibratePhone() {
+            if (navigator.vibrate) {
+                navigator.vibrate([200, 100, 200, 100, 200]);
+            }
+        }
+
+        function showAlertBanner(message, room, service) {
+            if (alertBannerEl) alertBannerEl.remove();
+            alertBannerEl = document.createElement('div');
+            alertBannerEl.id = 'alertBanner';
+            alertBannerEl.style.cssText = `
+                position: fixed; top: 0; left: 0; right: 0;
+                background: linear-gradient(135deg, #e74c3c, #c0392b);
+                color: white; padding: 16px 20px;
+                text-align: center; z-index: 9999;
+                box-shadow: 0 4px 20px rgba(231,76,60,0.4);
+                animation: slideDown 0.3s ease;
+            `;
+            alertBannerEl.innerHTML = `
+                <div style="font-size: 28px; margin-bottom: 4px;">🔔</div>
+                <div style="font-size: 18px; font-weight: 700;">${message}</div>
+                <div style="font-size: 14px; opacity: 0.9; margin-top: 4px;">📍 ${room} | ${service}</div>
+                <button onclick="dismissAlert()" style="
+                    margin-top: 10px; padding: 8px 24px;
+                    border: 2px solid rgba(255,255,255,0.5);
+                    background: transparent; color: white;
+                    border-radius: 20px; font-size: 14px;
+                    cursor: pointer;
+                ">OK, I'm going 👍</button>
+            `;
+            const style = document.createElement('style');
+            style.textContent = `
+                @keyframes slideDown {
+                    from { transform: translateY(-100%); }
+                    to { transform: translateY(0); }
+                }
+            `;
+            document.head.appendChild(style);
+            document.body.prepend(alertBannerEl);
+        }
+
+        function dismissAlert() {
+            if (alertBannerEl) {
+                alertBannerEl.style.transform = 'translateY(-100%)';
+                alertBannerEl.style.transition = 'transform 0.3s ease';
+                setTimeout(() => {
+                    if (alertBannerEl) alertBannerEl.remove();
+                    alertBannerEl = null;
+                }, 300);
+            }
+        }
+
+        async function checkAlert() {
+            try {
+                const data = await apiCall('/alert-status');
+                if (data && data.alert) {
+                    playBeep();
+                    vibratePhone();
+                    showAlertBanner(
+                        data.message || 'Please proceed',
+                        data.room || 'Room',
+                        data.service_name || data.service_code || ''
+                    );
+                }
+            } catch (e) {}
+        }
+
+        // ─── Init ────────────────────────────────────────────────
+        applyLang();
+        loadDashboard();
+
+        refreshInterval = setInterval(loadDashboard, REFRESH_SECONDS * 1000);
+        window.alertInterval = setInterval(checkAlert, 5000);
+        setTimeout(checkAlert, 1000);
+
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('/experience/service-worker.js');
+        }
+
+        document.addEventListener('click', function(e) {
+            if (e.target.closest('.status-card') && navigator.vibrate) {
+                navigator.vibrate(10);
+            }
+        });
+
+        // Check for cached status on load (offline first)
+        const cached = localStorage.getItem('cached_status');
+        if (cached && !navigator.onLine) {
+            const data = JSON.parse(cached);
+            document.getElementById('offlineBanner').style.display = 'block';
+            // Quick render from cache while online data loads
+        }
+    </script>
+</body>
+</html>

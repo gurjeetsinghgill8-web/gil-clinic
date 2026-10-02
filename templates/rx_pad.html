@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Prescription — {{ patient_name }}</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700;14..32,800&display=swap');
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{font-family:'Inter',system-ui,sans-serif;background:#eef2f7;color:#111;padding:24px 12px}
+  .no-print{max-width:760px;margin:0 auto 14px;display:flex;gap:10px;flex-wrap:wrap;justify-content:center}
+  .btn{display:inline-flex;align-items:center;gap:7px;padding:11px 18px;border-radius:11px;font-size:14px;font-weight:700;cursor:pointer;border:none;text-decoration:none;font-family:inherit}
+  .btn-primary{background:#667eea;color:#fff;box-shadow:0 6px 16px rgba(102,126,234,.3)}
+  .btn-wa{background:#25D366;color:#fff}
+  .btn-ghost{background:#fff;border:1.5px solid #cbd5e1;color:#111}
+
+  .pad{max-width:760px;margin:0 auto;background:#fff;border:1px solid #e2e8f0;border-radius:14px;box-shadow:0 8px 30px rgba(15,23,42,.08);overflow:hidden}
+  .pad-head{background:linear-gradient(135deg,#0f172a,#312e81);color:#fff;padding:20px 24px}
+  .pad-head .clinic{font-size:20px;font-weight:800;letter-spacing:-.3px}
+  .pad-head .doc{font-size:14px;margin-top:3px;opacity:.95}
+  .pad-head .quals{font-size:12px;opacity:.8;margin-top:2px}
+  .pad-head .addr{font-size:12px;opacity:.75;margin-top:6px}
+  .pad-body{padding:22px 24px}
+  .row{display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px;font-size:13.5px;padding:6px 0;border-bottom:1px dashed #e2e8f0}
+  .row b{font-weight:700}
+  .rx-block{margin-top:16px}
+  .rx-symbol{font-size:30px;font-weight:800;color:#312e81;line-height:1}
+  .section{margin-top:14px}
+  .section h3{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.8px;color:#64748b;margin-bottom:4px}
+  .section .content{font-size:14.5px;line-height:1.6;white-space:pre-wrap}
+  .sig{margin-top:30px;display:flex;justify-content:flex-end}
+  .sig .line{text-align:center}
+  .sig .name{font-weight:700;font-size:14px;border-top:1.5px solid #111;padding-top:6px;margin-top:34px}
+  .sig .qual{font-size:11px;color:#64748b;margin-top:2px}
+  .pad-foot{margin-top:22px;padding-top:12px;border-top:1px solid #e2e8f0;font-size:11px;color:#94a3b8;text-align:center;line-height:1.6}
+  @media print{
+    body{background:#fff;padding:0}
+    .no-print{display:none}
+    .pad{border:none;border-radius:0;box-shadow:none;max-width:none}
+    .pad-body{padding:16px 0}
+  }
+</style>
+</head>
+<body>
+
+<div class="no-print">
+  <button class="btn btn-primary" onclick="window.print()">🖨️ Print / Save PDF</button>
+  <a class="btn btn-wa" href="https://wa.me/?text={{ rx_text|urlencode }}" target="_blank" rel="noopener">💬 WhatsApp</a>
+  <a class="btn btn-ghost" href="{{ pad_url }}" target="_blank" rel="noopener">🔗 Share link</a>
+</div>
+
+<div class="pad">
+  <div class="pad-head">
+    <div class="clinic">🏥 {{ clinic_name }}</div>
+    <div class="doc">Dr. {{ doc_name }}{% if doc_degree %} · {{ doc_degree }}{% endif %}</div>
+    {% if doc_extra_quals %}<div class="quals">{{ doc_extra_quals }}</div>{% endif %}
+    {% if doc_reg_no %}<div class="quals">Reg. No: {{ doc_reg_no }}</div>{% endif %}
+    {% if clinic_address %}<div class="addr">📍 {{ clinic_address }}{% if doc_phone %} · 📞 {{ doc_phone }}{% endif %}</div>{% endif %}
+  </div>
+
+  <div class="pad-body">
+    <div class="row"><span><b>Patient:</b> {{ patient_name }}</span><span><b>ID:</b> {{ patient_id }}</span></div>
+    <div class="row">
+      <span><b>Age:</b> {{ age or '—' }}</span>
+      <span><b>Sex:</b> {{ gender or '—' }}</span>
+      <span><b>Date:</b> {{ date }}</span>
+    </div>
+    {% if vitals %}
+    <div class="row"><span><b>Vitals:</b> {{ vitals }}</span></div>
+    {% endif %}
+
+    <div class="rx-block">
+      <div class="rx-symbol">℞</div>
+      {% if diagnosis %}
+      <div class="section"><h3>Diagnosis</h3><div class="content">{{ diagnosis }}</div></div>
+      {% endif %}
+      {% if medicines %}
+      <div class="section"><h3>Medicines</h3><div class="content">{{ medicines }}</div></div>
+      {% endif %}
+      {% if investigations %}
+      <div class="section"><h3>Investigations</h3><div class="content">{{ investigations }}</div></div>
+      {% endif %}
+      {% if advice %}
+      <div class="section"><h3>Advice</h3><div class="content">{{ advice }}</div></div>
+      {% endif %}
+      {% if follow_up %}
+      <div class="section"><h3>Follow-up</h3><div class="content">{{ follow_up }}</div></div>
+      {% endif %}
+    </div>
+
+    <div class="sig">
+      <div class="line">
+        <div class="name">Dr. {{ doc_name }}</div>
+        <div class="qual">{{ doc_degree }}</div>
+      </div>
+    </div>
+
+    <div class="pad-foot">
+      Ye computer-generated prescription hai · Bina doctor ki sahi (signature/stamp) ke valid nahi.<br>
+      Dawa ki dose/timing clinic se confirm karein.
+    </div>
+  </div>
+</div>
+
+</body>
+</html>
