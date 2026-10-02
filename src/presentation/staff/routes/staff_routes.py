@@ -1209,9 +1209,15 @@ async def public_patient_track_status(request: Request, public_token: str):
         logger.exception("track status failed: %s", exc)
         patient_entries = []
 
+    # ── Live EWT + chamber gate (master blueprint Part B · B4 / Part D · E-01) ──
+    # The patient's own phone computes the "leave now" moment from this payload,
+    # so nothing has to run on the server (PA free has no cron).
+    wait = await _track_wait_info(all_entries, patient_entries)
+
     return {
         "ok": True,
         "patient_name": patient_entries[0].get("patient_name", patient_id) if patient_entries else patient_id,
+        "wait": wait,
         "entries": [
             {
                 "service_code": e.get("service_code", ""),
@@ -1223,6 +1229,218 @@ async def public_patient_track_status(request: Request, public_token: str):
             for e in patient_entries
         ],
     }
+
+
+# ── EWT support for the public tracking page ────────────────────────────────
+# The tracking page is polled every 8 seconds by every waiting patient, and the
+# host allows only 100 CPU-seconds per day — so the learned average and the
+# chamber state are cached in-process instead of being recomputed every poll.
+_WAIT_CACHE: dict[str, tuple[float, object]] = {}
+_WAIT_CACHE_TTL_SECONDS = 300.0
+_CHAMBER_CACHE_TTL_SECONDS = 60.0
+
+
+def _cache_get(key: str, ttl: float):
+    hit = _WAIT_CACHE.get(key)
+    if not hit:
+        return None
+    stamped, value = hit
+    if (datetime.now(timezone.utc).timestamp() - stamped) > ttl:
+        return None
+    return value
+
+
+def _cache_set(key: str, value) -> None:
+    _WAIT_CACHE[key] = (datetime.now(timezone.utc).timestamp(), value)
+
+
+async def _track_scope(patient_id: str) -> tuple[str, str]:
+    """Clinic + doctor that own this patient's live OPD token.
+
+    The queue list view does not carry tenancy columns, so this one small ORM
+    read supplies them (cached briefly).
+    """
+    key = f"scope:{patient_id}"
+    cached = _cache_get(key, _WAIT_CACHE_TTL_SECONDS)
+    if cached is not None:
+        return cached  # type: ignore[return-value]
+    scope = ("", "chief")
+    try:
+        from src.infrastructure.queue.models.queue_entry_model import QueueEntryModel
+
+        async with async_session_factory() as session:
+            row = await session.execute(
+                sa.select(QueueEntryModel.clinic_id, QueueEntryModel.doctor_id)
+                .where(
+                    QueueEntryModel.patient_id == patient_id,
+                    QueueEntryModel.service_code == "OPD",
+                )
+                .order_by(QueueEntryModel.created_at.desc())
+                .limit(1)
+            )
+            found = row.first()
+            if found:
+                scope = (str(found[0] or ""), str(found[1] or "chief"))
+    except Exception as exc:  # pragma: no cover - never break tracking
+        logger.debug("track scope lookup failed: %s", exc)
+    _cache_set(key, scope)
+    return scope
+
+
+async def _track_average(clinic_id: str, doctor_id: str) -> tuple[float, int]:
+    """The doctor's real average consultation length (cached for 5 minutes)."""
+    key = f"avg:{clinic_id}:{doctor_id}"
+    cached = _cache_get(key, _WAIT_CACHE_TTL_SECONDS)
+    if cached is not None:
+        return cached  # type: ignore[return-value]
+    try:
+        from datetime import timedelta
+
+        from src.domain.queue import ewt
+        from src.infrastructure.queue.models.queue_entry_model import QueueEntryModel
+
+        async with async_session_factory() as session:
+            stmt = sa.select(
+                QueueEntryModel.started_at, QueueEntryModel.completed_at
+            ).where(
+                QueueEntryModel.service_code == "OPD",
+                QueueEntryModel.completed_at.is_not(None),
+                QueueEntryModel.completed_at
+                >= datetime.now(timezone.utc) - timedelta(days=30),
+            )
+            if clinic_id:
+                stmt = stmt.where(QueueEntryModel.clinic_id == clinic_id)
+            if doctor_id:
+                stmt = stmt.where(QueueEntryModel.doctor_id == doctor_id)
+            rows = (await session.execute(stmt.limit(300))).all()
+
+        result = ewt.avg_service_minutes(
+            [{"started_at": s, "completed_at": c} for s, c in rows]
+        )
+    except Exception as exc:  # pragma: no cover
+        logger.debug("track average lookup failed: %s", exc)
+        result = (7.0, 0)
+    _cache_set(key, result)
+    return result
+
+
+async def _track_chamber_open(clinic_id: str, doctor_id: str) -> bool:
+    """Chamber gate state — True unless a tracked session says otherwise."""
+    key = f"chamber:{clinic_id}:{doctor_id}"
+    cached = _cache_get(key, _CHAMBER_CACHE_TTL_SECONDS)
+    if cached is not None:
+        return bool(cached)
+    if not clinic_id:
+        return True
+
+    is_open = True
+    try:
+        from src.infrastructure.queue.models.chamber_session_model import (
+            ChamberSessionModel,
+        )
+
+        async with async_session_factory() as session:
+            row = await session.execute(
+                sa.select(ChamberSessionModel)
+                .where(
+                    ChamberSessionModel.clinic_id == clinic_id,
+                    ChamberSessionModel.doctor_id == doctor_id,
+                )
+                .order_by(ChamberSessionModel.session_date.desc())
+                .limit(1)
+            )
+            found = row.scalars().first()
+            # No session recorded yet → stay backward compatible (open).
+            is_open = found.is_open if found is not None else True
+    except Exception as exc:  # pragma: no cover
+        logger.debug("track chamber lookup failed: %s", exc)
+
+    _cache_set(key, is_open)
+    return is_open
+
+
+async def _track_live_queue(clinic_id: str, doctor_id: str) -> list:
+    """Today's live OPD line for exactly one clinic + doctor.
+
+    The generic queue list carries no tenancy columns, so counting *its* rows
+    would tell a patient "17 ahead" when those 17 belong to other clinics. The
+    wait must always be computed inside one chamber.
+    """
+    from src.infrastructure.queue.models.queue_entry_model import QueueEntryModel
+
+    stmt = (
+        sa.select(QueueEntryModel)
+        .where(
+            QueueEntryModel.service_code == "OPD",
+            QueueEntryModel.completed_at.is_(None),
+            QueueEntryModel.delivered_at.is_(None),
+            QueueEntryModel.status.in_(("WAITING", "CALLED", "HOLD", "IN_PROGRESS")),
+        )
+        .order_by(
+            QueueEntryModel.sort_key.asc().nulls_last(),
+            QueueEntryModel.token_number.asc(),
+        )
+    )
+    if clinic_id:
+        stmt = stmt.where(QueueEntryModel.clinic_id == clinic_id)
+    if doctor_id:
+        stmt = stmt.where(QueueEntryModel.doctor_id == doctor_id)
+    async with async_session_factory() as session:
+        return list((await session.execute(stmt)).scalars().all())
+
+
+async def _track_wait_info(all_entries: list[dict], patient_entries: list[dict]) -> dict:
+    """Compute this patient's live wait for the public tracking page.
+
+    Read-only and defensive: any failure returns an empty dict so the tracking
+    page never breaks (it is the link patients open from WhatsApp).
+    """
+    try:
+        from src.domain.queue import ewt
+
+        mine = patient_entries[0] if patient_entries else None
+        if not mine:
+            return {}
+
+        mine_token = int(mine.get("token_number") or 0)
+        clinic_id, doctor_id = await _track_scope(str(mine.get("patient_id") or ""))
+
+        active = await _track_live_queue(clinic_id, doctor_id)
+        inside = next(
+            (e for e in active if (e.status or "").upper() == "IN_PROGRESS"), None
+        )
+        ahead = [
+            e for e in active
+            if (e.status or "").upper() in ("WAITING", "CALLED", "HOLD")
+            and int(e.token_number or 0) < mine_token
+        ]
+        mine_row = next(
+            (e for e in active if int(e.token_number or 0) == mine_token), None
+        )
+
+        avg_minutes, samples = await _track_average(clinic_id, doctor_id)
+        chamber_open = await _track_chamber_open(clinic_id, doctor_id)
+
+        estimate = ewt.estimate_wait(
+            ahead=ahead,
+            avg_minutes=avg_minutes,
+            samples=samples,
+            current=inside,
+            chamber_open=chamber_open,
+            me=mine_row,
+        )
+        payload = estimate.to_public_dict()
+        payload["line"] = estimate.to_line_hi()
+        # The patient's browser turns this into the chime + "ab niklo" screen,
+        # so no server-side timer is needed (Part D · E-03).
+        payload["leave_now"] = bool(
+            chamber_open and estimate.patients_ahead <= 3 and estimate.minutes <= 20
+        )
+        payload["token_number"] = mine_token
+        return payload
+    except Exception as exc:  # pragma: no cover - tracking must never break
+        logger.warning("track wait info failed (non-fatal): %s", exc)
+        return {}
 
 
 def _render_track_error(msg: str) -> str:

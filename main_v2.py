@@ -186,6 +186,11 @@ from src.presentation.lab_network.routes.lab_network_routes import (
     doctor_router as lab_network_doctor_router,
 )
 
+# -- Queue Engine (chamber gate + hold/return + live EWT feed) --
+from src.presentation.queue_engine.routes.queue_engine_routes import (
+    router as queue_engine_router,
+)
+
 
 # =========================================================================
 # Database Setup
@@ -273,6 +278,10 @@ from src.infrastructure.abdm.models import (  # noqa: F401
 )
 # External lab network model — lab_orders
 from src.infrastructure.lab.models import LabOrderModel  # noqa: F401
+# Queue Engine — chamber sessions (▶ START OPD gate, Part D · E-01)
+from src.infrastructure.queue.models.chamber_session_model import (  # noqa: F401
+    ChamberSessionModel,
+)
 
 
 # =========================================================================
@@ -374,6 +383,21 @@ def _migrate_sqlite_columns():
                     conn.execute(text(sql))
                     print(f"[GHOS] SQLite migration: added {table.name}.{col.name} ({coltype})")
             conn.commit()
+
+            # ALTER TABLE ADD COLUMN never creates indexes, so add the ones the
+            # queue engine depends on. Idempotent, and skipped harmlessly when
+            # the table is not there yet.
+            for idx_sql in (
+                "CREATE INDEX IF NOT EXISTS ix_queue_clinic_doctor_status "
+                "ON queue_entries (clinic_id, doctor_id, status)",
+                "CREATE INDEX IF NOT EXISTS ix_chamber_clinic_doctor_date "
+                "ON chamber_sessions (clinic_id, doctor_id, session_date)",
+            ):
+                try:
+                    conn.execute(text(idx_sql))
+                except Exception as e:  # pragma: no cover - index is an optimisation
+                    print(f"[GHOS] index create skipped: {e}")
+            conn.commit()
     except Exception as e:
         print(f"[GHOS] SQLite migration skipped/failed (non-fatal): {e}")
 
@@ -430,6 +454,17 @@ async def _migrate_missing_columns():
         ("opd_drug_history", "updated_at", "TIMESTAMP WITH TIME ZONE", "NOW()"),
         # New tables that might need creation
         ("clinic_staff_pins", "id", "INTEGER", "NULL"),  # will cause skip if table exists
+        # ── Queue Engine (EWT + Part D edge cases) ──
+        # SQLite gets these automatically from the models; PostgreSQL (hosted)
+        # needs them listed here.
+        ("queue_entries", "doctor_id", "VARCHAR(100)", "'chief'"),
+        ("queue_entries", "visit_type", "VARCHAR(20)", "''"),
+        ("queue_entries", "complexity_weight", "INTEGER", "1"),
+        ("queue_entries", "estimated_minutes", "INTEGER", "NULL"),
+        ("queue_entries", "sort_key", "DOUBLE PRECISION", "NULL"),
+        ("queue_entries", "requeue_count", "INTEGER", "0"),
+        ("queue_entries", "held_at", "TIMESTAMP WITH TIME ZONE", "NULL"),
+        ("queue_entries", "hold_reason", "VARCHAR(200)", "''"),
     ]
 
     try:
@@ -545,6 +580,9 @@ app.include_router(rx_pad_router)
 # External Lab Network
 app.include_router(lab_network_router)
 app.include_router(lab_network_doctor_router)
+
+# Queue Engine — chamber gate (▶ START OPD), token hold/return, live EWT feed
+app.include_router(queue_engine_router)
 
 # Serve static files from experience/pwa
 pwa_static = Path(__file__).parent / "src" / "experience" / "pwa"

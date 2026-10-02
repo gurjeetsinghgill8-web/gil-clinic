@@ -22,7 +22,7 @@ from __future__ import annotations
 import hashlib
 import logging
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
@@ -30,6 +30,7 @@ import sqlalchemy as sa
 from fastapi import APIRouter, Query, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 
+from src.domain.queue import ewt
 from src.infrastructure.clinic.models.clinic_model import ClinicModel
 from src.infrastructure.queue.models.queue_entry_model import QueueEntryModel
 from src.shared.infrastructure.database import async_session_factory
@@ -68,7 +69,10 @@ PROBLEM_TO_SPECIALTY: dict[str, str] = {
     "acidity": "Gastroenterology", "digest": "Gastroenterology",
 }
 
-# Average minutes per OPD patient — used to turn "patients ahead" into EWT.
+# Fallback minutes per OPD patient when a clinic has no consultation history at
+# all. The real number now comes from the EWT engine (`src/domain/queue/ewt.py`),
+# which learns each doctor's actual average — this constant is only the cold-start
+# default and is kept so old call sites keep working.
 MINUTES_PER_PATIENT = 7
 
 # ── Demo clinics (marketplace ko turant "alive" dikhane ke liye) ─────────────
@@ -94,6 +98,51 @@ DEMO_CLINICS = [
 
 SEED_TOKEN = "GIL-DEMO-SEED-2026"
 
+#: Which doctor's chamber a public booking lands in. The OPD session layer uses
+#: "chief" / "junior" doctor ids; a public booking always targets the clinic's
+#: primary doctor. One constant so queue partitioning stays consistent
+#: everywhere (Part D · E-04).
+BOOKING_DOCTOR_ID = "chief"
+
+
+def _opd_room_name() -> str:
+    """Chamber name for OPD from the dynamic service config (BUG-02).
+
+    Bookings used to store an empty room, so the doctor's screen showed no
+    chamber at all. Falls back to a sane label if the provider is unavailable.
+    """
+    try:
+        from src.infrastructure.clinic.department_provider import get_service_by_code
+
+        svc = get_service_by_code("OPD")
+        room = getattr(svc, "room_name", "") if svc else ""
+        if room:
+            return str(room)
+    except Exception:  # pragma: no cover - provider is best-effort
+        pass
+    return "OPD Room"
+
+
+def _booking_message(
+    token: int,
+    patient_name: str,
+    clinic_name: str,
+    ahead: int,
+    minutes: int,
+    state: str,
+) -> str:
+    """Patient-facing confirmation — honest when the doctor has not arrived."""
+    if state == "arrival_pending":
+        return (
+            f"Token #{token} booked for {patient_name} at {clinic_name}. "
+            "Doctor abhi chamber me nahi aaye — aapka number safe hai, "
+            "wait count OPD shuru hote hi chalega."
+        )
+    return (
+        f"Token #{token} booked for {patient_name} at {clinic_name}. "
+        f"{ahead} patient(s) ahead — est. {minutes} min."
+    )
+
 
 def _detect_specialty(problem: str | None) -> str | None:
     """Map a plain-language problem to a specialty, or return None."""
@@ -106,38 +155,122 @@ def _detect_specialty(problem: str | None) -> str | None:
     return None
 
 
-# ── REAL LIVE QUEUE (end-to-end) ───────────────────────────────────────────
-# Reads the actual queue_entries table: "patients ahead" = active OPD entries
-# for a clinic (not yet completed/delivered); "serving token" = the highest
-# active OPD token (the one currently being worked). No fake numbers.
+# ── REAL LIVE QUEUE + EWT (end-to-end) ─────────────────────────────────────
+# Reads the actual queue_entries table — never a demo number:
+#   * active rows  → who is waiting, and who is inside the chamber right now
+#   * 30-day history → the doctor's REAL average consultation length
+#   * chamber_sessions → did the doctor press ▶ START OPD today? (Part D · E-01)
+# The wait is then computed by `src/domain/queue/ewt.py` instead of the old
+# flat "patients × 7 minutes" guess.
 async def _queue_map(clinic_ids: list[str]) -> dict[str, dict[str, Any]]:
-    """Return {clinic_id: {patients_ahead, serving_token}} for active OPD queues."""
+    """Return live queue + EWT data for each clinic."""
     out: dict[str, dict[str, Any]] = {}
     if not clinic_ids:
         return out
     try:
+        from src.infrastructure.queue.models.chamber_session_model import (
+            ChamberSessionModel,
+        )
+
+        now = datetime.now(timezone.utc)
+        today = now.date()
+        history_since = now - timedelta(days=30)
+
         async with async_session_factory() as session:
-            rows = await session.execute(
-                sa.select(
-                    QueueEntryModel.clinic_id,
-                    sa.func.count(QueueEntryModel.id),
-                    sa.func.max(QueueEntryModel.token_number),
+            active_rows = (
+                await session.execute(
+                    sa.select(QueueEntryModel).where(
+                        QueueEntryModel.clinic_id.in_(clinic_ids),
+                        QueueEntryModel.completed_at.is_(None),
+                        QueueEntryModel.delivered_at.is_(None),
+                        QueueEntryModel.service_code == "OPD",
+                        QueueEntryModel.status.notin_(("CANCELLED", "NO_SHOW")),
+                    )
                 )
-                .where(
-                    QueueEntryModel.clinic_id.in_(clinic_ids),
-                    QueueEntryModel.completed_at.is_(None),
-                    QueueEntryModel.delivered_at.is_(None),
-                    QueueEntryModel.service_code == "OPD",
+            ).scalars().all()
+
+            history_rows = (
+                await session.execute(
+                    sa.select(
+                        QueueEntryModel.clinic_id,
+                        QueueEntryModel.started_at,
+                        QueueEntryModel.completed_at,
+                    )
+                    .where(
+                        QueueEntryModel.clinic_id.in_(clinic_ids),
+                        QueueEntryModel.service_code == "OPD",
+                        QueueEntryModel.completed_at.is_not(None),
+                        QueueEntryModel.completed_at >= history_since,
+                    )
+                    .limit(2000)
                 )
-                .group_by(QueueEntryModel.clinic_id)
-            )
-            for clinic_id, cnt, max_token in rows.all():
-                out[str(clinic_id)] = {
-                    "patients_ahead": int(cnt or 0),
-                    "serving_token": int(max_token or 0),
-                }
+            ).all()
+
+            chamber_rows = (
+                await session.execute(
+                    sa.select(ChamberSessionModel).where(
+                        ChamberSessionModel.clinic_id.in_(clinic_ids),
+                        ChamberSessionModel.session_date == today,
+                    )
+                )
+            ).scalars().all()
     except Exception as e:  # pragma: no cover - defensive (older DBs)
         logger.warning("marketplace queue map failed: %s", e)
+        return out
+
+    # ── group the active rows per clinic ──
+    buckets: dict[str, dict[str, Any]] = {}
+    for entry in active_rows:
+        cid = str(entry.clinic_id)
+        bucket = buckets.setdefault(cid, {"waiting": [], "current": None, "active": []})
+        bucket["active"].append(entry)
+        if (entry.status or "").upper() == "IN_PROGRESS":
+            if bucket["current"] is None:
+                bucket["current"] = entry
+        else:
+            bucket["waiting"].append(entry)
+
+    history: dict[str, list[Any]] = {}
+    for cid, started_at, completed_at in history_rows:
+        history.setdefault(str(cid), []).append(
+            {"started_at": started_at, "completed_at": completed_at}
+        )
+
+    # Chamber gate: a clinic that has never used chamber sessions keeps the old
+    # behaviour (open) so nothing regresses; a clinic that HAS started tracking
+    # is gated honestly on whether the doctor actually opened the chamber.
+    chamber_open: dict[str, bool] = {}
+    for row in chamber_rows:
+        cid = str(row.clinic_id)
+        chamber_open[cid] = bool(chamber_open.get(cid)) or row.is_open
+
+    for cid in clinic_ids:
+        bucket = buckets.get(cid, {"waiting": [], "current": None, "active": []})
+        avg_minutes, samples = ewt.avg_service_minutes(history.get(cid, []))
+        tracked = cid in chamber_open
+        is_open = chamber_open.get(cid, True)
+
+        estimate = ewt.estimate_wait(
+            ahead=bucket["waiting"],
+            avg_minutes=avg_minutes,
+            samples=samples,
+            current=bucket["current"],
+            chamber_open=is_open,
+        )
+        tokens = [e.token_number for e in bucket["active"] if e.token_number]
+        out[cid] = {
+            "patients_ahead": estimate.patients_ahead,
+            "serving_token": max(tokens) if tokens else 0,
+            "wait_minutes": estimate.minutes,
+            "confidence": estimate.confidence,
+            "state": estimate.state,
+            "chamber_open": is_open,
+            "chamber_tracked": tracked,
+            "avg_minutes": estimate.avg_service_minutes,
+            "samples": samples,
+            "delay_minutes": int(round(estimate.delay_minutes)),
+            "note": estimate.note,
+        }
     return out
 
 
@@ -154,11 +287,20 @@ def _to_public(
         q = queue or {}
         ahead = int(q.get("patients_ahead") or 0)
         serving = int(q.get("serving_token") or 0)
+        wait_minutes = q.get("wait_minutes")
+        chamber_open = bool(q.get("chamber_open", True))
         live = {
             "serving_token": serving,
             "patients_ahead": ahead,
-            "wait_minutes": ahead * MINUTES_PER_PATIENT,
+            # EWT engine output (self-calibrating), not a flat guess.
+            "wait_minutes": int(wait_minutes) if wait_minutes is not None else ahead * MINUTES_PER_PATIENT,
+            "confidence": q.get("confidence") or "low",
+            "state": q.get("state") or "live",
+            "chamber_open": chamber_open,
             "chamber": "OPD",
+            "avg_minutes": q.get("avg_minutes"),
+            "delay_minutes": int(q.get("delay_minutes") or 0),
+            "note": q.get("note") or "",
             "real": True,
         }
 
@@ -292,6 +434,14 @@ async def marketplace_book(request: Request):
     name = str(body.get("name") or "").strip()
     phone = str(body.get("phone") or "").strip()
     complaints = str(body.get("problem") or "").strip()
+    # Age is optional; it used to be hardcoded to 30, which quietly defeated any
+    # age-based logic downstream. Unknown age still defaults to 30.
+    try:
+        age = int(body.get("age")) if str(body.get("age") or "").strip() else 30
+    except (TypeError, ValueError):
+        age = 30
+    if age < 0 or age > 130:
+        age = 30
     if not clinic_id or not name:
         return JSONResponse({"ok": False, "error": "Clinic aur patient name chahiye."}, status_code=400)
     if phone and len(phone) < 10:
@@ -311,13 +461,27 @@ async def marketplace_book(request: Request):
         if clinic is None or not clinic.is_active:
             return JSONResponse({"ok": False, "error": "Clinic nahi mila."}, status_code=404)
 
+        # ── EWT snapshot BEFORE this booking joins the queue ──
+        # This is what we promise the patient; it is stored on the row so we can
+        # later compare promised vs delivered wait (the accuracy metric).
+        queue_info = (await _queue_map([str(clinic.id)])).get(str(clinic.id), {})
+        promised_minutes = int(queue_info.get("wait_minutes") or 0)
+        promised_state = queue_info.get("state") or "live"
+        promised_note = queue_info.get("note") or ""
+
         # ── patient: reuse by phone, else create ──
         existing = None
         if phone:
+            # A family can share one phone number, so this must NEVER use
+            # scalar_one_or_none() — that raises MultipleResultsFound and turns
+            # booking into a 500. Most recent record wins.
             row = await session.execute(
-                sa.select(PatientModel).where(PatientModel.phone_hash == phone_hash)
+                sa.select(PatientModel)
+                .where(PatientModel.phone_hash == phone_hash)
+                .order_by(PatientModel.created_at.desc())
+                .limit(1)
             )
-            existing = row.scalar_one_or_none()
+            existing = row.scalars().first()
 
         if existing is not None:
             patient_id = existing.patient_id
@@ -325,6 +489,7 @@ async def marketplace_book(request: Request):
             patient_name = existing.name
             existing.total_visits = (existing.total_visits or 0) + 1
             existing.last_visit_at = now
+            total_visits = int(existing.total_visits or 1)
         else:
             seq_row = await session.execute(
                 sa.select(sa.func.count(PatientModel.id)).where(
@@ -336,11 +501,12 @@ async def marketplace_book(request: Request):
             patient_uuid_obj = uuid7()
             patient_uuid = str(patient_uuid_obj)
             patient_name = name
+            total_visits = 1
             patient = PatientModel(
                 id=patient_uuid_obj,
                 patient_id=patient_id,
                 name=name,
-                age=30,
+                age=age,
                 gender="Not Specified",
                 date_of_birth="",
                 phone=phone,
@@ -356,30 +522,44 @@ async def marketplace_book(request: Request):
             )
             session.add(patient)
 
-        # ── next OPD token for this clinic's OPD queue ──
+        # ── next OPD token, partitioned PER CLINIC (BUG-01) ──
+        # The old query had no clinic filter, so two different clinics booking
+        # on the same day shared one token sequence (clinic A #17, clinic B #18).
         token_row = await session.execute(
             sa.select(sa.func.coalesce(sa.func.max(QueueEntryModel.token_number), 0)).where(
+                QueueEntryModel.clinic_id == str(clinic.id),
+                QueueEntryModel.doctor_id == BOOKING_DOCTOR_ID,
                 QueueEntryModel.service_code == "OPD",
                 QueueEntryModel.visit_id.like(f"VIS-{date_prefix}-%"),
             )
         )
         token = (token_row.scalar() or 0) + 1
 
+        # ── visit classification + chamber room (BUG-02) ──
+        visit_type = ewt.classify_visit_type(total_visits=total_visits)
+        room = _opd_room_name()
+        department = (clinic.specialty or "").strip() or "OPD"
+
         visit_id = f"VIS-{date_prefix}-{uuid7().hex[:6]}"
         entry = QueueEntryModel(
             id=uuid7(),
             clinic_id=str(clinic.id),
+            doctor_id=BOOKING_DOCTOR_ID,
             visit_id=visit_id,
             patient_id=patient_id,
             patient_uuid=patient_uuid,
             patient_name=patient_name,
             service_code="OPD",
             token_number=token,
-            department="OPD",
-            room="",
+            department=department,
+            room=room,
             status="WAITING",
             priority=0,
             display_order=0,
+            sort_key=float(token),
+            visit_type=visit_type,
+            complexity_weight=ewt.complexity_weight(visit_type),
+            estimated_minutes=promised_minutes,
             notes=complaints or "",
             created_by="marketplace",
             updated_by="marketplace",
@@ -390,16 +570,7 @@ async def marketplace_book(request: Request):
         session.add(entry)
         await session.commit()
 
-        ahead_row = await session.execute(
-            sa.select(sa.func.count(QueueEntryModel.id)).where(
-                QueueEntryModel.clinic_id == str(clinic.id),
-                QueueEntryModel.completed_at.is_(None),
-                QueueEntryModel.delivered_at.is_(None),
-                QueueEntryModel.service_code == "OPD",
-                QueueEntryModel.token_number < token,
-            )
-        )
-        ahead = int(ahead_row.scalar() or 0)
+        ahead = int(queue_info.get("patients_ahead") or 0)
 
     # ── live tracking link (same one the clinic reception uses) ──
     tracking_url = ""
@@ -416,15 +587,24 @@ async def marketplace_book(request: Request):
             "ok": True,
             "token": token,
             "patients_ahead": ahead,
-            "wait_minutes": ahead * MINUTES_PER_PATIENT,
+            "wait_minutes": promised_minutes,
+            "wait_state": promised_state,
+            "wait_note": promised_note,
+            "visit_type": visit_type,
+            "visit_label": ewt.VISIT_TYPE_LABEL.get(visit_type, "Consultation"),
+            "room": room,
             "visit_id": visit_id,
             "patient_id": patient_id,
             "clinic_name": clinic.clinic_name,
             "doctor_name": clinic.doctor_name,
             "tracking_url": tracking_url,
-            "message": (
-                f"Token #{token} booked for {patient_name} at {clinic.clinic_name}. "
-                f"{ahead} patient(s) ahead — est. {ahead * MINUTES_PER_PATIENT} min."
+            "message": _booking_message(
+                token=token,
+                patient_name=patient_name,
+                clinic_name=clinic.clinic_name or "",
+                ahead=ahead,
+                minutes=promised_minutes,
+                state=promised_state,
             ),
         }
     )

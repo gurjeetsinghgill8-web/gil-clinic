@@ -347,6 +347,54 @@
       b.textContent = text;
     }
 
+    // ── Live wait estimate (EWT) + "ab niklo" alert ─────────────────────────
+    // The wait is computed by the server from this doctor's real consultation
+    // history. The leave-now alert runs entirely in this browser — the host has
+    // no cron, so nothing may depend on a server-side timer.
+    let leaveNowFired = false;
+
+    function renderWait(w) {
+      if (!w || (!w.line && w.wait_minutes === undefined)) return;
+      let p = document.getElementById('ewt-panel');
+      if (!p) {
+        p = document.createElement('div');
+        p.id = 'ewt-panel';
+        p.style.cssText = 'margin:14px 16px;padding:14px 16px;border-radius:14px;background:#fff;border:1px solid #e2e8f0;box-shadow:0 2px 10px rgba(15,23,42,.06);font-family:inherit;';
+        const anchor = document.querySelector('main') || document.body;
+        anchor.prepend(p);
+      }
+
+      const pending = w.state === 'arrival_pending';
+      const bg = pending ? '#fff7ed' : (w.leave_now ? '#dcfce7' : '#f8fafc');
+      const border = pending ? '#fdba74' : (w.leave_now ? '#86efac' : '#e2e8f0');
+      p.style.background = bg;
+      p.style.borderColor = border;
+
+      const title = pending
+        ? '⏳ Doctor Arrival Pending'
+        : (w.patients_ahead > 0 ? '~' + w.wait_minutes + ' min ka wait' : 'Aapki baari hai');
+
+      const trust = { high: '🟢 bharosemand', medium: '🟡 theek', low: '⚪ anumaan' }[w.confidence] || '';
+
+      p.innerHTML =
+        '<div style="font-size:17px;font-weight:700;color:#0f172a;">' + title + '</div>' +
+        '<div style="margin-top:6px;font-size:14px;color:#475569;">' + (w.line || '') + '</div>' +
+        (pending
+          ? '<div style="margin-top:6px;font-size:13px;color:#9a3412;">Aapka number safe hai — wait count OPD shuru hote hi chalega.</div>'
+          : '<div style="margin-top:6px;font-size:13px;color:#64748b;">Aapse ' + (w.patients_ahead || 0) +
+            ' patient aage ' + (trust ? '· ' + trust : '') + '</div>') +
+        (w.note ? '<div style="margin-top:4px;font-size:13px;color:#b45309;">' + w.note + '</div>' : '');
+
+      if (w.leave_now && !leaveNowFired) {
+        leaveNowFired = true;
+        playBeep(900, 0.35);
+        setTimeout(() => playBeep(1200, 0.45), 380);
+        showBanner('🏃 अब निकलिए! आपका नंबर पास है — ' + (w.wait_minutes || 0) + ' min का wait');
+        if (navigator.vibrate) { try { navigator.vibrate([300, 120, 300]); } catch (e) {} }
+      }
+      if (!w.leave_now && w.patients_ahead > 4) leaveNowFired = false;
+    }
+
     async function poll() {
       try {
         const r = await fetch('/track/' + TRACK_TOKEN + '/status');
@@ -375,6 +423,7 @@
             last[key] = e.status;
           }
         });
+        renderWait(d.wait);
       } catch (e) { /* network — next poll will retry */ }
     }
 

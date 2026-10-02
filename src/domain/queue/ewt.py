@@ -1,0 +1,460 @@
+"""EWT — Estimated Wait Time engine ("Uber ETA for OPD").
+
+Why this file exists
+--------------------
+The marketplace used to show ``patients_ahead × 7`` minutes — a flat guess that
+treats a 6-minute follow-up and a 20-minute new case as the same thing. Patients
+lost trust in the number, and doctors said the queue "lied".
+
+This module replaces the guess with a self-calibrating estimate:
+
+    EWT = SUM(visit_weight_i × avg_service_minutes)   ← everyone ahead of you
+        + delay_penalty(current patient overrunning)
+        - elapsed_since_called (if you were already called)
+
+Design rules (deliberate, do not break):
+  * PURE FUNCTIONS ONLY — no DB, no network, no FastAPI, no ORM imports.
+    That keeps the maths unit-testable and safe to call from anywhere.
+  * Self-calibrating — the doctor's REAL average is learned from the
+    ``started_at`` → ``completed_at`` pairs the queue engine already records.
+  * Honest — if the doctor has not opened the chamber (Part D · E-01) the
+    estimate is NOT a countdown; it returns ``arrival_pending`` instead of a
+    fabricated number.
+  * No fake data — never invent a number to look busy.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+from datetime import datetime, timezone
+from typing import Any, Iterable, Mapping, Sequence
+
+# ── Tunables (one place, so tests and production agree) ─────────────────────
+
+#: Fallback consultation length when this doctor has no history yet.
+DEFAULT_AVG_MINUTES: float = 7.0
+
+#: Samples needed before we trust the learned average on its own.
+MIN_SAMPLES_FOR_TRUST: int = 5
+
+#: Samples needed before we report "high" confidence.
+SAMPLES_FOR_HIGH_CONFIDENCE: int = 20
+
+#: Clamp the learned average so one weird day cannot wreck the estimate.
+MIN_AVG_MINUTES: float = 2.0
+MAX_AVG_MINUTES: float = 45.0
+
+#: A single consultation shorter/longer than this is treated as noise
+#: (staff clicked "start" twice, or forgot to complete an entry).
+SANE_SERVICE_MINUTES: tuple[float, float] = (1.0, 120.0)
+
+#: Display clamps.
+MIN_EWT_MINUTES: int = 2
+MAX_EWT_MINUTES: int = 180
+
+#: How much of the current patient's overrun we add to everyone's wait.
+MAX_DELAY_PENALTY_MINUTES: float = 15.0
+
+#: Visit-type → multiplier on the doctor's learned average.
+#: A "new" case is ~1.8× a routine visit; a report review is a quick 0.6×.
+VISIT_TYPE_WEIGHT: dict[str, float] = {
+    "new": 1.8,
+    "procedure": 1.8,
+    "followup": 0.75,
+    "report": 0.6,
+    "": 1.0,
+}
+
+#: DB stores ``complexity_weight`` as an int (1 = routine, 2 = heavy).
+COMPLEXITY_WEIGHT_MINUTES: dict[int, float] = {1: 0.85, 2: 1.8, 3: 2.2}
+
+#: Human labels (Hinglish — this is what the clinic staff and patients read).
+VISIT_TYPE_LABEL: dict[str, str] = {
+    "new": "Naya case",
+    "procedure": "Test/Procedure",
+    "followup": "Follow-up",
+    "report": "Report review",
+    "": "Consultation",
+}
+
+
+@dataclass(frozen=True)
+class WaitEstimate:
+    """The answer to "how long will I wait?" — everything the UI needs."""
+
+    minutes: int
+    patients_ahead: int
+    avg_service_minutes: float
+    delay_minutes: float
+    confidence: str  # "high" | "medium" | "low"
+    state: str  # "live" | "arrival_pending"
+    chamber_open: bool
+    samples: int = 0
+    note: str = ""
+
+    @property
+    def is_live(self) -> bool:
+        """True when the number is a real countdown (chamber is open)."""
+        return self.state == "live"
+
+    def to_public_dict(self) -> dict[str, Any]:
+        """Minimal, JSON-safe shape for the marketplace / tracking APIs."""
+        return {
+            "wait_minutes": self.minutes,
+            "patients_ahead": self.patients_ahead,
+            "confidence": self.confidence,
+            "state": self.state,
+            "chamber_open": self.chamber_open,
+            "delay_minutes": int(round(self.delay_minutes)),
+            "note": self.note,
+        }
+
+    def to_line_hi(self) -> str:
+        """One short Hinglish line for the patient screen."""
+        if not self.chamber_open:
+            return "⏳ Doctor abhi chamber me nahi aaye — wait count shuru nahi hua"
+        if self.patients_ahead <= 0:
+            return "🟢 Aapki baari hai — andar chalein"
+        return f"⏳ Aapse {self.patients_ahead} patient aage · ~{self.minutes} min"
+
+
+# ── Time helpers ────────────────────────────────────────────────────────────
+
+
+def _as_utc(value: Any) -> datetime | None:
+    """Coerce a datetime (naive or aware, from DB or dict) to aware UTC."""
+    if isinstance(value, datetime):
+        return value if value.tzinfo else value.replace(tzinfo=timezone.utc)
+    if isinstance(value, str) and value:
+        try:
+            cleaned = value.replace("Z", "+00:00")
+            parsed = datetime.fromisoformat(cleaned)
+            return parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
+        except ValueError:
+            return None
+    return None
+
+
+def _field(obj: Any, name: str, default: Any = None) -> Any:
+    """Read ``name`` from a dict-like OR an ORM/entity object."""
+    if obj is None:
+        return default
+    if isinstance(obj, Mapping):
+        return obj.get(name, default)
+    return getattr(obj, name, default)
+
+
+def service_minutes(started_at: Any, completed_at: Any) -> float | None:
+    """Real consultation length in minutes, or None if unusable.
+
+    Returns None for missing timestamps, negative durations, or values outside
+    :data:`SANE_SERVICE_MINUTES` so one bad row cannot poison the average.
+    """
+    start = _as_utc(started_at)
+    end = _as_utc(completed_at)
+    if start is None or end is None:
+        return None
+    minutes = (end - start).total_seconds() / 60.0
+    low, high = SANE_SERVICE_MINUTES
+    if minutes < low or minutes > high:
+        return None
+    return minutes
+
+
+def avg_service_minutes(
+    entries: Iterable[Any] | Iterable[float],
+    fallback: float = DEFAULT_AVG_MINUTES,
+) -> tuple[float, int]:
+    """Learn this doctor's average consultation length.
+
+    Accepts either raw floats (minutes) or entry objects/dicts carrying
+    ``started_at`` / ``completed_at``. Uses a trimmed mean (drops the single
+    longest outlier) and blends toward ``fallback`` while the sample is small.
+
+    Returns:
+        ``(average_minutes, sample_count)``
+    """
+    samples: list[float] = []
+    for item in entries or []:
+        if isinstance(item, (int, float)) and not isinstance(item, bool):
+            value = float(item)
+            low, high = SANE_SERVICE_MINUTES
+            if low <= value <= high:
+                samples.append(value)
+            continue
+        value = service_minutes(
+            _field(item, "started_at"), _field(item, "completed_at")
+        )
+        if value is not None:
+            samples.append(value)
+
+    count = len(samples)
+    if count == 0:
+        return float(fallback), 0
+
+    values = sorted(samples)
+    if count >= 4:
+        values = values[:-1]  # drop the single longest consultation
+    mean = sum(values) / len(values)
+
+    if count < MIN_SAMPLES_FOR_TRUST:
+        # Small sample → lean on the clinic default so early estimates are sane.
+        weight = float(count) / float(MIN_SAMPLES_FOR_TRUST)
+        mean = (mean * weight) + (float(fallback) * (1.0 - weight))
+
+    return max(MIN_AVG_MINUTES, min(MAX_AVG_MINUTES, mean)), count
+
+
+# ── Visit classification (Part B · B4.2) ────────────────────────────────────
+
+
+def classify_visit_type(
+    total_visits: int | None = None,
+    has_report: bool = False,
+    is_procedure: bool = False,
+    service_code: str = "OPD",
+) -> str:
+    """Decide new / followup / report / procedure for one visit."""
+    if is_procedure or (service_code or "").upper() not in ("", "OPD"):
+        return "procedure"
+    if has_report:
+        return "report"
+    try:
+        visits = int(total_visits or 0)
+    except (TypeError, ValueError):
+        visits = 0
+    return "new" if visits <= 1 else "followup"
+
+
+def complexity_weight(visit_type: str) -> int:
+    """DB int weight stored alongside ``visit_type`` (1 = routine, 2 = heavy)."""
+    return 2 if visit_type in ("new", "procedure") else 1
+
+
+def visit_weight(visit_type: str, complexity_weight_value: int | None = None) -> float:
+    """Multiplier applied to the doctor's learned average."""
+    key = (visit_type or "").strip().lower()
+    if key in VISIT_TYPE_WEIGHT:
+        return VISIT_TYPE_WEIGHT[key]
+    try:
+        return COMPLEXITY_WEIGHT_MINUTES.get(int(complexity_weight_value or 1), 1.0)
+    except (TypeError, ValueError):
+        return 1.0
+
+
+def visit_minutes(
+    entry: Any,
+    avg_minutes: float,
+    fallback_minutes: float = DEFAULT_AVG_MINUTES,
+) -> float:
+    """Estimated minutes this entry will occupy the doctor."""
+    weight = visit_weight(
+        _field(entry, "visit_type", "") or "",
+        _field(entry, "complexity_weight", None),
+    )
+    base = float(avg_minutes) if avg_minutes else float(fallback_minutes)
+    return max(3.0, weight * base)
+
+
+# ── Live delay (Part B · B3) ────────────────────────────────────────────────
+
+
+def live_delay_minutes(
+    current: Any,
+    avg_minutes: float,
+    now: datetime | None = None,
+) -> float:
+    """How far the patient currently inside is overrunning.
+
+    Uses ``started_at`` (falling back to ``called_at``). Returns 0 when nobody
+    is inside or when they are still within the expected duration.
+    """
+    if current is None:
+        return 0.0
+    reference = _as_utc(_field(current, "started_at")) or _as_utc(
+        _field(current, "called_at")
+    )
+    if reference is None:
+        return 0.0
+    moment = now or datetime.now(timezone.utc)
+    elapsed = (moment - reference).total_seconds() / 60.0
+    overrun = elapsed - max(0.0, float(avg_minutes))
+    return max(0.0, overrun)
+
+
+def elapsed_since_called(
+    entry: Any, now: datetime | None = None
+) -> float:
+    """Minutes since this patient was called (0 if never called)."""
+    called = _as_utc(_field(entry, "called_at"))
+    if called is None:
+        return 0.0
+    moment = now or datetime.now(timezone.utc)
+    return max(0.0, (moment - called).total_seconds() / 60.0)
+
+
+def elapsed_since_started(entry: Any, now: datetime | None = None) -> float:
+    """Minutes the current patient has been inside the chamber (0 if unknown)."""
+    started = _as_utc(_field(entry, "started_at"))
+    if started is None:
+        return 0.0
+    moment = now or datetime.now(timezone.utc)
+    return max(0.0, (moment - started).total_seconds() / 60.0)
+
+
+# ── The estimate ────────────────────────────────────────────────────────────
+
+
+def eta_confidence(patients_ahead: int, samples: int) -> str:
+    """How much should the patient trust this number?"""
+    if samples >= SAMPLES_FOR_HIGH_CONFIDENCE and patients_ahead <= 5:
+        return "high"
+    if samples >= MIN_SAMPLES_FOR_TRUST and patients_ahead <= 10:
+        return "medium"
+    return "low"
+
+
+def estimate_wait(
+    ahead: Sequence[Any] | None = None,
+    avg_minutes: float = DEFAULT_AVG_MINUTES,
+    samples: int = 0,
+    current: Any = None,
+    chamber_open: bool = True,
+    me: Any = None,
+    now: datetime | None = None,
+    doctor_name: str = "",
+) -> WaitEstimate:
+    """The heart of the module — estimate one patient's wait.
+
+    The model, in plain words::
+
+        your wait = everyone still waiting in front of you
+                  + what is LEFT of the consultation happening right now
+                  + a penalty if that consultation is already overrunning
+
+    Args:
+        ahead: entries waiting (WAITING / CALLED / HOLD) — the patient inside
+            the chamber must NOT be in this list, or they are counted twice.
+        avg_minutes: learned average from :func:`avg_service_minutes`.
+        samples: how many consultations that average is based on.
+        current: the entry currently IN_PROGRESS, if any.
+        chamber_open: False until the doctor presses START OPD (Part D · E-01).
+        me: this patient's own entry — a patient already called has burned part
+            of their wait live, so we do not count it twice.
+        now: injectable clock (tests).
+        doctor_name: only used for the note text.
+
+    Returns:
+        :class:`WaitEstimate` — never raises, always safe to render.
+    """
+    ahead_list = list(ahead or [])
+    waiting_ahead = len(ahead_list)
+    patients_ahead = waiting_ahead + (1 if current is not None else 0)
+    confirm = float(avg_minutes or DEFAULT_AVG_MINUTES)
+
+    # ── E-01 chamber gate: no countdown until the doctor is actually in ──
+    if not chamber_open:
+        who = f"Dr. {doctor_name}" if doctor_name else "Doctor"
+        return WaitEstimate(
+            minutes=0,
+            patients_ahead=patients_ahead,
+            avg_service_minutes=round(confirm, 1),
+            delay_minutes=0.0,
+            confidence="low",
+            state="arrival_pending",
+            chamber_open=False,
+            samples=samples,
+            note=f"{who} abhi chamber me nahi aaye — aapka number safe hai.",
+        )
+
+    # Time already consumed by the consultation inside the chamber.
+    remaining_current = 0.0
+    overrun = 0.0
+    if current is not None:
+        expected_current = visit_minutes(current, confirm)
+        spent_current = elapsed_since_started(current, now=now)
+        remaining_current = max(0.0, expected_current - spent_current)
+        overrun = min(
+            MAX_DELAY_PENALTY_MINUTES, max(0.0, spent_current - expected_current)
+        )
+
+    total = sum(visit_minutes(entry, confirm) for entry in ahead_list)
+    total += remaining_current + overrun
+
+    # If this patient was already called they have been waiting live — do not
+    # bill them for time that has already passed.
+    spent = elapsed_since_called(me, now=now) if me is not None else 0.0
+    total -= min(spent, total)
+
+    minutes = int(round(max(0.0, total)))
+    if patients_ahead > 0:
+        # Never show "0 min" while people are still ahead of you.
+        minutes = max(MIN_EWT_MINUTES, minutes)
+    minutes = max(0, min(MAX_EWT_MINUTES, minutes))
+
+    note = ""
+    if patients_ahead == 0:
+        note = "Aapki baari hai."
+    elif overrun >= 3:
+        note = f"Chamber me case lamba chal raha hai (+{int(round(overrun))} min)."
+
+    return WaitEstimate(
+        minutes=minutes,
+        patients_ahead=patients_ahead,
+        avg_service_minutes=round(confirm, 1),
+        delay_minutes=round(overrun, 1),
+        confidence=eta_confidence(patients_ahead, samples),
+        state="live",
+        chamber_open=True,
+        samples=samples,
+        note=note,
+    )
+
+
+# ── Snapshot persistence (booking time) ─────────────────────────────────────
+
+
+def booking_snapshot(
+    estimate: WaitEstimate,
+    visit_type: str,
+) -> dict[str, Any]:
+    """Columns to stamp onto a newly booked queue entry.
+
+    Storing the estimate at booking time lets us later compare *promised* vs
+    *delivered* wait — that is the EWT accuracy metric from the blueprint.
+    """
+    return {
+        "visit_type": visit_type,
+        "complexity_weight": complexity_weight(visit_type),
+        "estimated_minutes": int(estimate.minutes),
+    }
+
+
+# ── Delay badge for staff screens ───────────────────────────────────────────
+
+
+def delay_severity(
+    current: Any, avg_minutes: float, now: datetime | None = None
+) -> str:
+    """🟡 / 🔴 badge level for the doctor's live view (warning 5, critical 10)."""
+    delay = live_delay_minutes(current, avg_minutes, now=now)
+    if delay >= 10:
+        return "critical"
+    if delay >= 5:
+        return "warning"
+    return "none"
+
+
+def ewt_feed_line(entry: Any, estimate: WaitEstimate) -> dict[str, Any]:
+    """Compact row for the doctor's live EWT feed."""
+    return {
+        "entry_id": str(_field(entry, "id", "") or ""),
+        "token_number": _field(entry, "token_number", 0),
+        "patient_name": _field(entry, "patient_name", "") or "",
+        "visit_type": _field(entry, "visit_type", "") or "",
+        "visit_label": VISIT_TYPE_LABEL.get(
+            (_field(entry, "visit_type", "") or "").lower(), "Consultation"
+        ),
+        "wait_minutes": estimate.minutes,
+        "confidence": estimate.confidence,
+    }
