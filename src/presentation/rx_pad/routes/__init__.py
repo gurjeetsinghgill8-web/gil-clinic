@@ -1,1 +1,0 @@
-"""Rx Pad HTTP routes."""

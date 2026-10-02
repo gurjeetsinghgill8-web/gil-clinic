@@ -1,0 +1,8 @@
+{
+  "name": "CardioQueue — GIL CLINIC",
+  "description": "Hospital Clinic & Patient Queue Management System for Gil Clinic Cardiology Department",
+  "permissions": [],
+  "capabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

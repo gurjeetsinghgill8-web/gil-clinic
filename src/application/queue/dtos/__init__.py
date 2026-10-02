@@ -1,1 +1,0 @@
-"""Queue application DTOs package."""

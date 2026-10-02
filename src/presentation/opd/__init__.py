@@ -1,1 +1,0 @@
-"""Smart OPD presentation layer."""

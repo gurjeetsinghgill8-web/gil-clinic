@@ -1,1 +1,0 @@
-"""Queue domain value objects."""

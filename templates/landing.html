@@ -64,16 +64,6 @@
             transform: translateY(-2px);
             box-shadow: 0 8px 24px rgba(34,197,94,0.25);
         }
-        .login-btn.patient {
-            background: linear-gradient(135deg, #1e293b, #7c2d12);
-            border-color: rgba(251,146,60,0.4);
-        }
-        .login-btn.patient:hover {
-            border-color: #fb923c;
-            transform: translateY(-2px);
-            box-shadow: 0 8px 24px rgba(251,146,60,0.25);
-        }
-        .login-btn.patient .icon { background: rgba(251,146,60,0.2); }
         .login-btn .icon {
             font-size: 36px;
             width: 56px;
@@ -109,15 +99,6 @@
         <p class="subtitle">CardioQueue — Multi-Specialty Clinic Management</p>
 
         <div class="login-options">
-            <a href="/find-doctor" class="login-btn patient">
-                <div class="icon">🩺</div>
-                <div class="info">
-                    <h3>Find a Doctor</h3>
-                    <p>Patient — Search by city &amp; specialty, see live queue</p>
-                </div>
-                <span class="arrow">→</span>
-            </a>
-
             <a href="/admin/login" class="login-btn admin">
                 <div class="icon">🔐</div>
                 <div class="info">
@@ -138,7 +119,6 @@
         </div>
 
         <div class="footer" style="flex-wrap: wrap; gap: 14px 20px;">
-            <a href="/" style="color: #a78bfa; font-weight: 700;">🏠 Home</a>
             <a href="/presentation" style="color: #38bdf8; font-weight: 600;">📑 Master Presentation (32 Slides)</a>
             <a href="/manual" style="color: #34d399; font-weight: 600;">📖 Operations Manual</a>
             <a href="/staff/patient-status">🔍 Patient Status Check</a>

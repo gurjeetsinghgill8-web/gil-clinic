@@ -687,15 +687,6 @@
                                 <button class="btn btn-sm" id="patient-link-btn" onclick="openPatientLink()"
                                         style="background:#0d9488;color:#fff;font-weight:700;"
                                         title="Patient ko WhatsApp par apna self-monitoring link bhejein (ghar se BP/sugar bharega)">📱 Patient link</button>
-                                <button class="btn btn-sm" id="health-card-btn" onclick="openHealthCard()"
-                                        style="background:#7c3aed;color:#fff;font-weight:700;"
-                                        title="Patient ka Universal Health Card banao (vitals + prescription history, shareable link)">🪪 Health Card</button>
-                                <button class="btn btn-sm" onclick="openVideoConsult()"
-                                        style="background:#0891b2;color:#fff;font-weight:700;"
-                                        title="Patient ke saath video consult (free Jitsi meet room)">📹 Video</button>
-                                <button class="btn btn-sm" onclick="openLabOrder()"
-                                        style="background:#dc2626;color:#fff;font-weight:700;"
-                                        title="External lab ko test order karo — result patient ke phone par">🧪 Lab Order</button>
                                 <button class="btn btn-sm btn-ghost" onclick="clearSelected()">✕ Clear</button>
                             </div>
                         </div>
@@ -953,7 +944,6 @@
                         <button class="btn btn-warning" onclick="optimizeRx()" id="optimize-btn" style="display:none;background:linear-gradient(135deg,#f59e0b,#d97706);color:#fff;">🔄 Optimize Rx</button>
                         <button class="btn btn-success" onclick="saveRx()">💾 Save</button>
                         <button class="btn btn-ghost" onclick="previewPdf()">📄 PDF Preview</button>
-                        <button class="btn btn-ghost" onclick="openRxPad()" title="Clinic letterhead par customized print-ready prescription (EKA DOC jaisa pad)">📝 Letterhead Rx</button>
                     </div>
                     <div class="flex gap-md mt-sm">
                         <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px;">
@@ -1441,29 +1431,6 @@
                             <label>Phone</label>
                             <input type="text" id="set-phone" value="{{ settings.doc_phone or '' }}">
                         </div>
-                    </div>
-                    <div class="card" style="grid-column:1/3;">
-                        <div class="card-title">📍 Location & ABDM (Find a Doctor + NHA)</div>
-                        <p class="text-sm text-muted" style="margin:0 0 10px;">Location → "Find a Doctor" distance sorting. HPR/HFR → ABDM (NHA) registry IDs. Optional.</p>
-                        <div class="form-row-2">
-                            <div class="form-group">
-                                <label>Latitude</label>
-                                <input type="text" id="set-lat" value="{{ settings.latitude or '' }}" placeholder="e.g. 26.9124">
-                            </div>
-                            <div class="form-group">
-                                <label>Longitude</label>
-                                <input type="text" id="set-lon" value="{{ settings.longitude or '' }}" placeholder="e.g. 75.7873">
-                            </div>
-                            <div class="form-group">
-                                <label>HPR ID (Doctor Registry)</label>
-                                <input type="text" id="set-hpr" value="{{ settings.hpr_id or '' }}" placeholder="ABDM HPR ID">
-                            </div>
-                            <div class="form-group">
-                                <label>HFR ID (Facility Registry)</label>
-                                <input type="text" id="set-hfr" value="{{ settings.hfr_id or '' }}" placeholder="ABDM HFR ID">
-                            </div>
-                        </div>
-                        <button type="button" class="btn btn-sm btn-ghost" onclick="getSettingsLocation()" style="margin-top:4px;">📍 Use my current location</button>
                     </div>
                     <div class="card" style="grid-column:1/3;">
                         <div class="card-title">🤖 AI Provider — Who Pays for AI?</div>
@@ -3818,19 +3785,6 @@ function storeLocalByokKeys(data) {
     } catch (e) {}
 }
 
-function getSettingsLocation() {
-    if (!navigator.geolocation) { showToast('Geolocation not supported', 'error'); return; }
-    navigator.geolocation.getCurrentPosition(
-        pos => {
-            document.getElementById('set-lat').value = pos.coords.latitude.toFixed(6);
-            document.getElementById('set-lon').value = pos.coords.longitude.toFixed(6);
-            showToast('📍 Location captured — Save dabayein');
-        },
-        () => showToast('Location permission denied', 'error'),
-        { timeout: 6000 }
-    );
-}
-
 function saveSettings() {
     const data = {
         clinic_name: document.getElementById('set-clinic-name').value.trim(),
@@ -3842,10 +3796,6 @@ function saveSettings() {
         doc_email: document.getElementById('set-email').value.trim(),
         doc_phone: document.getElementById('set-phone').value.trim(),
         clinic_address: document.getElementById('set-address').value.trim(),
-        latitude: document.getElementById('set-lat').value.trim(),
-        longitude: document.getElementById('set-lon').value.trim(),
-        hpr_id: document.getElementById('set-hpr').value.trim(),
-        hfr_id: document.getElementById('set-hfr').value.trim(),
         wa_reception: document.getElementById('set-wa-reception').value.trim(),
         wa_manager: document.getElementById('set-wa-manager').value.trim(),
         wa_doctor: document.getElementById('set-wa-doctor').value.trim(),
@@ -5763,134 +5713,6 @@ function closePatientLink() {
   document.getElementById('patient-link-modal').style.display = 'none';
 }
 
-// ── Universal Health Card modal ──────────────────────────────────────────────
-function openHealthCard() {
-  const pid = (typeof _currentPatientId !== 'undefined' && _currentPatientId) ? _currentPatientId : '';
-  const name = (document.getElementById('pt-name') || {}).value || '';
-  const phone = (document.getElementById('pt-phone') || {}).value || '';
-  if (!pid) {
-    showToast('Pehle patient select karein (🔍 Search Old) ya naam/phone bharein', 'warning');
-    return;
-  }
-  const modal = document.getElementById('health-card-modal');
-  const msgBox = document.getElementById('hc-msg');
-  const urlBox = document.getElementById('hc-url');
-  const waBtn = document.getElementById('hc-wa');
-  const viewBtn = document.getElementById('hc-view');
-  const errBox = document.getElementById('hc-err');
-  modal.style.display = 'flex';
-  msgBox.value = 'Card ban raha hai…';
-  urlBox.value = '';
-  waBtn.href = '#';
-  viewBtn.href = '#';
-  waBtn.style.pointerEvents = 'none';
-  viewBtn.style.pointerEvents = 'none';
-  errBox.style.display = 'none';
-
-  fetch('/opd/api/health-card', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ patient_id: pid, patient_name: name, phone: phone })
-  })
-    .then(r => r.json().then(j => ({ ok: r.ok, j: j })))
-    .then(res => {
-      if (!res.ok || !res.j || !res.j.ok) {
-        errBox.textContent = (res.j && res.j.error) || 'Card nahi ban paya';
-        errBox.style.display = 'block';
-        msgBox.value = '';
-        return;
-      }
-      const j = res.j;
-      urlBox.value = j.url;
-      msgBox.value = j.message;
-      waBtn.href = j.whatsapp_url;
-      viewBtn.href = j.url;
-      waBtn.style.pointerEvents = 'auto';
-      viewBtn.style.pointerEvents = 'auto';
-    })
-    .catch(() => {
-      errBox.textContent = 'Internet problem — dobara koshish karein';
-      errBox.style.display = 'block';
-    });
-}
-
-function closeHealthCard() {
-  document.getElementById('health-card-modal').style.display = 'none';
-}
-
-function copyHealthCard() {
-  const url = (document.getElementById('hc-url') || {}).value || '';
-  if (!url) return;
-  if (navigator.clipboard && navigator.clipboard.writeText) {
-    navigator.clipboard.writeText(url).then(() => showToast('Link copy ho gaya ✓'))
-      .catch(() => { document.getElementById('hc-url').select(); });
-  } else {
-    document.getElementById('hc-url').select();
-  }
-}
-
-// ── Letterhead Rx pad (GAP-06) ───────────────────────────────────────────────
-function openRxPad() {
-  const pid = (typeof _currentPatientId !== 'undefined' && _currentPatientId) ? _currentPatientId : '';
-  if (!pid) { showToast('Pehle patient select karke Rx 💾 Save karein, phir Letterhead Rx kholen', 'warning'); return; }
-  window.open('/opd/api/rx-pad?patient_id=' + encodeURIComponent(pid), '_blank');
-}
-
-// ── Video consult (GAP-08) — free Jitsi meet room ────────────────────────────
-function openVideoConsult() {
-  const room = 'GILCLINIC-' + Date.now().toString(36).toUpperCase();
-  const url = 'https://meet.jit.si/' + room;
-  if (navigator.clipboard && navigator.clipboard.writeText) {
-    navigator.clipboard.writeText(url).catch(() => {});
-  }
-  window.open(url, '_blank');
-  showToast('📹 Video room khul gaya — link copy ho gaya, patient ko WhatsApp par bhejein');
-}
-
-// ── External Lab Order (GAP-09) ──────────────────────────────────────────────
-function openLabOrder() {
-  const pid = (typeof _currentPatientId !== 'undefined' && _currentPatientId) ? _currentPatientId : '';
-  if (!pid) { showToast('Pehle patient select karein (🔍 Search Old)', 'warning'); return; }
-  document.getElementById('lo-name').value = (document.getElementById('pt-name') || {}).value || '';
-  document.getElementById('lo-phone').value = (document.getElementById('pt-phone') || {}).value || '';
-  document.getElementById('lo-tests').value = (document.getElementById('pt-investigations') || {}).value || '';
-  document.getElementById('lo-result').style.display = 'none';
-  const c = document.getElementById('lo-confirm'); c.style.display = 'inline-flex'; c.disabled = false; c.textContent = '🧪 Order';
-  document.getElementById('lab-order-modal').style.display = 'flex';
-}
-function closeLabOrder() { document.getElementById('lab-order-modal').style.display = 'none'; }
-async function submitLabOrder() {
-  const pid = _currentPatientId;
-  const tests = document.getElementById('lo-tests').value.trim();
-  const name = document.getElementById('lo-name').value.trim();
-  const phone = document.getElementById('lo-phone').value.trim();
-  const sample = document.getElementById('lo-sample').value;
-  const priority = document.getElementById('lo-priority').value;
-  if (!tests) { showToast('Tests likhein', 'warning'); return; }
-  const btn = document.getElementById('lo-confirm'); btn.disabled = true; btn.textContent = 'Ordering…';
-  try {
-    const r = await fetch('/opd/api/lab-order', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ patient_id: pid, patient_name: name, phone: phone, tests: tests, sample_type: sample, priority: priority })
-    });
-    const j = await r.json();
-    if (j.ok) {
-      btn.style.display = 'none';
-      const res = document.getElementById('lo-result'); res.style.display = 'block';
-      res.innerHTML = '<b style="color:#16a34a;">✅ Order ban gaya.</b> Result link (patient ko bhejein):' +
-        '<br><input readonly value="' + j.result_url + '" onclick="this.select()" style="width:100%;margin:6px 0;padding:6px;border:1px solid #cbd5e1;border-radius:6px;font-size:12px;">' +
-        '<a href="' + j.result_url + '" target="_blank" rel="noopener" style="color:#16a34a;font-weight:700;">👁️ Result dekho →</a>';
-      showToast('✅ Lab order ban gaya');
-    } else {
-      showToast('⚠️ ' + (j.error || 'Order fail'), 'error');
-      btn.disabled = false; btn.textContent = '🧪 Order';
-    }
-  } catch (e) {
-    showToast('Network error', 'error');
-    btn.disabled = false; btn.textContent = '🧪 Order';
-  }
-}
-
 function copyPatientLink() {
   const url = (document.getElementById('pl-url') || {}).value || '';
   if (!url) return;
@@ -6074,59 +5896,6 @@ function pmLink(patientId, name, phone) {
     <p class="text-sm text-muted" style="margin-bottom:0;">
       Tip: patient link kholne par "Add to Home screen" karega to phone par app jaisa icon ban jayega.
     </p>
-  </div>
-</div>
-
-<!-- 🪪 Universal Health Card Modal -->
-<div id="health-card-modal" style="display:none; position:fixed; inset:0; z-index:10000; background:rgba(0,0,0,.5); align-items:center; justify-content:center;">
-  <div style="background:#fff;border-radius:14px;padding:20px;max-width:520px;width:94%;max-height:90vh;overflow:auto;">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
-      <h3 style="margin:0;">🪪 Universal Health Card</h3>
-      <button onclick="closeHealthCard()" style="background:none;border:none;font-size:20px;cursor:pointer;">✕</button>
-    </div>
-    <p class="text-sm text-muted" style="margin-top:0;">
-      Patient ka poora portable record — latest vitals + prescription history — ek shareable link me.
-      Kisi bhi doctor ko read-only dikha sakta hai (30 din tak valid, revocable).
-    </p>
-    <label class="text-sm text-muted">Card link (patient ya doctor ko bhejein)</label>
-    <input type="text" id="hc-url" readonly style="width:100%;padding:8px;border:1px solid #cbd5e1;border-radius:8px;margin:4px 0 10px;font-size:12px;">
-    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;">
-      <button class="btn btn-sm btn-ghost" onclick="copyHealthCard()">📋 Copy link</button>
-      <a class="btn btn-sm" id="hc-wa" href="#" target="_blank" rel="noopener"
-         style="background:#25D366;color:#fff;font-weight:700;">💬 WhatsApp par bhejo</a>
-      <a class="btn btn-sm" id="hc-view" href="#" target="_blank" rel="noopener"
-         style="background:#7c3aed;color:#fff;font-weight:700;">👁️ Card dekho</a>
-    </div>
-    <label class="text-sm text-muted">Message</label>
-    <textarea id="hc-msg" readonly rows="6" style="width:100%;padding:8px;border:1px solid #cbd5e1;border-radius:8px;font-size:12.5px;line-height:1.5;"></textarea>
-    <div id="hc-err" class="text-sm" style="display:none;color:#dc2626;margin-top:8px;"></div>
-  </div>
-</div>
-
-<!-- 🧪 External Lab Order Modal -->
-<div id="lab-order-modal" style="display:none; position:fixed; inset:0; z-index:10000; background:rgba(0,0,0,.5); align-items:center; justify-content:center;">
-  <div style="background:#fff;border-radius:14px;padding:20px;max-width:460px;width:94%;max-height:90vh;overflow:auto;">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
-      <h3 style="margin:0;">🧪 External Lab Order</h3>
-      <button onclick="closeLabOrder()" style="background:none;border:none;font-size:20px;cursor:pointer;">✕</button>
-    </div>
-    <label class="text-sm" style="font-weight:600;">Patient name</label>
-    <input id="lo-name" style="width:100%;padding:8px;border:1px solid #cbd5e1;border-radius:8px;margin:4px 0 8px;">
-    <label class="text-sm" style="font-weight:600;">Phone</label>
-    <input id="lo-phone" style="width:100%;padding:8px;border:1px solid #cbd5e1;border-radius:8px;margin:4px 0 8px;">
-    <label class="text-sm" style="font-weight:600;">Tests (ek line me ek)</label>
-    <textarea id="lo-tests" rows="4" placeholder="CBC&#10;HbA1c&#10;Lipid profile" style="width:100%;padding:8px;border:1px solid #cbd5e1;border-radius:8px;margin:4px 0 8px;font-family:inherit;"></textarea>
-    <div style="display:flex;gap:8px;margin-bottom:10px;">
-      <div style="flex:1"><label class="text-sm" style="font-weight:600;">Sample</label>
-        <select id="lo-sample" style="width:100%;padding:8px;border:1px solid #cbd5e1;border-radius:8px;margin-top:4px;"><option>blood</option><option>urine</option><option>other</option></select></div>
-      <div style="flex:1"><label class="text-sm" style="font-weight:600;">Priority</label>
-        <select id="lo-priority" style="width:100%;padding:8px;border:1px solid #cbd5e1;border-radius:8px;margin-top:4px;"><option>routine</option><option>urgent</option></select></div>
-    </div>
-    <div style="display:flex;gap:10px;">
-      <button class="btn btn-ghost" onclick="closeLabOrder()" style="flex:1">Cancel</button>
-      <button class="btn btn-primary" id="lo-confirm" onclick="submitLabOrder()" style="flex:1">🧪 Order</button>
-    </div>
-    <div id="lo-result" style="display:none;margin-top:12px;font-size:13px;"></div>
   </div>
 </div>
 

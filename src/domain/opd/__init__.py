@@ -1,1 +1,0 @@
-"""OPD domain layer."""
