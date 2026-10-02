@@ -234,6 +234,60 @@ class TestConfidenceAndDelay:
         assert ewt.delay_severity(crit, 7.0, now=NOW) == "critical"
 
 
+class TestMergedEngineSignals:
+    """Signals merged from the enterprise blueprints (master blueprint Part F).
+
+    ``velocity`` = is the chamber running fast or slow *right now*; the
+    geriatric weight = a 70+ consultation genuinely takes longer.
+    """
+
+    def test_velocity_needs_history(self):
+        assert ewt.recent_velocity([], 7.0) == 1.0
+        assert ewt.recent_velocity([12.0], 7.0) == 1.0  # a single sample proves nothing
+
+    def test_velocity_detects_a_slow_chamber_and_clamps(self):
+        assert ewt.recent_velocity([14, 14, 14, 14, 14], 7.0) == ewt.MAX_VELOCITY
+
+    def test_velocity_detects_a_fast_chamber_and_clamps(self):
+        assert ewt.recent_velocity([3, 3, 3, 3, 3], 7.0) == pytest.approx(ewt.MIN_VELOCITY)
+
+    def test_velocity_only_reads_the_recent_tail(self):
+        # A very slow week followed by five quick visits must read as "fast".
+        history = [30, 30, 30, 30, 30, 4, 4, 4, 4, 4]
+        assert ewt.recent_velocity(history, 16.0) < 1.0
+
+    def test_velocity_scales_the_estimate(self):
+        ahead = [{"visit_type": "followup"} for _ in range(4)]
+        normal = ewt.estimate_wait(ahead=ahead, avg_minutes=8.0, samples=30, now=NOW)
+        slow = ewt.estimate_wait(
+            ahead=ahead, avg_minutes=8.0, samples=30, now=NOW, velocity=1.4
+        )
+        assert slow.minutes > normal.minutes
+        assert slow.velocity == 1.4
+
+    def test_velocity_is_clamped_inside_the_estimate(self):
+        estimate = ewt.estimate_wait(ahead=[{"visit_type": "new"}], velocity=99, now=NOW)
+        assert estimate.velocity == ewt.MAX_VELOCITY
+
+    def test_velocity_appears_in_the_public_payload(self):
+        estimate = ewt.estimate_wait(ahead=[{"visit_type": "new"}], velocity=0.9, now=NOW)
+        assert estimate.to_public_dict()["velocity"] == 0.9
+
+    def test_senior_patient_gets_its_own_weight(self):
+        assert ewt.classify_visit_type(total_visits=5, age=75) == "geriatric"
+        assert ewt.classify_visit_type(total_visits=5, age=40) == "followup"
+        assert ewt.visit_weight("geriatric") > ewt.visit_weight("followup")
+
+    def test_a_first_visit_is_still_a_new_case_even_for_a_senior(self):
+        assert ewt.classify_visit_type(total_visits=1, age=80) == "new"
+
+    def test_a_procedure_outranks_age(self):
+        assert (
+            ewt.classify_visit_type(total_visits=5, age=80, service_code="ECG")
+            == "procedure"
+        )
+
+
 class TestHoldStatus:
     def test_hold_is_part_of_the_live_queue(self):
         assert QueueStatus.HOLD.is_active is True
@@ -352,6 +406,21 @@ class TestBookingTokens:
             )
             assert response.status_code == 200
             assert response.json()["ok"] is True
+
+    def test_returning_senior_booking_is_classified_geriatric(self, client):
+        """Age now flows from the booking form into the EWT weight."""
+        clinic = _make_clinic("T-K", "Kilo Clinic")
+        first = client.post(
+            "/api/v1/marketplace/book",
+            json={"clinic_id": clinic, "name": "Senior", "phone": "9000000011", "age": 76},
+        ).json()
+        second = client.post(
+            "/api/v1/marketplace/book",
+            json={"clinic_id": clinic, "name": "Senior", "phone": "9000000011", "age": 76},
+        ).json()
+        assert first["visit_type"] == "new"          # first ever visit
+        assert second["visit_type"] == "geriatric"   # returning + 70+
+        assert second["token"] == 2
 
 
 # ══════════════════════════════════════════════════════════════════════════

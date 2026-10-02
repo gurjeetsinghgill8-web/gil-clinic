@@ -57,9 +57,12 @@ MAX_DELAY_PENALTY_MINUTES: float = 15.0
 
 #: Visit-type → multiplier on the doctor's learned average.
 #: A "new" case is ~1.8× a routine visit; a report review is a quick 0.6×.
+#: "geriatric" comes from the enterprise blueprint's elderly multiplier
+#: (70+ consultations consistently run longer than the clinic average).
 VISIT_TYPE_WEIGHT: dict[str, float] = {
     "new": 1.8,
     "procedure": 1.8,
+    "geriatric": 1.2,
     "followup": 0.75,
     "report": 0.6,
     "": 1.0,
@@ -72,10 +75,18 @@ COMPLEXITY_WEIGHT_MINUTES: dict[int, float] = {1: 0.85, 2: 1.8, 3: 2.2}
 VISIT_TYPE_LABEL: dict[str, str] = {
     "new": "Naya case",
     "procedure": "Test/Procedure",
+    "geriatric": "Senior patient",
     "followup": "Follow-up",
     "report": "Report review",
     "": "Consultation",
 }
+
+#: How far the recent-velocity signal may bend an estimate.
+MIN_VELOCITY: float = 0.7
+MAX_VELOCITY: float = 1.4
+
+#: Age at which a consultation is treated as a longer "geriatric" visit.
+GERIATRIC_AGE: int = 70
 
 
 @dataclass(frozen=True)
@@ -91,6 +102,7 @@ class WaitEstimate:
     chamber_open: bool
     samples: int = 0
     note: str = ""
+    velocity: float = 1.0  # recent pace vs the learned average (1.0 = on time)
 
     @property
     def is_live(self) -> bool:
@@ -106,6 +118,7 @@ class WaitEstimate:
             "state": self.state,
             "chamber_open": self.chamber_open,
             "delay_minutes": int(round(self.delay_minutes)),
+            "velocity": round(self.velocity, 2),
             "note": self.note,
         }
 
@@ -205,16 +218,60 @@ def avg_service_minutes(
     return max(MIN_AVG_MINUTES, min(MAX_AVG_MINUTES, mean)), count
 
 
-# ── Visit classification (Part B · B4.2) ────────────────────────────────────
+def recent_velocity(
+    entries: Iterable[Any] | Iterable[float],
+    avg_minutes: float,
+    window: int = 5,
+) -> float:
+    """Is the chamber moving faster or slower than its own average, *right now*?
 
+    The blueprint's ``V_t`` signal: the mean of the last ``window`` completed
+    consultations divided by the learned average.
+
+        1.0 = on schedule · < 1 = running fast · > 1 = running slow
+
+    Clamped to :data:`MIN_VELOCITY` / :data:`MAX_VELOCITY` so one chaotic
+    afternoon cannot distort everybody's estimate.
+
+    The caller should pass entries oldest → newest, because only the tail is
+    used. Anything unparsable is skipped rather than guessed.
+    """
+    durations: list[float] = []
+    for item in entries or []:
+        if isinstance(item, (int, float)) and not isinstance(item, bool):
+            value = float(item)
+            low, high = SANE_SERVICE_MINUTES
+            if low <= value <= high:
+                durations.append(value)
+            continue
+        value = service_minutes(
+            _field(item, "started_at"), _field(item, "completed_at")
+        )
+        if value is not None:
+            durations.append(value)
+
+    if len(durations) < 2 or avg_minutes <= 0:
+        return 1.0
+    recent = durations[-window:] if len(durations) >= window else durations
+    ratio = (sum(recent) / len(recent)) / float(avg_minutes)
+    return max(MIN_VELOCITY, min(MAX_VELOCITY, ratio))
+
+
+# ── Visit classification (Part B · B4.2) ────────────────────────────────────
 
 def classify_visit_type(
     total_visits: int | None = None,
     has_report: bool = False,
     is_procedure: bool = False,
     service_code: str = "OPD",
+    age: int | None = None,
 ) -> str:
-    """Decide new / followup / report / procedure for one visit."""
+    """Decide new / followup / report / procedure / geriatric for one visit.
+
+    ``age`` comes from the enterprise blueprint's elderly multiplier — senior
+    consultations genuinely run longer, so they get their own weight. Order is
+    deliberate: a procedure stays a procedure no matter the age.
+    """
     if is_procedure or (service_code or "").upper() not in ("", "OPD"):
         return "procedure"
     if has_report:
@@ -223,7 +280,14 @@ def classify_visit_type(
         visits = int(total_visits or 0)
     except (TypeError, ValueError):
         visits = 0
-    return "new" if visits <= 1 else "followup"
+    if visits <= 1:
+        return "new"
+    try:
+        if age is not None and int(age) >= GERIATRIC_AGE:
+            return "geriatric"
+    except (TypeError, ValueError):
+        pass
+    return "followup"
 
 
 def complexity_weight(visit_type: str) -> int:
@@ -323,6 +387,7 @@ def estimate_wait(
     me: Any = None,
     now: datetime | None = None,
     doctor_name: str = "",
+    velocity: float = 1.0,
 ) -> WaitEstimate:
     """The heart of the module — estimate one patient's wait.
 
@@ -331,6 +396,7 @@ def estimate_wait(
         your wait = everyone still waiting in front of you
                   + what is LEFT of the consultation happening right now
                   + a penalty if that consultation is already overrunning
+                  ... all scaled by how fast the chamber is moving today
 
     Args:
         ahead: entries waiting (WAITING / CALLED / HOLD) — the patient inside
@@ -343,6 +409,7 @@ def estimate_wait(
             of their wait live, so we do not count it twice.
         now: injectable clock (tests).
         doctor_name: only used for the note text.
+        velocity: recent pace from :func:`recent_velocity` (Part F merge).
 
     Returns:
         :class:`WaitEstimate` — never raises, always safe to render.
@@ -351,6 +418,7 @@ def estimate_wait(
     waiting_ahead = len(ahead_list)
     patients_ahead = waiting_ahead + (1 if current is not None else 0)
     confirm = float(avg_minutes or DEFAULT_AVG_MINUTES)
+    pace = max(MIN_VELOCITY, min(MAX_VELOCITY, float(velocity or 1.0)))
 
     # ── E-01 chamber gate: no countdown until the doctor is actually in ──
     if not chamber_open:
@@ -365,6 +433,7 @@ def estimate_wait(
             chamber_open=False,
             samples=samples,
             note=f"{who} abhi chamber me nahi aaye — aapka number safe hai.",
+            velocity=1.0,
         )
 
     # Time already consumed by the consultation inside the chamber.
@@ -379,7 +448,9 @@ def estimate_wait(
         )
 
     total = sum(visit_minutes(entry, confirm) for entry in ahead_list)
-    total += remaining_current + overrun
+    total += remaining_current
+    total *= pace  # today's real pace, not just the long-run average
+    total += overrun
 
     # If this patient was already called they have been waiting live — do not
     # bill them for time that has already passed.
@@ -397,6 +468,10 @@ def estimate_wait(
         note = "Aapki baari hai."
     elif overrun >= 3:
         note = f"Chamber me case lamba chal raha hai (+{int(round(overrun))} min)."
+    elif pace >= 1.2:
+        note = "Aaj cases thode lambe chal rahe hain — wait badh sakta hai."
+    elif pace <= 0.8:
+        note = "Chamber tez chal raha hai — jaldi number aa sakta hai."
 
     return WaitEstimate(
         minutes=minutes,
@@ -408,6 +483,7 @@ def estimate_wait(
         chamber_open=True,
         samples=samples,
         note=note,
+        velocity=round(pace, 2),
     )
 
 

@@ -202,6 +202,8 @@ async def _queue_map(clinic_ids: list[str]) -> dict[str, dict[str, Any]]:
                         QueueEntryModel.completed_at.is_not(None),
                         QueueEntryModel.completed_at >= history_since,
                     )
+                    # oldest → newest: recent_velocity() only reads the tail
+                    .order_by(QueueEntryModel.completed_at.asc())
                     .limit(2000)
                 )
             ).all()
@@ -246,7 +248,9 @@ async def _queue_map(clinic_ids: list[str]) -> dict[str, dict[str, Any]]:
 
     for cid in clinic_ids:
         bucket = buckets.get(cid, {"waiting": [], "current": None, "active": []})
-        avg_minutes, samples = ewt.avg_service_minutes(history.get(cid, []))
+        history_rows_for_clinic = history.get(cid, [])
+        avg_minutes, samples = ewt.avg_service_minutes(history_rows_for_clinic)
+        pace = ewt.recent_velocity(history_rows_for_clinic, avg_minutes)
         tracked = cid in chamber_open
         is_open = chamber_open.get(cid, True)
 
@@ -256,6 +260,7 @@ async def _queue_map(clinic_ids: list[str]) -> dict[str, dict[str, Any]]:
             samples=samples,
             current=bucket["current"],
             chamber_open=is_open,
+            velocity=pace,
         )
         tokens = [e.token_number for e in bucket["active"] if e.token_number]
         out[cid] = {
@@ -268,6 +273,7 @@ async def _queue_map(clinic_ids: list[str]) -> dict[str, dict[str, Any]]:
             "chamber_tracked": tracked,
             "avg_minutes": estimate.avg_service_minutes,
             "samples": samples,
+            "velocity": estimate.velocity,
             "delay_minutes": int(round(estimate.delay_minutes)),
             "note": estimate.note,
         }
@@ -299,6 +305,7 @@ def _to_public(
             "chamber_open": chamber_open,
             "chamber": "OPD",
             "avg_minutes": q.get("avg_minutes"),
+            "velocity": q.get("velocity"),
             "delay_minutes": int(q.get("delay_minutes") or 0),
             "note": q.get("note") or "",
             "real": True,
@@ -536,7 +543,7 @@ async def marketplace_book(request: Request):
         token = (token_row.scalar() or 0) + 1
 
         # ── visit classification + chamber room (BUG-02) ──
-        visit_type = ewt.classify_visit_type(total_visits=total_visits)
+        visit_type = ewt.classify_visit_type(total_visits=total_visits, age=age)
         room = _opd_room_name()
         department = (clinic.specialty or "").strip() or "OPD"
 

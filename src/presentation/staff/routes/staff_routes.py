@@ -1287,8 +1287,12 @@ async def _track_scope(patient_id: str) -> tuple[str, str]:
     return scope
 
 
-async def _track_average(clinic_id: str, doctor_id: str) -> tuple[float, int]:
-    """The doctor's real average consultation length (cached for 5 minutes)."""
+async def _track_average(clinic_id: str, doctor_id: str) -> tuple[float, int, float]:
+    """The doctor's real average consultation length + today's pace (cached 5 min).
+
+    Returns ``(avg_minutes, samples, velocity)`` where velocity is the recent
+    speed ratio from :func:`ewt.recent_velocity`.
+    """
     key = f"avg:{clinic_id}:{doctor_id}"
     cached = _cache_get(key, _WAIT_CACHE_TTL_SECONDS)
     if cached is not None:
@@ -1312,14 +1316,15 @@ async def _track_average(clinic_id: str, doctor_id: str) -> tuple[float, int]:
                 stmt = stmt.where(QueueEntryModel.clinic_id == clinic_id)
             if doctor_id:
                 stmt = stmt.where(QueueEntryModel.doctor_id == doctor_id)
-            rows = (await session.execute(stmt.limit(300))).all()
+            # oldest → newest, so recent_velocity() can read the tail
+            rows = (await session.execute(stmt.order_by(QueueEntryModel.completed_at.asc()).limit(300))).all()
 
-        result = ewt.avg_service_minutes(
-            [{"started_at": s, "completed_at": c} for s, c in rows]
-        )
+        history = [{"started_at": s, "completed_at": c} for s, c in rows]
+        avg, samples = ewt.avg_service_minutes(history)
+        result = (avg, samples, ewt.recent_velocity(history, avg))
     except Exception as exc:  # pragma: no cover
         logger.debug("track average lookup failed: %s", exc)
-        result = (7.0, 0)
+        result = (7.0, 0, 1.0)
     _cache_set(key, result)
     return result
 
@@ -1418,7 +1423,7 @@ async def _track_wait_info(all_entries: list[dict], patient_entries: list[dict])
             (e for e in active if int(e.token_number or 0) == mine_token), None
         )
 
-        avg_minutes, samples = await _track_average(clinic_id, doctor_id)
+        avg_minutes, samples, pace = await _track_average(clinic_id, doctor_id)
         chamber_open = await _track_chamber_open(clinic_id, doctor_id)
 
         estimate = ewt.estimate_wait(
@@ -1428,6 +1433,7 @@ async def _track_wait_info(all_entries: list[dict], patient_entries: list[dict])
             current=inside,
             chamber_open=chamber_open,
             me=mine_row,
+            velocity=pace,
         )
         payload = estimate.to_public_dict()
         payload["line"] = estimate.to_line_hi()

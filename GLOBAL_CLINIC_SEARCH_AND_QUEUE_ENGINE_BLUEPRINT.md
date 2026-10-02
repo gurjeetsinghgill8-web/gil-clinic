@@ -2,13 +2,13 @@
 
 > **Owner:** Gurjas Singh Gill (Dr. G. S. Gill)
 > **Product:** GHOS — GIL CLINIC (`gillhopitalsoftware1.pythonanywhere.com`)
-> **Version:** **1.1** · **Date:** 02 Oct 2026
+> **Version:** **1.2** · **Date:** 02 Oct 2026
 > **One-liner:** *"Practo ek directory dikhata hai. GHOS ek ZINDA queue dikhata hai."*
 > **Mantra:** 🟢 **Live queue > khaali appointment slot.**
 
 > **Ye file kya hai:** poore "Global Clinic Search + Queue Engine" module ka **master architecture blueprint**.
 > **Part A** Search · **Part B** Queue Engine · **Part C** Bridge · **Part D** Real-world edge cases ·
-> **Part E** Module 6 (external doctor data ingestion).
+> **Part E** Module 6 (external doctor data ingestion) · **Part F** Enterprise blueprints se merge / reject.
 >
 > **Har section me saaf likha hai:** ✅ kya ban chuka · 📐 kya banana hai · 📁 kis file me.
 
@@ -18,6 +18,26 @@
 |-----|-----------|
 | 1.0 | Part A/B/C + data model + build order |
 | **1.1** | ➕ **Part D** — 9 real-world edge cases (doctor late arrival, token skip/HOLD, no-cron alert, multi-doctor collision) · ➕ **Part E** — Module 6 Crawl4AI ingestion (PA-free-safe architecture) · 🐞 **BUG-01** booking token counter · ✅ status vocabulary corrected (`IN_PROGRESS`, not `IN_CONSULT`) |
+| **1.2** | ✅ **BLOCK 0 + BLOCK 1 SHIPPED** — EWT engine, chamber gate, HOLD→Next+1, doctor partition, BUG-01…04 fixed, **117 tests green** · ➕ **Part F** — enterprise blueprints ka honest merge: 11 ideas accepted, 7 rejected with physical reasons, 4 latent bugs found |
+
+---
+
+## 🚦 Ab tak kya ban chuka hai (02-Oct-2026)
+
+| Layer | Status |
+|-------|--------|
+| 🐞 BUG-01 token counter (clinic partition) | ✅ **FIXED + regression test** |
+| 🐞 BUG-02 khaali room / department | ✅ **FIXED** |
+| 🐞 BUG-03 family ek phone → booking 500 | ✅ **FIXED** |
+| 🐞 BUG-04 tracking doosre clinic ke token gin raha tha | ✅ **FIXED** |
+| 🧠 **EWT engine** — `src/domain/queue/ewt.py` | ✅ **BUILT** (self-calibrating, pure functions) |
+| 🚪 **E-01 Chamber gate** — `▶ START OPD` | ✅ **BUILT** |
+| ⏸️ **E-02 HOLD → Next+1** | ✅ **BUILT** |
+| 👨‍⚕️ **E-04 doctor partition** (`doctor_id`) | ✅ **BUILT** |
+| 🔔 **E-03 departure alert** (client-side, koi cron nahi) | ✅ **BUILT** |
+| 🖥️ Dashboard START OPD panel + delay badge | ✅ **BUILT** |
+| 📱 Patient page wait card + "ab niklo" chime | ✅ **BUILT** |
+| **Test suite** | ✅ **117 passed, 0 failed** |
 
 ---
 
@@ -261,7 +281,7 @@ delay = (abhi ka samay − called_at) − avg_service_time
 
 > Live app me abhi **delay alert wire nahi hua** — Part C ka kaam hai.
 
-## B4. 📐 EWT Engine — "Uber ETA for OPD" (BANANA HAI)
+## B4. ✅ EWT Engine — "Uber ETA for OPD" (BUILT 02-Oct-2026)
 
 **Problem:** `wait_minutes = patients_ahead × 7` — har patient ko 7 min maan leta hai. **Galat.**
 
@@ -722,6 +742,67 @@ class DoctorProfileSchema(BaseModel):          # ⚠️ aapke snippet me yeh DEF
 
 ---
 
+# PART F — ENTERPRISE BLUEPRINTS SE MERGE (aur jo reject hua, kyun)
+
+> **Kyun ye part hai:** 02-Oct ko teen enterprise blueprints alag se likhe gaye —
+> `GLOBAL_CLINIC_SEARCH_AND_QUEUE_ENGINE_BLUEPRINT_V4_ENTERPRISE.md`,
+> `WORLD_CLASS_HEALTHCARE_NETWORK_BLUEPRINT.md`, `REALTIME_QUEUE_AND_MULTI_BRANCH_BLUEPRINT.md`
+> (aur `PRODUCT_DEVELOPMENT_UBER_HEALTHCARE_PLAN.md`, jo Uber plan ka duplicate hai).
+> Unme **kuch ideas genuinely achhe** hain, aur **kuch is host par chal hi nahi sakte**.
+> Yeh part dono ko saaf-saaf alag karta hai — taaki koi buzzword product me na ghus jaye.
+
+## F1. ✅ Swikar kiye gaye ideas (11)
+
+| # | Idea | Source | Kya karenge (exact) | Verdict |
+|---|------|--------|---------------------|---------|
+| F-01 | **Recent velocity `V_t`** — chamber aaj tez chal raha hai ya slow | V4 §3.2, RT §1.1 | ✅ **Aaj hi merge ho gaya:** `ewt.recent_velocity()` — last 5 consultations ÷ average, clamp 0.7–1.4, `estimate_wait(velocity=…)` | ✅ DONE |
+| F-02 | **Geriatric multiplier** — 70+ consultation lambi hoti hai | RT §1.1.3, V4 §3.2 | ✅ **Aaj hi merge ho gaya:** `classify_visit_type(age=…)` → `"geriatric"` (weight 1.2), booking form ka `age` ab use hota hai | ✅ DONE |
+| F-03 | **EWT accuracy measurement** — "promised vs delivered wait" | V4 §2.2, ye blueprint §7 | `estimated_minutes` booking par save hota hai; `/admin/network` par actual se compare karke ±min report | 📐 NEXT |
+| F-04 | **Multi-factor ranking** — `license DESC, name ASC` ki jagah asli score | V4 §2.1–2.2 | `_to_public` me `rank_score`: partner weight + live depth + proximity sigmoid + cold-start dampener (`_haversine` pehle se hai) | 📐 NEXT |
+| F-05 | **Computed badge/tag engine** — structured `tags[]`, ad-hoc emoji nahi | V4 §1.3 | `TAG_LIVE_TELEMETRY`, `TAG_INSTANT_TOKEN`, `TAG_ZERO_WAIT_VERIFIED`, `TAG_DIRECT_CALL_ONLY` — sab maujooda data se | 📐 NEXT |
+| F-06 | **Referral slip + accept-to-queue** — clinic A → clinic B patient bheje | RT §3.3, V4 `TAG_REFERRAL_ELIGIBLE` | Naya `referrals` table + signed slip (wahi `itsdangerous` pattern jo `/s/<token>` me hai) → accept karne par receiver ke `queue_entries` me asli token | 📐 NEXT |
+| F-07 | **Verified review → Bayesian rating** — ek review = ek asli visit | V4 §2.2.2 + §5.3 | `clinic_reviews` table, token `COMPLETED` par milta hai (fake review band) → `clinics.rating` → ranking weight | 📐 NEXT |
+| F-08 | **Network-wide super-admin view** (PHI-free) | RT §2.3, Uber #12 | `_queue_map()` pehle se per-clinic live data deta hai → `/admin/network` page: token, last-active, licence — **naam tak, phone nahi** | 📐 NEXT |
+| F-09 | **Transit-aware departure alert** — `EWT ≤ travel + buffer` | V4 §3.3 | ✅ Aadha ho gaya: `leave_now` flag + browser chime. 📐 Bacha: patient ka GPS → clinic lat/long (marketplace API pehle se deta hai) + road factor | 🏷️ PARTIAL |
+| F-10 | **Business-hours availability** | V4 §1.1 | `clinics.open_time/close_time` + "abhi khula hai" filter (Part A · A-1) | 📐 NEXT |
+| F-11 | **Family Health Locker** (1 mobile → N profiles) | Uber #8 | BUG-03 fix iska **prerequisite** tha aur ho gaya; ab portal me multiple profiles | 📐 NEXT |
+
+## F2. ❌ Reject — aur exact physical wajah
+
+| Idea | Source | Kyun reject |
+|------|--------|-------------|
+| **H3 geohash (resolution 7)** | V4 §1.2, RT §3.1 | `h3` dependency me nahi hai, aur asli sawal sirf "sabse paas kaun" hai — jo `_haversine` + `clinics.latitude/longitude` **1000 rows par microseconds me** kar deta hai. 512 MB disk par compiled dependency = pure risk |
+| **Municipal GeoJSON boundary clamping** | V4 §1.2 | `shapely` + per-city polygons chahiye, aur jo `city` text filter already kaam kar raha hai usse better nahi. Asli dard (galat city string) isse theek nahi hota |
+| **Outbox + Kafka/GCP Pub-Sub + LWW CRDT multi-branch sync** | RT §2.1 | Paid pub/sub + alag consumer process chahiye. PA free par **scheduled task hi nahi** (403) — outbox ka koi consumer hi nahi hoga. Multi-tenancy `queue_entries.clinic_id` se already kaam kar rahi hai |
+| **Per-branch KMS keys, DBA bhi decrypt na kar sake** | RT §2.2 | KMS paid infra hai. `cryptography` installed hai par har read par CPU kharch karna 100 CPU-sec/din ke budget me nahi aata |
+| **Local-first offline queue** | Uber #11 | Queue server-authoritative hai (SQLite + Jinja2 ek process me). Browser clinic ko chalau nahi rakha sakta. 🔸 Salvage: service worker jo tracking page shell cache kare (**stale** label ke saath) |
+| **Server-side transit (Google Distance Matrix / OSRM)** | V4 §3.3 | Outbound internet whitelist-only + API paid. Isliye F-09 **client-side** hai |
+| **Crawl4AI app ke andar** | V4 §6 | Part E me already saabit kiya: outbound block + no cron + 100 CPU-sec + Chromium ~400 MB. Worker bahar chalega (GH Actions) |
+
+## F3. 🐞 Verify karte waqt jo chhupe bugs mile
+
+| # | Bug | Status |
+|---|-----|--------|
+| **BUG-03** | Booking `scalar_one_or_none()` se patient dhoondhta tha — ek hi phone par 2 log (family) = `MultipleResultsFound` = **HTTP 500**. Family Health Locker (F-11) ka prerequisite | ✅ **FIXED** |
+| **BUG-04** | Public tracking page **har clinic** ke tokens gin raha tha — patient ko "17 aage" dikhta tha jabki uske aage koi nahi tha | ✅ **FIXED** |
+| **OPEN-01** | `PatientModel.merged_into_patient_id` (dedup merges ke liye) ko `marketplace_routes`, `staff_routes`, `patient_portal_routes` ke phone lookups **ignore** karte hain → merged patient tombstone row par resolve ho sakta hai | 📐 TODO |
+| **OPEN-02** | Booking me `age` hardcoded 30 tha (ab theek hai), par **gender** abhi bhi `"Not Specified"` hai → koi demographic analytics possible nahi | 📐 TODO |
+
+## F4. Part F build register
+
+| # | Item | File | Effort |
+|---|------|------|--------|
+| F-01, F-02 | velocity + geriatric engine signals | `src/domain/queue/ewt.py` | ✅ **DONE** |
+| F-03 | EWT accuracy report (promised vs delivered) | naya `clinic_stats_routes.py` | M |
+| F-04, F-05 | multi-factor ranking + `tags[]` | `marketplace_routes.py` | M |
+| F-06 | referral slip + accept-to-queue | naya `referral/` module | L |
+| F-07 | verified reviews → Bayesian rating | model + admin card | M |
+| F-08 | `/admin/network` live overview | `admin/dashboard_routes.py` | S |
+| F-09b | GPS + travel time in the alert (client-side) | `patient_track.html` | S |
+| F-10 | `open_time` / `close_time` / `rating` | clinic model + marketplace | M |
+
+---
+
 ## 3. Data Model — poora module ek schema me
 
 ### 3.1 ✅ Jo maujood hai (chhedna nahi, sirf padhna)
@@ -809,26 +890,27 @@ CREATE TABLE doctor_crawl_runs (...);
 | GET | `/lab/<token>` | Patient: lab result phone par |
 | GET | `/abdm` + `/abdm/{status,fhir/Patient,fhir/Practitioner,consent,dhis/transactions}` | ABDM registry + FHIR + consent + DHIS |
 
-### 4.2 📐 BANANE HAIN
+### 4.2 📐 NAYE ENDPOINTS — ✅ jo ban gaye + baaki
 
 | Method | Path | Kaam | Kahan |
 |--------|------|------|-------|
-| GET | `/api/v1/marketplace/doctors?open_now=1` | Sirf khuli clinics | `marketplace_routes.py` |
-| GET | `/api/v1/marketplace/ewt?clinic_id=&doctor_id=` | EWT breakdown + chamber status | naya `ewt_routes.py` |
-| GET | `/api/v1/slots?clinic_id=&date=` | Free slots + confidence | naya `slots_routes.py` |
-| POST | `/api/v1/slots/book` | Slot → queue entry | same |
-| POST | `/opd/api/chamber/open` · `/close` | ▶️ START OPD (chamber gate · E-01) | naya `chamber_routes.py` |
-| POST | `/opd/api/queue/hold` · `/requeue` | Token HOLD → Next+1 (E-02) | same |
-| POST | `/opd/api/chamber/next-arrival-alert` | "Doctor aa gaye" — ek tap me sab waiting patients ko | same |
-| POST | `/opd/api/notify/leave-now` | Reception 1-click WhatsApp (E-03) | `opd_routes.py` helper |
-| POST | `/card/{uid}/revoke` | 🔒 Link band karo (DPDP) | `health_card_routes.py` |
-| GET | `/opd/api/queue-ewt` | Doctor Live View ka EWT feed | `opd_routes.py` |
-| POST | `/api/v1/marketplace/invite` | Tier-2 → `clinic_leads` | `marketplace_routes.py` |
-| POST | `/api/v1/ingest/doctors` | **Module 6 worker → app** (E2) | naya `ingest_routes.py` |
-| POST | `/api/v1/ingest/claim/{clinic_id}` | Doctor profile claim | same |
-| DELETE | `/api/v1/ingest/profile/{clinic_id}` | Opt-out (DPDP) | same |
-| GET | `/abdm/fhir/Bundle/{patient_id}` | Poora record ek FHIR bundle me | `abdm_routes.py` |
-| GET | `/abdm/dhis/claim-export` | DHIS incentive claim file | same |
+| GET | `/opd/api/chamber/status` | Chamber khula hai ya nahi + waiting count | ✅ **LIVE** |
+| POST | `/opd/api/chamber/open` · `/close` | ▶️ START / ⏹ END OPD (E-01) | ✅ **LIVE** |
+| POST | `/opd/api/chamber/arrival-alert` | "Doctor aa gaye" — waiting patients ke WhatsApp links | ✅ **LIVE** |
+| POST | `/opd/api/queue/hold` · `/requeue` | Token HOLD → Next+1 (E-02) | ✅ **LIVE** |
+| GET | `/opd/api/queue-ewt` | Doctor Live View ka EWT feed + delay badge | ✅ **LIVE** |
+| POST | `/opd/api/queue/leave-now` | Reception 1-click WhatsApp "ab niklo" (E-03b) | ✅ **LIVE** |
+| GET | `/api/v1/marketplace/doctors?open_now=1` | Sirf khuli clinics | 📐 |
+| GET | `/api/v1/marketplace/ewt?clinic_id=&doctor_id=` | EWT breakdown | 🏷️ `_queue_map()` me andar hai |
+| GET | `/api/v1/slots?clinic_id=&date=` | Free slots + confidence | 📐 |
+| POST | `/api/v1/slots/book` | Slot → queue entry | 📐 |
+| POST | `/card/{uid}/revoke` | 🔒 Link band karo (DPDP) | 📐 |
+| POST | `/api/v1/marketplace/invite` | Tier-2 → `clinic_leads` | 📐 |
+| POST | `/api/v1/ingest/doctors` | **Module 6 worker → app** (E2) | 📐 |
+| POST | `/api/v1/ingest/claim/{clinic_id}` | Doctor profile claim | 📐 |
+| DELETE | `/api/v1/ingest/profile/{clinic_id}` | Opt-out (DPDP) | 📐 |
+| GET | `/abdm/fhir/Bundle/{patient_id}` | Poora record ek FHIR bundle me | 📐 |
+| GET | `/abdm/dhis/claim-export` | DHIS incentive claim file | 📐 |
 
 ---
 
@@ -858,28 +940,35 @@ CREATE TABLE doctor_crawl_runs (...);
 
 > Owner ka nirdesh: **queue/EWT pehle** (yahi asli moat hai), phir edge cases, phir slots, phir growth.
 
-### 🐞 BLOCK 0 — BUG-01 fix (sabse pehle, 1 ghante ka kaam)
+### ✅ BLOCK 0 — BUG fixes — **DONE (02-Oct-2026)**
 
-| # | Item | File | Effort |
-|---|------|------|--------|
-| BUG-01 | Token counter me `clinic_id` + `doctor_id` filter | `marketplace_routes.py` | XS |
-| BUG-02 | `department` + `room` hardcode hatao | same | XS |
-| BUG-03 | Is bug ke liye regression test | `tests/` | S |
+| # | Item | File | Effort | Status |
+|---|------|------|--------|--------|
+| BUG-01 | Token counter me `clinic_id` + `doctor_id` filter | `marketplace_routes.py` | XS | ✅ |
+| BUG-02 | `department` + `room` hardcode hatao | same | XS | ✅ |
+| BUG-03 | Family ek phone → booking 500 (`scalar_one_or_none`) | same | S | ✅ |
+| BUG-04 | Tracking doosre clinic ke token gin raha tha | `staff_routes.py` | S | ✅ |
+| BUG-05 | In sab ke liye regression tests | `tests/test_ewt_calculation.py` | S | ✅ |
 
-### 🔴 BLOCK 1 — EWT Engine + Edge Cases (P0) — *"Uber ETA for OPD"*
+### ✅ BLOCK 1 — EWT Engine + Edge Cases (P0) — **DONE (02-Oct-2026)**
 
-| # | Item | File | Effort |
-|---|------|------|--------|
-| EWT-01 | `ewt.py` — rolling avg + complexity + estimate + confidence | **naya** `src/domain/queue/ewt.py` | M |
-| EWT-02 | `complexity_weight` · `estimated_minutes` · `visit_type` · `doctor_id` · `sort_key` · `requeue_count` | model + migration | S |
-| EWT-03 | `MINUTES_PER_PATIENT` hardcode → `estimate_wait()` | `marketplace_routes.py` | S |
-| EWT-04 | Booking par EWT snapshot save | same | S |
-| EWT-05 | Doctor Live View: EWT + delay badge 🟡/🔴 | `templates/opd/dashboard.html` | M |
-| EWT-06 | Patient page par EWT breakdown ("3 aage × ~6 min") | `marketplace.html` + `/track` | S |
-| **E-01** | **Chamber gate** — ▶️ START OPD + `chamber_sessions` + "Arrival Pending" | naya `chamber_routes.py` | M |
-| **E-02** | **HOLD → Next+1** (`sort_key` midpoint + HOLD status + abuse guard) | `queue_status.py` + queue routes | M |
-| **E-04** | **`doctor_id` partition** + token prefix (C-14 / G-14) | model + `marketplace_routes.py` | M |
-| EWT-07 | Unit tests: formula, chamber gate, hold-return, partition | `tests/test_ewt_calculation.py` | M |
+| # | Item | File | Effort | Status |
+|---|------|------|--------|--------|
+| EWT-01 | `ewt.py` — learned avg + weights + estimate + confidence + velocity | `src/domain/queue/ewt.py` | M | ✅ |
+| EWT-02 | `complexity_weight` · `estimated_minutes` · `visit_type` · `doctor_id` · `sort_key` · `requeue_count` · `held_at` · `hold_reason` | model + auto-migration | S | ✅ |
+| EWT-03 | `MINUTES_PER_PATIENT` hardcode → `estimate_wait()` | `marketplace_routes.py` | S | ✅ |
+| EWT-04 | Booking par EWT snapshot save (`estimated_minutes`) | same | S | ✅ |
+| EWT-05 | Doctor Live View: START OPD panel + EWT + delay badge 🟡/🔴 | `templates/opd/dashboard.html` | M | ✅ |
+| EWT-06 | Patient page par EWT card + "Arrival Pending" + "ab niklo" chime | `patient_track.html` + `/track/{t}/status` | S | ✅ |
+| **E-01** | **Chamber gate** — `chamber_sessions` + `queue_engine_routes.py` | naya module | M | ✅ |
+| **E-02** | **HOLD → Next+1** (`sort_key` midpoint + HOLD status + abuse guard) | `queue_status.py` + new routes | M | ✅ |
+| **E-04** | **`doctor_id` partition** | model + `marketplace_routes.py` | M | ✅ |
+| **E-03** | **Departure alert client-side** (chime + "AB NIKLO" + reception wa.me) | `patient_track.html` + new routes | M | ✅ |
+| EWT-07 | Unit + integration tests (49 in this file) | `tests/test_ewt_calculation.py` | M | ✅ |
+
+> **Note:** token prefix (C-14 / G-14) abhi bana nahi hai — `doctor_id` partition ho gaya hai, display prefix baaki hai.
+> **Note:** per-row HOLD button dashboard ke queue table me nahi hai — API ready hai (`/opd/api/queue/hold`),
+> button BLOCK 3 me dashboard ke saath jayega.
 
 ### 🟠 BLOCK 2 — Availability + Alert (P1)
 
@@ -888,8 +977,9 @@ CREATE TABLE doctor_crawl_runs (...);
 | AVL-01 | `open_time`/`close_time`/`rating` + admin form | clinic model + `onboard_doctor.html` | M |
 | AVL-02 | "🟢 Abhi khula hai" filter + `availability: OPEN/CLOSED` | `marketplace_routes.py` | S |
 | AVL-03 | Distance sort + "mere paas" button | `marketplace.html` | S |
-| **E-03** | **Departure alert client-side** (chime + "AB NIKLO") | `patient_track.html` + public status API | M |
-| **E-03b** | Reception 1-click WhatsApp (green icon) | reception dashboard + `staff_routes.py` | S |
+| **E-03** | **Departure alert client-side** (chime + "AB NIKLO") | `patient_track.html` + public status API | M | ✅ **DONE** |
+| **E-03b** | Reception 1-click WhatsApp link | `/opd/api/queue/leave-now` (API ✅) + green icon 📐 | S | 🏷️ API DONE |
+| **E-03c** | GPS + travel time in the alert (Part F-09b) | `patient_track.html` | S | 📐 |
 | E-06 | Holiday / closed day flag | clinic model + marketplace | S |
 | E-07 | No-show auto-detect (8 min) + EWT recompute | queue routes | S |
 
@@ -921,7 +1011,20 @@ CREATE TABLE doctor_crawl_runs (...);
 | M6-04 | `clinics` crawl columns + `doctor_crawl_runs` | model + migration | S |
 | M6-05 | Tier-2 "public listing" label + claim button | `marketplace.html` | S |
 
-### ⚫ BLOCK 6 — Compliance wiring (P0, credentials ka intezaar)
+### 🟣 BLOCK 7 — Enterprise merge (Part F) — P1/P2
+
+| # | Item | File | Effort |
+|---|------|------|--------|
+| F-01 · F-02 | velocity + geriatric signals | `src/domain/queue/ewt.py` | ✅ **DONE** |
+| F-03 | EWT accuracy (promised vs delivered) | naya `clinic_stats_routes.py` | M |
+| F-04 · F-05 | multi-factor ranking + `tags[]` | `marketplace_routes.py` | M |
+| F-06 | referral slip + accept-to-queue | naya `referral/` module | L |
+| F-07 | verified reviews → Bayesian rating | model + admin card | M |
+| F-08 | `/admin/network` live overview | `admin/dashboard_routes.py` | S |
+| F-10 | `open_time` / `close_time` / `rating` | clinic model + marketplace | M |
+| OPEN-01 | merged-patient tombstone fix in phone lookups | `marketplace_routes.py` + 2 more | S |
+
+### ⚫ BLOCK 8 — Compliance wiring (P0, credentials ka intezaar)
 
 | # | Item | File | Effort |
 |---|------|------|--------|
@@ -938,25 +1041,27 @@ CREATE TABLE doctor_crawl_runs (...);
 
 ## 7. Success Metrics (North Star)
 
-| Metric | Aaj | 90-din target |
-|--------|-----|---------------|
-| Doctor search → booking conversion | — | ≥ 15% |
-| Partner clinics with live feed | 1 (GIL CLINIC) | 100% |
-| Average patient wait (partner) | ~60 min (industry) | **< 15 min** |
-| **EWT accuracy (actual vs predicted)** | — | **± 5 min** |
-| **Ghost wait (doctor absent me jhoota EWT)** | — | **0** |
-| Health Card share rate | — | ≥ 20% visits |
-| Tier-2 listings (Module 6 se) | 8 (demo) | 500+ |
-| Tier-2 → Tier-1 upgrade | 0 | ≥ 5% / month |
-| No-show rate | — | < 10% |
+| Metric | Aaj | 90-din target | Kaise napa jayega |
+|--------|-----|---------------|-------------------|
+| Doctor search → booking conversion | — | ≥ 15% | marketplace analytics |
+| Partner clinics with live feed | 1 (GIL CLINIC) | 100% | `_queue_map()` |
+| Average patient wait (partner) | ~60 min (industry) | **< 15 min** | `called_at` → `started_at` |
+| **EWT accuracy (actual vs predicted)** | 📐 naya | **± 5 min** | `estimated_minutes` vs asli wait (F-03) |
+| **Ghost wait (doctor absent me jhoota EWT)** | ✅ **0** (chamber gate) | **0** | chamber_sessions |
+| Health Card share rate | — | ≥ 20% visits | `health_cards.view_count` |
+| Tier-2 listings (Module 6 se) | 8 (demo) | 500+ | `clinics.source='crawl'` |
+| Tier-2 → Tier-1 upgrade | 0 | ≥ 5% / month | `clinic_leads` |
+| No-show rate | — | < 10% | `status='NO_SHOW'` |
+| **Test suite** | ✅ **117 passed** | 100% green | `pytest tests/` |
 
 ---
 
 ## 8. Ek line me
 
 > **Part A patient ko sahi doctor dikhata hai. Part B doctor ko sahi patient deta hai.
-> Part C dono ko jodta hai. Part D use asli duniya me chalne layak banata hai —
-> aur Part E naye doctors khud laata hai.** 🟢
+> Part C dono ko jodta hai. Part D use asli duniya me chalne layak banata hai.
+> Part E naye doctors khud laata hai. Aur Part F jo achha hai wo leta hai,
+> jo is host par chal hi nahi sakta wo saaf mana kar deta hai.** 🟢
 
 ---
 
