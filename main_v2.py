@@ -191,6 +191,12 @@ from src.presentation.queue_engine.routes.queue_engine_routes import (
     router as queue_engine_router,
 )
 
+# -- Friendly URLs (forgiving aliases + a helpful 404 instead of raw JSON) --
+from src.presentation.common.routes.friendly_routes import (
+    install_friendly_404,
+    router as friendly_router,
+)
+
 
 # =========================================================================
 # Database Setup
@@ -583,6 +589,10 @@ app.include_router(lab_network_doctor_router)
 
 # Queue Engine — chamber gate (▶ START OPD), token hold/return, live EWT feed
 app.include_router(queue_engine_router)
+
+# Friendly URLs — /opd/Dashboard, /dashboard, /opd/dashbord … ab dead-end nahi
+app.include_router(friendly_router)
+install_friendly_404(app)
 
 # Serve static files from experience/pwa
 pwa_static = Path(__file__).parent / "src" / "experience" / "pwa"
