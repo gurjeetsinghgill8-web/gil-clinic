@@ -92,8 +92,19 @@ GIL CLINIC (one product)
 - [ ] Brick 4b (optional): 380KB OPD template ko chhote modules me todo — maintainability,
       user-facing nahi. Risk zyada, value kam — baad me jab clinic ka time ho.
 
-### BRICK 5 — Phase 4: retire the old
-- Delete `templates/dashboard/*`, shim logins, js.puter.com, placeholder modules.
+### BRICK 5 — Phase 4: retire the old (cleanup) — ✅ DONE 2026-10-03
+- [x] **Brick 5a:** dead/fake nav hataya — sidebar se `Manager/Billing/TV` (sab disabled
+      redirects) aur `Pharmacy/HR & Payroll/Inventory` ("Coming Soon" fake links).
+      `/staff/home` ke galat "COMING"/"BUILDING" badges bhi hataye (ECG/Echo/TMT ab LIVE
+      dikhte hain). Dead `data-uc` popup + `UNDER_CONSTRUCTION` data hataya.
+      Commit 41fdf53, 708 tests, 22/22 live.
+- **js.puter.com = ACTIVE dependency** (free AI gateway fallback for OCR/chat/diet) —
+  hataya NAHI, ise hatao mat. (Sahi faisla — plan me pehle galat likha tha.)
+- [ ] (optional, low-risk) purane login templates ka full removal — ab shim se `/signin`
+      pe redirect hain, lekin POST error paths abhi unhe use karte hain. Clinic ka time ho
+      to POST handlers ko `/signin` pe point karke delete karo.
+- (NOT applicable) `templates/dashboard/*` delete karna — ye staff dashboard ka LIVE UI
+      hai, delete nahi karna tha. Plan correction: inhe chhodo.
 
 ---
 
@@ -116,10 +127,10 @@ GIL CLINIC (one product)
 
 ## 6. CURRENT CHECKPOINT (resume from here)
 
-**Last update:** 2026-10-03 (after Brick 4a — role enforcement LIVE)
-**State:** Brick 1 ✅ + Brick 2 ✅ (single login) + Brick 3 ✅ (one hallway) + Brick 4a ✅ (role-based route guard). Tests 700 green. Build `6c00886` live.
-**Next action:** Brick 5 — retire old code (purane login templates, placeholder "Coming Soon" modules, js.puter.com dependency). Brick 4b (380KB split) optional/baad me.
-**How to resume:** ye file + `git pull` → `scripts/audit_probe_live.py` → Brick 5.
+**Last update:** 2026-10-03 (after Brick 5 — cleanup LIVE)
+**State:** Brick 1 ✅ + Brick 2 ✅ (single login) + Brick 3 ✅ (one hallway) + Brick 4a ✅ (role guard) + Brick 5 ✅ (dead/fake nav + misleading badges hataye). **CORE OBJECTIVE DONE.** Tests 708 green. Build `41fdf53` live.
+**Next action (sab optional):** Brick 4b (380KB OPD template split, maintainability) + purane login templates full removal (POST→`/signin`). Ye dono baad me, clinic time ke hisaab se.
+**How to resume:** ye file + `git pull` → `scripts/audit_probe_live.py`.
 
 ---
 
