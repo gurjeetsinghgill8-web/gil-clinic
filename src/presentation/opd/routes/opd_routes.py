@@ -237,7 +237,7 @@ async def opd_login_submit(request: Request, pin: str = Form(...)):
                         expiry = datetime.date.fromisoformat(str(lic.expiry_date)[:10])
                         if expiry < today:
                             return HTMLResponse(
-                                content=_render("opd/login.html", error="❌ License expired."),
+                                content=_render("unified_login.html", error="❌ License expired."),
                                 status_code=401,
                             )
                     except ValueError:
@@ -250,7 +250,7 @@ async def opd_login_submit(request: Request, pin: str = Form(...)):
 
     if not role:
         return HTMLResponse(
-            content=_render("opd/login.html", error="❌ Invalid PIN. Try again."),
+            content=_render("unified_login.html", error="❌ Invalid PIN. Try again."),
             status_code=401,
         )
 

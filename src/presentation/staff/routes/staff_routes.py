@@ -322,7 +322,7 @@ async def login_submit(
     # Strict PIN check — only the configured PIN for this role is accepted
     user_pin = pin.strip()
     if user_pin != expected_pin:
-        return HTMLResponse(content=_render("dashboard/login.html", request=request, error="❌ Wrong PIN. Please try again."))
+        return HTMLResponse(content=_render("unified_login.html", error="❌ Wrong PIN. Please try again."))
 
     token = create_session(role=role, name=name or role)
     target_url = "/staff/dietician" if role.lower() in ("dietitian", "dietician") else "/staff/home"
@@ -354,7 +354,7 @@ async def phone_login_submit(
 ):
     phone = phone.strip()
     if not phone or not password:
-        return HTMLResponse(content=_render("dashboard/login.html", request=request, error="❌ Phone and password required."))
+        return HTMLResponse(content=_render("unified_login.html", error="❌ Phone and password required.", mode="password"))
 
     try:
         from src.infrastructure.staff.models.staff_user_model import StaffUserModel
@@ -368,13 +368,13 @@ async def phone_login_submit(
             user = row.scalar_one_or_none()
 
             if not user or not user.password_hash:
-                return HTMLResponse(content=_render("dashboard/login.html", request=request, error="❌ Invalid phone or password."))
+                return HTMLResponse(content=_render("unified_login.html", error="❌ Invalid phone or password.", mode="password"))
 
             # Verify password
             import hashlib
             input_hash = hashlib.sha256(password.encode()).hexdigest()
             if input_hash != user.password_hash:
-                return HTMLResponse(content=_render("dashboard/login.html", request=request, error="❌ Wrong password."))
+                return HTMLResponse(content=_render("unified_login.html", error="❌ Wrong password.", mode="password"))
 
             token = create_session(
                 role=user.role.capitalize(),
@@ -391,7 +391,7 @@ async def phone_login_submit(
             )
             return resp
     except Exception as exc:
-        return HTMLResponse(content=_render("dashboard/login.html", request=request, error=f"❌ Login error: {exc}"))
+        return HTMLResponse(content=_render("unified_login.html", error=f"❌ Login error: {exc}", mode="password"))
 
 
 # ── Seed Default Staff Users (one-time setup) ──────────────────────────────

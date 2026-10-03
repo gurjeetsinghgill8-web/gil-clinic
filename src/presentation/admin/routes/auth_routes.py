@@ -129,7 +129,7 @@ async def admin_login_submit(
 
     if not username or not password:
         return HTMLResponse(
-            content=_render("admin/login.html", error="❌ Username and password required."),
+            content=_render("unified_login.html", error="❌ Username and password required.", mode="password"),
             status_code=401,
         )
 
@@ -147,7 +147,7 @@ async def admin_login_submit(
             if not admin:
                 logger.warning("Admin login failed: unknown username '%s'", username)
                 return HTMLResponse(
-                    content=_render("admin/login.html", error="❌ Invalid username or password."),
+                    content=_render("unified_login.html", error="❌ Invalid username or password.", mode="password"),
                     status_code=401,
                 )
 
@@ -156,8 +156,9 @@ async def admin_login_submit(
                 remaining = int((admin.locked_until - datetime.now(timezone.utc)).total_seconds() // 60)
                 return HTMLResponse(
                     content=_render(
-                        "admin/login.html",
+                        "unified_login.html",
                         error=f"🔒 Account locked. Try again in {remaining} minutes.",
+                        mode="password",
                     ),
                     status_code=401,
                 )
@@ -171,7 +172,7 @@ async def admin_login_submit(
                     logger.warning("Admin account '%s' locked after %d failed attempts", username, MAX_LOGIN_ATTEMPTS)
                 await session.commit()
                 return HTMLResponse(
-                    content=_render("admin/login.html", error="❌ Invalid username or password."),
+                    content=_render("unified_login.html", error="❌ Invalid username or password.", mode="password"),
                     status_code=401,
                 )
 
@@ -204,7 +205,7 @@ async def admin_login_submit(
     except Exception as e:
         logger.error("Admin login error: %s", e)
         return HTMLResponse(
-            content=_render("admin/login.html", error="⚠️ System error. Please try again."),
+            content=_render("unified_login.html", error="⚠️ System error. Please try again.", mode="password"),
             status_code=500,
         )
 
