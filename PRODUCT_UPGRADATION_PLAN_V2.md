@@ -16,7 +16,7 @@ Maine system ko LIVE run karke check kiya. Ye 5 issues hain jo aapne bataye + jo
 | 1 | Junior doctor ka PIN | Abhi `1234` hai (reception/ecg/echo/tmt/xray/lab/dietician ke saath SHARED) |
 | 2 | PIN change karne ka option | `/staff/settings` me "Change Your PIN" hai, PAR **sidebar me link nahi** (dhundna mushkil) + **BROKEN** (change ka asar login pe nahi hota) |
 | 3 | Hierarchy (CEO→clinic→doctor→staff) | Abhi nahi hai — koi manager/CEO doosre ka PIN nahi badal sakta |
-| 4 | "Find new doctors" system | **IDLE** — `/find-doctor` pe "No doctor/empty" dikhta hai; crawler kabhi real data se chala hi nahi |
+| 4 | **"Uber/Ola for OPD" city marketplace** (Find a Doctor) | Page BUILT hai, par **EMPTY/idle** — `/find-doctor` pe "No doctor"; crawler (GitHub) kabhi real data se chala nahi |
 | 5 | Naya version dikhna | Version sirf `/health` + OPD sidebar me hai; landing pe nahi dikhta |
 
 ---
@@ -68,25 +68,39 @@ Maine system ko LIVE run karke check kiya. Ye 5 issues hain jo aapne bataye + jo
 
 ---
 
-## 4. "Find new doctors" crawler — IDLE ko theek karna
+## 4. "Uber/Ola for OPD" city marketplace (Find a Doctor) — IDLE ko ALIVE karna
 
-**Diagnosis (live):** `/find-doctor` pe "No doctor / empty" dikh raha hai. Kya hua:
+> 📖 **Memory files (yehi "option 2" hai):**
+> - `PRODUCT_UPGRADATION_UBER_HEALTHCARE.md` — *"Uber made you stop waiting for a taxi. GHOS makes you stop waiting for a doctor."*
+> - `GLOBAL_CLINIC_SEARCH_AND_QUEUE_ENGINE_BLUEPRINT.md` — *"Practo ek directory dikhata hai. GHOS ek ZINDA queue dikhata hai."*
+> - `PRODUCT_DEVELOPMENT_UBER_HEALTHCARE_PLAN.md` · `DEEP_RESEARCH_PRODUCT_DEVELOPMENT.md`
 
-| Cheez | State |
+**Kya hai ye feature (vision):**
+Ek **city-level doctor marketplace** — jaise Ola/Uber me aap apne city me gaadiyan dekhte ho, waise ye patient ko **apne city me doctors** dikhata hai:
+- Patient city + specialty + problem (Hindi me "seene me dard") daalta hai.
+- **Tier 1 (upar):** GHOS partner clinics — 🟢 LIVE QUEUE, real token + wait time, 1-tap "Book Token".
+- **Tier 2 (neeche):** External/non-network doctors — directory (call + directions) + "📢 Invite to GHOS" (growth loop).
+
+**Kya BUILT hai (already done — blueprint se):**
+Two-tier ranking ✅ · `/find-doctor` page ✅ · meta/search/book APIs ✅ · "Abhi khula" + distance sort ✅ · city landing pages `/doctors/<city>` ✅ · growth loop (invite) ✅ · claim button ✅ · EWT engine ✅ · slots ✅ · demo seed script ✅
+
+**To ye "toy/idle" kyun lag raha hai (diagnosis — live):**
+`/find-doctor` pe **"No doctor / empty"** dikh raha hai — page bana hai par **andar data (doctors) nahi hai**:
+
+| Wajah | State |
 |---|---|
-| `workers/crawl_doctors/targets.json` | Sirf 1 **FAKE placeholder** (`example-hospital.example`) |
-| `.github/workflows/ingest-doctors.yml` | Cron **disabled** (comment), sirf manual |
-| GitHub secrets (`INGEST_TOKEN`, `GEMINI_API_KEY`) | Configure karne hain |
+| Tier 1 (partner clinics) | Koi onboard/seed nahi hua |
+| Tier 2 (external directory) crawler | **IDLE** — `targets.json` me sirf 1 **FAKE** `example-hospital.example`, cron **disabled** |
+| GitHub secrets (`INGEST_TOKEN`, `GEMINI_API_KEY`) | Configure nahi hain |
 
-Isliye ye "toy/idle" lag raha hai — infrastructure bana hai, par real data + schedule + secrets nahi daale.
+**Plan (marketplace ko ALIVE karne ke liye):**
+1. **Demo seed** (turant, bina crawler ke): `scripts/seed_marketplace_demo.py` chalake 8 demo clinics daalo → `/find-doctor` pe doctors turant dikhein (city + specialty + live queue).
+2. **Crawler real banao:** `targets.json` me **REAL public doctor roster URLs** daalo (asli hospital/clinic "Our Doctors" pages).
+3. **GitHub secrets** configure karo: `INGEST_TOKEN` + `GEMINI_API_KEY`.
+4. **Cron enable** karo (weekly, already likha hai bas uncomment).
+5. **Live queue feed** verify karo (Tier 1 clinics ka real token/wait time dikhe).
 
-**Plan:**
-1. **`targets.json` me REAL public doctor roster URLs daalo** (asli hospital/clinic ki public "Our Doctors" pages). Ye aapko/team ko dena hoga — kaunse hospital/clinic ke doctors chahiye.
-2. **GitHub Actions secrets configure karo**: `INGEST_TOKEN` (app ka same token) + `GEMINI_API_KEY`.
-3. **Cron enable karo** (weekly Sunday, jo already likha hai bas uncomment karna hai).
-4. **Test run** (dry-run) → verify doctors `/find-doctor` pe dikhein.
-
-> ⚠️ Isme mujhe aapka input chahiye: **kaunse hospital/clinic ke doctors real me chahiye?** (URLs ya naam do). Warna main sirf demo/sample rosters se chala sakta hoon.
+> ⚠️ **Mujhe aapse input chahiye:** Tier 1 ke liye **kaunse partner clinics** (aapke apne), aur Tier 2 ke liye **kaunse hospital/clinic ke doctors** real me chahiye? (URLs ya naam do). Warna main pehle demo seed se ALIVE kar dunga, phir real data.
 
 ---
 
@@ -109,7 +123,7 @@ Isliye ye "toy/idle" lag raha hai — infrastructure bana hai, par real data + s
 1. **Issue 1 (Junior PIN 1122)** — sabse chhota, turant.
 2. **Issue 2 + 3 (PIN management + clinic isolation)** — hierarchy, sabse important feature.
 3. **Issue 5 (version display)** — chhota, user ko visibility.
-4. **Issue 4 (crawler)** — aapke input (hospital URLs) ke baad.
+4. **Issue 4 (Uber/Ola marketplace ALIVE)** — demo seed turant, crawler aapke input (hospital URLs) ke baad.
 
 ---
 

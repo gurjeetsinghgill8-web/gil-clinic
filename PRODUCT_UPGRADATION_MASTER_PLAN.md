@@ -151,7 +151,7 @@ GIL CLINIC (one product)
 
 **Last update:** 2026-10-03 (Round 2 plan bana — `PRODUCT_UPGRADATION_PLAN_V2.md`)
 **State:** Sab bricks ✅ + Brick 8 (security) ✅. Ab **Round 2** ka PLAN banaya hai (koi code change nahi) — `PRODUCT_UPGRADATION_PLAN_V2.md` me 5 issues documented.
-**Next action:** Owner approve kare → shuru karo: (1) Junior doctor PIN `1234`→`1122`; (2) PIN management hierarchy (change-pin fix + manage-staff-PINs page + sidebar link); (3) clinic isolation complete; (4) find-doctor crawler (real targets + cron + secrets); (5) version badge har page pe.
+**Next action:** Owner approve kare → shuru karo: (1) Junior doctor PIN `1234`→`1122`; (2) PIN management hierarchy (change-pin fix + manage-staff-PINs page + sidebar link); (3) clinic isolation complete; (4) Uber/Ola city marketplace ALIVE (demo seed + crawler real targets + cron + secrets); (5) version badge har page pe.
 **How to resume:** ye file + `git pull` → `PRODUCT_UPGRADATION_PLAN_V2.md` padho → owner se confirm karo.
 
 ---
