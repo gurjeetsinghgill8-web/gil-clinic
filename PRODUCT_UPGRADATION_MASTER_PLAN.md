@@ -74,7 +74,9 @@ GIL CLINIC (one product)
 - [x] **Brick 2a:** Unified PIN login `/signin` + identity resolver `src/domain/auth/identity.py`
       — unique PIN routes directly, ambiguous PIN (1234) shows a role picker, old logins untouched.
       Commit 14e06d4, 633 tests, 11/11 live-verified.
-- [ ] Brick 2b: add username/password (admin + clinic) to the same `/signin` door
+- [x] **Brick 2b:** username/password (admin + clinic) on the same `/signin` door
+      — shared verifiers `src/application/auth/credentials.py` (lockout + licence), same cookies.
+      Commit e4804ee, 645 tests, 8/8 live-verified.
 - [ ] Brick 2c: make old logins redirect to `/signin` (thin shims), then remove them
 
 ### BRICK 3 — Phase 2: one hallway (single shell + nav)
@@ -109,10 +111,10 @@ GIL CLINIC (one product)
 
 ## 6. CURRENT CHECKPOINT (resume from here)
 
-**Last update:** 2026-10-03 (after Brick 2a)
-**State:** Brick 1 ✅ + Brick 2a ✅ (unified PIN login `/signin` live). Tests 633 green. Build `14e06d4` live.
-**Next action:** Brick 2b — username/password (admin + clinic) ko `/signin` me add karo.
-**How to resume:** ye file + `git pull` → `scripts/audit_probe_live.py` → Brick 2b.
+**Last update:** 2026-10-03 (after Brick 2b)
+**State:** Brick 1 ✅ + Brick 2a ✅ + Brick 2b ✅. `/signin` ab PIN + username/password dono karta hai. Tests 645 green. Build `e4804ee` live.
+**Next action:** Brick 2c — purane logins ko `/signin` ke thin shim banake hatao (last step of single-login).
+**How to resume:** ye file + `git pull` → `scripts/audit_probe_live.py` → Brick 2c.
 
 ---
 
