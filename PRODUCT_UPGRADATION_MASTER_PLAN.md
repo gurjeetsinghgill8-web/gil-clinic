@@ -79,12 +79,11 @@ GIL CLINIC (one product)
       PWA start_url → `/signin`. Commit 2b8d410. Tests 649, 15/15 live.
 - [ ] (Phase 4 me) old POST handlers ko hatao — ab shim hi kaafi hai, full removal baad me.
 
-### BRICK 3 — Phase 2: one hallway (single shell + nav)
+### BRICK 3 — Phase 2: one hallway (single shell + nav) — ✅ DONE 2026-10-03
 - [x] **Brick 3a:** role-filtered nav model `src/domain/auth/nav.py` (pure matrix) +
-      `/home` hub page (reads any session, shows the role's modules). Commit 794d782,
-      683 tests, 15/15 live.
-- [ ] Brick 3b: inject this nav into both dashboards (staff base.html sidebar + OPD
-      dashboard) so every page links to /home and the role's modules.
+      `/home` hub page (reads any session, shows the role's modules). Commit 794d782.
+- [x] **Brick 3b:** dono dashboards me `/home` ("🏠 My Modules") link inject kiya
+      (OPD sidebar + staff base.html). Commit a148414. Tests 686, 10/10 live.
 
 ### BRICK 4 — Phase 3: consolidate modules
 - Move each `/staff/<dept>` + OPD tab to a canonical module route.
@@ -114,10 +113,10 @@ GIL CLINIC (one product)
 
 ## 6. CURRENT CHECKPOINT (resume from here)
 
-**Last update:** 2026-10-03 (after Brick 3a)
-**State:** Brick 1 ✅ + Brick 2 ✅ (single login) + Brick 3a ✅ (nav model + `/home` hub). Tests 683 green. Build `794d782` live.
-**Next action:** Brick 3b — `/home` nav ko dono dashboards me inject karo (staff sidebar + OPD dashboard).
-**How to resume:** ye file + `git pull` → `scripts/audit_probe_live.py` → Brick 3b.
+**Last update:** 2026-10-03 (after Brick 3b — one hallway COMPLETE)
+**State:** Brick 1 ✅ + Brick 2 ✅ (single login) + Brick 3 ✅ (nav model + `/home` hub + dono dashboards link). Tests 686 green. Build `a148414` live.
+**Next action:** Brick 4 — Phase 3: modules consolidate (380KB OPD template ko todo, `/staff/<dept>` pages ko canonical routes par).
+**How to resume:** ye file + `git pull` → `scripts/audit_probe_live.py` → Brick 4.
 
 ---
 
