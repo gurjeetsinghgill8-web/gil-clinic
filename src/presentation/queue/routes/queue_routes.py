@@ -166,8 +166,17 @@ async def technician_action(
 
     data = result.data
 
-    # ── Patient notification on call/recall ──
-    if request.action in ("call", "recall"):
+    # ── Patient notification ──
+    # call/recall: patient aane ka alert; report-ready/complete/deliver: report
+    # status alert — taaki patient ko pata chale "report ready hai, le aao".
+    _NOTIFY_MSG = {
+        "call": "📢 *आपका Token #{token} ({svc}) बुलाया गया है — कृपया आएं!*",
+        "recall": "🔔 *आपका Token #{token} ({svc}) दोबारा बुलाया गया है — कृपया आएं!*",
+        "report-ready": "📋 *Aapki {svc} report ready hai — counter se le lijiye (Token #{token}).*",
+        "complete": "✅ *Aapka {svc} test complete ho gaya hai (Token #{token}). Report jald ready hogi.*",
+        "deliver": "📦 *Aapki {svc} report deliver ho gayi hai (Token #{token}).*",
+    }
+    if request.action in _NOTIFY_MSG:
         try:
             entry = await repo.get_by_id(request.entry_id)
             phone = ""
@@ -190,10 +199,11 @@ async def technician_action(
                     build_wa_me_url,
                     send_whatsapp_message,
                 )
+                svc = (entry.service_code or "OPD").strip()
                 msg = (
                     "🔔 *GIL CLINIC*\n\n"
-                    f"📢 *आपका Token #{entry.token_number} ({entry.service_code}) बुलाया गया है — कृपया आएं!*\n\n"
-                    "— Reception"
+                    + _NOTIFY_MSG[request.action].format(token=entry.token_number, svc=svc)
+                    + "\n\n— GIL CLINIC"
                 )
                 data["whatsapp_url"] = build_wa_me_url(phone, msg)
 
@@ -205,7 +215,7 @@ async def technician_action(
 
                     asyncio.create_task(send_whatsapp_message(phone, msg))
         except Exception as e:
-            logger.warning("call notify failed (non-fatal): %s", e)
+            logger.warning("patient notify failed (non-fatal): %s", e)
 
     return data
 

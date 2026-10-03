@@ -125,6 +125,46 @@ def test_call_action_generates_whatsapp_url():
         assert data.get("whatsapp_url", "").startswith("https://wa.me/"), data
 
 
+def test_report_ready_action_generates_whatsapp_url():
+    """When a tech marks a report ready, the patient must be notified too
+    (regression: only call/recall used to notify; report-ready was silent)."""
+    with TestClient(main_v2.app) as client:
+        token = create_session(role="Reception", name="Test Reception", user_id="tester")
+        client.cookies.set("gc_session", token)
+        reg = client.post("/staff/api/register", json={
+            "name": "Report Ready Patient",
+            "phone": str(int(_phone()) + 77),
+            "age": 40,
+            "gender": "Male",
+            "services": ["ECG"],
+            "complaints": "",
+        }).json()
+        assert reg.get("ok") is True, reg
+        patient_id = reg["patient_id"]
+
+        with main_v2.engine.connect() as conn:
+            from sqlalchemy import text
+            entry_id = conn.execute(text(
+                "SELECT id FROM queue_entries WHERE patient_id = :pid AND service_code='ECG'"
+            ), {"pid": patient_id}).scalar()
+        assert entry_id
+
+        # WAITING -> CALLED -> IN_PROGRESS -> COMPLETED -> REPORT_READY
+        for action in ("call", "start", "complete"):
+            r = client.post("/api/v1/queue/action", json={
+                "entry_id": str(entry_id), "action": action, "updated_by": "Test Tech",
+            })
+            assert r.status_code == 200, r.text
+            assert r.json().get("action") == action, r.text
+
+        r = client.post("/api/v1/queue/action", json={
+            "entry_id": str(entry_id), "action": "report-ready", "updated_by": "Test Tech",
+        })
+        data = r.json()
+        assert data.get("action") == "report-ready", data
+        assert data.get("whatsapp_url", "").startswith("https://wa.me/"), data
+
+
 if __name__ == "__main__":
     import traceback
 
