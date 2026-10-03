@@ -80,8 +80,11 @@ GIL CLINIC (one product)
 - [ ] (Phase 4 me) old POST handlers ko hatao — ab shim hi kaafi hai, full removal baad me.
 
 ### BRICK 3 — Phase 2: one hallway (single shell + nav)
-- Ek sidebar, role-filtered. Both old dashboards render inside it.
-- Missing cross-links added immediately.
+- [x] **Brick 3a:** role-filtered nav model `src/domain/auth/nav.py` (pure matrix) +
+      `/home` hub page (reads any session, shows the role's modules). Commit 794d782,
+      683 tests, 15/15 live.
+- [ ] Brick 3b: inject this nav into both dashboards (staff base.html sidebar + OPD
+      dashboard) so every page links to /home and the role's modules.
 
 ### BRICK 4 — Phase 3: consolidate modules
 - Move each `/staff/<dept>` + OPD tab to a canonical module route.
@@ -111,10 +114,10 @@ GIL CLINIC (one product)
 
 ## 6. CURRENT CHECKPOINT (resume from here)
 
-**Last update:** 2026-10-03 (after Brick 2c — single login COMPLETE)
-**State:** Brick 1 ✅ + Brick 2 ✅ (single door `/signin`: PIN + username/password + staff phone, sab credential shapes). Tests 649 green. Build `2b8d410` live.
-**Next action:** Brick 3 — Phase 2: EK shell (sidebar + topbar), role-filtered modules, dono dashboards isi shell ke andar.
-**How to resume:** ye file + `git pull` → `scripts/audit_probe_live.py` → Brick 3.
+**Last update:** 2026-10-03 (after Brick 3a)
+**State:** Brick 1 ✅ + Brick 2 ✅ (single login) + Brick 3a ✅ (nav model + `/home` hub). Tests 683 green. Build `794d782` live.
+**Next action:** Brick 3b — `/home` nav ko dono dashboards me inject karo (staff sidebar + OPD dashboard).
+**How to resume:** ye file + `git pull` → `scripts/audit_probe_live.py` → Brick 3b.
 
 ---
 
