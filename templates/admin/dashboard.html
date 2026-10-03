@@ -202,6 +202,7 @@
         <div class="user-info">
             <span>👤 {{ session.display_name or session.username }}</span>
             <span class="role-badge">{{ session.role | replace('_', ' ') }}</span>
+            <a href="/home" style="padding:8px 14px;border-radius:8px;background:#1e293b;color:#a78bfa;font-weight:700;text-decoration:none;font-size:13px;white-space:nowrap;">🏠 Home</a>
             <a href="/admin/logout" class="btn-logout">🚪 Logout</a>
         </div>
     </div>
