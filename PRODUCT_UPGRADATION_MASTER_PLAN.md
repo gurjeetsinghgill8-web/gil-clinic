@@ -89,8 +89,10 @@ GIL CLINIC (one product)
 - [x] **Brick 4a:** role-based ROUTE enforcement (`nav.can_access_staff_route`) — nav matrix
       ab sirf link chhupata nahi, route bhi refuse karta hai. Dead modules (billing/tv)
       nav se hataye. Commit 6c00886, 700 tests, 11/11 live.
-- [ ] Brick 4b (optional): 380KB OPD template ko chhote modules me todo — maintainability,
-      user-facing nahi. Risk zyada, value kam — baad me jab clinic ka time ho.
+- [x] **Brick 4b:** 380KB OPD template (`templates/opd/dashboard.html`, 6760 lines) ko
+      4 Jinja partials me toda — `templates/opd/partials/{_head,_sidebar,_main,_scripts}.html`.
+      `dashboard.html` ab sirf include-shell hai. **Byte-identical render verified**
+      (359818 chars, `scripts/verify_opd_split.py`). Commit 997d783, 708 tests, 10/10 live.
 
 ### BRICK 5 — Phase 4: retire the old (cleanup) — ✅ DONE 2026-10-03
 - [x] **Brick 5a:** dead/fake nav hataya — sidebar se `Manager/Billing/TV` (sab disabled
@@ -100,11 +102,17 @@ GIL CLINIC (one product)
       Commit 41fdf53, 708 tests, 22/22 live.
 - **js.puter.com = ACTIVE dependency** (free AI gateway fallback for OCR/chat/diet) —
   hataya NAHI, ise hatao mat. (Sahi faisla — plan me pehle galat likha tha.)
-- [ ] (optional, low-risk) purane login templates ka full removal — ab shim se `/signin`
-      pe redirect hain, lekin POST error paths abhi unhe use karte hain. Clinic ka time ho
-      to POST handlers ko `/signin` pe point karke delete karo.
+- [x] **Brick 7:** purane login templates (`opd/login.html`, `dashboard/login.html`,
+      `clinic_login.html`, `admin/login.html`) DELETE. POST error paths ab `unified_login.html`
+      render karte hain (mode=password for username/password, PIN door for PIN). Commit c63a363, 11/11 live.
 - (NOT applicable) `templates/dashboard/*` delete karna — ye staff dashboard ka LIVE UI
       hai, delete nahi karna tha. Plan correction: inhe chhodo.
+
+### BRICK 6 — Phase 5: har page se ghar wapasi (back-to-home) — ✅ DONE 2026-10-03
+- [x] Har authenticated page pe dikhne wala "🏠 Home" link (→ `/home`) add kiya:
+      staff `base.html` topbar, OPD sidebar (sabse upar "Home / My Modules"),
+      admin dashboard topbar, admin onboard topbar, OPD admin header.
+      Commit 672bf8e, 9/9 live.
 
 ---
 
@@ -127,9 +135,9 @@ GIL CLINIC (one product)
 
 ## 6. CURRENT CHECKPOINT (resume from here)
 
-**Last update:** 2026-10-03 (after Brick 5 — cleanup LIVE)
-**State:** Brick 1 ✅ + Brick 2 ✅ (single login) + Brick 3 ✅ (one hallway) + Brick 4a ✅ (role guard) + Brick 5 ✅ (dead/fake nav + misleading badges hataye). **CORE OBJECTIVE DONE.** Tests 708 green. Build `41fdf53` live.
-**Next action (sab optional):** Brick 4b (380KB OPD template split, maintainability) + purane login templates full removal (POST→`/signin`). Ye dono baad me, clinic time ke hisaab se.
+**Last update:** 2026-10-03 (after Brick 6 + 7 + 4b — sab kuch complete)
+**State:** Brick 1 ✅ + Brick 2 ✅ (single login) + Brick 3 ✅ (one hallway) + Brick 4a ✅ (role guard) + Brick 5 ✅ (cleanup) + **Brick 6 ✅ (har page pe 🏠 Home link)** + **Brick 7 ✅ (purane login templates delete)** + **Brick 4b ✅ (380KB template 4 partials me toda, byte-identical)**. **SAB COMPLETE.** Tests 708 green. Build `997d783` live.
+**Next action:** Kuch nahi baaki — sab optional items bhi ho gaye. Aage sirf naye features ya bug fixes.
 **How to resume:** ye file + `git pull` → `scripts/audit_probe_live.py`.
 
 ---
