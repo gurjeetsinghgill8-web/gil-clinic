@@ -461,6 +461,13 @@ def _to_public(
         "closing_note": avail["closing_note"],
         "rating": round(float(clinic.rating), 1) if getattr(clinic, "rating", None) else None,
         "rating_count": int(getattr(clinic, "rating_count", 0) or 0),
+        # ── Ingestion provenance (BLOCK 5 · Module 6) ──
+        # A crawled listing is a public listing nobody from that clinic has
+        # confirmed. The directory must say so, and must offer the clinic a way
+        # to claim it or remove it.
+        "source": getattr(clinic, "source", "manual") or "manual",
+        "is_crawled": (getattr(clinic, "source", "") or "") == "crawl",
+        "claim_status": getattr(clinic, "claim_status", "unclaimed") or "unclaimed",
         "live": live,
         "distance_km": distance_km,
     }

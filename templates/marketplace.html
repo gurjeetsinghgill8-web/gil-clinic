@@ -352,6 +352,15 @@ function card(d){
 
   const noticeHTML = !d.partner ? `
     <div class="notice"><b>⚠️ Notice:</b> This doctor is not on the GHOS Live Queue network yet. Please book the appointment directly at the clinic reception or by phone.</div>` : "";
+  // Module 6: a crawled listing is a PUBLIC listing nobody from that clinic has
+  // confirmed. Saying so is not a disclaimer formality — a patient who trusts a
+  // scraped address and a stale phone number blames the clinic, not the crawler.
+  const crawledHTML = d.is_crawled ? `
+    <div class="notice" style="background:#f1f5f9;border-color:#e2e8f0;color:#475569;">
+      <b>📋 Public listing.</b> Ye detail public web page se li gayi hai — clinic ne
+      confirm nahi kiya. Jaane se pehle call karke timing confirm kar lein.
+      ${d.claim_status === 'claimed' ? '<b>✅ Clinic ne ye listing confirm kar li hai.</b>' : ''}
+    </div>` : "";
   const shutHTML = shut && d.partner ? `
     <div class="notice"><b>🔴 Abhi band hai.</b> ${d.next_opening ? `Clinic ${escapeHtml(d.next_opening)} par khulegi. ` : ""}Aap token pehle book kar sakte hain — wait count OPD shuru hote hi chalega.</div>` : "";
 
@@ -364,7 +373,13 @@ function card(d){
     <div class="actions">
       <button class="btn btn-primary" onclick="callClinic('${escapeAttr(d.phone)}')">📞 Call Clinic Directly</button>
       <button class="btn btn-outline" onclick="directions('${escapeAttr(d.address + ', ' + d.city)}')">📍 Get Directions</button>
-      <button class="btn btn-nudge" onclick="nudge('${d.id}')">📢 Invite to GHOS Live Queue</button>
+      ${d.claim_status === 'claimed'
+        ? ''
+        : `<button class="btn btn-nudge" onclick="nudge('${d.id}')">📢 Invite to GHOS Live Queue</button>`}
+      ${d.is_crawled
+        ? `<button class="btn btn-outline" onclick="claimListing('${d.id}')">✅ Ye meri clinic hai</button>
+           <button class="btn btn-outline" onclick="optOutListing('${d.id}')">🚫 Hata dijiye</button>`
+        : ''}
     </div>`;
 
   el.innerHTML = `
@@ -390,10 +405,40 @@ function card(d){
       ${tagsHTML}
       ${liveHTML}
       ${shutHTML}
+      ${crawledHTML}
       ${noticeHTML}
       ${actions}
     </div>`;
   return el;
+}
+
+// ── Module 6: claim / remove a public listing (M6-05) ────────────────────────
+function claimListing(id){
+  const d = state.doctors.find(x => x.id === id);
+  if (!d){ toast("⚠️ Clinic nahi mili."); return; }
+  if (!confirm("Confirm karein ki " + d.clinic_name + " aapki clinic hai? Isse listing clinic-confirmed ho jayegi.")) return;
+  fetch("/api/v1/marketplace/claim", {
+    method: "POST", headers: {"Content-Type":"application/json"},
+    body: JSON.stringify({ clinic_id: d.id })
+  }).then(r => r.json()).then(data => {
+    if (data && data.ok){ toast("✅ " + data.message); search(); }
+    else toast("⚠️ " + ((data && data.error) || "Claim nahi hua."));
+  }).catch(() => toast("⚠️ Network error — dobara try karein."));
+}
+
+function optOutListing(id){
+  const d = state.doctors.find(x => x.id === id);
+  if (!d){ toast("⚠️ Clinic nahi mili."); return; }
+  const reason = prompt("Hata dijiye — wajah (optional)?");
+  if (reason === null) return;
+  if (!confirm("Ye listing directory se hat jayegi aur aage crawl bhi nahi hogi. Confirm?")) return;
+  fetch("/api/v1/marketplace/opt-out", {
+    method: "POST", headers: {"Content-Type":"application/json"},
+    body: JSON.stringify({ clinic_id: d.id, reason: reason || "clinic request" })
+  }).then(r => r.json()).then(data => {
+    if (data && data.ok){ toast("✅ " + data.message); search(); }
+    else toast("⚠️ " + ((data && data.error) || "Opt-out nahi hua."));
+  }).catch(() => toast("⚠️ Network error — dobara try karein."));
 }
 
 function bookToken(id){

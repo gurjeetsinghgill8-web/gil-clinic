@@ -222,6 +222,11 @@ from src.presentation.growth.routes.growth_routes import (
     router as growth_router,
 )
 
+# -- Module 6 ingestion (crawled profiles + claim/opt-out, BLOCK 5) --
+from src.presentation.ingest.routes.ingest_routes import (
+    router as ingest_router,
+)
+
 
 # =========================================================================
 # Database Setup
@@ -328,6 +333,10 @@ from src.infrastructure.clinic.models.referral_model import (  # noqa: F401
 )
 # Clinic leads — outreach pipeline (BLOCK 4 · GRW-02)
 from src.infrastructure.clinic.models.lead_model import ClinicLeadModel  # noqa: F401
+# Crawl runs — Module 6 ingestion tracking (BLOCK 5)
+from src.infrastructure.clinic.models.crawl_model import (  # noqa: F401
+    DoctorCrawlRunModel,
+)
 
 
 # =========================================================================
@@ -537,6 +546,17 @@ async def _migrate_missing_columns():
         ("health_cards", "revoked_at", "TIMESTAMP WITH TIME ZONE", "NULL"),
         ("health_cards", "revoked_by", "VARCHAR(100)", "''"),
         ("health_cards", "revoked_reason", "VARCHAR(200)", "''"),
+        # ── Ingestion provenance (BLOCK 5 · Module 6) ──
+        # A crawled listing must never look like a clinic-confirmed one, and an
+        # opt-out must survive the next crawl run — both need stored state.
+        ("clinics", "source", "VARCHAR(20)", "'manual'"),
+        ("clinics", "crawl_source_url", "VARCHAR(500)", "''"),
+        ("clinics", "crawl_run_id", "VARCHAR(36)", "''"),
+        ("clinics", "crawl_verified_at", "TIMESTAMP WITH TIME ZONE", "NULL"),
+        ("clinics", "claim_status", "VARCHAR(20)", "'unclaimed'"),
+        ("clinics", "claimed_at", "TIMESTAMP WITH TIME ZONE", "NULL"),
+        ("clinics", "opted_out_at", "TIMESTAMP WITH TIME ZONE", "NULL"),
+        ("clinics", "opt_out_reason", "VARCHAR(200)", "''"),
     ]
 
     try:
@@ -674,6 +694,9 @@ app.include_router(referral_router)
 
 # Growth — clinic invite pipeline (GRW-02) + city SEO pages (GRW-03)
 app.include_router(growth_router)
+
+# Module 6 — crawled doctor profiles, run history, claim and opt-out (BLOCK 5)
+app.include_router(ingest_router)
 
 # Serve static files from experience/pwa
 pwa_static = Path(__file__).parent / "src" / "experience" / "pwa"

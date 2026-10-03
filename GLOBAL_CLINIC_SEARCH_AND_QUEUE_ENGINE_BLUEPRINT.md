@@ -52,9 +52,10 @@
 | 🌆 **City landing pages** `/doctors/<city>` (GRW-03) | ✅ **BUILT** |
 | 👨‍👩‍👧 **Family Health Locker** (GRW-04) | ✅ **BUILT** |
 | 🧾 **FHIR R4 Bundle export** (ABD-03, no credentials needed) | ✅ **BUILT** |
+| 🕷️ **Module 6 ingestion worker** (BLOCK 5, outside the app) | ✅ **BUILT** |
 | 🖥️ Dashboard START OPD panel + delay badge | ✅ **BUILT** |
 | 📱 Patient page wait card + "ab niklo" chime | ✅ **BUILT** |
-| **Test suite** | ✅ **500 passed, 0 failed** |
+| **Test suite** | ✅ **561 passed, 0 failed** |
 
 ---
 
@@ -1047,15 +1048,41 @@ CREATE TABLE doctor_crawl_runs (...);
 > protects the household. It returns identifiers only, never another member's
 > readings, so every read still goes through that profile's own logged link.
 
-### 🟣 BLOCK 5 — Module 6: Ingestion (P2, alag worker)
+### 🟣 BLOCK 5 — Module 6: Ingestion (P2, alag worker) — **DONE (03-Oct-2026)**
 
 | # | Item | File | Effort |
 |---|------|------|--------|
-| M6-01 | GH Actions worker: crawl4ai + Chromium + Gemini extraction | **naya repo/`workers/`** | L |
-| M6-02 | `DoctorProfileSchema` + array wrapper + model-discovery fallback | worker | S |
-| M6-03 | `POST /api/v1/ingest/doctors` + claim + opt-out | naya `ingest_routes.py` | M |
-| M6-04 | `clinics` crawl columns + `doctor_crawl_runs` | model + migration | S |
-| M6-05 | Tier-2 "public listing" label + claim button | `marketplace.html` | S |
+| M6-01 | GH Actions worker: crawl4ai + Chromium + Gemini extraction | `workers/crawl_doctors/` + `.github/workflows/ingest-doctors.yml` | L | ✅ **DONE** |
+| M6-02 | `DoctorProfileSchema` + array wrapper + model-discovery fallback | `crawl_model.py` + `/api/v1/ingest/schema` | S | ✅ **DONE** |
+| M6-03 | `POST /api/v1/ingest/doctors` + claim + opt-out | `ingest_routes.py` | M | ✅ **DONE** |
+| M6-04 | `clinics` crawl columns + `doctor_crawl_runs` | model + migration | S | ✅ **DONE** |
+| M6-05 | Tier-2 "public listing" label + claim button | `marketplace.html` | S | ✅ **DONE** |
+
+> **Worker stays outside the app** — Part E proved it must: no outbound internet
+> on the free tier, no cron, ~100 CPU-sec/day, and Chromium is ~400 MB against
+> 512 MB of disk. The worker runs on GitHub Actions and POSTs results in.
+>
+> **The schema is fetched, not hard-coded.** `GET /api/v1/ingest/schema` returns
+> the exact contract the server validates against, so the worker and the API
+> cannot drift — the failure mode of drifting is silent (extraction emits a field
+> nobody checks, and a wrong phone number reaches a public listing).
+>
+> **Three safety rules, each tested:**
+> 1. **Opt-out is permanent and checked BEFORE any write.** A later crawl run
+>    that finds the clinic again still skips it (regression-tested).
+> 2. **A crawled listing is labelled "public listing, clinic ne confirm nahi
+>    kiya"** and is never a partner (`is_license_active=False`) — publishing
+>    scraped details as clinic-confirmed would misrepresent them, and the clinic
+>    would be blamed for a stale address.
+> 3. **No invented data.** A phone that is not a plausible 10-digit mobile is
+>    dropped rather than stored; placeholder names ("N/A", "Unknown", "TBD")
+>    are rejected; `(0,0)` coordinates are a "no fix" placeholder, not a place.
+>
+> **Claim ≠ onboarding.** Claiming marks the listing clinic-confirmed; the live
+> queue still needs a licence, which is a commercial step, not a click.
+>
+> **The cron is opt-in** (`workflow_dispatch` only, schedule commented out) —
+> a nightly job crawling an `example.com` placeholder is just noise.
 
 ### 🟣 BLOCK 7 — Enterprise merge (Part F) — P1/P2 — **DONE (03-Oct-2026)**
 

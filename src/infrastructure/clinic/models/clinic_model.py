@@ -110,6 +110,41 @@ class ClinicModel(Base):
         Integer, nullable=False, default=0, server_default="0"
     )
 
+    # ── Ingestion provenance (BLOCK 5 · Module 6) ────────────────────────────
+    # A clinic can enter this table three ways: an admin onboarded it, a patient
+    # claimed it, or a crawler found it on the public web. The directory must
+    # never blur those together — a crawled listing is a public listing that
+    # nobody from that clinic has confirmed, and it has to say so.
+    source: Mapped[str] = mapped_column(
+        String(20), nullable=False, default="manual", server_default="manual"
+    )  # manual | crawl | claim
+    crawl_source_url: Mapped[str] = mapped_column(
+        String(500), nullable=False, default="", server_default=""
+    )
+    crawl_run_id: Mapped[str] = mapped_column(
+        String(36), nullable=False, default="", server_default=""
+    )
+    crawl_verified_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
+    #: unclaimed → public listing; claimed → the clinic confirmed it;
+    #: opted_out → NEVER crawl or list this clinic again.
+    claim_status: Mapped[str] = mapped_column(
+        String(20), nullable=False, default="unclaimed", server_default="unclaimed"
+    )
+    claimed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    #: Who asked to be removed, and why — an opt-out with no record is one we
+    #: cannot honour six months later when the crawler runs again.
+    opted_out_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    opt_out_reason: Mapped[str] = mapped_column(
+        String(200), nullable=False, default="", server_default=""
+    )
+
     # ── Auth Credentials (auto-generated) ─────────────────────────────────
     clinic_username: Mapped[str] = mapped_column(
         String(50), unique=True, nullable=True
