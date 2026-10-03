@@ -18,6 +18,8 @@ Super-admin and clinic (username + password) remain on their own logins for now
 from __future__ import annotations
 
 import logging
+import os
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -25,6 +27,7 @@ import jinja2
 import sqlalchemy as sa
 from fastapi import APIRouter, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
+from itsdangerous import URLSafeTimedSerializer
 
 from src.domain.auth.identity import (
     SYSTEM_OPD,
@@ -39,6 +42,12 @@ logger = logging.getLogger(__name__)
 router = APIRouter(tags=["Auth"])
 
 _TEMPLATES_DIR = Path(__file__).parents[4] / "templates"
+
+#: Same secret the staff/clinic logins sign with, so the gc_session cookie the
+#: unified door issues is interchangeable with the ones they already issue.
+_STAFF_SIGNER = URLSafeTimedSerializer(
+    os.getenv("SECRET_KEY", "gil-clinic-secret-2024-change-in-prod")
+)
 
 #: Where a staff role lands. Dietician gets its own screen; everyone else goes
 #: home first (the sidebar then takes them anywhere their role allows).
@@ -185,6 +194,81 @@ def _route(match: RoleMatch) -> RedirectResponse:
     if match.system == SYSTEM_OPD:
         return _opd_response(match)
     return _staff_response(match)
+
+
+@router.post("/signin/password", include_in_schema=False)
+async def signin_password(
+    request: Request,
+    username: str = Form(""),
+    password: str = Form(""),
+):
+    """Username + password for the two roles that do not use a PIN.
+
+    Tries super-admin/ceo first (higher privilege wins), then clinic. On success
+    it sets the SAME cookie the old login sets, so the target dashboard accepts
+    it unchanged.
+    """
+    from src.application.auth.credentials import verify_admin, verify_clinic
+    from src.shared.infrastructure.database import async_session_factory
+
+    async with async_session_factory() as session:
+        admin, admin_err = await verify_admin(session, username, password)
+        if admin is not None:
+            from src.presentation.admin.routes import auth_routes
+
+            token = auth_routes._create_admin_session(
+                admin_id=str(admin.id),
+                username=admin.username,
+                role=admin.role,
+                display_name=admin.display_name or "",
+            )
+            await session.commit()
+            resp = RedirectResponse("/admin/dashboard", status_code=303)
+            resp.set_cookie(
+                auth_routes.SESSION_COOKIE,
+                token,
+                max_age=auth_routes.SESSION_MAX_AGE,
+                httponly=True,
+                samesite="lax",
+            )
+            return resp
+
+        clinic, clinic_err = await verify_clinic(session, username, password)
+        if clinic is not None:
+            # Mirrors clinic_login's session payload so staff routes keep scoping
+            # data to this clinic.
+            payload = {
+                "role": "Doctor",
+                "user_id": str(clinic.id),
+                "name": clinic.doctor_name,
+                "clinic_id": str(clinic.id),
+                "clinic_code": clinic.clinic_code,
+                "ts": datetime.now(timezone.utc).isoformat(),
+            }
+            token = _STAFF_SIGNER.dumps(payload)
+            await session.commit()
+            resp = RedirectResponse("/staff/home", status_code=303)
+            resp.set_cookie(
+                "gc_session",
+                token,
+                max_age=60 * 60 * 12,
+                httponly=True,
+                samesite="lax",
+            )
+            return resp
+
+        await session.commit()
+
+    # Prefer the admin error if it was a lockout (more specific than "invalid").
+    error = admin_err if admin_err and "lock" in admin_err else _invalid_message()
+    return HTMLResponse(
+        _render("unified_login.html", error=error, mode="password"),
+        status_code=401,
+    )
+
+
+def _invalid_message() -> str:
+    return "❌ Username ya password galat hai. Dobara try karein."
 
 
 @router.get("/signin/check", include_in_schema=False)

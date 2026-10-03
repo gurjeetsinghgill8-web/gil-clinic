@@ -33,6 +33,10 @@
            font-family:inherit; font-size:15px; font-weight:800; color:#fff;
            background:linear-gradient(135deg,#667eea,#764ba2); }
   button:disabled { opacity:.55; cursor:not-allowed; }
+  .tabs { display:flex; gap:8px; margin-bottom:16px; }
+  .tab { flex:1; padding:10px; border:1.5px solid var(--line); border-radius:10px; background:#0f172a;
+         color:var(--muted); font-family:inherit; font-size:13.5px; font-weight:700; cursor:pointer; }
+  .tab.active { border-color:var(--brand); color:#fff; background:#1e293b; }
   .error { margin-top:12px; padding:10px 12px; border-radius:10px; background:#fef2f2; color:#dc2626;
            font-size:13px; font-weight:600; text-align:center; }
   .choices { margin-top:14px; display:flex; flex-direction:column; gap:9px; }
@@ -53,6 +57,11 @@
   <p class="sub">Ek PIN — aapki apni jagah</p>
 
   <div class="card">
+    <div class="tabs">
+      <button type="button" id="tab-pin" class="tab active" onclick="switchTab('pin')">🔢 PIN</button>
+      <button type="button" id="tab-pass" class="tab" onclick="switchTab('pass')">🔑 Username + Password</button>
+    </div>
+
     {% if choices %}
       <form method="POST" action="/signin">
         <label for="pin">Aapka PIN</label>
@@ -68,10 +77,18 @@
         </div>
       </form>
     {% else %}
-      <form method="POST" action="/signin">
+      <form method="POST" action="/signin" id="form-pin">
         <label for="pin">PIN daalein</label>
         <input id="pin" name="pin" type="password" inputmode="numeric" maxlength="6"
                placeholder="••••" autofocus autocomplete="off">
+        <button type="submit">Login →</button>
+      </form>
+
+      <form method="POST" action="/signin/password" id="form-pass" style="display:none;">
+        <label for="username">Username</label>
+        <input id="username" name="username" autocomplete="username" placeholder="Admin ya clinic username">
+        <label for="password" style="margin-top:12px;">Password</label>
+        <input id="password" name="password" type="password" autocomplete="current-password" placeholder="••••••••">
         <button type="submit">Login →</button>
       </form>
     {% endif %}
@@ -82,11 +99,28 @@
   </div>
 
   <div class="foot">
-    Ek hi PIN se apni jagah: reception sirf reception, lab sirf lab, doctor apna OPD.<br>
-    Admin/CEO username-password se: <a href="/admin/login">Admin login</a> ·
-    Clinic login: <a href="/clinic-portal">Clinic portal</a><br>
+    Ek hi darwaaze se sab: reception sirf reception, lab sirf lab, doctor apna OPD.<br>
+    <a href="/admin/login">Admin login</a> ·
+    <a href="/clinic-portal">Clinic portal</a> ·
     <a href="/">← Home</a>
   </div>
 </div>
+
+<script>
+  // Respect a server-side error on the password tab (re-render keeps the tab).
+  var initial = {{ mode|default('pin')|tojson }};
+  function switchTab(which) {
+    var pinTab = document.getElementById('tab-pin');
+    var passTab = document.getElementById('tab-pass');
+    var pinForm = document.getElementById('form-pin');
+    var passForm = document.getElementById('form-pass');
+    var isPass = (which === 'pass');
+    pinTab.classList.toggle('active', !isPass);
+    passTab.classList.toggle('active', isPass);
+    if (pinForm) pinForm.style.display = isPass ? 'none' : '';
+    if (passForm) passForm.style.display = isPass ? '' : 'none';
+  }
+  if (initial === 'password') switchTab('pass');
+</script>
 </body>
 </html>
