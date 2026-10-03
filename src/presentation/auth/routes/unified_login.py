@@ -36,6 +36,7 @@ from src.domain.auth.identity import (
     resolve_pin,
     route_for,
 )
+from src.domain.auth import nav
 
 logger = logging.getLogger(__name__)
 
@@ -296,6 +297,85 @@ async def signin_password(
 
 def _invalid_message() -> str:
     return "❌ Username ya password galat hai. Dobara try karein."
+
+
+# ── Brick 3 · the one hallway (role-filtered home) ──────────────────────────
+
+
+def _current_identity(request: Request) -> dict | None:
+    """Who is this person, from whichever session cookie is present.
+
+    Tries the three session namespaces in order (opd, staff, admin) and returns
+    a unified ``{role, name, dashboard, system}``. None when not logged in.
+    """
+    from src.presentation.opd.routes import opd_routes
+
+    sess = opd_routes._get_opd_session(request)
+    if sess:
+        return {
+            "role": sess.get("role", "junior"),
+            "name": sess.get("name", "Doctor"),
+            "dashboard": "/opd/dashboard",
+            "system": "opd",
+        }
+
+    from src.presentation.staff.routes import staff_routes
+
+    sess = staff_routes.get_session(request)
+    if sess:
+        return {
+            "role": sess.get("role", "doctor"),
+            "name": sess.get("name", "Staff"),
+            "dashboard": "/staff/home",
+            "system": "staff",
+        }
+
+    from src.presentation.admin.routes import auth_routes
+
+    sess = auth_routes.get_admin_session(request)
+    if sess:
+        return {
+            "role": sess.get("role", "ceo"),
+            "name": sess.get("display_name") or sess.get("username") or "Admin",
+            "dashboard": "/admin/dashboard",
+            "system": "admin",
+        }
+
+    return None
+
+
+@router.get("/home", include_in_schema=False)
+async def home_hub(request: Request):
+    """The one hallway: this person's modules, filtered by role.
+
+    Not logged in → the unified door. Logged in → their modules as cards plus a
+    button straight to their main dashboard. This is the page that makes two
+    dashboards feel like one product: the same nav for everyone, scoped to them.
+    """
+    identity = _current_identity(request)
+    if identity is None:
+        return RedirectResponse("/signin", status_code=302)
+
+    modules = nav.modules_for_role(identity["role"])
+    grouped: dict[str, list[dict]] = {}
+    for module in modules:
+        grouped.setdefault(module.group, []).append(
+            {"key": module.key, "name": module.name, "url": module.url, "icon": module.icon}
+        )
+
+    return HTMLResponse(
+        _render(
+            "home_hub.html",
+            person_name=identity["name"],
+            role=identity["role"],
+            role_label=nav.canonical_role(identity["role"]),
+            read_only=nav.is_read_only(identity["role"]),
+            owner=nav.is_owner(identity["role"]),
+            dashboard=identity["dashboard"],
+            groups=grouped,
+            total=len(modules),
+        )
+    )
 
 
 @router.get("/signin/check", include_in_schema=False)

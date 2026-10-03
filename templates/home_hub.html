@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#0f172a">
+<title>Home — GIL CLINIC</title>
+<link rel="manifest" href="/manifest.json">
+<link rel="apple-touch-icon" href="/static/icons/apple-touch-icon.png">
+<link rel="icon" type="image/png" sizes="192x192" href="/static/icons/icon-192.png">
+<script>
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', function () {
+      navigator.serviceWorker.register('/sw.js').catch(function () {});
+    });
+  }
+</script>
+<style>
+  :root { --bg:#0f172a; --card:#1e293b; --line:rgba(255,255,255,.08); --text:#e2e8f0; --muted:#94a3b8; --brand:#667eea; }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family:'Inter',system-ui,sans-serif; background:var(--bg); color:var(--text); min-height:100vh; }
+  header { padding:20px 24px; border-bottom:1px solid var(--line); display:flex; align-items:center; gap:14px; flex-wrap:wrap; }
+  .dot { width:40px; height:40px; border-radius:11px; background:linear-gradient(135deg,#667eea,#764ba2);
+         display:flex; align-items:center; justify-content:center; font-size:20px; }
+  header h1 { font-size:18px; font-weight:800; }
+  header .sub { color:var(--muted); font-size:12.5px; margin-top:2px; }
+  .spacer { flex:1; }
+  .role-pill { font-size:12px; font-weight:800; padding:5px 12px; border-radius:999px; background:#1e293b; border:1px solid var(--line); color:var(--text); }
+  .role-pill.owner { background:#7c3aed; color:#fff; }
+  .role-pill.ceo { background:#0e7490; color:#fff; }
+  .role-pill.ro { background:#065f46; color:#fff; }
+  .btn { display:inline-flex; align-items:center; gap:7px; padding:11px 16px; border-radius:11px; text-decoration:none;
+         font-weight:800; font-size:13.5px; background:linear-gradient(135deg,#667eea,#764ba2); color:#fff; }
+  main { max-width:960px; margin:0 auto; padding:24px; }
+  .banner { padding:11px 14px; border-radius:11px; font-size:12.5px; margin-bottom:20px; border:1px solid var(--line); color:var(--muted); }
+  .group { margin-bottom:22px; }
+  .group h2 { font-size:12px; font-weight:800; color:var(--muted); text-transform:uppercase; letter-spacing:.6px; margin-bottom:10px; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); gap:12px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:18px 16px; text-decoration:none; color:var(--text); transition:.15s; display:block; }
+  .card:hover { border-color:var(--brand); transform:translateY(-2px); }
+  .card .icon { font-size:26px; margin-bottom:10px; }
+  .card .name { font-weight:700; font-size:14.5px; }
+  .empty { color:var(--muted); font-size:13px; padding:20px; text-align:center; }
+  footer { max-width:960px; margin:0 auto; padding:0 24px 44px; color:#475569; font-size:11.5px; text-align:center; }
+</style>
+</head>
+<body>
+<header>
+  <div class="dot">🏥</div>
+  <div>
+    <h1>{{ person_name }}</h1>
+    <div class="sub">GIL CLINIC — aapke modules</div>
+  </div>
+  <div class="spacer"></div>
+  <span class="role-pill {{ 'owner' if owner else ('ceo' if read_only else ('ro' if read_only else '') ) }}">{{ role_label }}</span>
+  <a class="btn" href="{{ dashboard }}">→ Apna dashboard</a>
+</header>
+
+<main>
+  <div class="banner">
+    {% if read_only %}
+      👁️ <b>Read-only</b> — aap sab dekh sakte hain, badal nahi sakte.
+    {% elif owner %}
+      👑 <b>Owner</b> — aap sab dekh aur badal sakte hain.
+    {% else %}
+      Aapke role ke hisaab se ye modules dikh rahe hain — baaki kahin nahi jaa sakte.
+    {% endif %}
+    Total {{ total }} module{{ '' if total == 1 else 's' }}.
+  </div>
+
+  {% for group, modules in groups.items() %}
+  <div class="group">
+    <h2>{{ group }}</h2>
+    <div class="grid">
+      {% for m in modules %}
+      <a class="card" href="{{ m.url }}">
+        <div class="icon">{{ m.icon }}</div>
+        <div class="name">{{ m.name }}</div>
+      </a>
+      {% endfor %}
+    </div>
+  </div>
+  {% endfor %}
+
+  {% if not groups %}
+  <div class="empty">Is role ke liye abhi koi module nahi — admin se sampark karein.</div>
+  {% endif %}
+</main>
+
+<footer>GIL CLINIC · Ek product, ek login, role-based modules</footer>
+</body>
+</html>
