@@ -258,6 +258,58 @@ async def health_card_page(request: Request, uid: str):
     )
 
 
+@router.get("/card/{uid}/fhir", include_in_schema=False)
+async def health_card_fhir_export(request: Request, uid: str, download: bool = True):
+    """ABD-03 — the card holder's record as a FHIR R4 Bundle.
+
+    Reachable from the card link the patient already holds, so "give me my
+    records in a portable format" needs no login, no support ticket and no
+    ABDM credentials. The same access log applies: a FHIR export is a read of
+    the record and is recorded as one.
+    """
+    from src.infrastructure.abdm.fhir import fhir_bundle, bundle_summary
+    from src.presentation.abdm.routes.abdm_routes import _collect_patient_record
+
+    async with async_session_factory() as session:
+        card = await _card(session, uid)
+        if card is None:
+            await _log_access(
+                session, card=None, uid=uid, request=request,
+                outcome="denied", reason="fhir_not_found_or_revoked",
+            )
+            await session.commit()
+            return _error_page(
+                "Health Card kaam nahi kar raha",
+                "Link adhoora, expire ya revoke ho chuka hai.",
+                404,
+            )
+        # A FHIR export is a read of the whole record — log it as one.
+        await _log_access(
+            session, card=card, uid=uid, request=request, outcome="granted"
+        )
+        card.view_count = (card.view_count or 0) + 1
+        await session.commit()
+        record = await _collect_patient_record(session, card.patient_id)
+
+    if not record:
+        return _error_page(
+            "Patient record nahi mila",
+            "Is card ka patient record database me nahi mila.",
+            404,
+        )
+
+    bundle = fhir_bundle(**record)
+    count = bundle_summary(bundle)["total"]
+    safe_id = "".join(ch for ch in card.patient_id if ch.isalnum() or ch in "-_")
+    response = JSONResponse(bundle, media_type="application/fhir+json")
+    if download:
+        response.headers["Content-Disposition"] = (
+            f'attachment; filename="fhir-{safe_id or "patient"}.json"'
+        )
+    response.headers["X-FHIR-Resources"] = str(count)
+    return response
+
+
 @doctor_router.post("/health-card", include_in_schema=False)
 async def api_create_health_card(request: Request):
     """Doctor ke OPD dashboard se — patient ka Universal Health Card banao.

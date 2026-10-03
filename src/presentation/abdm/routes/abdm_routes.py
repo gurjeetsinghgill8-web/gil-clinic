@@ -4,6 +4,7 @@
     POST /api/v1/abdm/abha/link                    → link ABHA number to patient
     GET  /api/v1/abdm/fhir/Patient/{pid}           → FHIR R4 Patient
     GET  /api/v1/abdm/fhir/Practitioner/{cid}      → FHIR Practitioner + Organization
+    GET  /api/v1/abdm/fhir/bundle/{pid}            → FULL FHIR R4 collection Bundle ⭐
     POST /api/v1/abdm/consent                      → create consent artefact
     GET  /api/v1/abdm/consent/{pid}                → list consent
     POST /api/v1/abdm/consent/{id}/revoke          → revoke consent
@@ -12,6 +13,12 @@
 
 Real NHA calls abhi stubbed hain (credentials ke bina crash nahi hota) — local
 records ban jaate hain aur transactions DHIS claim ke liye log hote hain.
+
+**ABD-03 (the Bundle export) does not need credentials.** The FHIR standard is
+public and the mapping is local, so a patient can already be handed a portable
+record in the exact shape a HIP would later POST to an HIU. When
+``ABDM_CLIENT_ID`` / ``SECRET`` arrive, only the transport is new — the data
+model is already built and tested.
 """
 
 from __future__ import annotations
@@ -27,9 +34,12 @@ from fastapi import APIRouter, Query, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 
 from src.infrastructure.abdm.fhir import (
+    bundle_summary,
+    fhir_bundle,
     fhir_organization,
     fhir_patient,
     fhir_practitioner,
+    validate_bundle,
 )
 from src.infrastructure.abdm.models import (
     AbdmTransactionModel,
@@ -156,16 +166,106 @@ async def fhir_practitioner_resource(clinic_id: str):
         c = await session.get(ClinicModel, cid)
     if c is None:
         return JSONResponse({"resourceType": "OperationOutcome", "issue": [{"severity": "error", "code": "not-found", "diagnostics": "Clinic not found"}]}, status_code=404)
-    return JSONResponse(
-        {
-            "resourceType": "Bundle",
-            "type": "collection",
-            "entry": [
-                {"resource": fhir_practitioner(c)},
-                {"resource": fhir_organization(c)},
-            ],
-        }
+    # Route it through the same builder as the full export, so these entries
+    # carry fullUrl/id like every other Bundle this service emits — a consumer
+    # should never have to special-case which endpoint produced a Bundle.
+    return JSONResponse(fhir_bundle(patient=None, clinic=c))
+
+
+async def _collect_patient_record(session, patient_id: str) -> dict[str, Any]:
+    """Everything needed for a FHIR export, in one place.
+
+    Shared by the staff download and the patient-facing card export so both
+    produce byte-identical structure for the same patient — two export paths
+    that disagree is a support problem nobody can debug.
+    """
+    from src.infrastructure.opd.models.opd_models import OpdPrescriptionModel
+    from src.infrastructure.opd.models.patient_portal_models import PatientReadingModel
+
+    prow = await session.execute(
+        sa.select(PatientModel).where(PatientModel.patient_id == patient_id).limit(1)
     )
+    patient = prow.scalars().first()
+    if patient is None:
+        return {}
+
+    clinic = None
+    clinic_id = str(getattr(patient, "clinic_id", "") or "")
+    if clinic_id:
+        try:
+            clinic = await session.get(ClinicModel, uuid.UUID(clinic_id))
+        except (ValueError, AttributeError, TypeError):
+            clinic = None
+
+    prescriptions = list(
+        (
+            await session.execute(
+                sa.select(OpdPrescriptionModel)
+                .where(OpdPrescriptionModel.patient_id == patient_id)
+                .order_by(OpdPrescriptionModel.created_at.desc())
+                .limit(200)
+            )
+        ).scalars().all()
+    )
+    readings = [
+        r.to_dict()
+        for r in (
+            await session.execute(
+                sa.select(PatientReadingModel)
+                .where(PatientReadingModel.patient_id == patient_id)
+                .order_by(PatientReadingModel.date_time.desc())
+                .limit(500)
+            )
+        ).scalars().all()
+    ]
+    return {"patient": patient, "clinic": clinic, "prescriptions": prescriptions, "readings": readings}
+
+
+@router.get("/fhir/bundle/{patient_id}")
+async def fhir_patient_bundle(patient_id: str, download: bool = Query(default=False)):
+    """ABD-03 — the patient's whole record as a FHIR R4 collection Bundle.
+
+    Works without ABDM credentials: the standard is public and the mapping is
+    local. ``?download=true`` sends it as a file so a patient or a clinic can
+    keep it; otherwise it is returned as ``application/fhir+json`` for a
+    viewer or another system to consume.
+    """
+    async with async_session_factory() as session:
+        record = await _collect_patient_record(session, patient_id)
+
+    if not record:
+        return JSONResponse(
+            {
+                "resourceType": "OperationOutcome",
+                "issue": [
+                    {
+                        "severity": "error",
+                        "code": "not-found",
+                        "diagnostics": f"Patient {patient_id} not found",
+                    }
+                ],
+            },
+            status_code=404,
+        )
+
+    bundle = fhir_bundle(**record)
+    problems = validate_bundle(bundle)
+    if problems:  # pragma: no cover - defensive; the tests assert this is empty
+        logger.warning("FHIR bundle validation issues: %s", problems)
+
+    if download:
+        safe_id = "".join(ch for ch in patient_id if ch.isalnum() or ch in "-_") or "patient"
+        response = JSONResponse(
+            bundle,
+            media_type="application/fhir+json",
+            headers={
+                "Content-Disposition": f'attachment; filename="fhir-{safe_id}.json"'
+            },
+        )
+    else:
+        response = JSONResponse(bundle, media_type="application/fhir+json")
+    response.headers["X-FHIR-Resources"] = str(bundle_summary(bundle)["total"])
+    return response
 
 
 # ═════════════════════════════════════════════════════════════════════════════

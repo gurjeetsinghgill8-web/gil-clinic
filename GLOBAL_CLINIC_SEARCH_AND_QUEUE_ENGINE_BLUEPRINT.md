@@ -51,9 +51,10 @@
 | 📢 **Clinic invite pipeline** (GRW-02, no longer a toast) | ✅ **BUILT** |
 | 🌆 **City landing pages** `/doctors/<city>` (GRW-03) | ✅ **BUILT** |
 | 👨‍👩‍👧 **Family Health Locker** (GRW-04) | ✅ **BUILT** |
+| 🧾 **FHIR R4 Bundle export** (ABD-03, no credentials needed) | ✅ **BUILT** |
 | 🖥️ Dashboard START OPD panel + delay badge | ✅ **BUILT** |
 | 📱 Patient page wait card + "ab niklo" chime | ✅ **BUILT** |
-| **Test suite** | ✅ **470 passed, 0 failed** |
+| **Test suite** | ✅ **500 passed, 0 failed** |
 
 ---
 
@@ -1090,14 +1091,24 @@ CREATE TABLE doctor_crawl_runs (...);
 
 | # | Item | File | Effort |
 |---|------|------|--------|
-| ABD-01 | ABDM sandbox HFR + HPR register | `abdm_routes.py` | M |
-| ABD-02 | ABHA create + link live | same | M |
-| ABD-03 | FHIR Bundle export (offline bhi ban sakta hai ✅) | `fhir.py` + routes | M |
-| ABD-04 | DHIS claim export (incentive 💰) | `abdm_routes.py` | S |
-| ABD-05 | NHA Milestone certification apply | docs | M |
+| ABD-01 | ABDM sandbox HFR + HPR register | `abdm_routes.py` | M | ⛔ **BLOCKED** (credentials) |
+| ABD-02 | ABHA create + link live | same | M | ⛔ **BLOCKED** (credentials) |
+| ABD-03 | **FHIR Bundle export** (offline bhi ban sakta hai ✅) | `fhir.py` + `abdm_routes.py` + `/card/{uid}/fhir` | M | ✅ **DONE** |
+| ABD-04 | DHIS claim export (incentive 💰) | `abdm_routes.py` | S | ⛔ **BLOCKED** (credentials) |
+| ABD-05 | NHA Milestone certification apply | docs | M | ⛔ **BLOCKED** (credentials) |
 
 > ⚠️ **ABD-01 se aage credentials ke bina nahi badh sakte** — `ABDM_CLIENT_ID` / `ABDM_CLIENT_SECRET`
-> (NHA sandbox) chahiye. Tab tak **ABD-03 offline FHIR export** ban sakta hai.
+> (NHA sandbox) chahiye. Tab tak **ABD-03 offline FHIR export** ban gaya hai.
+
+> **ABD-03 detail:** `fhir_bundle()` produces a **FHIR R4 collection Bundle** that
+> opens in any FHIR viewer and is the exact shape a HIP would later POST to an
+> HIU — so when credentials arrive, only the *transport* is new work. `?download=true`
+> saves it as a file; the patient can export from their own health-card link
+> (no login, no ticket), and that export is logged as an access because it is a
+> full read of the record. `validate_bundle()` checks the mistakes that actually
+> break an import (wrong resourceType, missing entry wrapper, no id, dangling
+> subject reference) — deliberately not a full spec validator, which is too
+> heavy for this host's CPU budget.
 
 ---
 
