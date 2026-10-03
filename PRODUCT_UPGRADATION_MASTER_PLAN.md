@@ -149,10 +149,10 @@ GIL CLINIC (one product)
 
 ## 6. CURRENT CHECKPOINT (resume from here)
 
-**Last update:** 2026-10-03 (after Brick 8 — security fix LIVE)
-**State:** Sab bricks ✅ + **Brick 8 (security) ✅** — reception/doosre staff ab OPD/prescription se BLOCK. Tests 713 green. Build `66e48cd` live.
-**Next action (IMPORTANT, owner decide):** PIN `1234` junior doctor + reception DONO ka hai → receptionist "Junior Doctor" chun kar OPD khol sakta hai. Junior doctor ka PIN badalna hai (unique karo) — owner naya PIN bataaye.
-**How to resume:** ye file + `git pull` → `scripts/audit_probe_live.py`.
+**Last update:** 2026-10-03 (Round 2 plan bana — `PRODUCT_UPGRADATION_PLAN_V2.md`)
+**State:** Sab bricks ✅ + Brick 8 (security) ✅. Ab **Round 2** ka PLAN banaya hai (koi code change nahi) — `PRODUCT_UPGRADATION_PLAN_V2.md` me 5 issues documented.
+**Next action:** Owner approve kare → shuru karo: (1) Junior doctor PIN `1234`→`1122`; (2) PIN management hierarchy (change-pin fix + manage-staff-PINs page + sidebar link); (3) clinic isolation complete; (4) find-doctor crawler (real targets + cron + secrets); (5) version badge har page pe.
+**How to resume:** ye file + `git pull` → `PRODUCT_UPGRADATION_PLAN_V2.md` padho → owner se confirm karo.
 
 ---
 
