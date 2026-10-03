@@ -235,28 +235,6 @@ function showToast(msg, type = 'success') {
   setTimeout(() => toast.remove(), 4000);
 }
 
-// ── Under Construction popup ───────────────────────────────────────────────
-function showUnderConstruction(name) {
-  const ov = document.createElement('div');
-  ov.className = 'uc-overlay';
-  ov.innerHTML = `
-    <div class="uc-card">
-      <div class="uc-emoji">🚧</div>
-      <div class="uc-title">Under Construction</div>
-      <div class="uc-sub"><strong>${name}</strong> is being built.<br>It will be available soon!</div>
-      <button class="btn btn-outline btn-full" onclick="this.closest('.uc-overlay').remove()">← Go Back</button>
-    </div>
-  `;
-  document.body.appendChild(ov);
-}
-
-document.querySelectorAll('[data-uc]').forEach(el => {
-  el.addEventListener('click', e => {
-    e.preventDefault();
-    showUnderConstruction(el.dataset.uc);
-  });
-});
-
 // ── Staff Login ────────────────────────────────────────────────────────────
 const staffBtns = document.querySelectorAll('.staff-btn');
 staffBtns.forEach(btn => {

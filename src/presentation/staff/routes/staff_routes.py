@@ -135,22 +135,6 @@ def department_for_service(code: str) -> str:
     c = (code or "").strip()
     return _SERVICE_DEPARTMENT.get(c, _SERVICE_DEPARTMENT.get(c.upper(), c.upper() or "Cardiology"))
 
-# Under construction departments
-UNDER_CONSTRUCTION = [
-    {"name": "Pharmacy",      "icon": "💊"},
-    {"name": "HR & Payroll",  "icon": "👥"},
-    {"name": "Inventory",     "icon": "📦"},
-    {"name": "GST / Finance", "icon": "💼"},
-    {"name": "Multi-Branch",  "icon": "🏢"},
-    {"name": "WhatsApp Alerts","icon": "💬"},
-    {"name": "WhatsApp Alerts","icon": "💬"},
-    {"name": "Video Consult", "icon": "📹"},
-    {"name": "IPD Ward",      "icon": "🛏️"},
-    {"name": "Vendor Mgmt",   "icon": "🤝"},
-    {"name": "Analytics Pro", "icon": "📈"},
-]
-
-
 # ── Jinja2 Filters ─────────────────────────────────────────────────────────────
 def format_time(value):
     """Format ISO timestamp or datetime to HH:MM AM/PM."""
@@ -496,7 +480,7 @@ async def home(request: Request):
     stats = await _get_stats(request)
     return HTMLResponse(content=_render("dashboard/home.html",
         request=request, active_page="home", session_user=sess,
-        stats=stats, under_construction=UNDER_CONSTRUCTION,
+        stats=stats,
     ))
 
 
