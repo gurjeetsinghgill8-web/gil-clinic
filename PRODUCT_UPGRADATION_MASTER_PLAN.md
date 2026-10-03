@@ -70,14 +70,14 @@ GIL CLINIC (one product)
 - [x] `/docs` + `/redoc` production me disable (ENABLE_DOCS=1 opt-in) — 24a9798
 - [x] `/staff/seed*` env-flag ke peeche (ALLOW_SEED=1) — 24a9798
 
-### BRICK 2 — Phase 1: one front door (single login, role routing)
+### BRICK 2 — Phase 1: one front door (single login, role routing) — ✅ DONE 2026-10-03
 - [x] **Brick 2a:** Unified PIN login `/signin` + identity resolver `src/domain/auth/identity.py`
-      — unique PIN routes directly, ambiguous PIN (1234) shows a role picker, old logins untouched.
-      Commit 14e06d4, 633 tests, 11/11 live-verified.
-- [x] **Brick 2b:** username/password (admin + clinic) on the same `/signin` door
-      — shared verifiers `src/application/auth/credentials.py` (lockout + licence), same cookies.
-      Commit e4804ee, 645 tests, 8/8 live-verified.
-- [ ] Brick 2c: make old logins redirect to `/signin` (thin shims), then remove them
+      — unique PIN routes directly, ambiguous PIN (1234) shows a role picker. Commit 14e06d4.
+- [x] **Brick 2b:** username/password (admin + clinic) on the same door
+      — shared verifiers `src/application/auth/credentials.py` (lockout + licence). Commit e4804ee.
+- [x] **Brick 2c:** staff phone+password added; old login pages become 302 shims to `/signin`;
+      PWA start_url → `/signin`. Commit 2b8d410. Tests 649, 15/15 live.
+- [ ] (Phase 4 me) old POST handlers ko hatao — ab shim hi kaafi hai, full removal baad me.
 
 ### BRICK 3 — Phase 2: one hallway (single shell + nav)
 - Ek sidebar, role-filtered. Both old dashboards render inside it.
@@ -111,10 +111,10 @@ GIL CLINIC (one product)
 
 ## 6. CURRENT CHECKPOINT (resume from here)
 
-**Last update:** 2026-10-03 (after Brick 2b)
-**State:** Brick 1 ✅ + Brick 2a ✅ + Brick 2b ✅. `/signin` ab PIN + username/password dono karta hai. Tests 645 green. Build `e4804ee` live.
-**Next action:** Brick 2c — purane logins ko `/signin` ke thin shim banake hatao (last step of single-login).
-**How to resume:** ye file + `git pull` → `scripts/audit_probe_live.py` → Brick 2c.
+**Last update:** 2026-10-03 (after Brick 2c — single login COMPLETE)
+**State:** Brick 1 ✅ + Brick 2 ✅ (single door `/signin`: PIN + username/password + staff phone, sab credential shapes). Tests 649 green. Build `2b8d410` live.
+**Next action:** Brick 3 — Phase 2: EK shell (sidebar + topbar), role-filtered modules, dono dashboards isi shell ke andar.
+**How to resume:** ye file + `git pull` → `scripts/audit_probe_live.py` → Brick 3.
 
 ---
 
