@@ -71,7 +71,11 @@ GIL CLINIC (one product)
 - [x] `/staff/seed*` env-flag ke peeche (ALLOW_SEED=1) — 24a9798
 
 ### BRICK 2 — Phase 1: one front door (single login, role routing)
-- Ek login page; role → route. Old logins become thin shims, then removed.
+- [x] **Brick 2a:** Unified PIN login `/signin` + identity resolver `src/domain/auth/identity.py`
+      — unique PIN routes directly, ambiguous PIN (1234) shows a role picker, old logins untouched.
+      Commit 14e06d4, 633 tests, 11/11 live-verified.
+- [ ] Brick 2b: add username/password (admin + clinic) to the same `/signin` door
+- [ ] Brick 2c: make old logins redirect to `/signin` (thin shims), then remove them
 
 ### BRICK 3 — Phase 2: one hallway (single shell + nav)
 - Ek sidebar, role-filtered. Both old dashboards render inside it.
@@ -105,10 +109,10 @@ GIL CLINIC (one product)
 
 ## 6. CURRENT CHECKPOINT (resume from here)
 
-**Last update:** 2026-10-03 (after Brick 1)
-**State:** Brick 1 (Phase 0) DONE + deployed + live-verified. Tests 609 green. Build `24a9798` live.
-**Next action:** Brick 2 — Phase 1: single login (role-based routing). Old logins become shims.
-**How to resume:** ye file + `git pull` → `scripts/audit_probe_live.py` → Brick 2.
+**Last update:** 2026-10-03 (after Brick 2a)
+**State:** Brick 1 ✅ + Brick 2a ✅ (unified PIN login `/signin` live). Tests 633 green. Build `14e06d4` live.
+**Next action:** Brick 2b — username/password (admin + clinic) ko `/signin` me add karo.
+**How to resume:** ye file + `git pull` → `scripts/audit_probe_live.py` → Brick 2b.
 
 ---
 
