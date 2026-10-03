@@ -29,7 +29,8 @@ on:
         type: string
         default: "0"
 
-  # Weekly crawl. Uncomment after adding real targets:
+  # Weekly crawl. ACTIVATION: real targets daalne ke baad ye comment hata do
+  # (CRAWLER_ACTIVATION.md Step 3/4 dekho):
   # schedule:
   #   - cron: "30 20 * * 0"   # Sundays 02:00 IST (20:30 UTC Saturday)
 

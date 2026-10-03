@@ -1,18 +1,19 @@
 {
-  "_comment": "Module 6 crawl targets. Add public hospital/clinic roster pages here. 'wait_for' is the CSS selector to wait for on JS-rendered pages — without it the crawler extracts an empty shell and reports 0 doctors for a page that has plenty.",
+  "_comment": "Module 6 crawl targets. Add public hospital/clinic 'Our Doctors' roster pages here. 'wait_for' is the CSS selector to wait for on JS-rendered pages — without it the crawler extracts an empty shell and reports 0 doctors for a page that has plenty.",
   "_rules": [
     "Only public pages. Never a page behind a login, and never one whose robots.txt disallows crawling.",
     "The ingest API enforces clinic opt-outs; do not try to filter them here.",
-    "city/state are fallbacks used only when the page itself does not state them."
+    "city/state are fallbacks used only when the page itself does not state them.",
+    "TARGETS ABHI KHAALI HAI — real hospital 'Our Doctors' URL daalne par crawler turant kaam karega (cron weekly chalega)."
   ],
   "targets": [
     {
-      "url": "https://example-hospital.example/doctors",
-      "label": "Example Hospital — doctor roster",
+      "url": "https://REPLACE-WITH-REAL-HOSPITAL.example/our-doctors",
+      "label": "TODO: apne hospital ka naam — doctor roster",
       "city": "Jodhpur",
       "state": "Rajasthan",
       "wait_for": ".doctor-list, .team-member, .profile-card",
-      "notes": "Replace with a real public roster before enabling the cron."
+      "notes": "Is URL ko asli public hospital/clinic ki 'Our Doctors' page se badal dein."
     }
   ]
 }

@@ -876,7 +876,7 @@ async def marketplace_book(request: Request):
     )
 
 
-@router.post("/seed", include_in_schema=False)
+@router.post("/api/v1/marketplace/seed", include_in_schema=False)
 async def seed_demo_clinics(token: str = Query("")):
     """One-time demo clinics seed — idempotent (clinic_code se dedupe).
 
