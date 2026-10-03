@@ -114,6 +114,20 @@ GIL CLINIC (one product)
       admin dashboard topbar, admin onboard topbar, OPD admin header.
       Commit 672bf8e, 9/9 live.
 
+### BRICK 8 — Phase 6: SECURITY — reception/doosre staff ko OPD se block — ✅ DONE 2026-10-03
+- [x] **Critical fix:** `opd_routes._get_opd_session` ka staff-session fallback HATAYA
+      (ye kisi bhi staff role ko doctor "junior" bana deta tha — reception prescription
+      pad khol sakta tha). Ab OPD access sirf `opd_session` cookie se.
+- [x] **Cookie stacking fix:** har login (`/signin`, `/signin/password`) ab doosre
+      session cookies (`opd_session`/`gc_session`/`admin_session`) clear karta hai,
+      taaki reception login karne par purana doctor session stack na ho.
+- [x] `/staff/doctor` route ko role-guard kiya (reception/lab ab `/home` pe bounce).
+- [x] 5 regression tests. Commit 66e48cd, 713 tests, 6/6 live.
+- ⚠️ **ABHI BHI BAQI (CREDENTIAL issue):** PIN `1234` junior doctor KA BHI hai aur
+      Reception/ECG/Echo/TMT/Xray/Lab/Dietician KA BHI. Isliye receptionist jo `1234`
+      jaanta hai, wo role-picker me "Junior Doctor" chun kar OPD khol sakta hai.
+      **Fix = junior doctor ka PIN badlo (ya reception ka PIN).** Owner decide kare.
+
 ---
 
 ## 5. The COMPLETION RITUAL (har brick ke baad — kabhi skip nahi)
@@ -135,9 +149,9 @@ GIL CLINIC (one product)
 
 ## 6. CURRENT CHECKPOINT (resume from here)
 
-**Last update:** 2026-10-03 (after Brick 6 + 7 + 4b — sab kuch complete)
-**State:** Brick 1 ✅ + Brick 2 ✅ (single login) + Brick 3 ✅ (one hallway) + Brick 4a ✅ (role guard) + Brick 5 ✅ (cleanup) + **Brick 6 ✅ (har page pe 🏠 Home link)** + **Brick 7 ✅ (purane login templates delete)** + **Brick 4b ✅ (380KB template 4 partials me toda, byte-identical)**. **SAB COMPLETE.** Tests 708 green. Build `997d783` live.
-**Next action:** Kuch nahi baaki — sab optional items bhi ho gaye. Aage sirf naye features ya bug fixes.
+**Last update:** 2026-10-03 (after Brick 8 — security fix LIVE)
+**State:** Sab bricks ✅ + **Brick 8 (security) ✅** — reception/doosre staff ab OPD/prescription se BLOCK. Tests 713 green. Build `66e48cd` live.
+**Next action (IMPORTANT, owner decide):** PIN `1234` junior doctor + reception DONO ka hai → receptionist "Junior Doctor" chun kar OPD khol sakta hai. Junior doctor ka PIN badalna hai (unique karo) — owner naya PIN bataaye.
 **How to resume:** ye file + `git pull` → `scripts/audit_probe_live.py`.
 
 ---
