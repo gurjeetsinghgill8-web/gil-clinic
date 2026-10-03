@@ -17,15 +17,15 @@
 
 Crawler hi "idle" hai kyunki:
 1. `targets.json` me asli hospital URL nahi hai (sirf placeholder).
-2. GitHub me 2 secrets nahi hain (`INGEST_TOKEN` + `GEMINI_API_KEY`).
+2. GitHub me 2 secrets nahi hain (`INGEST_TOKEN` + `DEEPSEEK_API_KEY`).
 
 ---
 
-## Step 1 — GEMINI_API_KEY (free) banao
+## Step 1 — DEEPSEEK_API_KEY (aapke paas already hai)
 
-1. Kholo: **https://aistudio.google.com/apikey**
-2. "Create API key" dabao → key copy karo.
-3. Ye key crawler ko doctors extract karne ke liye chahiye (LLM extraction).
+- Crawler ab **DeepSeek** use karta hai (Gemini nahi) — aapki existing key.
+- Ye key app me already configure hai (`DEEPSEEK_KEY` / `secret.txt`).
+- GitHub secret me bhi wahi key daalni hai (Step 2).
 
 ---
 
@@ -37,8 +37,8 @@ Crawler hi "idle" hai kyunki:
    - Name: `INGEST_TOKEN`
    - Value: `GIL-DEMO-SEED-2026` (abhi app ka default; production ke liye koi unique secret value rakh do aur PythonAnywhere ke env `INGEST_TOKEN` me bhi wahi daalo)
 4. **Secret 2:**
-   - Name: `GEMINI_API_KEY`
-   - Value: (Step 1 wali key)
+   - Name: `DEEPSEEK_API_KEY`
+   - Value: (aapki existing DeepSeek key)
 
 ---
 

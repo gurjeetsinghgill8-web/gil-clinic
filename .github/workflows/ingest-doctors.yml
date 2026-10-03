@@ -7,8 +7,8 @@
 #
 # Setup (one time):
 #   Repository → Settings → Secrets and variables → Actions:
-#     INGEST_TOKEN     = same value the app's INGEST_TOKEN env var holds
-#     GEMINI_API_KEY   = key for the extraction model
+#     INGEST_TOKEN      = same value the app's INGEST_TOKEN env var holds
+#     DEEPSEEK_API_KEY  = owner's existing DeepSeek key for the extraction model
 #
 # The schedule is DISABLED until a real target is added to
 # workers/crawl_doctors/targets.json — a cron that crawls an example.com
@@ -66,7 +66,7 @@ jobs:
         working-directory: workers/crawl_doctors
         env:
           INGEST_TOKEN: ${{ secrets.INGEST_TOKEN }}
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
           API_BASE: https://gillhopitalsoftware1.pythonanywhere.com
           RUN_LABEL: gh-${{ github.run_number }}
         run: |

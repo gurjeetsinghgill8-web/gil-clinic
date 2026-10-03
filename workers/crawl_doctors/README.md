@@ -22,7 +22,7 @@ So the crawler runs here, in GitHub Actions, on a cron. The app only receives.
 GitHub Actions (cron)
    └─ python -m worker.main --config targets.json
         ├─ crawl4ai + Chromium       → raw HTML from each roster page
-        ├─ Gemini (schema-guided)    → doctor profiles
+        ├─ DeepSeek (schema-guided)   → doctor profiles
         ├─ validate against the API's own schema
         └─ POST /api/v1/ingest/doctors  (token-gated)
                                           └─ opt-outs enforced server-side
@@ -60,6 +60,6 @@ GitHub Actions (cron)
 pip install -r requirements.txt
 playwright install chromium
 export INGEST_TOKEN=...            # same secret the app expects
-export GEMINI_API_KEY=...
+export DEEPSEEK_API_KEY=...
 python main.py --config targets.json --dry-run   # extract, do not post
 ```

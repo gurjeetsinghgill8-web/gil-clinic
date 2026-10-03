@@ -220,9 +220,9 @@ def crawl_and_extract(
     from crawl4ai.extraction_strategy import LLMExtractionStrategy
 
     strategy = LLMExtractionStrategy(
-        # ``google/gemini-2.0-flash`` per the blueprint; the provider string is
-        # configurable because the sandbox key may be a different model.
-        provider=os.getenv("EXTRACTION_PROVIDER", "google/gemini-2.0-flash"),
+        # DeepSeek (owner's existing key) — LiteLLM provider string. Override
+        # with EXTRACTION_PROVIDER if a different model is preferred.
+        provider=os.getenv("EXTRACTION_PROVIDER", "deepseek/deepseek-chat"),
         api_token=api_key,
         schema=schema,
         extraction_type="schema" if schema else "block",
@@ -344,9 +344,9 @@ def main(argv: list[str] | None = None) -> int:
         logger.error("INGEST_TOKEN is required (the app fails closed without it)")
         return 2
 
-    api_key = os.getenv("GEMINI_API_KEY") or os.getenv("EXTRACTION_API_KEY") or ""
+    api_key = os.getenv("DEEPSEEK_API_KEY") or os.getenv("DEEPSEEK_KEY") or os.getenv("EXTRACTION_API_KEY") or ""
     if not api_key:
-        logger.error("GEMINI_API_KEY is required for schema-guided extraction")
+        logger.error("DEEPSEEK_API_KEY is required for schema-guided extraction")
         return 2
 
     try:

@@ -175,11 +175,13 @@
       </div>
       <div class="field">
         <label for="city">City</label>
-        <select id="city"><option value="">All cities</option></select>
+        <input id="city" list="city-options" placeholder="e.g. Jodhpur, Jaipur…" autocomplete="off">
+        <datalist id="city-options"></datalist>
       </div>
       <div class="field">
         <label for="specialty">Specialty</label>
-        <select id="specialty"><option value="">All specialties</option></select>
+        <input id="specialty" list="specialty-options" placeholder="e.g. Cardiology, Skin…" autocomplete="off">
+        <datalist id="specialty-options"></datalist>
       </div>
       <button class="geo-btn" id="geo-btn" title="Use my location">📍</button>
     </div>
@@ -271,9 +273,9 @@ async function loadMeta(){
   try {
     const r = await fetch("/api/v1/marketplace/meta");
     const m = await r.json();
-    const citySel = $("city"), specSel = $("specialty");
-    (m.cities||[]).forEach(c => { const o=document.createElement("option"); o.value=c; o.textContent=c; citySel.appendChild(o); });
-    (m.specialties||[]).forEach(s => { const o=document.createElement("option"); o.value=s; o.textContent=s; specSel.appendChild(o); });
+    const cityList = $("city-options"), specList = $("specialty-options");
+    (m.cities||[]).forEach(c => { const o=document.createElement("option"); o.value=c; cityList.appendChild(o); });
+    (m.specialties||[]).forEach(s => { const o=document.createElement("option"); o.value=s; specList.appendChild(o); });
   } catch(e){ /* non-fatal */ }
 }
 
