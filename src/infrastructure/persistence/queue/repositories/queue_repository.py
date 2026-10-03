@@ -71,8 +71,17 @@ class SqlAlchemyQueueRepository(QueueRepository):
     # ------------------------------------------------------------------
 
     async def get_by_id(self, entry_uuid: str) -> QueueEntry | None:
-        """Get a single queue entry by its UUID."""
-        model = await self._session.get(QueueEntryModel, self._to_uuid(entry_uuid))
+        """Get a single queue entry by its UUID.
+
+        A malformed id (e.g. "0" or "not-a-uuid") used to raise ValueError from
+        ``uuid.UUID`` and turn ``GET /api/v1/queue/notes/{entry_id}`` into a
+        bare 500. A bad id is "not found", never a crash.
+        """
+        try:
+            key = self._to_uuid(entry_uuid)
+        except (ValueError, AttributeError, TypeError):
+            return None
+        model = await self._session.get(QueueEntryModel, key)
         if model is None:
             return None
         return self._mapper.to_domain(model)

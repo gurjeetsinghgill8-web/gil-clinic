@@ -413,7 +413,9 @@ async def phone_login_submit(
 
 @router.get("/seed-staff", include_in_schema=False)
 async def seed_staff_users(request: Request):
-    """Create default staff users for testing. ADMIN ONLY."""
+    """Create default staff users for testing. ADMIN ONLY + ALLOW_SEED env gate."""
+    if os.getenv("ALLOW_SEED") != "1":
+        return RedirectResponse("/staff/login", status_code=302)
     sess = get_session(request)
     if not sess or sess.get("role") not in ("admin", "Admin", "manager", "Manager"):
         return RedirectResponse("/staff/login", status_code=302)
@@ -1590,7 +1592,9 @@ def _render_track_error(msg: str) -> str:
 
 @router.get("/seed", include_in_schema=False)
 async def seed_test_data(request: Request):
-    """Seed sample data. ADMIN ONLY."""
+    """Seed sample data. ADMIN ONLY + ALLOW_SEED env gate."""
+    if os.getenv("ALLOW_SEED") != "1":
+        return RedirectResponse("/staff/login", status_code=302)
     sess = get_session(request)
     if not sess or sess.get("role") not in ("admin", "Admin", "manager", "Manager"):
         return RedirectResponse("/staff/login", status_code=302)

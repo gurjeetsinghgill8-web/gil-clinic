@@ -607,11 +607,18 @@ async def _migrate_missing_columns():
 # FastAPI App
 # =========================================================================
 
+# Docs are OFF by default: the OpenAPI schema lists every internal and
+# staff endpoint, and exposing it publicly was one of the audit's P0 findings.
+# Turn them on locally with ENABLE_DOCS=1 when actually developing against them.
+_ENABLE_DOCS = os.getenv("ENABLE_DOCS") == "1"
+
 app = FastAPI(
     title=APP_NAME,
     version=APP_VERSION,
     description=APP_DESC,
     lifespan=lifespan,
+    docs_url="/docs" if _ENABLE_DOCS else None,
+    redoc_url="/redoc" if _ENABLE_DOCS else None,
 )
 
 # Make clinic settings available for the root page
