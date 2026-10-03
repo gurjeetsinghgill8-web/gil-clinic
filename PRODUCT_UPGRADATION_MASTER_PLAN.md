@@ -149,9 +149,9 @@ GIL CLINIC (one product)
 
 ## 6. CURRENT CHECKPOINT (resume from here)
 
-**Last update:** 2026-10-03 (Round 2 — marketplace ALIVE + crawler READY)
-**State:** Sab bricks ✅ + Brick 8 (security) ✅. **Marketplace ALIVE** (9 doctors live) + **crawler READY** (`CRAWLER_ACTIVATION.md` guide) + seed route fix. Build `1ddb3d5` live.
-**Next action (owner ke 2 input chahiye crawler real chalane ke liye):** (1) `GEMINI_API_KEY` banao + GitHub secret me daalo; (2) asli hospital "Our Doctors" URLs `targets.json` me daalo. Baaki: Junior PIN `1234`→`1122`, PIN hierarchy, version badge — plan me documented.
+**Last update:** 2026-10-03 (Round 2 — free-text input + DeepSeek crawler)
+**State:** Marketplace **free-text city/specialty input** ✅ (patient khud type kare) + crawler **DeepSeek** pe shift ✅ (Gemini nahi). 9 doctors live. Build `8fbe7f4` live.
+**Next action (sirf 1 input chahiye):** asli hospital "Our Doctors" URLs `targets.json` me daalo → crawler DeepSeek se real doctors extract karega. (`CRAWLER_ACTIVATION.md` + `PRODUCT_UPGRADATION_PLAN_V2.md` me baaki plan: Junior PIN 1122, PIN hierarchy, version badge.)
 **How to resume:** ye file + `git pull` → `CRAWLER_ACTIVATION.md` padho.
 
 ---
