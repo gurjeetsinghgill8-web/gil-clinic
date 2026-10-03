@@ -174,12 +174,62 @@ class HealthCardModel(Base):
     created_by: Mapped[str] = mapped_column(String(100), nullable=False, default="")
     expires_at: Mapped[datetime.datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     view_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+
+    # ── Revocation (GRW-01 / DPDP) ─────────────────────────────────────────
+    # A patient must be able to withdraw a shared card, and the clinic must be
+    # able to prove when and why. `active=0` alone was a silent switch with no
+    # record behind it — that is not an auditable consent withdrawal.
+    revoked_at: Mapped[datetime.datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    revoked_by: Mapped[str] = mapped_column(String(100), nullable=False, default="")
+    revoked_reason: Mapped[str] = mapped_column(String(200), nullable=False, default="")
+
     created_at: Mapped[datetime.datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
 
     def __repr__(self) -> str:  # pragma: no cover
         return f"<HealthCard {self.patient_id} active={self.active}>"
+
+
+class HealthCardAccessModel(Base):
+    """One row per view of a health card — the "who saw my record?" log.
+
+    DPDP gives a patient the right to know who accessed their data and the
+    right to withdraw consent. Both need a record, and neither can be
+    reconstructed after the fact, so the log is written at view time.
+
+    Deliberately stores no clinical content — only that a view happened, from
+    which IP/agent, and by which card. It is an access log, not a second copy
+    of the chart.
+    """
+
+    __tablename__ = "health_card_access"
+    __table_args__ = (
+        Index("idx_health_card_access_uid", "uid", "created_at"),
+        Index("idx_health_card_access_patient", "patient_id", "created_at"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    card_id: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    uid: Mapped[str] = mapped_column(String(80), nullable=False, default="", index=True)
+    patient_id: Mapped[str] = mapped_column(String(30), nullable=False, default="", index=True)
+    #: Best-effort viewer identity. "anonymous" for a public link holder —
+    #: which is itself useful: a card being read by many strangers is a signal.
+    viewer: Mapped[str] = mapped_column(String(120), nullable=False, default="anonymous")
+    ip_hash: Mapped[str] = mapped_column(String(64), nullable=False, default="")
+    user_agent: Mapped[str] = mapped_column(String(200), nullable=False, default="")
+    outcome: Mapped[str] = mapped_column(
+        String(20), nullable=False, default="granted"
+    )  # granted | denied
+    denial_reason: Mapped[str] = mapped_column(String(100), nullable=False, default="")
+    created_at: Mapped[datetime.datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+
+    def __repr__(self) -> str:  # pragma: no cover
+        return f"<HealthCardAccess uid={self.uid} viewer={self.viewer}>"
 
 
 class PatientRequestModel(Base):

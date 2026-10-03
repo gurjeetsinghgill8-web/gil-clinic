@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#0f172a">
+<title>Doctors in {{ city }} — Book a Live OPD Token | GIL CLINIC</title>
+<meta name="description" content="{{ total }} doctor{{ 's' if total != 1 else '' }} in {{ city }}{% if open_now_count %} · {{ open_now_count }} open right now{% endif %}. See the real live queue, patients ahead and estimated wait before you travel. Book a token in one tap.">
+<link rel="canonical" href="/doctors/{{ city_slug }}">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Doctors in {{ city }} — live OPD queue and wait times">
+<meta property="og:description" content="{{ total }} clinics listed{% if partners %} · {{ partners }} with live queue{% endif %}. Choose by real wait time, not by guesswork.">
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700;14..32,800&display=swap');
+  :root{
+    --bg:#f1f5f9; --card:#ffffff; --ink:#0f172a; --muted:#64748b;
+    --line:#e2e8f0; --brand:#667eea; --brand2:#764ba2;
+    --grad:linear-gradient(135deg,#667eea,#764ba2);
+    --green:#16a34a; --green-bg:#dcfce7; --amber:#d97706; --amber-bg:#fef3c7;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--ink);-webkit-font-smoothing:antialiased}
+  a{color:inherit;text-decoration:none}
+  .hero{background:linear-gradient(160deg,#0f172a 0%,#1e293b 55%,#312e81 100%);color:#f8fafc;padding:30px 20px 54px}
+  .hero-inner{max-width:860px;margin:0 auto}
+  .brand{display:flex;align-items:center;gap:10px;font-weight:800;font-size:15px}
+  .brand .dot{width:34px;height:34px;border-radius:10px;background:var(--grad);display:flex;align-items:center;justify-content:center;font-size:18px}
+  .hero h1{font-size:clamp(22px,5vw,34px);font-weight:800;letter-spacing:-.8px;margin:22px 0 8px;line-height:1.15}
+  .hero h1 span{background:var(--grad);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+  .hero p{color:#94a3b8;font-size:15px;max-width:620px;line-height:1.65}
+  .stats{display:flex;flex-wrap:wrap;gap:10px;margin-top:18px}
+  .stat{background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.14);border-radius:12px;padding:9px 14px;font-size:12.5px;font-weight:600;color:#e2e8f0}
+  main{max-width:860px;margin:-30px auto 50px;padding:0 20px}
+  .panel{background:var(--card);border-radius:18px;border:1px solid var(--line);box-shadow:0 18px 44px rgba(15,23,42,.14);padding:16px}
+  .quick{display:flex;flex-wrap:wrap;gap:8px}
+  .quick a{font-size:12.5px;font-weight:700;padding:8px 13px;border-radius:999px;background:#eef2ff;border:1px solid #c7d2fe;color:#3730a3;transition:.15s}
+  .quick a:hover{background:#e0e7ff}
+  h2.sec{font-size:16px;font-weight:800;margin:24px 0 12px;display:flex;align-items:center;gap:8px}
+  .count{font-size:13px;color:var(--muted);font-weight:600}
+  .list{display:flex;flex-direction:column;gap:13px}
+  .card{background:var(--card);border-radius:15px;border:1px solid var(--line);padding:16px;position:relative;transition:.15s}
+  .card.partner{border-color:#86efac;box-shadow:0 6px 20px rgba(22,163,74,.09)}
+  .card.shut{opacity:.72}
+  .card:hover{transform:translateY(-2px);box-shadow:0 10px 28px rgba(15,23,42,.10)}
+  .row{display:flex;gap:13px;align-items:flex-start}
+  .avatar{width:48px;height:48px;border-radius:13px;background:var(--grad);color:#fff;display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:800;flex-shrink:0}
+  .nm{font-size:16.5px;font-weight:800}
+  .qual{font-size:12.5px;color:var(--muted);margin:2px 0 5px}
+  .spec{display:inline-block;font-size:11.5px;font-weight:700;color:#4338ca;background:#eef2ff;padding:3px 9px;border-radius:999px}
+  .clinic{font-size:13px;color:var(--muted);margin-top:6px}
+  .meta{display:flex;flex-wrap:wrap;gap:9px;margin-top:11px;font-size:12.5px;color:var(--muted);align-items:center}
+  .avail{font-size:11.5px;font-weight:800;padding:4px 10px;border-radius:999px;border:1px solid var(--line);background:#f8fafc;color:var(--muted)}
+  .avail.success{background:var(--green-bg);border-color:#bbf7d0;color:#166534}
+  .avail.warning{background:var(--amber-bg);border-color:#fde68a;color:#92400e}
+  .tags{display:flex;flex-wrap:wrap;gap:6px;margin-top:9px}
+  .tag{font-size:11px;font-weight:700;padding:3px 9px;border-radius:999px;background:#f1f5f9;border:1px solid var(--line);color:#334155}
+  .live{margin-top:11px;padding:11px 13px;border-radius:11px;background:var(--green-bg);border:1px solid #bbf7d0}
+  .live .top{font-size:12.5px;font-weight:800;color:var(--green)}
+  .live .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:9px;margin-top:9px}
+  .live .st{background:#fff;border-radius:9px;padding:8px 9px;border:1px solid #bbf7d0}
+  .live .k{font-size:10px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.3px}
+  .live .v{font-size:14.5px;font-weight:800;margin-top:2px}
+  .hours{font-size:12px;color:var(--muted);margin-top:8px}
+  .cta{margin-top:13px;display:flex;gap:9px;flex-wrap:wrap}
+  .btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:10px 15px;border-radius:10px;font-size:13px;font-weight:700;transition:.15s}
+  .btn-primary{background:var(--grad);color:#fff;box-shadow:0 5px 14px rgba(102,126,234,.28)}
+  .btn-out{background:#fff;color:var(--ink);border:1.5px solid var(--line)}
+  footer{max-width:860px;margin:0 auto;padding:0 20px 44px;text-align:center;color:#94a3b8;font-size:12px;line-height:1.75}
+  footer a{color:#64748b;font-weight:600;text-decoration:underline}
+  .empty{background:var(--card);border:1px dashed var(--line);border-radius:16px;padding:36px 20px;text-align:center;color:var(--muted)}
+</style>
+</head>
+<body>
+
+<div class="hero">
+  <div class="hero-inner">
+    <a class="brand" href="/"><span class="dot">🏥</span> GIL CLINIC · City Marketplace</a>
+    <h1>Doctors in {{ city }}<br><span>wait time dekh kar chunein.</span></h1>
+    <p>
+      {{ city }} me {{ total }} clinic{{ 's' if total != 1 else '' }} listed hain.
+      Partner clinics apna <b>live queue</b> dikhate hain — token, kitne patient aage,
+      aur asli wait time. Guesswork nahi.
+    </p>
+    <div class="stats">
+      <span class="stat">🏥 {{ total }} clinic{{ 's' if total != 1 else '' }}</span>
+      {% if partners %}<span class="stat">🟢 {{ partners }} live queue</span>{% endif %}
+      {% if open_now_count %}<span class="stat">🚪 {{ open_now_count }} abhi khule</span>{% endif %}
+      {% if zero_wait_count %}<span class="stat">⚡ {{ zero_wait_count }} bina wait</span>{% endif %}
+    </div>
+  </div>
+</div>
+
+<main>
+  <div class="panel">
+    <div style="font-size:12px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:9px;">
+      {{ city }} me specialty ke hisaab se
+    </div>
+    <div class="quick">
+      {% for name, n in specialties %}
+        <a href="/find-doctor?city={{ city | urlencode }}&specialty={{ name | urlencode }}">{{ name }} ({{ n }})</a>
+      {% endfor %}
+      <a href="/find-doctor?city={{ city | urlencode }}" style="background:#dcfce7;border-color:#bbf7d0;color:#166534;">Saare doctors →</a>
+    </div>
+  </div>
+
+  <h2 class="sec">🩺 {{ city }} ke doctors <span class="count">{{ total }} listed</span></h2>
+
+  {% if doctors %}
+  <div class="list">
+    {% for d in doctors %}
+    <div class="card {{ 'partner' if d.partner else '' }} {{ 'shut' if not d.within_hours else '' }}">
+      <div class="row">
+        <div class="avatar">{{ (d.doctor_name or 'D')[:1] | upper }}</div>
+        <div style="flex:1;min-width:0;">
+          <div class="nm">Dr. {{ d.doctor_name }}</div>
+          <div class="qual">{{ d.degree }}</div>
+          <span class="spec">{{ d.specialty }}</span>
+          <div class="clinic">🏥 {{ d.clinic_name }}{% if d.address %} · {{ d.address }}{% endif %}</div>
+        </div>
+      </div>
+
+      <div class="meta">
+        <span class="avail {{ 'success' if d.availability == 'OPEN' else ('warning' if d.availability == 'CLOSING_SOON' else '') }}">
+          {{ d.availability_badge }}
+        </span>
+        {% if d.phone %}<span>📞 {{ d.phone }}</span>{% endif %}
+        {% if d.rating %}<span>⭐ {{ d.rating }}{% if d.rating_count %} ({{ d.rating_count }}){% endif %}</span>{% endif %}
+      </div>
+
+      {% if d.hours or d.next_opening %}
+      <div class="hours">
+        🕒 {{ d.hours }}{% if not d.is_open_now and d.next_opening %} · khulega {{ d.next_opening }}{% endif %}
+        {% if d.closing_note %} · {{ d.closing_note }}{% endif %}
+      </div>
+      {% endif %}
+
+      {% if d.tag_labels %}
+      <div class="tags">
+        {% for t in d.tag_labels %}<span class="tag" title="{{ t.hint }}">{{ t.label }}</span>{% endfor %}
+      </div>
+      {% endif %}
+
+      {% if d.partner and d.live %}
+      <div class="live">
+        <div class="top">🟢 LIVE QUEUE — asli OPD queue se</div>
+        <div class="grid">
+          <div class="st"><div class="k">Serving</div><div class="v">{{ d.live.serving_token_label or ('#' ~ d.live.serving_token if d.live.serving_token else '—') }}</div></div>
+          <div class="st"><div class="k">Aage</div><div class="v">{{ d.live.patients_ahead }}</div></div>
+          <div class="st"><div class="k">Wait</div><div class="v">~{{ d.live.wait_minutes }} min</div></div>
+        </div>
+      </div>
+      {% endif %}
+
+      <div class="cta">
+        {% if d.partner %}
+          <a class="btn btn-primary" href="/find-doctor?city={{ city | urlencode }}">🎫 Token book karein</a>
+        {% else %}
+          <a class="btn btn-primary" href="tel:{{ d.phone }}">📞 Clinic ko call karein</a>
+        {% endif %}
+        <a class="btn btn-out" href="https://www.google.com/maps/search/{{ (d.address ~ ', ' ~ d.city) | urlencode }}" target="_blank" rel="noopener">📍 Directions</a>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="empty">
+    <div style="font-size:38px;margin-bottom:8px;">🔎</div>
+    <h3 style="color:var(--ink);font-size:16px;margin-bottom:6px;">Abhi koi clinic listed nahi</h3>
+    <p style="font-size:13px;">{{ city }} me jald hi clinics jud rahe hain.</p>
+  </div>
+  {% endif %}
+
+  <h2 class="sec">🌆 Doosre sheher</h2>
+  <div class="quick">
+    <a href="/find-doctor">Poora directory</a>
+    <a href="/">Home</a>
+  </div>
+</main>
+
+<footer>
+  <b>GHOS — Gill Hospital OS</b> · "One Patient. One Journey. One Platform."<br>
+  Partner clinics ke wait times unke asli queue engine se aate hain — estimate hain, guarantee nahi.
+  Emergency me turant clinic ya nazdeeki hospital ko call karein.<br>
+  <a href="/find-doctor">Find a Doctor</a> · <a href="/">Home</a>
+</footer>
+
+</body>
+</html>

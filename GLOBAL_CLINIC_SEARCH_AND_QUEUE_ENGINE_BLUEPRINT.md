@@ -47,9 +47,13 @@
 | 🏷️ **Computed tags + multi-factor ranking** (F-04 / F-05) | ✅ **BUILT** |
 | 👁️ **PHI-free network overview** (F-08) | ✅ **BUILT** |
 | 🪦 **OPEN-01 tombstone fix** in all 4 phone lookups | ✅ **BUILT** |
+| 🗂️ **Health card access log + revoke** (GRW-01 / DPDP) | ✅ **BUILT** |
+| 📢 **Clinic invite pipeline** (GRW-02, no longer a toast) | ✅ **BUILT** |
+| 🌆 **City landing pages** `/doctors/<city>` (GRW-03) | ✅ **BUILT** |
+| 👨‍👩‍👧 **Family Health Locker** (GRW-04) | ✅ **BUILT** |
 | 🖥️ Dashboard START OPD panel + delay badge | ✅ **BUILT** |
 | 📱 Patient page wait card + "ab niklo" chime | ✅ **BUILT** |
-| **Test suite** | ✅ **435 passed, 0 failed** |
+| **Test suite** | ✅ **470 passed, 0 failed** |
 
 ---
 
@@ -1016,14 +1020,31 @@ CREATE TABLE doctor_crawl_runs (...);
 > tells the desk to shift or close it instead — deleting would strand a patient
 > holding a token with no window.
 
-### 🔵 BLOCK 4 — Retention + Growth (P2)
+### 🔵 BLOCK 4 — Retention + Growth (P2) — **DONE (03-Oct-2026)**
 
 | # | Item | File | Effort |
 |---|------|------|--------|
-| GRW-01 | `health_card_access` audit + `/card/{uid}/revoke` (DPDP) | `health_card_routes.py` | S |
-| GRW-02 | `clinic_leads` + Tier-2 "📢 Invite" + Admin pipeline | marketplace + admin | M |
-| GRW-03 | City SEO pages `/doctors/<city>` | naya route | S |
-| GRW-04 | Family Health Locker (1 mobile → N profiles) | portal | L |
+| GRW-01 | `health_card_access` audit + revoke (DPDP) | `patient_portal_models.py` + `health_card_routes.py` | S | ✅ **DONE** |
+| GRW-02 | `clinic_leads` + Tier-2 "📢 Invite" + pipeline | `lead_model.py` + `growth_routes.py` + `marketplace.html` | M | ✅ **DONE** |
+| GRW-03 | City landing pages `/doctors/<city>` | `growth_routes.py` + `city_doctors.html` | S | ✅ **DONE** |
+| GRW-04 | Family Health Locker (1 mobile → N profiles) | `patient_portal_routes.py` | L | ✅ **DONE** |
+
+> **GRW-02 detail:** the marketplace's "📢 Invite to GHOS Live Queue" button did
+> nothing but show a toast — so the single most valuable sales signal the
+> product produces (a real patient, in a real city, asking for a clinic that is
+> not on the network) was discarded at the exact moment it was created. It is
+> now a counted lead with collected demand notes, and three renewed asks
+> resurface a declined lead, because the demand changed.
+>
+> **GRW-01 detail:** every card view is logged (granted *and* denied), `active=0`
+> gained a who/when/why record, and the IP is stored **hashed** so the log can
+> spot a returning reader without becoming a second piece of personal data.
+>
+> **GRW-04 detail:** the locker is reachable only from an ALREADY verified
+> portal session, so it adds no new way to reach a patient's data — the full
+> 10-digit registered number that verified one profile is the same secret that
+> protects the household. It returns identifiers only, never another member's
+> readings, so every read still goes through that profile's own logged link.
 
 ### 🟣 BLOCK 5 — Module 6: Ingestion (P2, alag worker)
 

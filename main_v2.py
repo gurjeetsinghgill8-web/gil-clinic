@@ -217,6 +217,11 @@ from src.presentation.referral.routes.referral_routes import (
     router as referral_router,
 )
 
+# -- Growth (invite pipeline GRW-02 + city landing pages GRW-03) --
+from src.presentation.growth.routes.growth_routes import (
+    router as growth_router,
+)
+
 
 # =========================================================================
 # Database Setup
@@ -277,6 +282,7 @@ from src.infrastructure.opd.models.opd_models import (  # noqa: F401
 from src.infrastructure.opd.models.ai_usage_model import AIUsageModel  # noqa: F401
 # Patient Portal tables — patient self-readings, portal links, share snapshots
 from src.infrastructure.opd.models.patient_portal_models import (  # noqa: F401
+    HealthCardAccessModel,
     HealthCardModel,
     PatientPortalLinkModel,
     PatientReadingModel,
@@ -320,6 +326,8 @@ from src.infrastructure.clinic.models.review_model import (  # noqa: F401
 from src.infrastructure.clinic.models.referral_model import (  # noqa: F401
     ReferralModel,
 )
+# Clinic leads — outreach pipeline (BLOCK 4 · GRW-02)
+from src.infrastructure.clinic.models.lead_model import ClinicLeadModel  # noqa: F401
 
 
 # =========================================================================
@@ -523,6 +531,12 @@ async def _migrate_missing_columns():
         # columns link a queue entry back to the slot it reserved.
         ("queue_entries", "slot_id", "VARCHAR(36)", "NULL"),
         ("queue_entries", "slot_time", "VARCHAR(5)", "''"),
+        # ── Health card revocation (BLOCK 4 · GRW-01 / DPDP) ──
+        # active=0 was a silent switch with no record behind it; a consent
+        # withdrawal needs who/when/why to be auditable.
+        ("health_cards", "revoked_at", "TIMESTAMP WITH TIME ZONE", "NULL"),
+        ("health_cards", "revoked_by", "VARCHAR(100)", "''"),
+        ("health_cards", "revoked_reason", "VARCHAR(200)", "''"),
     ]
 
     try:
@@ -657,6 +671,9 @@ app.include_router(reviews_router)
 
 # Referrals — signed cross-clinic slip, accept creates a real token (F-06)
 app.include_router(referral_router)
+
+# Growth — clinic invite pipeline (GRW-02) + city SEO pages (GRW-03)
+app.include_router(growth_router)
 
 # Serve static files from experience/pwa
 pwa_static = Path(__file__).parent / "src" / "experience" / "pwa"

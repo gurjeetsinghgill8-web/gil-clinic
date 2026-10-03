@@ -335,6 +335,103 @@ async def patient_portal_verify(request: Request, token: str):
     return resp
 
 
+@router.get("/my/{token}/family", include_in_schema=False)
+async def patient_portal_family(request: Request, token: str):
+    """Family Health Locker — every profile on this one mobile number (GRW-04).
+
+    One phone number is the normal case for an Indian household: a father books
+    for his daughter, a son manages his mother's BP readings. Before this, the
+    family had to keep a separate WhatsApp link per person, and losing one meant
+    losing that person's history.
+
+    Access rule: the caller must ALREADY hold a verified session for one profile
+    in the family. The verification they passed (the full 10-digit registered
+    number) is exactly the secret that protects the whole household, so this
+    adds no new way to reach a patient's data — it only stops the family from
+    juggling five links.
+
+    Deliberately returns identifiers and demographics only, never another
+    member's readings: switching profiles goes through that profile's own link,
+    so every read stays individually logged.
+    """
+    if not _verified(request, token):
+        return JSONResponse({"ok": False, "error": "verify required"}, status_code=401)
+
+    async with async_session_factory() as session:
+        link = await _portal_link(session, token)
+        if link is None:
+            return JSONResponse({"ok": False, "error": "Link kaam nahi kar raha"}, status_code=404)
+
+        me = await _patient(session, link.patient_id)
+        phone_hash = (me.phone_hash if me else "") or ""
+        phone = (me.phone if me else "") or link.phone or ""
+
+        members: list[Dict[str, Any]] = []
+        if phone_hash:
+            from src.infrastructure.patient.lookup import live_only
+
+            stmt = live_only(
+                sa.select(PatientModel).where(PatientModel.phone_hash == phone_hash)
+            ).order_by(PatientModel.name.asc())
+            rows = list((await session.execute(stmt)).scalars().all())
+
+            for person in rows:
+                # Reuse an active link when one exists; only mint a new one when
+                # there is none, so repeated visits do not pile up tokens.
+                existing = (
+                    await session.execute(
+                        sa.select(PatientPortalLinkModel)
+                        .where(
+                            PatientPortalLinkModel.patient_id == person.patient_id,
+                            PatientPortalLinkModel.active == 1,
+                        )
+                        .order_by(PatientPortalLinkModel.created_at.desc())
+                        .limit(1)
+                    )
+                ).scalars().first()
+
+                if existing is None or tk.is_expired(existing.expires_at):
+                    existing = PatientPortalLinkModel(
+                        token=tk.new_token(24),
+                        patient_id=person.patient_id,
+                        patient_name=person.name or "Patient",
+                        phone=tk.normalize_phone(phone),
+                        phone_last4=tk.phone_last4(phone),
+                        created_by="family_locker",
+                        expires_at=tk.portal_expiry(),
+                    )
+                    session.add(existing)
+                    await session.flush()
+
+                members.append(
+                    {
+                        "patient_id": person.patient_id,
+                        "name": person.name or "",
+                        "age": person.age or 0,
+                        "gender": person.gender or "",
+                        "blood_group": person.blood_group or "",
+                        "is_me": person.patient_id == link.patient_id,
+                        "portal_token": existing.token,
+                    }
+                )
+            await session.commit()
+
+    base = _base_url(request)
+    for member in members:
+        member["portal_url"] = f"{base}/my/{member['portal_token']}"
+
+    return {
+        "ok": True,
+        "phone_masked": ("••••••" + phone[-4:]) if phone else "",
+        "count": len(members),
+        "members": members,
+        "note": (
+            "Ek hi mobile number ke saare profiles. Har member ka apna portal hai — "
+            "readings alag rehti hain."
+        ),
+    }
+
+
 @router.get("/my/{token}/data", include_in_schema=False)
 async def patient_portal_data(request: Request, token: str):
     if not _verified(request, token):

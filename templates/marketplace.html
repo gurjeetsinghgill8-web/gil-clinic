@@ -444,7 +444,24 @@ function directions(q){
   window.open("https://www.google.com/maps/search/" + encodeURIComponent(q), "_blank");
 }
 function nudge(id){
-  toast("📢 Demand noted! The clinic has been flagged for GHOS Live Queue onboarding.");
+  // GRW-02: this used to be a toast and nothing else — which threw away the
+  // single most valuable sales signal the product creates (a real patient in a
+  // real city asking for a clinic that is not on the network yet).
+  const d = state.doctors.find(x => x.id === id);
+  if (!d){ toast("⚠️ Clinic nahi mili."); return; }
+  fetch("/api/v1/marketplace/invite", {
+    method: "POST", headers: {"Content-Type":"application/json"},
+    body: JSON.stringify({
+      clinic_id: d.id,
+      clinic_name: d.clinic_name,
+      city: d.city,
+      specialty: d.specialty,
+      problem: $("problem").value.trim()
+    })
+  }).then(r => r.json()).then(data => {
+    if (data && data.ok) toast("✅ " + data.message);
+    else toast("⚠️ " + ((data && data.error) || "Request save nahi hui."));
+  }).catch(() => toast("⚠️ Network error — dobara try karein."));
 }
 
 function escapeHtml(s){ return String(s||"").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
