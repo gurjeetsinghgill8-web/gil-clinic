@@ -106,6 +106,9 @@
       {{ session_user.name }} · {{ session_user.role }}
     </div>
     {% endif %}
+    <!-- Brick 3b: the one hallway — the role-filtered hub links this department
+         back to every module the person is allowed to see. -->
+    <a href="/home" class="btn-logout" style="background:#1e293b;color:#a78bfa;border-color:#312e81;display:block;text-align:center;margin-bottom:8px;">🏠 My Modules</a>
     <a href="/staff/logout" class="btn-logout">🚪 Logout</a>
   </div>
 </nav>

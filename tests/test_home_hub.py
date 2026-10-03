@@ -222,3 +222,32 @@ class TestHomeHub:
         assert "Read-only" in home.text
         assert "Admin Panel" in home.text
         assert "Doctor OPD" in home.text
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# 3. Brick 3b — both dashboards link to the hub
+# ══════════════════════════════════════════════════════════════════════════
+
+
+class TestDashboardsLinkTheHub:
+    def test_the_opd_dashboard_links_to_home(self):
+        html = (ROOT / "templates" / "opd" / "dashboard.html").read_text(encoding="utf-8")
+        assert 'href="/home"' in html
+        assert "My Modules" in html
+
+    def test_the_staff_shell_links_to_home(self):
+        html = (ROOT / "templates" / "dashboard" / "base.html").read_text(encoding="utf-8")
+        assert 'href="/home"' in html
+        assert "My Modules" in html
+
+    def test_every_staff_page_inherits_the_link(self):
+        """base.html is the shared shell, so every /staff/* page gets the link."""
+        base = (ROOT / "templates" / "dashboard" / "base.html").read_text(encoding="utf-8")
+        assert 'href="/home"' in base
+        # Every dashboard page extends base.html. login.html is the standalone
+        # login page (now a shim), not a dashboard page, so it is exempt.
+        for template in (ROOT / "templates" / "dashboard").glob("*.html"):
+            if template.name in ("base.html", "login.html"):
+                continue
+            text = template.read_text(encoding="utf-8", errors="replace")
+            assert "base.html" in text, f"{template.name} does not extend base.html"
