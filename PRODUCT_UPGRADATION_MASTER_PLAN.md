@@ -85,9 +85,12 @@ GIL CLINIC (one product)
 - [x] **Brick 3b:** dono dashboards me `/home` ("🏠 My Modules") link inject kiya
       (OPD sidebar + staff base.html). Commit a148414. Tests 686, 10/10 live.
 
-### BRICK 4 — Phase 3: consolidate modules
-- Move each `/staff/<dept>` + OPD tab to a canonical module route.
-- Split the 380KB OPD template.
+### BRICK 4 — Phase 3: consolidate + enforce
+- [x] **Brick 4a:** role-based ROUTE enforcement (`nav.can_access_staff_route`) — nav matrix
+      ab sirf link chhupata nahi, route bhi refuse karta hai. Dead modules (billing/tv)
+      nav se hataye. Commit 6c00886, 700 tests, 11/11 live.
+- [ ] Brick 4b (optional): 380KB OPD template ko chhote modules me todo — maintainability,
+      user-facing nahi. Risk zyada, value kam — baad me jab clinic ka time ho.
 
 ### BRICK 5 — Phase 4: retire the old
 - Delete `templates/dashboard/*`, shim logins, js.puter.com, placeholder modules.
@@ -113,10 +116,10 @@ GIL CLINIC (one product)
 
 ## 6. CURRENT CHECKPOINT (resume from here)
 
-**Last update:** 2026-10-03 (after Brick 3b — one hallway COMPLETE)
-**State:** Brick 1 ✅ + Brick 2 ✅ (single login) + Brick 3 ✅ (nav model + `/home` hub + dono dashboards link). Tests 686 green. Build `a148414` live.
-**Next action:** Brick 4 — Phase 3: modules consolidate (380KB OPD template ko todo, `/staff/<dept>` pages ko canonical routes par).
-**How to resume:** ye file + `git pull` → `scripts/audit_probe_live.py` → Brick 4.
+**Last update:** 2026-10-03 (after Brick 4a — role enforcement LIVE)
+**State:** Brick 1 ✅ + Brick 2 ✅ (single login) + Brick 3 ✅ (one hallway) + Brick 4a ✅ (role-based route guard). Tests 700 green. Build `6c00886` live.
+**Next action:** Brick 5 — retire old code (purane login templates, placeholder "Coming Soon" modules, js.puter.com dependency). Brick 4b (380KB split) optional/baad me.
+**How to resume:** ye file + `git pull` → `scripts/audit_probe_live.py` → Brick 5.
 
 ---
 
