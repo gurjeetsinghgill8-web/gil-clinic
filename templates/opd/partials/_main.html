@@ -1,0 +1,1185 @@
+    <!-- ─── MAIN ─── -->
+    <main class="main">
+        <div class="content">
+            <!-- Stats bar -->
+            <div class="stats-grid">
+                <div class="stat-card"><div class="value" id="today-count-display">{{ today_count }}</div><div class="label">Today's Patients</div></div>
+                <div class="stat-card"><div class="value">₹{{ today_revenue }}</div><div class="label">Today's Fees</div></div>
+                <div class="stat-card"><div class="value" id="roster-count">0</div><div class="label">Total Records</div></div>
+            </div>
+
+            <!-- ════════════════ TAB: NEW Rx ════════════════ -->
+            <div class="tab-content active" id="tab-rx">
+                <div class="flex-between mb-sm">
+                    <h2>📝 New Prescription</h2>
+                    <div class="flex gap-sm" style="flex-wrap:wrap;">
+                        <div id="ai-manual-toggle" style="display:inline-flex;background:#e2e8f0;border-radius:999px;padding:3px;">
+                            <button id="tg-ai" onclick="setManualMode(false)" style="border:none;border-radius:999px;padding:6px 14px;font-weight:700;cursor:pointer;">🤖 AI Mode</button>
+                            <button id="tg-manual" onclick="setManualMode(true)" style="border:none;border-radius:999px;padding:6px 14px;font-weight:700;cursor:pointer;">✍️ Manual</button>
+                        </div>
+                        <button class="btn btn-ghost btn-sm" onclick="clearRxForm()">🔄 New Patient</button>
+                        <button class="btn btn-ghost btn-sm" onclick="toggleSearch()">🔍 Search Old</button>
+                        <button class="btn btn-sm btn-primary" id="followup-btn" onclick="showFollowupDialog()" style="display:none;">🔄 Follow-Up Rx</button>
+                    </div>
+                </div>
+
+                <div id="manual-banner" style="display:{% if settings.ai_mode == 'off' %}block{% else %}none{% endif %}; background:#fff7ed; border:1.5px solid #f59e0b; color:#9a3412; border-radius:10px; padding:10px 14px; margin-bottom:12px; font-weight:600;">
+                    ✍️ <b>Manual Mode chalu hai</b> — sab kuch free, bina AI ke. Diagnosis / Medicines / Investigations khud likho aur 💾 Save karo — koi rukawat nahi. AI chahiye to upar "🤖 AI Mode" dabao (recharge/keys Settings mein).
+                </div>
+
+                <style>
+                    body.manual-mode #quick-scan-card,
+                    body.manual-mode button[onclick*="generateRx"],
+                    body.manual-mode button[onclick*="generateDiagnosisOnly"],
+                    body.manual-mode button[onclick*="fillDxAdviceFromRx"],
+                    body.manual-mode button[onclick*="runUpgrade"],
+                    body.manual-mode button[onclick*="processAllScans"],
+                    body.manual-mode button[onclick*="processQuickScansAuto"],
+                    body.manual-mode #voice-btn,
+                    body.manual-mode label[for="camera-file-input"],
+                    body.manual-mode label[for="gallery-file-input"] { display: none !important; }
+                    #tg-ai.active-ai { background:#059669; color:#fff; }
+                    #tg-manual.active-manual { background:#d97706; color:#fff; }
+                </style>
+
+                <script>
+                    var _manualMode = {{ 'true' if settings.ai_mode == 'off' else 'false' }};
+                    var _prevAiMode = {{ ("'" ~ settings.ai_mode ~ "'") if settings.ai_mode and settings.ai_mode != 'off' else "'puter'" }};
+                    function aiGuard() {
+                        if (_manualMode) { showToast('✍️ Manual Mode on hai — upar "🤖 AI Mode" dabao', 'error'); return false; }
+                        return true;
+                    }
+                    function setManualMode(on) {
+                        _manualMode = on;
+                        document.body.classList.toggle('manual-mode', on);
+                        var aiB = document.getElementById('tg-ai');
+                        var mnB = document.getElementById('tg-manual');
+                        if (aiB) { aiB.classList.toggle('active-ai', !on); aiB.style.background = on ? '' : '#059669'; aiB.style.color = on ? '' : '#fff'; }
+                        if (mnB) { mnB.classList.toggle('active-manual', on); mnB.style.background = on ? '#d97706' : ''; mnB.style.color = on ? '#fff' : ''; }
+                        var banner = document.getElementById('manual-banner');
+                        if (banner) banner.style.display = on ? 'block' : 'none';
+                        var mode = on ? 'off' : (_prevAiMode || 'puter');
+                        fetch('/opd/api/settings', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ ai_mode: mode }),
+                        }).then(function (r) { return r.json(); }).then(function (d) {
+                            if (d && d.ok) {
+                                showToast(on ? '✍️ Manual Mode ON — AI band, sab free chalega' : '🤖 AI Mode ON (' + mode + ')', 'success');
+                                var sel = document.getElementById('set-ai-mode');
+                                if (sel) sel.value = mode;
+                            } else {
+                                showToast((d && d.error) || 'Mode save fail', 'error');
+                            }
+                        }).catch(function () { showToast('Mode save fail', 'error'); });
+                    }
+                    if (_manualMode) {
+                        document.body.classList.add('manual-mode');
+                        var _mb = document.getElementById('tg-manual');
+                        var _ab = document.getElementById('tg-ai');
+                        if (_mb) { _mb.style.background = '#d97706'; _mb.style.color = '#fff'; }
+                        if (_ab) { _ab.style.background = ''; _ab.style.color = ''; }
+                    } else {
+                        var _ai2 = document.getElementById('tg-ai');
+                        if (_ai2) { _ai2.style.background = '#059669'; _ai2.style.color = '#fff'; }
+                    }
+                </script>
+
+                <!-- Prominent AI Camera & Gallery Upload Toolbar (Always Visible) -->
+                <div class="card mb-sm" id="quick-scan-card" style="background:linear-gradient(135deg, rgba(124,58,237,0.08), rgba(37,99,235,0.08));border:1.5px solid #a855f7;border-radius:12px;padding:16px;">
+                    <div class="flex-between mb-sm" style="flex-wrap:wrap;gap:8px;">
+                        <h4 style="margin:0;color:#581c87;font-size:15px;display:flex;align-items:center;gap:6px;">
+                            📸 Snap/Upload Old Prescriptions & Lab Reports (Groq Vision AI)
+                        </h4>
+                        <span style="font-size:11px;background:#f3e8ff;color:#7e22ce;padding:3px 10px;border-radius:12px;font-weight:700;">1-by-1 Sequential AI Queue</span>
+                    </div>
+                    <div style="font-size:12px;color:#6b21a8;margin-bottom:12px;">
+                        Take camera snaps of handwritten prescriptions or pick multi-page lab reports from mobile gallery. AI Vision sequentially reads all images 1-by-1 and auto-fills your prescription below!
+                    </div>
+
+                    <!-- Native File Inputs (hidden via opacity for mobile compatibility) -->
+                    <input type="file" id="camera-file-input" accept="image/*" capture="environment" style="position:fixed;top:-9999px;left:-9999px;width:1px;height:1px;opacity:0;" onchange="handleCameraCapture(this)">
+                    <input type="file" id="gallery-file-input" accept="image/*,.pdf,.csv,.xlsx,.xls,application/pdf,text/csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" multiple style="position:fixed;top:-9999px;left:-9999px;width:1px;height:1px;opacity:0;" onchange="handleGalleryUpload(this)">
+
+                    <div class="flex gap-sm mb-sm" style="flex-wrap:wrap;">
+                        <label for="camera-file-input" style="background:#7c3aed;color:white;font-weight:700;font-size:13px;padding:10px 18px;border:none;border-radius:8px;cursor:pointer;display:inline-flex;align-items:center;gap:8px;box-shadow:0 3px 10px rgba(124,58,237,0.25);">
+                            <span style="font-size:18px;">📷</span> <strong>Take Live Camera Snap</strong>
+                        </label>
+
+                        <label for="gallery-file-input" style="background:#2563eb;color:white;font-weight:700;font-size:13px;padding:10px 18px;border:none;border-radius:8px;cursor:pointer;display:inline-flex;align-items:center;gap:8px;box-shadow:0 3px 10px rgba(37,99,235,0.25);">
+                            <span style="font-size:18px;">🖼️</span> <strong>Upload from Gallery / Files</strong>
+                        </label>
+
+                        <button onclick="openBatchScan()" style="background:#0f766e;color:white;font-weight:700;font-size:13px;padding:10px 18px;border:none;border-radius:8px;cursor:pointer;display:inline-flex;align-items:center;gap:8px;box-shadow:0 3px 10px rgba(15,118,110,0.3);" title="10-50 pages ki investigations ek saath">
+                            <span style="font-size:18px;">📸</span> <strong>Batch Scan (multi-page)</strong>
+                        </button>
+
+                        <button id="quick-scan-process-btn" onclick="processQuickScansAuto()" style="display:none;background:linear-gradient(135deg,#059669,#10b981);color:white;font-weight:700;font-size:14px;padding:10px 22px;border:none;border-radius:8px;cursor:pointer;box-shadow:0 4px 14px rgba(5,150,105,0.35);animation:pulse-btn 1.8s infinite;">
+                            🔍 <strong>AI Process Prescription</strong>
+                        </button>
+                    </div>
+
+                    <div id="quick-scan-previews" class="flex flex-wrap gap-sm mb-sm"></div>
+                    <div id="quick-scan-status" class="text-sm" style="font-weight:600;color:#581c87;"></div>
+                </div>
+
+                <!-- Patient Search (hidden by default) -->
+                <div id="search-section" style="display:none;" class="card mb-sm">
+                    <div class="card-title">Search Existing Patient</div>
+                    <div class="autocomplete-wrap">
+                        <input type="text" id="patient-search" placeholder="Type name or phone..." oninput="debouncedSearch()">
+                        <div class="autocomplete-list" id="search-results"></div>
+                    </div>
+                    <div id="selected-patient" style="display:none; margin-top:8px;">
+                        <div class="flex-between">
+                            <span id="selected-patient-info"></span>
+                            <div class="flex gap-sm" style="align-items:center;">
+                                <button class="btn btn-sm" id="patient-link-btn" onclick="openPatientLink()"
+                                        style="background:#0d9488;color:#fff;font-weight:700;"
+                                        title="Patient ko WhatsApp par apna self-monitoring link bhejein (ghar se BP/sugar bharega)">📱 Patient link</button>
+                                <button class="btn btn-sm" id="health-card-btn" onclick="openHealthCard()"
+                                        style="background:#7c3aed;color:#fff;font-weight:700;"
+                                        title="Patient ka Universal Health Card banao (vitals + prescription history, shareable link)">🪪 Health Card</button>
+                                <button class="btn btn-sm" onclick="openVideoConsult()"
+                                        style="background:#0891b2;color:#fff;font-weight:700;"
+                                        title="Patient ke saath video consult (free Jitsi meet room)">📹 Video</button>
+                                <button class="btn btn-sm" onclick="openLabOrder()"
+                                        style="background:#dc2626;color:#fff;font-weight:700;"
+                                        title="External lab ko test order karo — result patient ke phone par">🧪 Lab Order</button>
+                                <button class="btn btn-sm btn-ghost" onclick="clearSelected()">✕ Clear</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Main Form -->
+                <div class="card">
+                    <div class="flex-between mb-sm" style="flex-wrap:wrap;gap:8px;border-bottom:1px solid var(--border);padding-bottom:10px;">
+                        <h3 style="margin:0;font-size:16px;color:#1e293b;display:flex;align-items:center;gap:6px;">👤 Patient Information & Vision Scan</h3>
+                        <div class="flex gap-sm" style="flex-wrap:wrap;">
+                            <label for="camera-file-input" style="background:#7c3aed;color:white;font-weight:700;padding:6px 14px;border:none;border-radius:6px;cursor:pointer;display:inline-flex;align-items:center;gap:4px;">
+                                📷 Camera Snap
+                            </label>
+                            <label for="gallery-file-input" style="background:#2563eb;color:white;font-weight:700;padding:6px 14px;border:none;border-radius:6px;cursor:pointer;display:inline-flex;align-items:center;gap:4px;">
+                                🖼️ Gallery Upload
+                            </label>
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Patient Name *</label>
+                            <input type="text" id="pt-name" placeholder="Full name" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Phone</label>
+                            <input type="text" id="pt-phone" placeholder="10 digit">
+                        </div>
+                    </div>
+                    <div class="form-row-3">
+                        <div class="form-group">
+                            <label>Age / Gender</label>
+                            <div class="flex gap-sm">
+                                <input type="text" id="pt-age" placeholder="Age" style="width:60px;">
+                                <select id="pt-gender" style="width:100px;">
+                                    <option value="Male">Male</option>
+                                    <option value="Female">Female</option>
+                                    <option value="Other">Other</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label>Fee (₹)</label>
+                            <input type="text" id="pt-fee" placeholder="0" value="0">
+                        </div>
+                        <div class="form-group">
+                            <label>Follow-up?</label>
+                            <div class="flex gap-sm" style="padding-top:6px;">
+                                <label><input type="checkbox" id="is-followup"> Yes</label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Vitals (BP / Pulse / Sugar / Weight / SpO2 / Temp)</label>
+                            <input type="text" id="pt-vitals" placeholder="e.g. 130/80, 72/min, F-110, 68kg, 98%, 98.4°F">
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Complaints / Clinical Notes
+                            <button id="voice-btn" class="btn btn-sm btn-ghost" onclick="toggleRecording()" title="Record audio complaints" style="padding:2px 8px;font-size:14px;margin-left:8px;vertical-align:middle;">🎙️ Record</button>
+                            <label for="camera-file-input" style="background:#7c3aed;color:white;font-weight:700;padding:3px 10px;font-size:12px;margin-left:6px;border:none;border-radius:6px;cursor:pointer;vertical-align:middle;display:inline-block;">📷 Scan Rx</label>
+                            <label for="gallery-file-input" style="background:#2563eb;color:white;font-weight:700;padding:3px 10px;font-size:12px;margin-left:6px;border:none;border-radius:6px;cursor:pointer;vertical-align:middle;display:inline-block;">🖼️ Upload Rx</label>
+                            <label for="camera-file-input" title="Galat padha? Dobara scan karo" style="background:#f59e0b;color:white;font-weight:700;padding:3px 10px;font-size:12px;margin-left:6px;border:none;border-radius:6px;cursor:pointer;vertical-align:middle;display:inline-block;">🔁 Re-scan</label>
+                            <span id="voice-status" class="text-sm text-muted" style="font-size:11px;margin-left:4px;"></span>
+                        </label>
+                        <textarea id="pt-complaints" rows="3" placeholder="Describe complaints..."></textarea>
+                    </div>
+
+                    <div class="form-group">
+                        <label>🩺 Physician-entered Diagnosis
+                            <button type="button" id="dx-gen-btn" onclick="generateDiagnosisOnly()"
+                                style="float:right;background:#059669;color:#fff;border:none;border-radius:6px;padding:2px 10px;font-size:12px;cursor:pointer;font-weight:700;">
+                                🩺 Generate Dx</button>
+                        </label>
+                        <textarea id="pt-diagnosis" rows="2" placeholder="Aapki apni diagnosis — AI ise kabhi overwrite nahi karega..."></textarea>
+                        <div id="ai-assessment-box" style="display:none;margin-top:6px;padding:8px 10px;border:1px dashed #8b5cf6;border-radius:8px;background:rgba(139,92,246,0.05);">
+                            <label style="font-size:12px;color:#7c3aed;font-weight:700;">🤖 AI Clinical Assessment — suggestion only; Rx mein tabhi jayega jab aap "Copy to Diagnosis" dabayein</label>
+                            <textarea id="pt-ai-assessment" rows="3" readonly style="width:100%;margin-top:4px;border:1px solid #ddd;border-radius:6px;background:#fff;font-size:13px;color:#4b5563;resize:vertical;"></textarea>
+                            <div style="display:flex;gap:6px;margin-top:6px;">
+                                <button type="button" class="btn btn-sm" onclick="copyAiAssessmentToDiagnosis()" style="background:#8b5cf6;color:#fff;border:none;border-radius:6px;padding:3px 10px;font-size:12px;cursor:pointer;font-weight:700;">📋 Copy to Diagnosis</button>
+                                <button type="button" class="btn btn-sm" onclick="clearAiAssessment()" style="background:transparent;border:1px solid #ccc;color:#6b7280;border-radius:6px;padding:3px 10px;font-size:12px;cursor:pointer;">Clear</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label>📝 Advice / Lifestyle Notes
+                            <button type="button" onclick="fillDxAdviceFromRx(document.getElementById('rx-output').value, true)"
+                                style="float:right;background:#7c3aed;color:#fff;border:none;border-radius:6px;padding:2px 10px;font-size:12px;cursor:pointer;">
+                                ✨ Fill from AI</button>
+                        </label>
+                        <textarea id="pt-advice" rows="2" placeholder="Diet, exercise, lifestyle advice..."></textarea>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Quick Investigations</label>
+                        <div class="investigation-btns" id="inv-btns">
+                            <button onclick="toggleInv(this)">CBC</button>
+                            <button onclick="toggleInv(this)">ECG</button>
+                            <button onclick="toggleInv(this)">X-Ray</button>
+                            <button onclick="toggleInv(this)">USG</button>
+                            <button onclick="toggleInv(this)">Lipid Profile</button>
+                            <button onclick="toggleInv(this)">Thyroid</button>
+                            <button onclick="toggleInv(this)">Blood Sugar</button>
+                            <button onclick="toggleInv(this)">HbA1c</button>
+                            <button onclick="toggleInv(this)">Echo</button>
+                            <button onclick="toggleInv(this)">TMT</button>
+                            <button onclick="toggleInv(this)">LFT</button>
+                            <button onclick="toggleInv(this)">KFT</button>
+                            <button onclick="toggleInv(this)">Urine</button>
+                            <button onclick="toggleInv(this)">Vitamin D</button>
+                            <button onclick="toggleInv(this)">Vitamin B12</button>
+                            <button onclick="toggleInv(this)">CRP</button>
+                            <button onclick="toggleInv(this)">ESR</button>
+                            <button onclick="toggleInv(this)">Hb</button>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Selected Investigations</label>
+                        <input type="text" id="pt-investigations" placeholder="Selected tests appear here..." readonly>
+                    </div>
+
+                    <!-- ✍️ Digital Ink Prescription Writing Pad — Click to Open -->
+                    <div class="card ink-pad-card mb-sm" style="padding:14px;" id="ink-pad-card">
+                        <div class="flex-between mb-sm" style="flex-wrap:wrap;gap:8px;cursor:pointer;" onclick="toggleInkPad()">
+                            <h4 style="margin:0;color:#6d28d9;font-size:15px;display:flex;align-items:center;gap:6px;">
+                                ✍️ Write Prescription by Hand <span id="ink-toggle-icon" style="font-size:12px;transition:transform 0.2s;">▶</span>
+                            </h4>
+                            <div style="display:flex;gap:4px;align-items:center;">
+                                <span style="font-size:10px;background:#ede9fe;color:#7c3aed;padding:3px 8px;border-radius:10px;font-weight:600;">🖊️ Stylus | Finger | Touch</span>
+                                <span style="font-size:10px;color:#7c3aed;" id="ink-collapse-label">Click to open writing pad</span>
+                            </div>
+                        </div>
+
+                        <div id="ink-pad-body" style="display:none;">
+                            <!-- Toolbar -->
+                            <div class="ink-toolbar">
+                                <button class="ink-tool-btn active" id="ink-pen-btn" onclick="inkSetTool('pen')" title="Pen">🖊️</button>
+                                <button class="ink-tool-btn" id="ink-eraser-btn" onclick="inkSetTool('eraser')" title="Eraser">🧹</button>
+                                <span style="width:1px;height:24px;background:#d1d5db;margin:0 4px;"></span>
+                                <button class="ink-tool-btn" onclick="inkUndo()" title="Undo" id="ink-undo-btn" disabled>↩️</button>
+                                <button class="ink-tool-btn" onclick="inkRedo()" title="Redo" id="ink-redo-btn" disabled>↪️</button>
+                                <span style="width:1px;height:24px;background:#d1d5db;margin:0 4px;"></span>
+                                <span class="ink-color-dot active" style="background:#1e293b;" onclick="inkSetColor('#1e293b', this)" title="Black"></span>
+                                <span class="ink-color-dot" style="background:#2563eb;" onclick="inkSetColor('#2563eb', this)" title="Blue"></span>
+                                <span class="ink-color-dot" style="background:#dc2626;" onclick="inkSetColor('#dc2626', this)" title="Red"></span>
+                                <span class="ink-color-dot" style="background:#16a34a;" onclick="inkSetColor('#16a34a', this)" title="Green"></span>
+                                <span style="width:1px;height:24px;background:#d1d5db;margin:0 4px;"></span>
+                                <span style="font-size:11px;color:#6b7280;">Size:</span>
+                                <input type="range" class="ink-size-slider" id="ink-size-slider" min="1" max="12" value="3" oninput="inkSetSize(this.value)">
+                                <span id="ink-size-label" style="font-size:11px;color:#7c3aed;font-weight:600;min-width:20px;">3</span>
+                                <span style="width:1px;height:24px;background:#d1d5db;margin:0 4px;"></span>
+                                <button class="btn btn-sm btn-ghost" onclick="inkClearPage()" style="color:#ef4444;">🗑️ Clear Page</button>
+                                <button class="btn btn-sm btn-ghost" onclick="inkNewPage()" style="color:#7c3aed;">📄 + New Page</button>
+                            </div>
+
+                            <!-- Page Tabs -->
+                            <div class="ink-page-tabs mb-sm" id="ink-page-tabs">
+                                <span class="ink-page-tab active" data-page="0" onclick="inkSwitchPage(0)">Page 1</span>
+                            </div>
+
+                            <!-- Canvas -->
+                            <div class="ink-canvas-wrap" id="ink-canvas-wrap" style="width:100%;min-height:550px;height:70vh;max-height:800px;">
+                                <canvas id="ink-canvas"></canvas>
+                            </div>
+
+                            <!-- Action Buttons -->
+                            <div class="flex gap-sm mt-sm" style="flex-wrap:wrap;">
+                                <button class="btn btn-primary" onclick="inkSaveHandwriting()" style="background:#7c3aed;">
+                                    💾 Save Handwriting
+                                </button>
+                                <button class="btn btn-warning" onclick="inkConvertToEMR()" style="background:linear-gradient(135deg,#f59e0b,#d97706);color:#fff;">
+                                    🤖 Convert to Structured Rx (AI)
+                                </button>
+                                <span class="text-sm text-muted" id="ink-status" style="align-self:center;"></span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="card" style="margin-bottom:12px;padding:12px;background:var(--card-bg);border:1px solid var(--border);">
+                        <div class="flex-between mb-sm" style="flex-wrap:wrap;gap:6px;">
+                            <label style="font-weight:600;font-size:14px;">💊 Add Medicine</label>
+                            <div class="flex gap-xs" style="flex-wrap:wrap;align-items:center;">
+                                <label for="camera-file-input" style="background:#7c3aed;color:white;font-weight:700;padding:4px 10px;font-size:12px;border:none;border-radius:6px;cursor:pointer;display:inline-block;">
+                                    📷 Scan Rx
+                                </label>
+                                <label for="gallery-file-input" style="background:#2563eb;color:white;font-weight:700;padding:4px 10px;font-size:12px;border:none;border-radius:6px;cursor:pointer;display:inline-block;">
+                                    🖼️ Upload Rx
+                                </label>
+                                <button class="btn btn-sm btn-ghost" onclick="openMedLibrary()" style="color:#047857;border-color:#a7f3d0;font-weight:600;">💊 Library</button>
+                                <button class="btn btn-sm btn-primary" onclick="addMedicineRow()">+ Add</button>
+                            </div>
+                        </div>
+                        <div id="medicines-container">
+                            <div class="med-row" data-index="0" style="display:flex;gap:6px;align-items:flex-start;flex-wrap:wrap;margin-bottom:6px;position:relative;">
+                                <div style="position:relative;flex:2;min-width:150px;">
+                                    <input type="text" class="med-name" placeholder="Drug name — type to search" style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;width:100%;box-sizing:border-box;">
+                                    <div class="med-suggest" style="display:none;position:absolute;top:100%;left:0;right:0;z-index:50;background:#fff;border:1px solid var(--border);border-radius:8px;box-shadow:0 6px 20px rgba(0,0,0,.15);max-height:240px;overflow:auto;"></div>
+                                </div>
+                                <input type="text" class="med-brand" placeholder="Brand" style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;width:90px;">
+                                <input type="text" class="med-dose" placeholder="Dose (500mg / 1 tab)" style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;width:110px;">
+                                <select class="med-freq" style="padding:6px 8px;border:1px solid var(--border);border-radius:6px;font-size:13px;width:150px;flex:0 0 auto;">
+                                    <option value="OD">OD (once daily)</option>
+                                    <option value="BD" selected>BD (twice daily)</option>
+                                    <option value="TDS">TDS (thrice daily)</option>
+                                    <option value="QID">QID (4 times)</option>
+                                    <option value="HS">HS (night)</option>
+                                    <option value="SOS">SOS (as needed)</option>
+                                    <option value="STAT">STAT (single dose)</option>
+                                </select>
+                                <select class="med-food" style="padding:6px 8px;border:1px solid var(--border);border-radius:6px;font-size:13px;width:170px;flex:0 0 auto;">
+                                    <option value="">— Timing —</option>
+                                    <option value="before food">Before food</option>
+                                    <option value="after food" selected>After food</option>
+                                    <option value="with food">With food</option>
+                                    <option value="empty stomach">Empty stomach</option>
+                                    <option value="Morning">Morning</option>
+                                    <option value="Morning + Evening">Morning + Evening</option>
+                                    <option value="Morning + Afternoon + Evening">Morning + Afternoon + Evening</option>
+                                    <option value="Bedtime">Bedtime</option>
+                                </select>
+                                <input type="text" class="med-duration" placeholder="Duration (5 days)" style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;width:100px;">
+                                <button type="button" class="btn btn-sm btn-ghost" onclick="saveMedToLibrary(this)" title="Drug bank me save karo" style="color:#047857;padding:4px 8px;">💾</button>
+                                <button type="button" class="btn btn-sm btn-ghost" onclick="removeMedicineRow(this)" style="color:var(--danger);padding:4px 8px;">✕</button>
+                            </div>
+                        </div>
+                        <div class="flex-between mt-sm">
+                            <button class="btn btn-sm btn-ghost" onclick="buildMedicinesText()">📋 Generate Medicine Text</button>
+                            <span class="text-sm text-muted" id="med-count">1 medicine(s)</span>
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Medicine Text (AI ke liye / Manual)</label>
+                            <div class="autocomplete-wrap">
+                                <textarea id="pt-medicines" rows="3" placeholder="Medicines will appear here when you click 'Generate Medicine Text'..."></textarea>
+                                <div class="drug-btn-wrap" id="drug-suggestions"></div>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label>Templates</label>
+                            <select id="template-select" onchange="applyTemplate()">
+                                <option value="">— Select Template —</option>
+                            </select>
+                            <button class="btn btn-ghost btn-sm mt-sm" onclick="saveAsTemplate()">💾 Save as Template</button>
+                        </div>
+                    </div>
+
+                    <div class="flex gap-md mt-sm">
+                        <button class="btn btn-primary" onclick="generateRx()">🤖 AI Generate Prescription</button>
+                        <button class="btn btn-warning" onclick="optimizeRx()" id="optimize-btn" style="display:none;background:linear-gradient(135deg,#f59e0b,#d97706);color:#fff;">🔄 Optimize Rx</button>
+                        <button class="btn btn-success" onclick="saveRx()">💾 Save</button>
+                        <button class="btn btn-ghost" onclick="previewPdf()">📄 PDF Preview</button>
+                        <button class="btn btn-ghost" onclick="openRxPad()" title="Clinic letterhead par customized print-ready prescription (EKA DOC jaisa pad)">📝 Letterhead Rx</button>
+                    </div>
+                    <div class="flex gap-md mt-sm">
+                        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px;">
+                            <input type="checkbox" id="ai-suggest-drugs" style="width:auto;">
+                            🤖 Allow AI to suggest drug changes? <span class="text-muted" style="font-size:11px;">(Default: AI assists only)</span>
+                        </label>
+                        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px;">
+                            <input type="checkbox" id="ai-include-investigations" checked style="width:auto;">
+                            🔬 Include Investigations section <span class="text-muted" style="font-size:11px;">(Uncheck to skip lab tests)</span>
+                        </label>
+                    </div>
+                    <div class="mt-sm text-muted text-sm" id="rx-status"></div>
+                </div>
+
+                <!-- AI Output -->
+                <div class="card" id="rx-output-section" style="display:none;">
+                    <div class="flex-between mb-sm">
+                        <div class="card-title" style="margin:0;">🤖 AI Prescription Output</div>
+                        <div class="flex gap-sm" style="flex-wrap:wrap;">
+                            <button class="btn btn-sm btn-ghost" onclick="copyRx()">📋 Copy</button>
+                            <button class="btn btn-sm btn-success" onclick="saveRx()">💾 Save</button>
+                            <button class="btn btn-sm btn-primary" onclick="previewPdf()">📄 PDF</button>
+                            <button class="btn btn-sm btn-ghost" onclick="sendToSpecialtyConsult()" style="background:rgba(139,92,246,0.12);border-color:#8b5cf6;color:#7c3aed;font-weight:600;" title="Get specialist opinion on this prescription">⚕️ Specialty Consult</button>
+                            <span style="position:relative;display:inline-block;">
+                                <button class="btn btn-sm btn-ghost" onclick="toggleWhatsAppMenu()" style="background:rgba(37,211,102,0.12);border-color:#25D366;">📱 WhatsApp ▾</button>
+                                <div id="wa-menu" style="display:none;position:absolute;bottom:100%;right:0;background:#fff;border:1px solid #cbd5e1;border-radius:8px;z-index:99999;min-width:200px;box-shadow:0 8px 30px rgba(0,0,0,0.2);margin-bottom:6px;max-height:300px;overflow-y:auto;">
+                                    <button class="btn btn-sm btn-ghost" onclick="shareWhatsApp('patient')" style="display:flex;width:100%;border-radius:0;border-bottom:1px solid #e2e8f0;padding:10px 14px;">👤 Send Rx to Patient</button>
+                                    <button class="btn btn-sm btn-ghost" onclick="shareWhatsApp('call-patient')" style="display:flex;width:100%;border-radius:0;border-bottom:1px solid #e2e8f0;padding:10px 14px;">🔔 Call Patient (Turn Ready)</button>
+                                    <button class="btn btn-sm btn-ghost" onclick="shareWhatsApp('report-ready')" style="display:flex;width:100%;border-radius:0;border-bottom:1px solid #e2e8f0;padding:10px 14px;">📋 Report Ready</button>
+                                    <button class="btn btn-sm btn-ghost" onclick="shareWhatsApp('reception')" style="display:flex;width:100%;border-radius:0;border-bottom:1px solid #e2e8f0;padding:10px 14px;">🏥 Send to Reception</button>
+                                    <button class="btn btn-sm btn-ghost" onclick="shareWhatsApp('doctor')" style="display:flex;width:100%;border-radius:0;border-bottom:1px solid #e2e8f0;padding:10px 14px;">👨‍⚕️ Send to Doctor</button>
+                                    <button class="btn btn-sm btn-ghost" onclick="shareWhatsApp('manager')" style="display:flex;width:100%;border-radius:0;padding:10px 14px;">👔 Send to Manager</button>
+                                </div>
+                            </span>
+                        </div>
+                    </div>
+                    <textarea id="rx-output" rows="12" style="font-family:monospace;font-size:13px;"></textarea>
+
+                    <!-- Clinical Decision Support Panel -->
+                    <div id="clinical-support-section" style="display:none;" class="clinical-support">
+                        <div class="cs-header">
+                            🧠 Clinical Decision Support
+                            <span class="cs-warning">⚠️ DOCTOR REFERENCE — Not in Prescription / PDF</span>
+                        </div>
+                        <div id="clinical-support-content"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ════════════════ TAB: QUEUE ════════════════ -->
+            <div class="tab-content" id="tab-queue">
+                <div class="flex-between mb-sm">
+                    <h2>🚶 OPD Waiting Queue</h2>
+                    <button class="btn btn-sm btn-ghost" onclick="loadQueuePatients()">🔄 Refresh</button>
+                </div>
+                <div class="card">
+                    <div style="overflow-x:auto;">
+                        <table>
+                            <thead>
+                                <tr><th>#</th><th>Token</th><th>Patient</th><th>Age/Gender</th><th>Complaints</th><th>Wait</th><th>Visits</th><th>Consult</th><th>📱 Call</th></tr>
+                            </thead>
+                            <tbody id="queue-body">
+                                <tr><td colspan="9" style="text-align:center;color:var(--text-muted);padding:32px;">Loading queue...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ════════════════ TAB: OPD ROSTER ════════════════ -->
+            <div class="tab-content" id="tab-roster">
+                <div class="flex-between mb-sm">
+                    <h2>📋 OPD Roster</h2>
+                    <div class="flex gap-sm">
+                        <button class="btn btn-sm btn-ghost active" onclick="loadRoster('today')" id="filter-today">Today</button>
+                        <button class="btn btn-sm btn-ghost" onclick="loadRoster('yesterday')" id="filter-yesterday">Yesterday</button>
+                        <button class="btn btn-sm btn-ghost" onclick="loadRoster('last5')" id="filter-last5">Last 5 Days</button>
+                        <button class="btn btn-sm btn-ghost" onclick="loadRoster('all')" id="filter-all">All</button>
+                    </div>
+                </div>
+                <div class="card">
+                    <div class="flex-between mb-sm">
+                        <span>Total: <strong id="roster-total">0</strong> | Fees: ₹<strong id="roster-fees">0</strong></span>
+                    </div>
+                    <div style="overflow-x:auto;">
+                        <table>
+                            <thead>
+                                <tr><th>Date</th><th>Patient</th><th>Phone</th><th>Vitals</th><th>Diagnosis</th><th>Fee</th><th>Actions</th></tr>
+                            </thead>
+                            <tbody id="roster-body"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ════════════════ TAB: BATCH SCAN ════════════════ -->
+            <div class="tab-content" id="tab-batch">
+                <h2 class="mb-sm">📸 Batch Scan (Prescriptions & Pathology Reports)</h2>
+                <div class="card">
+                    <div class="card-title">Snap or Upload Document Images</div>
+                    <div style="font-size:13px;color:#64748b;margin-bottom:14px;">
+                        Capture camera photos or pick multi-page lab reports/old handwritten prescriptions from gallery.
+                    </div>
+                    
+                    <!-- Native File Inputs for Batch Tab -->
+                    <input type="file" id="batch-tab-camera" accept="image/*" capture="environment" style="position:fixed;top:-9999px;left:-9999px;width:1px;height:1px;opacity:0;" onchange="handleCameraCapture(this)">
+                    <input type="file" id="batch-tab-gallery" accept="image/*,.pdf,.csv,.xlsx,.xls,application/pdf,text/csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" multiple style="position:fixed;top:-9999px;left:-9999px;width:1px;height:1px;opacity:0;" onchange="handleGalleryUpload(this)">
+
+                    <div class="flex gap-sm mb-sm" style="flex-wrap:wrap;">
+                        <label for="batch-tab-camera" style="background:#7c3aed;color:white;font-weight:700;font-size:13px;padding:10px 18px;border:none;border-radius:8px;cursor:pointer;display:inline-flex;align-items:center;gap:8px;">
+                            <span style="font-size:18px;">📷</span> <strong>Take Live Camera Snap</strong>
+                        </label>
+
+                        <label for="batch-tab-gallery" style="background:#2563eb;color:white;font-weight:700;font-size:13px;padding:10px 18px;border:none;border-radius:8px;cursor:pointer;display:inline-flex;align-items:center;gap:8px;">
+                            <span style="font-size:18px;">🖼️</span> <strong>Upload from Gallery / Files</strong>
+                        </label>
+
+                        <label for="batch-tab-gallery" style="background:#f59e0b;color:white;font-weight:700;font-size:13px;padding:10px 18px;border:none;border-radius:8px;cursor:pointer;display:inline-flex;align-items:center;gap:8px;" title="10-50 pages ho to 1-2 karke baar-baar dabao — pages add hote rahenge">
+                            <span style="font-size:18px;">➕</span> <strong>Add More Pages</strong>
+                        </label>
+                    </div>
+
+                    <div style="font-size:12px;color:#475569;margin-bottom:10px;background:#f1f5f9;padding:8px 12px;border-radius:8px;">
+                        💡 <strong>25-50 pages?</strong> 1-2 karke upload karte jao (➕ Add More Pages) — AI sab pages
+                        1-by-1 padhega, relevant data extract karega aur form auto-fill karega. Process hone ke baad
+                        originals delete ho jate hain — jagah nahi bharegi.
+                    </div>
+
+                    <div id="scan-previews" class="flex flex-wrap gap-sm" style="margin-bottom:12px;"></div>
+                    <div id="scan-queue-status" class="text-muted text-sm mb-sm" style="font-weight:600;"></div>
+                    <button class="btn btn-primary" onclick="processAllScans()">🤖 AI Read All (1-by-1 Queue)</button>
+                </div>
+            </div>
+
+            <!-- ════════════════ TAB: LAB INTELLIGENCE ════════════════ -->
+            <div class="tab-content" id="tab-lab-intel">
+                <div class="flex-between mb-sm">
+                    <h2>🧪 AI Lab Intelligence Engine</h2>
+                    <div class="flex gap-sm" style="flex-wrap:wrap;">
+                        <button class="btn btn-ghost btn-sm" onclick="clearLabForm()">🔄 New Report</button>
+                        <button class="btn btn-ghost btn-sm" onclick="loadLabHistory()">📋 View History</button>
+                    </div>
+                </div>
+
+                <!-- Lab Report Upload Card -->
+                <div class="card mb-sm" style="background:linear-gradient(135deg, rgba(5,150,105,0.08), rgba(16,185,129,0.06));border:1.5px solid #10b981;border-radius:12px;padding:16px;">
+                    <div class="flex-between mb-sm" style="flex-wrap:wrap;gap:8px;">
+                        <h4 style="margin:0;color:#065f46;font-size:15px;display:flex;align-items:center;gap:6px;">
+                            🔬 Upload Laboratory Report (Pathology / Radiology / ECG / Echo)
+                        </h4>
+                        <span style="font-size:11px;background:#d1fae5;color:#065f46;padding:3px 10px;border-radius:12px;font-weight:700;">AI Clinical Intelligence</span>
+                    </div>
+                    <div style="font-size:12px;color:#047857;margin-bottom:12px;">
+                        Capture or upload lab reports — AI extracts structured values, detects abnormalities, and generates clinical insights for doctor review.
+                    </div>
+
+                    <!-- Hidden file inputs for Lab Intelligence -->
+                    <input type="file" id="lab-camera-input" accept="image/*" capture="environment" style="position:fixed;top:-9999px;left:-9999px;width:1px;height:1px;opacity:0;" onchange="handleLabCamera(this)">
+                    <input type="file" id="lab-gallery-input" accept="image/*,.pdf,application/pdf" multiple style="position:fixed;top:-9999px;left:-9999px;width:1px;height:1px;opacity:0;" onchange="handleLabGallery(this)">
+
+                    <div class="flex gap-sm mb-sm" style="flex-wrap:wrap;">
+                        <label for="lab-camera-input" style="background:#059669;color:white;font-weight:700;font-size:13px;padding:10px 18px;border:none;border-radius:8px;cursor:pointer;display:inline-flex;align-items:center;gap:8px;box-shadow:0 3px 10px rgba(5,150,105,0.25);">
+                            <span style="font-size:18px;">📷</span> <strong>Capture Lab Report</strong>
+                        </label>
+                        <label for="lab-gallery-input" style="background:#0284c7;color:white;font-weight:700;font-size:13px;padding:10px 18px;border:none;border-radius:8px;cursor:pointer;display:inline-flex;align-items:center;gap:8px;box-shadow:0 3px 10px rgba(2,132,199,0.25);">
+                            <span style="font-size:18px;">🖼️</span> <strong>Upload Report Image/PDF</strong>
+                        </label>
+                        <select id="lab-report-type" style="width:auto;padding:8px 14px;border:1px solid #10b981;border-radius:8px;font-size:13px;background:#f0fdf4;">
+                            <option value="pathology">🩸 Pathology</option>
+                            <option value="radiology">🩻 Radiology</option>
+                            <option value="ecg">💓 ECG</option>
+                            <option value="echo">🫀 Echo</option>
+                            <option value="pft">🫁 PFT</option>
+                            <option value="other">📋 Other</option>
+                        </select>
+                    </div>
+
+                    <div id="lab-file-previews" class="flex flex-wrap gap-sm mb-sm"></div>
+                    <div id="lab-upload-status" class="text-sm" style="font-weight:600;color:#065f46;"></div>
+                </div>
+
+                <!-- Patient Context -->
+                <div class="card mb-sm">
+                    <div class="card-title">👤 Patient Context</div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Patient Name *</label>
+                            <input type="text" id="lab-pt-name" placeholder="Patient name" oninput="autoLinkLabPatient()">
+                        </div>
+                        <div class="form-group">
+                            <label>Phone</label>
+                            <input type="text" id="lab-pt-phone" placeholder="10 digit">
+                        </div>
+                    </div>
+                    <div class="form-row-3">
+                        <div class="form-group">
+                            <label>Age</label>
+                            <input type="text" id="lab-pt-age" placeholder="Age" style="width:80px;">
+                        </div>
+                        <div class="form-group">
+                            <label>Gender</label>
+                            <select id="lab-pt-gender" style="width:120px;">
+                                <option value="">—</option>
+                                <option value="Male">Male</option>
+                                <option value="Female">Female</option>
+                                <option value="Other">Other</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Report Date</label>
+                            <input type="date" id="lab-report-date" style="width:160px;">
+                        </div>
+                    </div>
+
+                    <button id="lab-analyze-btn" class="btn btn-primary mt-sm" onclick="analyzeLabReport()" style="display:none;">
+                        🔬 Analyze Lab Report with AI
+                    </button>
+                    <span id="lab-analyze-status" class="text-sm text-muted" style="margin-left:12px;"></span>
+                </div>
+
+                <!-- Results Display -->
+                <div id="lab-results-section" style="display:none;">
+
+                    <!-- Structured Results Table -->
+                    <div class="card mb-sm">
+                        <div class="card-title">📊 Structured Lab Values</div>
+                        <div style="overflow-x:auto;">
+                            <table>
+                                <thead>
+                                    <tr><th>Test</th><th>Value</th><th>Unit</th><th>Reference Range</th><th>Status</th></tr>
+                                </thead>
+                                <tbody id="lab-results-body"></tbody>
+                            </table>
+                        </div>
+                        <div class="text-sm text-muted mt-sm">
+                            <span id="lab-total-tests">0</span> tests extracted | 
+                            <span id="lab-abnormal-count" style="color:#dc2626;">0 abnormal</span>
+                        </div>
+                    </div>
+
+                    <!-- Doctor Intelligence Panel -->
+                    <div class="card mb-sm" style="border:2px dashed #f59e0b;background:linear-gradient(135deg, rgba(245,158,11,0.03), rgba(217,119,6,0.02));border-radius:12px;padding:16px 20px;">
+                        <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;font-weight:700;color:#d97706;font-size:14px;">
+                            🧠 Doctor Intelligence Panel
+                            <span style="font-size:10px;color:#92400e;background:rgba(245,158,11,0.12);padding:3px 8px;border-radius:4px;font-weight:600;">⚠️ DOCTOR REFERENCE ONLY — Not for Patient</span>
+                        </div>
+
+                        <!-- 1. Key Abnormal Findings -->
+                        <details open class="lab-intel-section" style="margin-bottom:12px;padding:10px 12px;background:rgba(0,0,0,0.02);border-radius:8px;border-left:3px solid #ef4444;">
+                            <summary style="cursor:pointer;font-weight:700;font-size:13px;color:#dc2626;margin-bottom:8px;">
+                                🚨 Key Abnormal Findings
+                            </summary>
+                            <div id="lab-abnormal-findings" style="font-size:13px;line-height:1.7;white-space:pre-wrap;"></div>
+                        </details>
+
+                        <!-- 2. Possible Clinical Concerns -->
+                        <details open class="lab-intel-section" style="margin-bottom:12px;padding:10px 12px;background:rgba(0,0,0,0.02);border-radius:8px;border-left:3px solid #f59e0b;">
+                            <summary style="cursor:pointer;font-weight:700;font-size:13px;color:#d97706;margin-bottom:8px;">
+                                ⚠️ Possible Clinical Concerns
+                            </summary>
+                            <div id="lab-clinical-concerns" style="font-size:13px;line-height:1.7;white-space:pre-wrap;"></div>
+                        </details>
+
+                        <!-- 3. AI Suggestions Disclaimer -->
+                        <div style="background:rgba(245,158,11,0.08);border-radius:6px;padding:8px 12px;margin-bottom:12px;font-size:11px;color:#92400e;font-weight:600;text-align:center;">
+                            ⚠️ AI suggestions are for physician review and are not final diagnoses.
+                        </div>
+
+                        <!-- 4. Suggested Follow-up Tests -->
+                        <details open class="lab-intel-section" style="margin-bottom:12px;padding:10px 12px;background:rgba(0,0,0,0.02);border-radius:8px;border-left:3px solid #3b82f6;">
+                            <summary style="cursor:pointer;font-weight:700;font-size:13px;color:#2563eb;margin-bottom:8px;">
+                                📋 Suggested Follow-up Tests
+                            </summary>
+                            <div id="lab-recommendations" style="font-size:13px;line-height:1.7;white-space:pre-wrap;"></div>
+                        </details>
+
+                        <!-- 5. Risk Flags -->
+                        <details open class="lab-intel-section" style="margin-bottom:12px;padding:10px 12px;background:rgba(0,0,0,0.02);border-radius:8px;border-left:3px solid #7c3aed;">
+                            <summary style="cursor:pointer;font-weight:700;font-size:13px;color:#6d28d9;margin-bottom:8px;">
+                                🏷️ Risk Flags
+                            </summary>
+                            <div id="lab-risk-flags" style="font-size:13px;line-height:1.7;white-space:pre-wrap;"></div>
+                        </details>
+                    </div>
+
+                    <!-- Trend Dashboard -->
+                    <div class="card mb-sm">
+                        <div class="flex-between mb-sm">
+                            <div class="card-title" style="margin:0;">📈 Longitudinal Trend Dashboard</div>
+                            <button class="btn btn-sm btn-ghost" onclick="loadLabTrends()">🔄 Refresh Trends</button>
+                        </div>
+                        <div id="lab-trends-content" style="font-size:13px;line-height:1.8;"></div>
+                        <div id="lab-trends-status" class="text-muted text-sm" style="text-align:center;padding:20px;">
+                            Click "🔄 Refresh Trends" to load historical comparison
+                        </div>
+                    </div>
+
+                    <!-- Action Buttons -->
+                    <div class="flex gap-md mt-sm" style="flex-wrap:wrap;">
+                        <button class="btn btn-success" onclick="copyLabToInvestigations()">📋 Copy to Prescription Investigations</button>
+                        <button class="btn btn-ghost" onclick="switchTab('rx')">📝 Back to Prescription</button>
+                        <button class="btn btn-ghost" onclick="exportLabPdf()" style="color:#2563eb;">📄 Export Report</button>
+                    </div>
+
+                    <!-- Save confirmation -->
+                    <div class="text-sm text-muted mt-sm" id="lab-save-status"></div>
+                </div>
+            </div>
+
+            <!-- ════════════════ TAB: SPECIALTY UPGRADE ════════════════ -->
+            <div class="tab-content" id="tab-upgrade">
+                <h2 class="mb-sm">⚕️ Specialty Upgrade</h2>
+                <div class="card">
+                    <div class="card-title">Compare GP Rx with Specialist Opinions</div>
+                    <div class="flex gap-sm mb-sm" style="flex-wrap:wrap;">
+                        <button class="btn btn-sm btn-primary" onclick="loadUpgradeQueuePatients()">🔄 Load from Queue</button>
+                        <button class="btn btn-sm btn-ghost" onclick="loadRosterPatientsForUpgrade()">📋 Load from Roster</button>
+                        <span class="text-sm text-muted" id="up-queue-info" style="align-self:center;"></span>
+                    </div>
+                    <div id="up-queue-list" style="display:none;margin-bottom:12px;max-height:200px;overflow-y:auto;border:1px solid var(--border);border-radius:8px;padding:8px;"></div>
+                    <div class="form-group">
+                        <label>Patient Name</label>
+                        <input type="text" id="up-pt-name" placeholder="Patient name">
+                    </div>
+                    <div class="form-group">
+                        <label>Vitals</label>
+                        <input type="text" id="up-vitals" placeholder="BP / Pulse / SpO2 / Sugar">
+                    </div>
+                    <div class="form-group">
+                        <label>Complaints / Symptoms</label>
+                        <textarea id="up-complaints" rows="2" placeholder="Fever, chest pain, SOB... (vitals + ye bhar do to bina purani Rx ke bhi fresh assessment milega)"></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label>Examination Findings</label>
+                        <input type="text" id="up-examination" placeholder="e.g. P/A soft, chest clear, pedal edema —">
+                    </div>
+                    <div class="form-group">
+                        <label>Physician's Current Prescription (optional — doctor ka input kabhi overwrite nahi hota)</label>
+                        <textarea id="up-rx" rows="4" placeholder="Paste the current prescription... (optional)"></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label>Select Specialties (up to 4) — har specialty apna reasoning framework + evidence sources use karti hai</label>
+                        <div class="flex gap-sm mb-sm">
+                            <button class="btn btn-sm btn-ghost" onclick="selectAllSpecs()">✅ Select All</button>
+                            <button class="btn btn-sm btn-ghost" onclick="clearAllSpecs()">❌ Clear All</button>
+                        </div>
+                        <div class="spec-grid">
+                            <div class="spec-item" onclick="toggleSpec(this)"><span class="spec-check">✓</span><input type="checkbox" class="spec-cb" value="🩺 General Medicine"><label>🩺 General Medicine</label></div>
+                            <div class="spec-item" onclick="toggleSpec(this)"><span class="spec-check">✓</span><input type="checkbox" class="spec-cb" value="❤️ Cardiology"><label>❤️ Cardiology</label></div>
+                            <div class="spec-item" onclick="toggleSpec(this)"><span class="spec-check">✓</span><input type="checkbox" class="spec-cb" value="💓 Echocardiography"><label>💓 Echocardiography</label></div>
+                            <div class="spec-item" onclick="toggleSpec(this)"><span class="spec-check">✓</span><input type="checkbox" class="spec-cb" value="🫁 Pulmonology"><label>🫁 Pulmonology</label></div>
+                            <div class="spec-item" onclick="toggleSpec(this)"><span class="spec-check">✓</span><input type="checkbox" class="spec-cb" value="🦠 Infectious Diseases"><label>🦠 Infectious Diseases</label></div>
+                            <div class="spec-item" onclick="toggleSpec(this)"><span class="spec-check">✓</span><input type="checkbox" class="spec-cb" value="🦴 Orthopedics"><label>🦴 Orthopedics</label></div>
+                            <div class="spec-item" onclick="toggleSpec(this)"><span class="spec-check">✓</span><input type="checkbox" class="spec-cb" value="👶 Pediatrics"><label>👶 Pediatrics</label></div>
+                            <div class="spec-item" onclick="toggleSpec(this)"><span class="spec-check">✓</span><input type="checkbox" class="spec-cb" value="🩸 Diabetology"><label>🩸 Diabetology</label></div>
+                            <div class="spec-item" onclick="toggleSpec(this)"><span class="spec-check">✓</span><input type="checkbox" class="spec-cb" value="🧠 Neurology"><label>🧠 Neurology</label></div>
+                            <div class="spec-item" onclick="toggleSpec(this)"><span class="spec-check">✓</span><input type="checkbox" class="spec-cb" value="👩‍⚕️ Gynecology"><label>👩‍⚕️ Gynecology</label></div>
+                            <div class="spec-item" onclick="toggleSpec(this)"><span class="spec-check">✓</span><input type="checkbox" class="spec-cb" value="👁️ Ophthalmology"><label>👁️ Ophthalmology</label></div>
+                            <div class="spec-item" onclick="toggleSpec(this)"><span class="spec-check">✓</span><input type="checkbox" class="spec-cb" value="👂 ENT"><label>👂 ENT</label></div>
+                            <div class="spec-item" onclick="toggleSpec(this)"><span class="spec-check">✓</span><input type="checkbox" class="spec-cb" value="🩺 Gastroenterology"><label>🩺 Gastroenterology</label></div>
+                            <div class="spec-item" onclick="toggleSpec(this)"><span class="spec-check">✓</span><input type="checkbox" class="spec-cb" value="🧬 Dermatology"><label>🧬 Dermatology</label></div>
+                            <div class="spec-item" onclick="toggleSpec(this)"><span class="spec-check">✓</span><input type="checkbox" class="spec-cb" value="🧪 Endocrinology"><label>🧪 Endocrinology</label></div>
+                            <div class="spec-item" onclick="toggleSpec(this)"><span class="spec-check">✓</span><input type="checkbox" class="spec-cb" value="🫀 Rheumatology"><label>🫀 Rheumatology</label></div>
+                            <div class="spec-item" onclick="toggleSpec(this)"><span class="spec-check">✓</span><input type="checkbox" class="spec-cb" value="🧠 Psychiatry"><label>🧠 Psychiatry</label></div>
+                            <div class="spec-item" onclick="toggleSpec(this)"><span class="spec-check">✓</span><input type="checkbox" class="spec-cb" value="🩺 Urology"><label>🩺 Urology</label></div>
+                            <div class="spec-item" onclick="toggleSpec(this)"><span class="spec-check">✓</span><input type="checkbox" class="spec-cb" value="🩺 Nephrology"><label>🩺 Nephrology</label></div>
+                            <div class="spec-item" onclick="toggleSpec(this)"><span class="spec-check">✓</span><input type="checkbox" class="spec-cb" value="🩺 Oncology"><label>🩺 Oncology</label></div>
+                            <div class="spec-item" onclick="toggleSpec(this)"><span class="spec-check">✓</span><input type="checkbox" class="spec-cb" value="🩺 General Surgery"><label>🩺 General Surgery</label></div>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>Or type a custom specialty (optional — no pre-verified sources, sab kuch "Evidence not verified" dikhega)</label>
+                        <input type="text" id="up-custom" placeholder="e.g. Sports Medicine, Palliative Care">
+                    </div>
+                    <button class="btn btn-primary" onclick="runUpgrade()">⚕️ Get Specialist Opinions (Reasoning → Evidence → Draft)</button>
+                    <div id="upgrade-results" class="mt-md"></div>
+                </div>
+                <div class="card mt-sm">
+                    <div class="card-title">📚 Evidence Source Library</div>
+                    <div class="text-sm text-muted mb-sm">Specialty → verified primary sources. Ye sirf source list hai — har clinical question ke liye relevant guideline alag se retrieve + verify hoti hai. Current versions available hone par outdated guideline par default nahi hota.</div>
+                    <button class="btn btn-sm btn-ghost" onclick="loadEvidenceLibrary()">🔄 Load Library</button>
+                    <div id="evidence-library-box" class="mt-sm" style="max-height:300px;overflow-y:auto;"></div>
+                </div>
+                <div class="card mt-sm">
+                    <div class="card-title">🔎 Evidence Search (Guideline Retrieval)</div>
+                    <div class="form-group">
+                        <label>Specialty</label>
+                        <select id="ev-search-spec" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:6px;">
+                            <option value="🩺 General Medicine">🩺 General Medicine</option>
+                            <option value="❤️ Cardiology">❤️ Cardiology</option>
+                            <option value="💓 Echocardiography">💓 Echocardiography</option>
+                            <option value="🫁 Pulmonology">🫁 Pulmonology</option>
+                            <option value="🦠 Infectious Diseases">🦠 Infectious Diseases</option>
+                            <option value="🩸 Diabetology">🩸 Diabetology</option>
+                            <option value="🩺 Nephrology">🩺 Nephrology</option>
+                            <option value="🧠 Neurology">🧠 Neurology</option>
+                            <option value="🩺 Gastroenterology">🩺 Gastroenterology</option>
+                            <option value="🧪 Endocrinology">🧪 Endocrinology</option>
+                            <option value="🦴 Orthopedics">🦴 Orthopedics</option>
+                            <option value="👶 Pediatrics">👶 Pediatrics</option>
+                            <option value="👩‍⚕️ Gynecology">👩‍⚕️ Gynecology</option>
+                            <option value="👁️ Ophthalmology">👁️ Ophthalmology</option>
+                            <option value="👂 ENT">👂 ENT</option>
+                            <option value="🧬 Dermatology">🧬 Dermatology</option>
+                            <option value="🫀 Rheumatology">🫀 Rheumatology</option>
+                            <option value="🧠 Psychiatry">🧠 Psychiatry</option>
+                            <option value="🩺 Urology">🩺 Urology</option>
+                            <option value="🩺 Oncology">🩺 Oncology</option>
+                            <option value="🩺 General Surgery">🩺 General Surgery</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Clinical Question</label>
+                        <input type="text" id="ev-search-q" placeholder="e.g. Stage 1 HTN + diabetes mein first-line drug kya hai per latest guideline?">
+                    </div>
+                    <div class="form-group">
+                        <label>Patient Context (optional)</label>
+                        <input type="text" id="ev-search-ctx" placeholder="e.g. 58/M, BP 150/95, DM-2, no symptoms">
+                    </div>
+                    <button class="btn btn-sm btn-primary" onclick="runEvidenceSearch()">🔎 Search Evidence</button>
+                    <div id="evidence-search-result" class="mt-sm"></div>
+                </div>
+                <!-- Roster patients for upgrade (hidden, populated by JS) -->
+                <div id="up-roster-section" style="display:none;" class="card mt-sm">
+                    <div class="card-title">📋 Select Previous Patient for Upgrade</div>
+                    <div style="max-height:250px;overflow-y:auto;" id="up-roster-list"></div>
+                </div>
+            </div>
+
+            <!-- ════════════════ TAB: STARRED ════════════════ -->
+            <div class="tab-content" id="tab-starred">
+                <h2 class="mb-sm">⭐ Starred Comparisons</h2>
+                <div class="card">
+                    <div id="starred-list"></div>
+                </div>
+            </div>
+
+            <!-- ════════════════ TAB: SETTINGS ════════════════ -->
+            <div class="tab-content" id="tab-settings">
+                <h2 class="mb-sm">⚙️ Doctor / Clinic Settings</h2>
+                <div class="grid-2" style="grid-template-columns: 1fr 1fr; gap:16px;">
+                    <div class="card">
+                        <div class="card-title">Clinic Information</div>
+                        <div class="form-group">
+                            <label>Clinic Name</label>
+                            <input type="text" id="set-clinic-name" value="{{ settings.clinic_name or '' }}">
+                        </div>
+                        <div class="form-group">
+                            <label>Clinic Address</label>
+                            <textarea id="set-address" rows="3" placeholder="Line 1&#10;Line 2 (optional)">{{ settings.clinic_address or '' }}</textarea>
+                            <span class="text-sm text-muted">Each line appears separately on letterhead</span>
+                        </div>
+                    </div>
+                    <div class="card">
+                        <div class="card-title">Doctor Profile</div>
+                        <div class="form-group">
+                            <label>Doctor Name</label>
+                            <input type="text" id="set-doc-name" value="{{ settings.doc_name or '' }}">
+                        </div>
+                        <div class="form-group">
+                            <label>Degree (e.g. MBBS, MD)</label>
+                            <input type="text" id="set-degree" value="{{ settings.doc_degree or '' }}">
+                        </div>
+                        <div class="form-group">
+                            <label>Subtitle / Specialty</label>
+                            <input type="text" id="set-subtitle" value="{{ settings.doc_subtitle or '' }}">
+                        </div>
+                        <div class="form-group">
+                            <label>Registration No.</label>
+                            <input type="text" id="set-reg" value="{{ settings.doc_reg_no or '' }}">
+                        </div>
+                        <div class="form-group">
+                            <label>Additional Qualifications & Fellowships</label>
+                            <textarea id="set-extra" rows="3" placeholder="Fellowship in Cardiology&#10;Dip. Diabetology&#10;PG Diploma in Diabetes">{{ settings.doc_extra_quals or '' }}</textarea>
+                            <span class="text-sm text-muted">One per line — shows on PDF letterhead</span>
+                        </div>
+                    </div>
+                    <div class="card">
+                        <div class="card-title">Contact</div>
+                        <div class="form-group">
+                            <label>Email</label>
+                            <input type="email" id="set-email" value="{{ settings.doc_email or '' }}">
+                        </div>
+                        <div class="form-group">
+                            <label>Phone</label>
+                            <input type="text" id="set-phone" value="{{ settings.doc_phone or '' }}">
+                        </div>
+                    </div>
+                    <div class="card" style="grid-column:1/3;">
+                        <div class="card-title">📍 Location & ABDM (Find a Doctor + NHA)</div>
+                        <p class="text-sm text-muted" style="margin:0 0 10px;">Location → "Find a Doctor" distance sorting. HPR/HFR → ABDM (NHA) registry IDs. Optional.</p>
+                        <div class="form-row-2">
+                            <div class="form-group">
+                                <label>Latitude</label>
+                                <input type="text" id="set-lat" value="{{ settings.latitude or '' }}" placeholder="e.g. 26.9124">
+                            </div>
+                            <div class="form-group">
+                                <label>Longitude</label>
+                                <input type="text" id="set-lon" value="{{ settings.longitude or '' }}" placeholder="e.g. 75.7873">
+                            </div>
+                            <div class="form-group">
+                                <label>HPR ID (Doctor Registry)</label>
+                                <input type="text" id="set-hpr" value="{{ settings.hpr_id or '' }}" placeholder="ABDM HPR ID">
+                            </div>
+                            <div class="form-group">
+                                <label>HFR ID (Facility Registry)</label>
+                                <input type="text" id="set-hfr" value="{{ settings.hfr_id or '' }}" placeholder="ABDM HFR ID">
+                            </div>
+                        </div>
+                        <button type="button" class="btn btn-sm btn-ghost" onclick="getSettingsLocation()" style="margin-top:4px;">📍 Use my current location</button>
+                    </div>
+                    <div class="card" style="grid-column:1/3;">
+                        <div class="card-title">🤖 AI Provider — Who Pays for AI?</div>
+                        <div class="form-row-2">
+                            <div class="form-group">
+                                <label>AI Mode</label>
+                                <select id="set-ai-mode">
+                                    <option value="auto" {% if settings.ai_mode == 'auto' or settings.ai_mode == 'puter' %}selected{% endif %}>Auto — my own API keys (clinic pays)</option>
+                                    <option value="gilwallet" {% if settings.ai_mode == 'gilwallet' %}selected{% endif %}>GIL AI Wallet — sasta backup (UPI recharge, hamari keys)</option>
+                                    <option value="off" {% if settings.ai_mode == 'off' %}selected{% endif %}>Off — no AI</option>
+                                </select>
+                                <span class="text-sm text-muted">Your clinic pays its own AI usage — GIL CLINIC pays ₹0 in every mode.</span>
+                            </div>
+                            <div class="form-group">
+                                <label>💰 GIL AI Wallet (sasta backup — Puter mahnga lage tab)</label>
+                                <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+                                    <button type="button" class="btn btn-sm" style="background:#059669;color:#fff;font-weight:700;" onclick="openWalletRecharge()">💳 UPI Recharge</button>
+                                    <span id="wallet-balance" class="text-sm" style="font-weight:700;color:#047857;">Balance: —</span>
+                                    <span id="wallet-upi" class="text-sm text-muted"></span>
+                                </div>
+                                <div id="wallet-detail" class="text-sm" style="margin-top:6px;color:#475569;"></div>
+                                {% if is_owner %}
+                                <div id="wallet-approvals" style="margin-top:8px;"></div>
+                                {% endif %}
+                            </div>
+                            <div class="form-group" style="display:none;">
+                                <label>Puter — Free AI (optional)</label>
+                                <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+                                    <button type="button" class="btn btn-sm" style="background:#7c3aed;color:#fff;" onclick="connectPuter()">🔌 Connect Puter</button>
+                                    <button type="button" class="btn btn-sm" style="background:#059669;color:#fff;font-weight:700;" onclick="window.open('https://puter.com/login','_blank')" title="Puter par naya FREE account banao (email ya Google se) — sign-in popup blank aaye to yahi asli rasta hai">🆕 Naya Account banao</button>
+                                    <button type="button" class="btn btn-sm" style="background:#0b57d0;color:#fff;" onclick="window.open('https://puter.com','_blank')" title="Puter account ka billing/recharge page kholega">💳 Recharge Puter</button>
+                                    <button type="button" class="btn btn-sm" style="background:#b45309;color:#fff;font-weight:700;" onclick="reloginPuter()" title="Dummy/guest session saaf karke apni asli ID se dobara login (tablet par bhi chalta hai)">🔄 Re-login (apni ID se)</button>
+                                    <span id="puter-status" class="text-sm text-muted">Not connected</span>
+                                </div>
+                                <span id="puter-usage-info" class="text-sm" style="color:#047857;font-weight:600;"></span>
+                                <div class="text-sm text-muted" style="line-height:1.5;">
+                                    Free Puter account = free AI credits, koi API key nahi chahiye.
+                                    <br>• <b>Naya account nahi ban raha?</b> "🆕 Naya Account banao" dabao → puter.com/login nayi tab me khulega → wahan <b>email ya Google se Sign up</b> karo → phir yahan "🔌 Connect Puter" dabao.
+                                    <br>• Puter ki taraf se sign-up me dikkat aa rahi hai (<a href="https://github.com/HeyPuter/puter/issues/1430" target="_blank" rel="noopener">known Puter bug</a>) — hamare app ki galti nahi. Sign-in window blank aaye to tab band mat karo, login pura karke wapas aao (app khud pakad lega).
+                                    <br>• <b>Puter bilkul hi na chale to</b> neeche "My own API keys" me <b>Groq key</b> (free — console.groq.com) daal do: usme <b>koi login, koi popup hi nahi</b> chahiye aur AI seedha chalta hai.
+                                </div>
+                                <div style="margin-top:10px;padding-top:10px;border-top:1px dashed #cbd5e1;">
+                                    <label>📲 <b>Tablet / phone par Puter BINA popup ke — Direct Token Paste</b></label>
+                                    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;">
+                                        <input type="password" id="puter-token-input" autocomplete="off" placeholder="Puter Auth Token yahan paste karo…" style="flex:1;min-width:200px;font-family:monospace;font-size:13px;">
+                                        <button type="button" class="btn btn-sm" style="background:#0f766e;color:#fff;font-weight:700;" onclick="savePuterTokenUI()">💾 Save Token</button>
+                                        <button type="button" class="btn btn-sm btn-ghost" onclick="copyPuterTokenUI()" title="Is device par jo Puter login hai uska token copy karo (phir tablet par paste kar do)">📋 Copy my token</button>
+                                    </div>
+                                    <span id="puter-token-status" class="text-sm text-muted"></span>
+                                    <div class="text-sm text-muted" style="line-height:1.5;margin-top:4px;">
+                                        <b>Tablet par AI nahi chal raha?</b> Puter ka login <b>har device par alag</b> hota hai — mobile ka login tablet par apne aap nahi jata.
+                                        <br>• Jin device par Puter chal raha hai (mobile) → wahan <b>📋 Copy my token</b> dabao.
+                                        <br>• Tablet par yahan token <b>paste</b> karo → <b>💾 Save Token</b> → ab AI seedha chalega, <b>koi login / popup / cookie nahi</b>.
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label>Optional: AI model override (Puter model ID, e.g. <code>gpt-4o-mini</code>)</label>
+                            <input type="text" id="set-ai-model" value="{{ settings.ai_model or '' }}" placeholder="leave blank for auto">
+                        </div>
+                        <div class="form-group">
+                            <label>🔑 My own API keys (BYOK — AES-encrypted, never shared)</label>
+                            <div class="form-row-2">
+                                <div class="form-group">
+                                    <label>Groq <code>gsk_...</code> <span id="key-badge-groq" style="color:#047857;font-weight:700;">{% if settings.has_groq %}✅ saved{% endif %}</span></label>
+                                    <div style="display:flex;gap:6px;">
+                                        <input type="password" id="set-groq-key" autocomplete="off" placeholder="{% if settings.has_groq %}•••••••• (saved){% else %}gsk_...{% endif %}">
+                                        <button type="button" class="btn btn-sm btn-ghost" onclick="testAIKey('groq')" title="Saved key sach me chalti hai ya nahi — real test">🧪 Test</button>
+                                        <button type="button" class="btn btn-sm btn-ghost" id="key-clear-groq" onclick="clearAIKey('groq')" {% if not settings.has_groq %}style="display:none;"{% endif %}>✕</button>
+                                    </div>
+                                    <div class="text-sm" id="key-test-groq" style="margin-top:4px;"></div>
+                                </div>
+                                <div class="form-group">
+                                    <label>OpenAI <code>sk-...</code> <span id="key-badge-openai" style="color:#047857;font-weight:700;">{% if settings.has_openai %}✅ saved{% endif %}</span></label>
+                                    <div style="display:flex;gap:6px;">
+                                        <input type="password" id="set-openai-key" autocomplete="off" placeholder="{% if settings.has_openai %}•••••••• (saved){% else %}sk-...{% endif %}">
+                                        <button type="button" class="btn btn-sm btn-ghost" onclick="testAIKey('openai')" title="Saved key sach me chalti hai ya nahi — real test">🧪 Test</button>
+                                        <button type="button" class="btn btn-sm btn-ghost" id="key-clear-openai" onclick="clearAIKey('openai')" {% if not settings.has_openai %}style="display:none;"{% endif %}>✕</button>
+                                    </div>
+                                    <div class="text-sm" id="key-test-openai" style="margin-top:4px;"></div>
+                                </div>
+                                <div class="form-group">
+                                    <label>Anthropic <code>sk-ant-...</code> <span id="key-badge-anthropic" style="color:#047857;font-weight:700;">{% if settings.has_anthropic %}✅ saved{% endif %}</span></label>
+                                    <div style="display:flex;gap:6px;">
+                                        <input type="password" id="set-anthropic-key" autocomplete="off" placeholder="{% if settings.has_anthropic %}•••••••• (saved){% else %}sk-ant-...{% endif %}">
+                                        <button type="button" class="btn btn-sm btn-ghost" onclick="testAIKey('anthropic')" title="Saved key sach me chalti hai ya nahi — real test">🧪 Test</button>
+                                        <button type="button" class="btn btn-sm btn-ghost" id="key-clear-anthropic" onclick="clearAIKey('anthropic')" {% if not settings.has_anthropic %}style="display:none;"{% endif %}>✕</button>
+                                    </div>
+                                    <div class="text-sm" id="key-test-anthropic" style="margin-top:4px;"></div>
+                                </div>
+                                <div class="form-group">
+                                    <label>DeepSeek <code>sk-...</code> <span id="key-badge-deepseek" style="color:#047857;font-weight:700;">{% if settings.has_deepseek %}✅ saved{% endif %}</span></label>
+                                    <div style="display:flex;gap:6px;">
+                                        <input type="password" id="set-deepseek-key" autocomplete="off" placeholder="{% if settings.has_deepseek %}•••••••• (saved){% else %}sk-...{% endif %}">
+                                        <button type="button" class="btn btn-sm btn-ghost" onclick="testAIKey('deepseek')" title="Saved key sach me chalti hai ya nahi — real test">🧪 Test</button>
+                                        <button type="button" class="btn btn-sm btn-ghost" id="key-clear-deepseek" onclick="clearAIKey('deepseek')" {% if not settings.has_deepseek %}style="display:none;"{% endif %}>✕</button>
+                                    </div>
+                                    <div class="text-sm" id="key-test-deepseek" style="margin-top:4px;"></div>
+                                </div>
+                                <div class="form-group">
+                                    <label>Google Gemini <code>AIza...</code> <span id="key-badge-gemini" style="color:#047857;font-weight:700;">{% if settings.has_gemini %}✅ saved{% endif %}</span></label>
+                                    <div style="display:flex;gap:6px;">
+                                        <input type="password" id="set-gemini-key" autocomplete="off" placeholder="{% if settings.has_gemini %}•••••••• (saved){% else %}AIza...{% endif %}">
+                                        <button type="button" class="btn btn-sm btn-ghost" onclick="testAIKey('gemini')" title="Saved key sach me chalti hai ya nahi — real test">🧪 Test</button>
+                                        <button type="button" class="btn btn-sm btn-ghost" id="key-clear-gemini" onclick="clearAIKey('gemini')" {% if not settings.has_gemini %}style="display:none;"{% endif %}>✕</button>
+                                    </div>
+                                    <div class="text-sm" id="key-test-gemini" style="margin-top:4px;"></div>
+                                </div>
+                            </div>
+                            <span class="text-sm text-muted">Your clinic pays your own provider bill — no third-party cut, no GIL CLINIC involvement.</span>
+                            <div class="text-sm" style="margin-top:6px;color:#b45309;font-weight:600;line-height:1.5;">
+                                ⚠️ Ye keys sirf tab use hoti hain jab upar <b>AI Mode = "Auto — my own API keys"</b> ho.
+                                Agar AI Mode <b>"Puter"</b> par hai to key saved hone ke baad bhi wo <b>use nahi hogi</b>.
+                                <br>💡 Save karne ke baad <b>🧪 Test</b> dabao — turant pata chal jayega ki key sahi hai aur chalegi ya nahi.
+                            </div>
+                            <div class="text-sm" style="margin-top:6px;color:#065f46;font-weight:600;line-height:1.55;background:#ecfdf5;border:1px solid #6ee7b7;border-radius:8px;padding:8px 10px;">
+                                ✅ <b>Ye keys ab is browser se seedha chalti hain (browser-side BYOK).</b><br>
+                                PythonAnywhere FREE ka server provider tak nahi pahunch sakta (outbound whitelist),
+                                is liye app ab <b>aapke browser</b> se DeepSeek/Groq/Gemini ko seedha call karti hai.
+                                Key <b>is device ke browser me hi save</b> hoti hai (server pe nahi) — isliye
+                                <b>har doctor apni key apne device par daale, aur uska bill usi ka hoga.</b>
+                                <br>• <b>Key is device me chalana hai to:</b> key bharo → 💾 Save → AI Mode = "Auto" rakho.
+                                <br>• <b>Har device par alag key bharo</b> (har doctor ka apna bill). "🧪 Test" server se test karta hai
+                                (PA par connection error dikha sakta hai) — par asli AI call browser se chalegi.
+                                <br>• <b>Bina key ke bhi AI chahiye</b> → upar <b>Puter</b> mode (free credits).
+                            </div>
+                        </div>
+                        <div class="text-sm text-muted" id="ai-usage-info" style="margin-top:4px;">🤖 AI calls this month: loading…</div>
+                        <div class="text-sm text-muted" style="margin-top:4px;">⚠️ Enabling AI sends patient data to the selected AI provider. By enabling, you consent on your clinic's behalf (DPDP Act 2023).</div>
+                    </div>
+                    <div class="card" style="grid-column:1/2;">
+                        <div class="card-title">📱 WhatsApp Jugaad Numbers</div>
+                        <div class="form-row-2">
+                            <div class="form-group">
+                                <label>Reception</label>
+                                <input type="text" id="set-wa-reception" value="{{ settings.wa_reception or '' }}" placeholder="91XXXXXXXXXX">
+                            </div>
+                            <div class="form-group">
+                                <label>Manager</label>
+                                <input type="text" id="set-wa-manager" value="{{ settings.wa_manager or '' }}" placeholder="91XXXXXXXXXX">
+                            </div>
+                            <div class="form-group">
+                                <label>Doctor</label>
+                                <input type="text" id="set-wa-doctor" value="{{ settings.wa_doctor or '' }}" placeholder="91XXXXXXXXXX">
+                            </div>
+                            <div class="form-group">
+                                <label>Dietitian</label>
+                                <input type="text" id="set-wa-dietitian" value="{{ settings.wa_dietitian or '' }}" placeholder="91XXXXXXXXXX">
+                            </div>
+                        </div>
+                        <div class="text-sm text-muted">Numbers with country code (no +). Used by WhatsApp share buttons.</div>
+                    </div>
+                    <div class="card" style="grid-column:2/3;">
+                        <div class="card-title">📄 Prescription Header Preview</div>
+                        <div id="letterhead-preview" style="border:1px solid var(--border);border-radius:8px;padding:12px;background:rgb(235,245,255);font-family:Helvetica,Arial,sans-serif;font-size:12px;line-height:1.4;">
+                            <div style="display:flex;justify-content:space-between;margin-bottom:8px;">
+                                <span class="letterhead-left" style="font-weight:bold;font-size:14px;color:#003366;" id="preview-doc-name">Dr. Name</span>
+                                <span class="letterhead-right" style="font-weight:bold;font-size:13px;color:#003366;" id="preview-clinic-name">Clinic Name</span>
+                            </div>
+                            <div style="display:flex;justify-content:space-between;margin-bottom:4px;">
+                                <span class="letterhead-left" style="font-weight:bold;font-size:10px;color:#1e1e78;" id="preview-degree">MBBS, MD</span>
+                                <span class="letterhead-right" style="font-size:10px;color:#3c3c3c;" id="preview-address">Clinic Address</span>
+                            </div>
+                            <div style="display:flex;justify-content:space-between;margin-bottom:4px;">
+                                <span class="letterhead-left" style="font-style:italic;font-size:10px;color:#3c3c78;" id="preview-subtitle">Specialty</span>
+                                <span class="letterhead-right" style="font-size:10px;color:#3c3c3c;" id="preview-contact">📞 Phone</span>
+                            </div>
+                            <div style="display:flex;justify-content:space-between;">
+                                <span class="letterhead-left" style="font-size:9px;color:#505064;" id="preview-extra">Extra qualifications</span>
+                                <span class="letterhead-right" style="font-size:9px;color:#646464;" id="preview-reg">Reg No: DMC-12345</span>
+                            </div>
+                            <div style="height:1px;background:#ccc;margin:8px 0;"></div>
+                            <div style="display:flex;justify-content:space-between;font-size:11px;">
+                                <span id="preview-patient">Patient: Demo Patient</span>
+                                <span id="preview-date">Date: 24-Jul-2026</span>
+                            </div>
+                        </div>
+                        <div class="text-sm text-muted mt-sm">Live preview — saves with settings</div>
+                    </div>
+                    <div style="grid-column:1/3;margin-top:-8px;">
+                        <button class="btn btn-primary" onclick="saveSettings()">💾 Save All Settings</button>
+                        <span id="settings-status" class="text-muted text-sm" style="margin-left:12px;"></span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ════════════════ TAB: RESEARCH ════════════════ -->
+            <div class="tab-content" id="tab-research">
+                <h2 class="mb-sm">🔬 Practice Research</h2>
+                <div class="card">
+                    <div class="card-title">Ask AI about your practice data</div>
+                    <div class="flex gap-sm mb-sm">
+                        <button class="btn btn-sm btn-ghost" onclick="setResearchQ('What is the most common diagnosis in my practice?')">📊 Disease Distribution</button>
+                        <button class="btn btn-sm btn-ghost" onclick="setResearchQ('What are the top 10 most prescribed medications?')">💊 Top Drugs</button>
+                        <button class="btn btn-sm btn-ghost" onclick="setResearchQ('What is my revenue breakdown by diagnosis?')">💰 Revenue</button>
+                    </div>
+                    <textarea id="research-q" rows="2" placeholder="Ask a research question about your patient data..."></textarea>
+                    <button class="btn btn-primary mt-sm" onclick="runResearch()">🔬 Analyze</button>
+                    <div id="research-result" class="mt-md rx-output" style="display:none;"></div>
+                </div>
+            </div>
+
+            <!-- ════════════════ TAB: CME ════════════════ -->
+            <div class="tab-content" id="tab-cme">
+                <h2 class="mb-sm">📚 CME Study Material</h2>
+                <div class="card">
+                    <div class="card-title">Generate CME Content</div>
+                    <input type="text" id="cme-topic" placeholder="e.g. Hypertension Management, Diabetes Guidelines...">
+                    <button class="btn btn-primary mt-sm" onclick="generateCME()">📚 Generate CME</button>
+                    <div id="cme-content" class="mt-md rx-output" style="display:none;"></div>
+                    <button class="btn btn-ghost mt-sm" id="cme-pdf-btn" style="display:none;" onclick="downloadCmePdf()">📄 Download PDF</button>
+                    <div id="cme-chat-box" style="display:none; margin-top:16px; border-top:1px solid var(--border, #e2e8f0); padding-top:14px;">
+                        <div class="card-title">💬 Discuss — sawal poochein (bol ke ya likh ke)</div>
+                        <div id="cme-chat-log" style="max-height:280px; overflow-y:auto; margin-bottom:10px; font-size:14px; line-height:1.5;"></div>
+                        <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-bottom:8px;">
+                            <select id="jarvis-lang" onchange="_jarvisLang = this.value" style="padding:6px;border:1px solid #cbd5e1;border-radius:8px;" title="Bhasha chuno">
+                                <option value="hi-IN">🌐 हिंदी</option>
+                                <option value="en-IN" selected>🌐 English</option>
+                                <option value="mr-IN">🌐 मराठी</option>
+                                <option value="ta-IN">🌐 தமிழ்</option>
+                                <option value="te-IN">🌐 తెలుగు</option>
+                            </select>
+                            <label style="display:inline-flex;align-items:center;gap:5px;cursor:pointer;font-size:13px;">
+                                <input type="checkbox" id="jarvis-voice" checked> 🔊 Voice answer
+                            </label>
+                            <button class="btn btn-sm" id="jarvis-mic" onclick="jarvisToggleMic()" style="background:#059669;color:#fff;font-weight:700;">🎙️ Bolo</button>
+                            <span id="jarvis-mic-status" class="text-sm text-muted"></span>
+                        </div>
+                        <div style="display:flex; gap:8px; align-items:center;">
+                            <input type="text" id="cme-chat-q" placeholder="e.g. Is naye guideline ka Indian OPD par kya asar hai?" style="flex:1; padding:8px; border:1px solid #cbd5e1; border-radius:8px;" onkeydown="if(event.key==='Enter') cmeAsk()">
+                            <button class="btn btn-sm btn-primary" onclick="cmeAsk()">💬 Poochein</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ════════════════ TAB: PATIENT MONITOR (patient self-filling) ════════════════ -->
+            <div class="tab-content" id="tab-patient-monitor">
+                <div class="flex-between mb-sm" style="flex-wrap:wrap;gap:8px;">
+                    <h2 style="margin:0;">🩺 Patient Monitor — ghar se bhari readings</h2>
+                    <div class="flex gap-sm" style="flex-wrap:wrap;">
+                        <button class="btn btn-sm btn-ghost" onclick="loadPatientMonitor()">🔄 Refresh</button>
+                    </div>
+                </div>
+                <p class="text-sm text-muted" style="margin-bottom:10px;">
+                    Patient apne phone se BP / sugar / pulse / weight / temp bharta hai — yahan trends aur
+                    report dikhte hain. Naya patient jodne ke liye <b>New Rx</b> me patient select karke
+                    <b>📱 Patient link</b> dabayein (WhatsApp par link chala jayega).
+                </p>
+
+                <div class="card" style="margin-bottom:12px;">
+                    <div class="flex-between" style="flex-wrap:wrap;gap:10px;">
+                        <div id="pm-stats" class="text-sm"><span class="text-muted">Loading…</span></div>
+                        <div class="flex gap-sm" style="flex-wrap:wrap;">
+                            <input type="text" id="pm-search" placeholder="Patient ka naam / ID / phone…"
+                                   style="padding:7px 10px;border:1px solid #cbd5e1;border-radius:8px;"
+                                   onkeydown="if(event.key==='Enter') loadPatientMonitor()">
+                            <button class="btn btn-sm btn-primary" onclick="loadPatientMonitor()">🔍 Dhoondo</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="pm-list"><p class="text-muted text-sm">Loading…</p></div>
+                <div id="pm-detail"></div>
+            </div>
+
+        </div>
+    </main>

@@ -241,11 +241,40 @@ class TestPwaStatusEndpoint:
         assert "cache" in body["note"].lower()
 
 
+def _render_opd_dashboard() -> str:
+    """Render the OPD dashboard through Jinja (its content lives in partials).
+
+    Brick 4b split the 380KB template into partials, so a raw read of
+    ``dashboard.html`` only sees the include shell — render it to check content.
+    """
+    import jinja2
+
+    env = jinja2.Environment(
+        loader=jinja2.FileSystemLoader(str(ROOT / "templates")), auto_reload=False
+    )
+    return env.get_template("opd/dashboard.html").render(
+        request=None,
+        session={"role": "chief", "name": "Dr"},
+        role="chief",
+        doctor_id="x",
+        doc_name="Dr",
+        settings={},
+        raw_ai_keys={},
+        build_stamp="t",
+        tab="rx",
+        today_count=0,
+        today_revenue=0,
+        is_chief=True,
+        is_owner=True,
+        templates=[],
+    )
+
+
 class TestPagesLinkTheManifest:
     """A manifest nobody links is a manifest the browser never reads."""
 
     def test_the_dashboard_links_and_registers(self):
-        html = (ROOT / "templates" / "opd" / "dashboard.html").read_text(encoding="utf-8")
+        html = _render_opd_dashboard()
         assert 'rel="manifest"' in html
         assert "/manifest.json" in html
         assert "serviceWorker" in html and "'/sw.js'" in html
@@ -341,7 +370,7 @@ class TestToolsPage:
         assert "clickable" in html.lower() or "click" in html.lower()
 
     def test_the_dashboard_links_to_the_tools_page(self):
-        html = (ROOT / "templates" / "opd" / "dashboard.html").read_text(encoding="utf-8")
+        html = _render_opd_dashboard()
         assert 'href="/tools"' in html
 
 

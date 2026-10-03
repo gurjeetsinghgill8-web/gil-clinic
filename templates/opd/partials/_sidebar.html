@@ -1,0 +1,43 @@
+    <!-- ─── SIDEBAR ─── -->
+    <aside class="sidebar">
+        <div class="sb-header">
+            <h2>{{ settings.clinic_name or 'Smart OPD' }}</h2>
+            <span class="role-badge">
+                {% if role == 'chief' %}👑 Chief
+                {% elif role == 'admin' %}⚙️ Admin
+                {% elif role == 'licensed' %}🔐 Licensed
+                {% else %}👨‍⚕️ Junior{% endif %}
+            </span>
+            <div class="doctor-name">{{ doc_name or settings.doc_name }}</div>
+        </div>
+
+        <a href="/home" class="nav-item" style="color:#a78bfa;font-weight:700;border-bottom:1px solid var(--border);margin-bottom:8px;">
+            <span class="icon">🏠</span> Home / My Modules
+        </a>
+
+        <button class="nav-item active" data-tab="rx"> <span class="icon">📝</span> New Rx</button>
+        <button class="nav-item" data-tab="queue"> <span class="icon">🚶</span> Queue <span id="queue-badge" style="background:#ef4444;color:#fff;font-size:10px;padding:1px 6px;border-radius:10px;margin-left:4px;">0</span></button>
+        <button class="nav-item" data-tab="roster"> <span class="icon">📋</span> OPD Roster</button>
+        <button class="nav-item" data-tab="batch"> <span class="icon">📸</span> Batch Scan</button>
+        <button class="nav-item" data-tab="lab-intel"> <span class="icon">🧪</span> Lab Intelligence</button>
+        <button class="nav-item" data-tab="patient-monitor"> <span class="icon">🩺</span> Patient Monitor</button>
+        <button class="nav-item" data-tab="upgrade"> <span class="icon">⚕️</span> Specialty Upgrade</button>
+        {% if is_chief %}
+        <button class="nav-item" data-tab="starred"> <span class="icon">⭐</span> Starred</button>
+        {% endif %}
+        <button class="nav-item" data-tab="settings"> <span class="icon">⚙️</span> Settings</button>
+        {% if is_chief %}
+        <button class="nav-item" data-tab="research"> <span class="icon">🔬</span> Research</button>
+        <button class="nav-item" data-tab="cme"> <span class="icon">📚</span> CME</button>
+        {% endif %}
+
+        <div class="sb-footer">
+            <!-- Brick 3b: the one hallway — every dashboard links to the role-
+                 filtered hub, so a doctor can reach reception/lab/billing and
+                 back without knowing their URLs. -->
+            <a href="/home" style="display:block;text-align:center;margin-bottom:8px;padding:8px;border-radius:8px;background:#1e293b;color:#a78bfa;font-weight:700;text-decoration:none;font-size:13px;">🏠 My Modules</a>
+            <a href="/opd/logout">🚪 Logout</a>
+            <div id="build-stamp" title="Live par kaunsa version chal raha hai — har deploy par badalta hai. Naya code chadha ya nahi, yahin se pata chalta hai."
+                 style="margin-top:8px;font-size:11px;color:var(--text-muted);line-height:1.35;word-break:break-all;">Build: …</div>
+        </div>
+    </aside>

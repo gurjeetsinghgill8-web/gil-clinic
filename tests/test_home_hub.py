@@ -229,9 +229,39 @@ class TestHomeHub:
 # ══════════════════════════════════════════════════════════════════════════
 
 
+def _render_opd_dashboard() -> str:
+    """Render the OPD dashboard through Jinja.
+
+    Brick 4b split the 380KB template into partials, so a raw read of
+    ``dashboard.html`` only sees the include shell — the real content has to be
+    rendered. This helper does exactly that with a minimal context.
+    """
+    import jinja2
+
+    env = jinja2.Environment(
+        loader=jinja2.FileSystemLoader(str(ROOT / "templates")), auto_reload=False
+    )
+    return env.get_template("opd/dashboard.html").render(
+        request=None,
+        session={"role": "chief", "name": "Dr"},
+        role="chief",
+        doctor_id="x",
+        doc_name="Dr",
+        settings={},
+        raw_ai_keys={},
+        build_stamp="t",
+        tab="rx",
+        today_count=0,
+        today_revenue=0,
+        is_chief=True,
+        is_owner=True,
+        templates=[],
+    )
+
+
 class TestDashboardsLinkTheHub:
     def test_the_opd_dashboard_links_to_home(self):
-        html = (ROOT / "templates" / "opd" / "dashboard.html").read_text(encoding="utf-8")
+        html = _render_opd_dashboard()
         assert 'href="/home"' in html
         assert "My Modules" in html
 
