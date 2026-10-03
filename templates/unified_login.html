@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#0f172a">
+<title>Login — GIL CLINIC</title>
+<link rel="manifest" href="/manifest.json">
+<link rel="apple-touch-icon" href="/static/icons/apple-touch-icon.png">
+<link rel="icon" type="image/png" sizes="192x192" href="/static/icons/icon-192.png">
+<script>
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', function () {
+      navigator.serviceWorker.register('/sw.js').catch(function () {});
+    });
+  }
+</script>
+<style>
+  :root { --bg:#0f172a; --card:#1e293b; --line:rgba(255,255,255,.08); --text:#e2e8f0; --muted:#94a3b8; --brand:#667eea; }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family:'Inter',system-ui,sans-serif; background:var(--bg); color:var(--text);
+         min-height:100vh; display:flex; align-items:center; justify-content:center; padding:20px; }
+  .box { width:100%; max-width:400px; }
+  .logo { text-align:center; font-size:54px; margin-bottom:6px; }
+  h1 { text-align:center; font-size:24px; font-weight:800; letter-spacing:-.5px; }
+  .sub { text-align:center; color:var(--muted); font-size:13.5px; margin:6px 0 26px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:16px; padding:24px; }
+  label { display:block; font-size:11px; font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:.5px; margin-bottom:7px; }
+  input { width:100%; padding:14px; border:1.5px solid var(--line); border-radius:11px; background:#0f172a;
+          color:var(--text); font-size:18px; letter-spacing:6px; text-align:center; outline:none; font-family:inherit; }
+  input:focus { border-color:var(--brand); }
+  button { width:100%; margin-top:14px; padding:14px; border:0; border-radius:11px; cursor:pointer;
+           font-family:inherit; font-size:15px; font-weight:800; color:#fff;
+           background:linear-gradient(135deg,#667eea,#764ba2); }
+  button:disabled { opacity:.55; cursor:not-allowed; }
+  .error { margin-top:12px; padding:10px 12px; border-radius:10px; background:#fef2f2; color:#dc2626;
+           font-size:13px; font-weight:600; text-align:center; }
+  .choices { margin-top:14px; display:flex; flex-direction:column; gap:9px; }
+  .choices .head { font-size:12px; color:var(--muted); font-weight:700; text-align:center; }
+  .choice-btn { width:100%; padding:13px; border:1.5px solid var(--line); border-radius:11px; background:#0f172a;
+               color:var(--text); font-family:inherit; font-size:14.5px; font-weight:700; cursor:pointer; }
+  .choice-btn:hover { border-color:var(--brand); background:#1e293b; }
+  .choice-btn .desc { font-weight:400; color:var(--muted); font-size:12px; }
+  .foot { margin-top:22px; text-align:center; font-size:12px; color:var(--muted); line-height:1.9; }
+  .foot a { color:#a78bfa; text-decoration:none; font-weight:600; }
+  .foot a:hover { text-decoration:underline; }
+</style>
+</head>
+<body>
+<div class="box">
+  <div class="logo">🏥</div>
+  <h1>GIL CLINIC</h1>
+  <p class="sub">Ek PIN — aapki apni jagah</p>
+
+  <div class="card">
+    {% if choices %}
+      <form method="POST" action="/signin">
+        <label for="pin">Aapka PIN</label>
+        <input id="pin" name="pin" value="{{ pin }}" readonly>
+        <div class="choices">
+          <div class="head">Ye PIN ek se zyada roles ka hai — apna role chunein:</div>
+          {% for c in choices %}
+          <button type="submit" name="role" value="{{ c.key }}" class="choice-btn">
+            {{ c.name }}
+            <span class="desc">→ {{ c.dashboard }}</span>
+          </button>
+          {% endfor %}
+        </div>
+      </form>
+    {% else %}
+      <form method="POST" action="/signin">
+        <label for="pin">PIN daalein</label>
+        <input id="pin" name="pin" type="password" inputmode="numeric" maxlength="6"
+               placeholder="••••" autofocus autocomplete="off">
+        <button type="submit">Login →</button>
+      </form>
+    {% endif %}
+
+    {% if error %}
+    <div class="error">{{ error }}</div>
+    {% endif %}
+  </div>
+
+  <div class="foot">
+    Ek hi PIN se apni jagah: reception sirf reception, lab sirf lab, doctor apna OPD.<br>
+    Admin/CEO username-password se: <a href="/admin/login">Admin login</a> ·
+    Clinic login: <a href="/clinic-portal">Clinic portal</a><br>
+    <a href="/">← Home</a>
+  </div>
+</div>
+</body>
+</html>

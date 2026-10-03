@@ -232,6 +232,11 @@ from src.presentation.pwa.routes.pwa_routes import (
     router as pwa_router,
 )
 
+# -- Unified login (one door, role-based routing — Brick 2a) --
+from src.presentation.auth.routes.unified_login import (
+    router as unified_login_router,
+)
+
 # -- Clinic tools (one page where every new capability is actually clickable) --
 from src.presentation.tools.routes.tools_routes import (
     router as tools_router,
@@ -717,6 +722,9 @@ app.include_router(ingest_router)
 
 # PWA — one manifest + one root-scoped service worker (installable app)
 app.include_router(pwa_router)
+
+# Unified login — one door, role-based routing (Brick 2a, additive)
+app.include_router(unified_login_router)
 
 # Clinic tools — a real page for referral / slots / reviews / FHIR / audit
 app.include_router(tools_router)
