@@ -507,6 +507,10 @@ async def reception(request: Request):
     sess = get_session(request)
     if not sess:
         return RedirectResponse("/staff/login")
+    from src.domain.auth import nav
+
+    if not nav.can_access_staff_route(sess.get("role"), "reception"):
+        return RedirectResponse("/home", status_code=302)
     queue_entries = await _get_queue(request)
     return HTMLResponse(content=_render("dashboard/reception.html",
         request=request, active_page="reception", session_user=sess,
@@ -520,6 +524,12 @@ async def _dept_page(request: Request, dept_key: str, active_page: str):
     sess = get_session(request)
     if not sess:
         return RedirectResponse("/staff/login")
+    # Brick 4: a technician may open only their own department. Oversight roles
+    # (admin/ceo/owner) bypass; everyone else is sent to their own hub.
+    from src.domain.auth import nav
+
+    if not nav.can_access_staff_route(sess.get("role"), active_page):
+        return RedirectResponse("/home", status_code=302)
     cfg = DEPT_CONFIG.get(dept_key, {"id": dept_key, "name": dept_key, "icon": "🏥"})
     all_entries = await _get_queue(request, department=cfg["id"])
     current = next((e for e in all_entries if e.get("status") == "IN_PROGRESS"), None)
@@ -608,6 +618,10 @@ async def live_board_page(request: Request):
     sess = get_session(request)
     if not sess:
         return RedirectResponse("/staff/login")
+    from src.domain.auth import nav
+
+    if not nav.can_access_staff_route(sess.get("role"), "live_board"):
+        return RedirectResponse("/home", status_code=302)
     snap = await _live_board_snapshot(request)
     return HTMLResponse(content=_render("dashboard/live_board.html",
         request=request, active_page="live_board", session_user=sess,
@@ -649,6 +663,10 @@ async def patient_status(request: Request, q: str = Query("")):
     sess = get_session(request)
     if not sess:
         return RedirectResponse("/staff/login", status_code=302)
+    from src.domain.auth import nav
+
+    if not nav.can_access_staff_route(sess.get("role"), "patient_status"):
+        return RedirectResponse("/home", status_code=302)
     patient_entries = []
     query = q.strip()
 
@@ -923,6 +941,10 @@ async def dietician_page(request: Request):
     sess = get_session(request)
     if not sess:
         return RedirectResponse("/staff/login")
+    from src.domain.auth import nav
+
+    if not nav.can_access_staff_route(sess.get("role"), "dietician"):
+        return RedirectResponse("/home", status_code=302)
     queue_entries = await _get_queue(request, department="Dietitian")
     return HTMLResponse(content=_render("dashboard/dietician.html",
         request=request, active_page="dietician", session_user=sess,

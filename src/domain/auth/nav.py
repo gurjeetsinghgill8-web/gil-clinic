@@ -43,9 +43,7 @@ MODULES: tuple[Module, ...] = (
     Module("tmt", "TMT", "/staff/tmt", "🏃", "Diagnostics"),
     Module("xray", "Xray", "/staff/xray", "🦴", "Diagnostics"),
     Module("lab", "Lab", "/staff/lab", "🧪", "Diagnostics"),
-    Module("billing", "Billing", "/staff/billing", "💰", "Admin"),
     Module("live_board", "Live Board", "/staff/live-board", "📊", "Admin"),
-    Module("tv", "TV Display", "/staff/tv", "📺", "Admin"),
     Module("tools", "Clinic Tools", "/tools", "🛠️", "Admin"),
     Module("admin", "Admin Panel", "/admin/dashboard", "🔐", "Admin"),
     Module("find_doctor", "Find a Doctor", "/find-doctor", "📍", "Public"),
@@ -65,10 +63,10 @@ ROLE_MODULES: dict[str, tuple[str, ...]] = {
     # Super-admin / clinic admin: admin surface + the operational rooms, and —
     # per the owner's rule "admin doctor se bhi zyada dekh sakta hai" — the
     # doctor cockpit too, so an admin can oversee it.
-    "admin": ("admin", "opd", "reception", "billing", "tools", "live_board",
-              "tv", "patient_status", "find_doctor"),
+    "admin": ("admin", "opd", "reception", "tools", "live_board",
+              "patient_status", "find_doctor"),
     # Manager: the operational oversight rooms.
-    "manager": ("reception", "billing", "tools", "live_board", "tv",
+    "manager": ("reception", "tools", "live_board",
                 "patient_status", "find_doctor"),
     # Doctor (OPD chief/junior/admin/licensed + staff "doctor"): own cockpit.
     "doctor": ("opd", "tools", "patient_status", "live_board", "find_doctor"),
@@ -80,7 +78,6 @@ ROLE_MODULES: dict[str, tuple[str, ...]] = {
     "tmt": ("tmt",),
     "xray": ("xray",),
     "dietician": ("dietician", "find_doctor"),
-    "billing": ("billing",),
 }
 
 # ── Canonicalisation ─────────────────────────────────────────────────────────
@@ -146,3 +143,37 @@ def is_owner(raw_role: str | None) -> bool:
 def module_keys(raw_role: str | None) -> list[str]:
     """Just the keys, for quick assertions and JSON."""
     return [m.key for m in modules_for_role(raw_role)]
+
+
+# ── Route enforcement (Brick 4) — the matrix as security, not just nav ──────
+#
+# Hiding a link is not protection: a receptionist can still type /staff/lab in
+# the address bar. This is the same rule, enforced at the route. ``admin``,
+# ``ceo`` and ``owner`` bypass it (oversight roles see everything).
+
+#: staff route key → canonical roles allowed to open it.
+STAFF_ROUTE_ROLES: dict[str, tuple[str, ...]] = {
+    "reception": ("reception", "manager"),
+    "ecg": ("ecg",),
+    "echo": ("echo",),
+    "tmt": ("tmt",),
+    "xray": ("xray",),
+    "lab": ("lab",),
+    "opd": ("doctor", "manager"),
+    "doctor": ("doctor", "manager"),
+    "dietician": ("dietician", "manager"),
+    "manager": ("manager",),
+    "patient_status": ("reception", "doctor", "dietician", "manager"),
+    "live_board": ("doctor", "manager"),
+    "settings": ("manager",),
+}
+
+OVERSIGHT_ROLES: frozenset[str] = frozenset({"admin", "ceo", "owner"})
+
+
+def can_access_staff_route(raw_role: str | None, route_key: str) -> bool:
+    """May this role open this staff route? Oversight roles always can."""
+    role = canonical_role(raw_role)
+    if role in OVERSIGHT_ROLES:
+        return True
+    return role in STAFF_ROUTE_ROLES.get(route_key, ())

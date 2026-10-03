@@ -39,8 +39,12 @@ def _client(role: str = "Reception") -> TestClient:
 
 
 def test_department_pages_are_enabled():
-    """TMT/ECG/Echo pages must render (200), NOT redirect to /staff/home."""
-    with _client() as client:
+    """TMT/ECG/Echo pages must render (200) for an OVERSIGHT role.
+
+    Brick 4 enforces roles: a single department technician only opens their own
+    room, so these pages are checked with an oversight session that may open all.
+    """
+    with _client("super_admin") as client:
         for path in ("/staff/ecg", "/staff/echo", "/staff/tmt", "/staff/xray", "/staff/lab"):
             r = client.get(path, follow_redirects=False)
             assert r.status_code == 200, f"{path} -> {r.status_code} (expected 200)"
@@ -48,7 +52,7 @@ def test_department_pages_are_enabled():
 
 
 def test_live_board_page_and_json():
-    with _client() as client:
+    with _client("Manager") as client:
         # Register patients across departments
         client.post("/staff/api/register", json={
             "name": "LiveBoard One", "phone": f"9{_RUN:05d}0001",
