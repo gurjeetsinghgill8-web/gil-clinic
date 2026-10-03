@@ -41,9 +41,15 @@
 | 📅 **Slot booking** (BLOCK 3 · SLT-01/02/03, capacity-checked) | ✅ **BUILT** |
 | 🚨 **E-08 Code Red** (`#E-1` + siren + queue-moved-back honesty) | ✅ **BUILT** |
 | 🏷️ **Token prefix** `C-14` / `G-14` (E-04 display gap) | ✅ **BUILT** |
+| 🔁 **Referral slip** — cross-clinic, signed, accept-to-queue (F-06) | ✅ **BUILT** |
+| ⭐ **Verified reviews → Bayesian rating** (F-07) | ✅ **BUILT** |
+| 📊 **EWT accuracy report** (±5 min, graded) (F-03) | ✅ **BUILT** |
+| 🏷️ **Computed tags + multi-factor ranking** (F-04 / F-05) | ✅ **BUILT** |
+| 👁️ **PHI-free network overview** (F-08) | ✅ **BUILT** |
+| 🪦 **OPEN-01 tombstone fix** in all 4 phone lookups | ✅ **BUILT** |
 | 🖥️ Dashboard START OPD panel + delay badge | ✅ **BUILT** |
 | 📱 Patient page wait card + "ab niklo" chime | ✅ **BUILT** |
-| **Test suite** | ✅ **344 passed, 0 failed** |
+| **Test suite** | ✅ **435 passed, 0 failed** |
 
 ---
 
@@ -1029,18 +1035,35 @@ CREATE TABLE doctor_crawl_runs (...);
 | M6-04 | `clinics` crawl columns + `doctor_crawl_runs` | model + migration | S |
 | M6-05 | Tier-2 "public listing" label + claim button | `marketplace.html` | S |
 
-### 🟣 BLOCK 7 — Enterprise merge (Part F) — P1/P2
+### 🟣 BLOCK 7 — Enterprise merge (Part F) — P1/P2 — **DONE (03-Oct-2026)**
 
 | # | Item | File | Effort |
 |---|------|------|--------|
 | F-01 · F-02 | velocity + geriatric signals | `src/domain/queue/ewt.py` | ✅ **DONE** |
-| F-03 | EWT accuracy (promised vs delivered) | naya `clinic_stats_routes.py` | M |
-| F-04 · F-05 | multi-factor ranking + `tags[]` | `marketplace_routes.py` | M |
-| F-06 | referral slip + accept-to-queue | naya `referral/` module | L |
-| F-07 | verified reviews → Bayesian rating | model + admin card | M |
-| F-08 | `/admin/network` live overview | `admin/dashboard_routes.py` | S |
-| F-10 | `open_time` / `close_time` / `rating` | clinic model + marketplace | M |
-| OPEN-01 | merged-patient tombstone fix in phone lookups | `marketplace_routes.py` + 2 more | S |
+| F-03 | EWT accuracy (promised vs delivered, ±5 min, graded) | `ewt.accuracy_report` + `/opd/api/stats/ewt-accuracy` | M | ✅ **DONE** |
+| F-04 | Multi-factor ranking + `rank_score` + `explain()` | `discovery.py` + `marketplace_routes.py` | M | ✅ **DONE** |
+| F-05 | Computed `tags[]` (9 tags, each backed by real data) | `discovery.py` | S | ✅ **DONE** |
+| F-06 | Referral slip + accept-to-queue (signed, one-shot) | `referral_model.py` + `referral_routes.py` + `referral_slip.html` | L | ✅ **DONE** |
+| F-07 | Verified reviews → Bayesian rating | `reviews.py` + `review_model.py` + `review_routes.py` | M | ✅ **DONE** |
+| F-08 | `/api/v1/admin/network` live overview (**PHI-free**) | `clinic_stats_routes.py` | S | ✅ **DONE** |
+| F-09b | GPS + travel time in the alert | `travel.py` + `patient_track.html` | S | ✅ **DONE** |
+| F-10 | `open_time` / `close_time` / `rating` | clinic model + marketplace | M | ✅ **DONE** (BLOCK 2) |
+| OPEN-01 | merged-patient tombstone in phone lookups | `src/infrastructure/patient/lookup.py` + 4 call sites | S | ✅ **DONE** |
+
+> **OPEN-01 detail:** a tombstone was reachable from all four phone lookups
+> (`marketplace_routes`, `staff_routes`, `patient_portal_routes`, and the new
+> `slots_routes`). All four now go through `patient/lookup.py`, which skips
+> tombstones and follows them to the survivor. A **second** latent BUG-03 was
+> found on the way: `staff_routes` used `scalar_one_or_none()` for its phone
+> lookup, so a family sharing one number would have raised
+> `MultipleResultsFound` = HTTP 500 on reception booking.
+>
+> **F-06 safety rules:** nothing enters the receiving queue until that clinic
+> accepts with its own session; the slip is signed + time-limited (14 days); a
+> second acceptance is refused (409) so a forwarded link cannot mint two tokens;
+> opening the slip page grants nothing (it only increments a view counter).
+> A referred patient goes to the **back** of the line by default — a referral is
+> a real patient, not an emergency.
 
 ### ⚫ BLOCK 8 — Compliance wiring (P0, credentials ka intezaar)
 

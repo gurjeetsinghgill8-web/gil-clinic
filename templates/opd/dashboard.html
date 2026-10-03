@@ -6296,6 +6296,8 @@ async function deleteMedLibrary(id) {
   <button id="qe-toggle" style="width:100%;padding:9px;border:0;border-radius:9px;background:#16a34a;color:#fff;font-weight:700;cursor:pointer;">&#9654; START OPD</button>
   <button id="qe-red" style="width:100%;margin-top:6px;padding:9px;border:0;border-radius:9px;background:#dc2626;color:#fff;font-weight:800;cursor:pointer;">&#128680; CODE RED (Emergency)</button>
   <div id="qe-links" style="margin-top:8px;"></div>
+  <!-- Incoming referrals from other clinics (F-06) -->
+  <div id="qe-referrals" style="margin-top:10px;"></div>
   <!-- Live per-patient actions: E-03b leave-now · E-02 hold · E-07 no-show -->
   <div id="qe-queue" style="margin-top:10px;"></div>
   <!-- Slot grid: SLT-01/02 create + SLT-03 book (Part B · B5) -->
@@ -6374,6 +6376,9 @@ async function deleteMedLibrary(id) {
                  'onclick="qeLeaveNow(\'' + esc(r.entry_id) + '\')"') +
           rowBtn('&#9208;', '#d97706', 'Hold — patient bahar hai',
                  'onclick="qeHold(\'' + esc(r.entry_id) + '\')"') +
+          rowBtn('&#128257;', '#7c3aed', 'Doosri clinic ko referral bhejein',
+                 'onclick="qeRefer(\'' + esc(r.entry_id) + '\',\'' +
+                 esc(r.patient_name) + '\')"') +
           '</div>';
       });
     }
@@ -6525,6 +6530,91 @@ async function deleteMedLibrary(id) {
       .catch(function () {});
   }
 
+  // ── F-06 · Referrals: send a patient out, accept one in ─────────────────
+  function renderReferrals(d) {
+    var box = el('qe-referrals');
+    if (!box) return;
+    var rows = (d && d.referrals) || [];
+    if (!rows.length) { box.innerHTML = ''; return; }
+    var html = '<div style="color:#c4b5fd;font-size:11px;text-transform:uppercase;' +
+      'letter-spacing:.4px;margin-bottom:5px;">Referral aaye (' + rows.length + ')</div>';
+    rows.slice(0, 5).forEach(function (r) {
+      html += '<div style="padding:5px 0;border-top:1px solid rgba(196,181,253,.25);">' +
+        '<div style="display:flex;align-items:center;gap:6px;">' +
+        '<span style="flex:1;color:#ede9fe;overflow:hidden;text-overflow:ellipsis;' +
+        'white-space:nowrap;">' + esc(r.urgency_label || '') + ' ' +
+        esc(r.patient_name || '—') + '</span>' +
+        rowBtn('&#9989;', '#16a34a', 'Accept — token banayein',
+               'onclick="qeAcceptReferral(\'' + esc(r.id) + '\')"') +
+        rowBtn('&#10060;', '#475569', 'Decline',
+               'onclick="qeDeclineReferral(\'' + esc(r.id) + '\')"') +
+        '</div>' +
+        '<div style="color:#a5b4fc;font-size:11px;margin-top:2px;">' +
+        esc(r.from_clinic_name || 'Clinic') + ' se · ' + esc(r.reason || '') + '</div>' +
+        '</div>';
+    });
+    box.innerHTML = html;
+  }
+
+  function loadReferrals() {
+    fetch('/opd/api/referrals')
+      .then(function (r) { return r.json(); })
+      .then(function (d) { if (d && d.ok) renderReferrals(d); })
+      .catch(function () {});
+  }
+
+  window.qeAcceptReferral = function (referralId) {
+    post('/opd/api/referrals/' + referralId + '/accept', {}).then(function (d) {
+      if (!d || d.ok === false) { alert((d && d.error) || 'Accept fail hua'); return; }
+      alert(d.message);
+      load();
+      loadReferrals();
+    }).catch(function () {});
+  };
+
+  window.qeDeclineReferral = function (referralId) {
+    var reason = prompt('Decline karne ki wajah (optional)?') || '';
+    post('/opd/api/referrals/' + referralId + '/decline', { reason: reason })
+      .then(function (d) {
+        if (!d || d.ok === false) { alert((d && d.error) || 'Decline fail hua'); return; }
+        loadReferrals();
+      }).catch(function () {});
+  };
+
+  // Send one of TODAY'S patients to another clinic.
+  window.qeRefer = function (entryId, patientName) {
+    fetch('/api/v1/marketplace/doctors')
+      .then(function (r) { return r.json(); })
+      .then(function (list) {
+        var options = (list.doctors || []).filter(function (x) { return x.partner; });
+        if (!options.length) { alert('Abhi koi partner clinic nahi mili.'); return; }
+        var menu = options.slice(0, 9).map(function (x, i) {
+          return (i + 1) + '. ' + x.clinic_name + ' (' + x.specialty + ', ' + x.city + ')';
+        }).join('\n');
+        var pick = prompt('Kis clinic ko bhejna hai?\n\n' + menu + '\n\nNumber likhein:', '1');
+        if (!pick) return;
+        var chosen = options[parseInt(pick, 10) - 1];
+        if (!chosen) { alert('Galat number.'); return; }
+        var reason = prompt('Kyun bhej rahe hain? (test / review / second opinion)') || '';
+        var urgency = (prompt('Priority — ROUTINE / SOON / URGENT', 'ROUTINE') || 'ROUTINE')
+          .toUpperCase();
+
+        post('/opd/api/referrals', {
+          to_clinic_id: chosen.id,
+          patient_name: patientName,
+          reason: reason,
+          urgency: urgency
+        }).then(function (d) {
+          if (!d || d.ok === false) { alert((d && d.error) || 'Referral nahi bana'); return; }
+          if (navigator.clipboard && d.slip_url) {
+            navigator.clipboard.writeText(d.slip_url).catch(function () {});
+          }
+          alert(d.message + '\n\nSlip link (WhatsApp par bhejein):\n' + d.slip_url);
+        }).catch(function () {});
+      })
+      .catch(function () { alert('Clinic list nahi mili.'); });
+  };
+
   // ── E-08 · Code Red (emergency override + siren) ─────────────────────────
   function siren() {
     try {
@@ -6633,8 +6723,10 @@ async function deleteMedLibrary(id) {
     bindRed();
     load();
     loadSlots();
+    loadReferrals();
     setInterval(load, 30000);
     setInterval(loadSlots, 60000);
+    setInterval(loadReferrals, 60000);
   }
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);

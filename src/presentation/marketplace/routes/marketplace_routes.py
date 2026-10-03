@@ -30,7 +30,7 @@ import sqlalchemy as sa
 from fastapi import APIRouter, Query, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 
-from src.domain.clinic import opening_hours
+from src.domain.clinic import discovery, opening_hours
 from src.domain.queue import ewt, token_label
 from src.infrastructure.clinic.models.clinic_model import ClinicModel
 from src.infrastructure.queue.models.queue_entry_model import QueueEntryModel
@@ -466,6 +466,20 @@ def _to_public(
     }
 
 
+def _decorate(doctor: dict[str, Any]) -> dict[str, Any]:
+    """Add the computed tags and the ranking score (F-04 / F-05).
+
+    Done after ``_to_public`` so the tag engine and the score see exactly the
+    same shape the API returns — and so neither can drift from the payload by
+    reading a different key.
+    """
+    tags = discovery.compute_tags(doctor)
+    doctor["tags"] = tags
+    doctor["tag_labels"] = discovery.tags_with_labels(tags)
+    doctor["rank_score"] = discovery.rank_score(doctor)
+    return doctor
+
+
 def _haversine(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
     """Great-circle distance in km."""
     import math
@@ -540,14 +554,10 @@ def _sort_key(sort: str, doctor: dict[str, Any]) -> Any:
     if sort == "name":
         return (doctor.get("doctor_name") or "").lower()
 
-    # smart: open first, then the shortest real wait, then nearest, then rated.
-    return (
-        0 if doctor.get("is_open_now") else 1,
-        live.get("wait_minutes") if live.get("wait_minutes") is not None else 9999,
-        distance if distance is not None else 9999.0,
-        -(rating or 0.0),
-        (doctor.get("doctor_name") or "").lower(),
-    )
+    # smart: the F-04 multi-factor score — proximity, live depth (trust-damped),
+    # real availability and rating. Tier is applied separately by the caller so
+    # the partner-above-directory rule can never be broken by these weights.
+    return -float(doctor.get("rank_score") or 0.0)
 
 
 @router.get("/api/v1/marketplace/doctors")
@@ -593,7 +603,9 @@ async def marketplace_doctors(
             )
             rows = (await session.execute(stmt)).scalars().all()
             queue = await _queue_map([str(c.id) for c in rows])
-            doctors = [_to_public(c, queue.get(str(c.id)), lat, lon) for c in rows]
+            doctors = [
+                _decorate(_to_public(c, queue.get(str(c.id)), lat, lon)) for c in rows
+            ]
     except Exception as e:  # pragma: no cover - defensive
         logger.exception("marketplace doctors query failed")
         note = f"Directory temporarily unavailable ({type(e).__name__}). Please try again."
@@ -717,13 +729,12 @@ async def marketplace_book(request: Request):
             # A family can share one phone number, so this must NEVER use
             # scalar_one_or_none() — that raises MultipleResultsFound and turns
             # booking into a 500. Most recent record wins.
-            row = await session.execute(
-                sa.select(PatientModel)
-                .where(PatientModel.phone_hash == phone_hash)
-                .order_by(PatientModel.created_at.desc())
-                .limit(1)
-            )
-            existing = row.scalars().first()
+            # OPEN-01: tombstones (merged duplicates) are skipped, and a
+            # tombstone is followed to its survivor, so a booking can never be
+            # written against a patient record the app considers deleted.
+            from src.infrastructure.patient.lookup import find_by_phone_resolved
+
+            existing = await find_by_phone_resolved(session, phone_hash)
 
         if existing is not None:
             patient_id = existing.patient_id

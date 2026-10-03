@@ -693,19 +693,29 @@ async def api_patient_link(request: Request):
 
     async with async_session_factory() as session:
         if not patient_id and phone:
-            found = await session.execute(
-                sa.select(PatientModel)
-                .where(PatientModel.phone_hash == tk.phone_hash(phone))
-                .limit(1)
+            from src.infrastructure.patient.lookup import (
+                find_by_phone_resolved,
+                follow_merge,
             )
-            p = found.scalar_one_or_none()
+
+            # OPEN-01: no tombstone may resolve here — a merged duplicate must
+            # send the portal to the surviving record, never to the row the app
+            # considers deleted. Also uses .first() semantics so a family
+            # sharing one number cannot raise MultipleResultsFound.
+            p = await find_by_phone_resolved(session, tk.phone_hash(phone))
             if p is None:
+                # Fall back to the raw phone column, still tombstone-aware.
                 found = await session.execute(
                     sa.select(PatientModel)
-                    .where(PatientModel.phone == tk.normalize_phone(phone))
+                    .where(
+                        PatientModel.phone == tk.normalize_phone(phone),
+                        PatientModel.merged_into_patient_id.is_(None),
+                    )
                     .limit(1)
                 )
-                p = found.scalar_one_or_none()
+                p = found.scalars().first()
+            if p is not None and p.merged_into_patient_id:
+                p = await follow_merge(session, p)
             if p is not None:
                 patient_id = p.patient_id
                 patient_name = patient_name or p.name

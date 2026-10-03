@@ -436,6 +436,82 @@
       });
     }
 
+    // ── Verified review (F-07) ─────────────────────────────────────────────
+    // Offered only on the tracking page of a COMPLETED visit, so the token
+    // itself is the proof of visit. No signup, no anonymous drive-by.
+    let reviewOffered = false;
+
+    function maybeOfferReview(status) {
+      if (reviewOffered) return;
+      if (!['COMPLETED', 'REPORT_READY', 'DELIVERED'].includes(status)) return;
+      if (localStorage.getItem('ghos_reviewed_' + TRACK_TOKEN)) return;
+      reviewOffered = true;
+      showReviewBox();
+    }
+
+    function showReviewBox() {
+      if (document.getElementById('review-box')) return;
+      const box = document.createElement('div');
+      box.id = 'review-box';
+      box.style.cssText = 'margin:14px 16px;padding:14px 16px;border-radius:14px;' +
+        'background:#fff;border:1px solid #e2e8f0;font-family:inherit;';
+      box.innerHTML =
+        '<div style="font-size:15px;font-weight:700;color:#0f172a;">⭐ Doctor ko rating dijiye</div>' +
+        '<div style="font-size:12.5px;color:#64748b;margin-top:4px;">' +
+        'Sirf asli visit ke baad — is liye aapka link hi proof hai. Naam public nahi hoga.</div>' +
+        '<div id="star-row" style="margin-top:10px;font-size:26px;letter-spacing:4px;cursor:pointer;">' +
+        ['☆','☆','☆','☆','☆'].map((s, i) =>
+          '<span data-star="' + (i + 1) + '">' + s + '</span>').join('') + '</div>' +
+        '<textarea id="review-comment" rows="2" placeholder="Kuch likhna chahein? (optional)" ' +
+        'style="width:100%;margin-top:8px;padding:9px;border:1.5px solid #e2e8f0;border-radius:9px;' +
+        'font-family:inherit;font-size:13px;outline:none;"></textarea>' +
+        '<button type="button" id="review-send" style="margin-top:8px;width:100%;padding:10px;' +
+        'border:0;border-radius:9px;background:#667eea;color:#fff;font-weight:700;font-size:14px;' +
+        'font-family:inherit;cursor:pointer;">Review bhejein</button>';
+      const anchor = document.querySelector('main') || document.body;
+      anchor.prepend(box);
+
+      let chosen = 0;
+      const starRow = document.getElementById('star-row');
+      starRow.addEventListener('click', ev => {
+        const star = ev.target.getAttribute('data-star');
+        if (!star) return;
+        chosen = Number(star);
+        starRow.innerHTML = [1,2,3,4,5].map(i =>
+          '<span data-star="' + i + '">' + (i <= chosen ? '★' : '☆') + '</span>').join('');
+      });
+
+      document.getElementById('review-send').addEventListener('click', async () => {
+        if (!chosen) { alert('Pehle star chunein.'); return; }
+        const btn = document.getElementById('review-send');
+        btn.disabled = true; btn.textContent = 'Bhej rahe hain…';
+        try {
+          const r = await fetch('/api/v1/reviews', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              tracking_token: TRACK_TOKEN,
+              rating: chosen,
+              comment: (document.getElementById('review-comment').value || '').trim()
+            })
+          });
+          const d = await r.json();
+          if (d.ok) {
+            try { localStorage.setItem('ghos_reviewed_' + TRACK_TOKEN, '1'); } catch (e) {}
+            box.innerHTML = '<div style="font-size:14px;font-weight:700;color:#16a34a;">' +
+              '✅ Shukriya! Aapka review darj ho gaya.</div>' +
+              '<div style="font-size:12.5px;color:#64748b;margin-top:4px;">' +
+              'Ye asli visit ka verified review hai — isi se clinic ka score banta hai.</div>';
+          } else {
+            alert(d.error || 'Review save nahi hua.');
+            btn.disabled = false; btn.textContent = 'Review bhejein';
+          }
+        } catch (e) {
+          alert('Network error — dobara koshish karein.');
+          btn.disabled = false; btn.textContent = 'Review bhejein';
+        }
+      });
+    }
+
     async function poll() {
       try {
         let url = '/track/' + TRACK_TOKEN + '/status';
@@ -464,11 +540,15 @@
               } else if (e.status === 'REPORT_READY' || e.status === 'COMPLETED') {
                 playBeep(660, 0.3);
                 showBanner('✅ आपकी रिपोर्ट तैयार है — Reception से लें (' + e.service_code + ')');
+                maybeOfferReview(e.status);
               }
             }
             last[key] = e.status;
           }
         });
+        // A patient often opens this page AFTER the visit is already done, so
+        // the review must not depend on catching a live transition.
+        (d.entries || []).forEach(e => maybeOfferReview(e.status));
         renderWait(d.wait);
         bindLocationButton();
       } catch (e) { /* network — next poll will retry */ }

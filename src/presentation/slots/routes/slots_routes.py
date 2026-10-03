@@ -670,13 +670,11 @@ async def _reserve(
         # ── patient: reuse by phone, else create (same rule as marketplace) ──
         existing = None
         if phone and phone_hash:
-            row = await session.execute(
-                sa.select(PatientModel)
-                .where(PatientModel.phone_hash == phone_hash)
-                .order_by(PatientModel.created_at.desc())
-                .limit(1)
-            )
-            existing = row.scalars().first()
+            # OPEN-01: tombstones are skipped and followed to their survivor,
+            # so a slot booking can never be written against a merged-away row.
+            from src.infrastructure.patient.lookup import find_by_phone_resolved
+
+            existing = await find_by_phone_resolved(session, phone_hash)
 
         if patient_id:
             patient_key = patient_id

@@ -202,6 +202,21 @@ from src.presentation.slots.routes.slots_routes import (
     router as slots_router,
 )
 
+# -- Clinic stats (EWT accuracy report + PHI-free network overview) --
+from src.presentation.clinic_stats.routes.clinic_stats_routes import (
+    router as clinic_stats_router,
+)
+
+# -- Verified reviews (visit-verified rating → Bayesian clinic score) --
+from src.presentation.reviews.routes.review_routes import (
+    router as reviews_router,
+)
+
+# -- Referrals (cross-clinic signed slip + accept-to-queue, F-06) --
+from src.presentation.referral.routes.referral_routes import (
+    router as referral_router,
+)
+
 
 # =========================================================================
 # Database Setup
@@ -296,6 +311,14 @@ from src.infrastructure.queue.models.chamber_session_model import (  # noqa: F40
 # Slot booking — appointment_slots (Part B · B5, BLOCK 3 · SLT-01)
 from src.infrastructure.queue.models.appointment_slot_model import (  # noqa: F401
     AppointmentSlotModel,
+)
+# Verified reviews — clinic_reviews (Part F · F-07)
+from src.infrastructure.clinic.models.review_model import (  # noqa: F401
+    ClinicReviewModel,
+)
+# Referrals — cross-clinic slips (Part F · F-06)
+from src.infrastructure.clinic.models.referral_model import (  # noqa: F401
+    ReferralModel,
 )
 
 
@@ -625,6 +648,15 @@ install_friendly_404(app)
 
 # Slot booking — appointment slots grid, capacity-checked booking, Code Red
 app.include_router(slots_router)
+
+# Clinic stats — EWT accuracy (F-03) + PHI-free network view (F-08)
+app.include_router(clinic_stats_router)
+
+# Verified reviews — one review per completed visit (F-07)
+app.include_router(reviews_router)
+
+# Referrals — signed cross-clinic slip, accept creates a real token (F-06)
+app.include_router(referral_router)
 
 # Serve static files from experience/pwa
 pwa_static = Path(__file__).parent / "src" / "experience" / "pwa"

@@ -725,10 +725,18 @@ async def staff_register_patient(request: Request):
         async with async_session_factory() as session:
             existing_patient = None
             if phone:
-                existing = await session.execute(
-                    sa.select(PatientModel).where(PatientModel.phone_hash == phone_hash)
+                # Two fixes in one line:
+                #   BUG-03 — scalar_one_or_none() raises MultipleResultsFound
+                #     when a family shares a phone number, turning reception
+                #     booking into an HTTP 500.
+                #   OPEN-01 — tombstones (merged duplicates) must be skipped,
+                #     and followed to their survivor, so a visit is never
+                #     written against a record the app considers deleted.
+                from src.infrastructure.patient.lookup import (
+                    find_by_phone_resolved,
                 )
-                existing_patient = existing.scalar_one_or_none()
+
+                existing_patient = await find_by_phone_resolved(session, phone_hash)
 
             if existing_patient:
                 patient_id = existing_patient.patient_id

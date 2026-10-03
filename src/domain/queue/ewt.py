@@ -457,6 +457,156 @@ def no_show_recovery_note(token: Any, waited_minutes: float | None) -> str:
     )
 
 
+# ── F-03 · EWT accuracy: promised vs delivered ──────────────────────────────
+
+#: A promise is considered accurate within this many minutes either way.
+ACCURACY_TOLERANCE_MINUTES: int = 5
+
+
+def delivered_wait_minutes(entry: Any) -> float | None:
+    """How long the patient ACTUALLY waited, in minutes, or None if unknown.
+
+    Measured booking → called (falling back to started), which is the wait the
+    patient experienced standing in the room — not the consultation length.
+    Returns None rather than guessing when either timestamp is missing, because
+    a fabricated sample would corrupt the very metric that exists to detect
+    fabrication.
+    """
+    created = _as_utc(_field(entry, "created_at"))
+    if created is None:
+        return None
+    called = _as_utc(_field(entry, "called_at")) or _as_utc(_field(entry, "started_at"))
+    if called is None:
+        return None
+    minutes = (called - created).total_seconds() / 60.0
+    if minutes < 0:
+        return None  # clock skew or a bad backfill — not a usable sample
+    return minutes
+
+
+def accuracy_report(
+    entries: Iterable[Any] | None,
+    tolerance: int = ACCURACY_TOLERANCE_MINUTES,
+) -> dict[str, Any]:
+    """Compare the wait we PROMISED against the wait we DELIVERED.
+
+    This is the metric the whole EWT engine is accountable to. The blueprint's
+    North Star is ±5 minutes; without this number "self-calibrating" is a claim,
+    not a fact.
+
+    Reads ``estimated_minutes`` (stamped at booking) and the real
+    booking → called gap. Only rows that have both are counted, and ``skipped``
+    reports how many were dropped — an accuracy figure computed over a silently
+    filtered subset would be worse than no figure at all.
+
+    Returns:
+        ``promised_avg``, ``delivered_avg``, ``bias_minutes``, ``mean_abs_error``,
+        ``within_tolerance_pct``, ``accuracy_grade``, ``samples``, ``skipped``.
+
+        ``bias_minutes`` is ``mean(delivered − promised)``:
+
+          * **positive** — patients waited *longer* than we told them. We were
+            optimistic, which is the failure that costs a patient their trust
+            (and sometimes their turn).
+          * **negative** — patients waited *less* than we told them. We were
+            conservative: a safe error, but one that still needs watching,
+            because an over-cautious EWT sends people away for no reason.
+    """
+    try:
+        limit = max(1, int(tolerance))
+    except (TypeError, ValueError):
+        limit = ACCURACY_TOLERANCE_MINUTES
+
+    pairs: list[tuple[float, float]] = []
+    skipped = 0
+    for entry in entries or []:
+        promised = _field(entry, "estimated_minutes")
+        delivered = delivered_wait_minutes(entry)
+        if promised is None or delivered is None:
+            skipped += 1
+            continue
+        try:
+            promised_value = float(promised)
+        except (TypeError, ValueError):
+            skipped += 1
+            continue
+        if promised_value < 0:
+            skipped += 1
+            continue
+        pairs.append((promised_value, float(delivered)))
+
+    if not pairs:
+        return {
+            "promised_avg": None,
+            "delivered_avg": None,
+            "bias_minutes": None,
+            "mean_abs_error": None,
+            "within_tolerance_pct": None,
+            "accuracy_grade": "no_data",
+            "tolerance_minutes": limit,
+            "samples": 0,
+            "skipped": skipped,
+            "note": "Abhi itna data nahi hai — accuracy report kuch dinon me banegi.",
+        }
+
+    count = len(pairs)
+    promised_avg = sum(p for p, _ in pairs) / count
+    delivered_avg = sum(d for _, d in pairs) / count
+    errors = [d - p for p, d in pairs]
+    abs_errors = [abs(e) for e in errors]
+    mean_abs = sum(abs_errors) / count
+    within = sum(1 for e in abs_errors if e <= limit)
+    within_pct = round(100.0 * within / count, 1)
+
+    # Grade on the ±tolerance hit rate, not on the mean — one 90-minute
+    # outlier should not hide a clinic that is accurate 95% of the time.
+    if within_pct >= 80:
+        grade = "excellent"
+    elif within_pct >= 60:
+        grade = "good"
+    elif within_pct >= 40:
+        grade = "fair"
+    else:
+        grade = "poor"
+
+    return {
+        "promised_avg": round(promised_avg, 1),
+        "delivered_avg": round(delivered_avg, 1),
+        # positive = patients waited LONGER than promised (we were optimistic)
+        # negative = patients waited less (conservative, but still worth seeing)
+        "bias_minutes": round(sum(errors) / count, 1),
+        "mean_abs_error": round(mean_abs, 1),
+        "within_tolerance_pct": within_pct,
+        "accuracy_grade": grade,
+        "tolerance_minutes": limit,
+        "samples": count,
+        "skipped": skipped,
+        "note": accuracy_note(grade, within_pct, limit, count),
+    }
+
+
+def accuracy_note(grade: str, within_pct: float, tolerance: int, samples: int) -> str:
+    """One Hinglish line a clinic owner can act on."""
+    if samples < MIN_SAMPLES_FOR_TRUST:
+        return (
+            f"Sirf {samples} sample — thoda data aur aane dein, phir bharosa kar sakte hain."
+        )
+    if grade == "excellent":
+        return f"{within_pct}% patients ko ±{tolerance} min ke andar sahi wait bata — badhiya."
+    if grade == "good":
+        return f"{within_pct}% sahi — theek hai, engine khud ko calibrate kar raha hai."
+    if grade == "fair":
+        return (
+            f"Sirf {within_pct}% ±{tolerance} min me — thoda off hai. "
+            "Zyada patients ka status update karne se accuracy badhegi."
+        )
+    return (
+        f"Sirf {within_pct}% sahi — wait ka anumaan bharosemand nahi hai. "
+        "Zyada tar 'START OPD' aur token complete karne se sudhrega."
+    )
+
+
+
 # ── The estimate ────────────────────────────────────────────────────────────
 
 

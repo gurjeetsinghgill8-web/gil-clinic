@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#0f172a">
+<title>Referral Slip — GIL Clinic</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700;14..32,800&display=swap');
+  :root{
+    --bg:#f1f5f9; --card:#ffffff; --ink:#0f172a; --muted:#64748b;
+    --line:#e2e8f0; --brand:#667eea; --brand2:#764ba2;
+    --grad:linear-gradient(135deg,#667eea,#764ba2);
+    --green:#16a34a; --green-bg:#dcfce7; --amber:#d97706; --amber-bg:#fef3c7;
+    --red:#dc2626; --red-bg:#fee2e2;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--ink);-webkit-font-smoothing:antialiased;padding:20px}
+  .wrap{max-width:640px;margin:0 auto}
+  .head{background:linear-gradient(160deg,#0f172a 0%,#1e293b 55%,#312e81 100%);color:#f8fafc;border-radius:18px;padding:22px}
+  .brand{display:flex;align-items:center;gap:10px;font-weight:800;font-size:14px}
+  .brand .dot{width:32px;height:32px;border-radius:10px;background:var(--grad);display:flex;align-items:center;justify-content:center;font-size:17px}
+  .head h1{font-size:21px;font-weight:800;margin:16px 0 4px;letter-spacing:-.4px}
+  .head p{color:#94a3b8;font-size:13px}
+  .card{background:var(--card);border-radius:16px;border:1px solid var(--line);padding:20px;margin-top:16px}
+  .card h2{font-size:12px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.6px;margin-bottom:12px}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  .field .k{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.4px}
+  .field .v{font-size:15px;font-weight:600;margin-top:3px;word-break:break-word}
+  .field.full{grid-column:1/-1}
+  .pill{display:inline-block;font-size:12px;font-weight:800;padding:5px 11px;border-radius:999px;border:1px solid var(--line);background:#f8fafc}
+  .pill.urgent{background:var(--red-bg);border-color:#fecaca;color:#991b1b}
+  .pill.soon{background:var(--amber-bg);border-color:#fde68a;color:#92400e}
+  .pill.routine{background:var(--green-bg);border-color:#bbf7d0;color:#166534}
+  .pill.pending{background:#e0e7ff;border-color:#c7d2fe;color:#3730a3}
+  .pill.accepted{background:var(--green-bg);border-color:#bbf7d0;color:#166534}
+  .pill.declined{background:#f1f5f9;color:#475569}
+  .note-box{margin-top:12px;padding:12px;border-radius:11px;background:#eef2ff;border:1px solid #c7d2fe;font-size:13.5px;line-height:1.6;color:#312e81}
+  .actions{display:flex;gap:10px;margin-top:18px;flex-wrap:wrap}
+  button{font-family:inherit;font-size:14.5px;font-weight:700;padding:13px 18px;border-radius:12px;border:0;cursor:pointer;flex:1;min-width:150px}
+  .accept{background:var(--green);color:#fff;box-shadow:0 6px 18px rgba(22,163,74,.28)}
+  .accept:disabled{opacity:.5;cursor:not-allowed;box-shadow:none}
+  .decline{background:#fff;color:var(--ink);border:1.5px solid var(--line)}
+  .msg{margin-top:14px;padding:13px;border-radius:11px;font-size:13.5px;line-height:1.6;display:none}
+  .msg.ok{display:block;background:var(--green-bg);border:1px solid #bbf7d0;color:#166534}
+  .msg.err{display:block;background:var(--amber-bg);border:1px solid #fde68a;color:#92400e}
+  .foot{text-align:center;color:#94a3b8;font-size:11.5px;line-height:1.7;margin-top:20px}
+  .warn{margin-top:12px;padding:11px 13px;border-radius:11px;background:var(--amber-bg);border:1px solid #fde68a;font-size:12.5px;color:#92400e;line-height:1.55}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="head">
+    <div class="brand"><span class="dot">🔁</span> GIL CLINIC · Referral Slip</div>
+    <h1>{{ from_clinic or "Clinic" }} → {{ to_clinic or "Clinic" }}</h1>
+    <p>Ek clinic ne is patient ko aapke paas bheja hai. Neeche poori detail hai.</p>
+  </div>
+
+  <div class="card">
+    <h2>Priority &amp; status</h2>
+    <span class="pill {{ 'urgent' if urgency == 'URGENT' else ('soon' if urgency == 'SOON' else 'routine') }}">{{ urgency_label or urgency }}</span>
+    &nbsp;
+    <span class="pill {{ 'pending' if status == 'PENDING' else ('accepted' if status == 'ACCEPTED' else 'declined') }}">{{ status }}</span>
+    {% if source_token %}&nbsp;<span class="pill">Sender token: {{ source_token }}</span>{% endif %}
+  </div>
+
+  <div class="card">
+    <h2>Patient</h2>
+    <div class="grid">
+      <div class="field"><div class="k">Naam</div><div class="v">{{ patient_name }}</div></div>
+      <div class="field"><div class="k">Umar</div><div class="v">{{ patient_age if patient_age else "—" }}</div></div>
+      {% if patient_id %}<div class="field"><div class="k">Patient ID</div><div class="v">{{ patient_id }}</div></div>{% endif %}
+      {% if patient_phone %}<div class="field"><div class="k">Phone</div><div class="v">{{ patient_phone }}</div></div>{% endif %}
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Kyun bheja gaya</h2>
+    <div class="field"><div class="v">{{ reason or "—" }}</div></div>
+    {% if note %}<div class="note-box">📝 {{ note }}</div>{% endif %}
+    <div style="font-size:12px;color:var(--muted);margin-top:12px;">
+      Slip bani: {{ created_at[:16] }}{% if expires_at %} · valid till: {{ expires_at[:10] }}{% endif %}
+    </div>
+  </div>
+
+  {% if status == 'PENDING' %}
+  <div class="card">
+    <h2>Action</h2>
+    <div style="font-size:13px;color:var(--muted);line-height:1.6;">
+      Accept karne par is patient ka <b>asli token</b> aapki OPD queue me ban jayega.
+      Tab tak uski koi entry aapki queue me nahi hai.
+    </div>
+    <div class="actions">
+      <button class="accept" id="accept-btn">✅ Accept &amp; token banayein</button>
+      <button class="decline" id="decline-btn">✖ Decline</button>
+    </div>
+    <div class="msg" id="msg"></div>
+    <div class="warn">
+      ⚠️ Accept karne ke liye aapko is clinic ke OPD dashboard me login hona chahiye.
+      Login nahi hai to pehle <a href="/opd/login" style="color:#92400e;font-weight:700;">yahan login</a> karein, phir ye page dobara kholein.
+    </div>
+  </div>
+  {% elif status == 'ACCEPTED' %}
+  <div class="card">
+    <div class="msg ok" style="display:block;">
+      ✅ Ye referral accept ho chuka hai{% if accepted_token_label %} — token <b>{{ accepted_token_label }}</b>{% endif %}.
+    </div>
+  </div>
+  {% else %}
+  <div class="card">
+    <div class="msg err" style="display:block;">Ye referral {{ status }} hai.</div>
+  </div>
+  {% endif %}
+
+  <div class="foot">
+    <b>GHOS — Gill Hospital OS</b><br>
+    Ye link sirf is referral ke liye hai. Kisi ko forward karne se pehle soch lein —
+    isme patient ki health information hai.
+  </div>
+</div>
+
+<script>
+const SLIP_TOKEN = {{ slip_token | tojson }};
+const REFERRAL_ID = {{ referral_id | default('') | tojson }};
+const msg = document.getElementById('msg');
+
+function show(kind, text) {
+  if (!msg) return;
+  msg.className = 'msg ' + kind;
+  msg.innerHTML = text;
+}
+
+async function resolveReferralId() {
+  if (REFERRAL_ID) return REFERRAL_ID;
+  // The slip page is token-based; the inbox API is the authoritative way for an
+  // authenticated clinic to find the referral behind this token.
+  try {
+    const r = await fetch('/opd/api/referrals');
+    if (!r.ok) return '';
+    const d = await r.json();
+    const match = (d.referrals || []).find(x => (x.slip_url || '').endsWith(SLIP_TOKEN));
+    return match ? match.id : '';
+  } catch (e) { return ''; }
+}
+
+async function act(kind) {
+  const btn = document.getElementById(kind === 'accept' ? 'accept-btn' : 'decline-btn');
+  btn.disabled = true;
+  const label = btn.textContent;
+  btn.textContent = '⏳ Ruk jaiye…';
+  try {
+    const id = await resolveReferralId();
+    if (!id) {
+      show('err', '⚠️ Referral nahi mila. Pehle <a href="/opd/login" style="color:#92400e;font-weight:700;">OPD login</a> karein, phir ye page refresh karein.');
+      btn.disabled = false; btn.textContent = label; return;
+    }
+    const body = kind === 'decline'
+      ? { reason: (prompt('Decline karne ki wajah (optional)?') || '') }
+      : {};
+    const r = await fetch('/opd/api/referrals/' + id + '/' + kind, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+    const d = await r.json();
+    if (d.ok) {
+      show('ok', '✅ ' + (d.message || 'Ho gaya.'));
+      if (kind === 'accept') setTimeout(() => location.reload(), 2200);
+    } else {
+      show('err', '⚠️ ' + (d.error || 'Fail hua.'));
+      btn.disabled = false; btn.textContent = label;
+    }
+  } catch (e) {
+    show('err', '⚠️ Network error — dobara koshish karein.');
+    btn.disabled = false; btn.textContent = label;
+  }
+}
+
+const acceptBtn = document.getElementById('accept-btn');
+const declineBtn = document.getElementById('decline-btn');
+if (acceptBtn) acceptBtn.addEventListener('click', () => act('accept'));
+if (declineBtn) declineBtn.addEventListener('click', () => act('decline'));
+</script>
+</body>
+</html>
