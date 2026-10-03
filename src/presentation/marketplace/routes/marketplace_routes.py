@@ -31,7 +31,7 @@ from fastapi import APIRouter, Query, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 
 from src.domain.clinic import opening_hours
-from src.domain.queue import ewt
+from src.domain.queue import ewt, token_label
 from src.infrastructure.clinic.models.clinic_model import ClinicModel
 from src.infrastructure.queue.models.queue_entry_model import QueueEntryModel
 from src.shared.infrastructure.database import async_session_factory
@@ -122,6 +122,104 @@ def _opd_room_name() -> str:
     except Exception:  # pragma: no cover - provider is best-effort
         pass
     return "OPD Room"
+
+
+@router.get("/api/v1/marketplace/slots")
+async def marketplace_slots(
+    clinic_id: str = Query(...),
+    date: str = Query(default="", description="YYYY-MM-DD (default: today)"),
+):
+    """Public slot availability for one clinic (Part B · B5 / BLOCK 3 · SLT-02).
+
+    A slot is never returned alone: each one carries the live queue and an EWT
+    confidence, because a bare "2:30 PM available" is exactly the fake promise
+    this product exists to replace.
+    """
+    from src.presentation.slots.routes.slots_routes import (
+        _booked_counts,
+        _day_slots,
+        _parse_day,
+        _queue_counts,
+        _slot_forecast,
+    )
+
+    clinic_uuid = None
+    try:
+        clinic_uuid = uuid.UUID(str(clinic_id).strip())
+    except (ValueError, AttributeError, TypeError):
+        return JSONResponse({"ok": False, "error": "Clinic nahi mila."}, status_code=404)
+
+    day = _parse_day(date, datetime.now(timezone.utc).date())
+    if day is None:
+        return JSONResponse({"ok": False, "error": "Date samajh nahi aayi."}, status_code=400)
+
+    async with async_session_factory() as session:
+        clinic = await session.get(ClinicModel, clinic_uuid)
+        if clinic is None or not clinic.is_active:
+            return JSONResponse({"ok": False, "error": "Clinic nahi mila."}, status_code=404)
+
+        cid = str(clinic.id)
+        did = BOOKING_DOCTOR_ID
+        slots = await _day_slots(session, cid, did, day)
+        booked = await _booked_counts(session, [str(s.id) for s in slots])
+        counts = await _queue_counts(session, cid, did)
+        queue = (await _queue_map([cid])).get(cid, {})
+
+    context = {
+        "chamber_open": bool(queue.get("chamber_open", True)),
+        "avg_service_minutes": queue.get("avg_minutes"),
+        "velocity": queue.get("velocity"),
+        "samples": queue.get("samples"),
+    }
+    now = datetime.now(timezone.utc)
+
+    rows = []
+    for slot in slots:
+        taken = booked.get(str(slot.id), 0)
+        capacity = max(1, int(slot.capacity or 1))
+        forecast, confidence = _slot_forecast(slot, context, int(counts["waiting"]), now)
+        rows.append(
+            {
+                "id": str(slot.id),
+                "window": slot.window_label,
+                "start_time": slot.start_time,
+                "end_time": slot.end_time,
+                "capacity": capacity,
+                "booked": taken,
+                "remaining": max(0, capacity - taken),
+                "is_full": taken >= capacity,
+                "is_active": bool(slot.is_active),
+                "bookable": bool(slot.is_active) and taken < capacity,
+                "forecast": forecast,
+                "confidence": confidence,
+            }
+        )
+
+    bookable = [r for r in rows if r["bookable"]]
+    return {
+        "ok": True,
+        "clinic_id": cid,
+        "date": day.isoformat(),
+        "doctor_id": did,
+        "slots": rows,
+        "total": len(rows),
+        "bookable": len(bookable),
+        "queue": {
+            "waiting": int(counts["waiting"]),
+            "chamber_open": context["chamber_open"],
+            "avg_service_minutes": context["avg_service_minutes"],
+        },
+        # The product's own ranking rule, stated to the patient.
+        "advice": (
+            "Slot aapki jagah reserve karta hai. Us waqt tak queue clear hone ka "
+            "anumaan upar likha hai — live token aur asli wait phir bhi queue "
+            "ke hisaab se milega."
+            if bookable
+            else "Is din ke liye koi slot khaali nahi — aap live queue me token "
+            "book kar sakte hain."
+        ),
+        "token_label_prefix": token_label.specialty_prefix(clinic.specialty),
+    }
 
 
 def _booking_message(
@@ -298,6 +396,10 @@ def _to_public(
         chamber_open = bool(q.get("chamber_open", True))
         live = {
             "serving_token": serving,
+            # Two doctors can both call "token 14" — the prefix says whose it is.
+            "serving_token_label": token_label.token_label(
+                serving, token_label.specialty_prefix(clinic.specialty)
+            ),
             "patients_ahead": ahead,
             # EWT engine output (self-calibrating), not a flat guess.
             "wait_minutes": int(wait_minutes) if wait_minutes is not None else ahead * MINUTES_PER_PATIENT,
@@ -525,8 +627,12 @@ async def marketplace_doctors(
 async def marketplace_book(request: Request):
     """1-tap booking — creates a REAL OPD queue entry for the clinic.
 
-    Body: {clinic_id, name, phone, problem?, specialty?}
+    Body: {clinic_id, name, phone, problem?, specialty?, age?, slot_id?}
     Returns the token number + a live tracking link the patient can open.
+
+    With ``slot_id`` the reservation goes through the same capacity check the
+    reception desk uses (``slots_routes._reserve``), so "how many people fit in
+    this slot" is answered in exactly one place and can never disagree.
     """
     from src.infrastructure.patient.models.patient_model import PatientModel
     from src.shared.domain.base_entity import uuid7
@@ -540,6 +646,7 @@ async def marketplace_book(request: Request):
     name = str(body.get("name") or "").strip()
     phone = str(body.get("phone") or "").strip()
     complaints = str(body.get("problem") or "").strip()
+    slot_id = str(body.get("slot_id") or "").strip()
     # Age is optional; it used to be hardcoded to 30, which quietly defeated any
     # age-based logic downstream. Unknown age still defaults to 30.
     try:
@@ -552,6 +659,35 @@ async def marketplace_book(request: Request):
         return JSONResponse({"ok": False, "error": "Clinic aur patient name chahiye."}, status_code=400)
     if phone and len(phone) < 10:
         return JSONResponse({"ok": False, "error": "10-digit phone number chahiye."}, status_code=400)
+
+    # ── Slot booking delegates to the shared, capacity-checked reservation ──
+    if slot_id:
+        from src.presentation.slots.routes.slots_routes import _reserve
+
+        reserved = await _reserve(
+            slot_id=slot_id,
+            name=name,
+            phone=phone,
+            age=age,
+            problem=complaints,
+        )
+        if not reserved.get("ok"):
+            return JSONResponse(reserved, status_code=int(reserved.get("status") or 400))
+
+        tracking_url = ""
+        try:
+            from src.presentation.staff.routes.staff_routes import make_tracking_token
+            from src.utils.public_url import public_base_url
+
+            tracking_url = (
+                f"{public_base_url(request)}/track/"
+                f"{make_tracking_token(reserved['patient_id'])}"
+            )
+        except Exception:  # pragma: no cover
+            tracking_url = ""
+        reserved["tracking_url"] = tracking_url
+        reserved["clinic_name"] = reserved.get("clinic_name") or ""
+        return JSONResponse(reserved)
 
     try:
         clinic_uuid = uuid.UUID(clinic_id)
@@ -631,11 +767,14 @@ async def marketplace_book(request: Request):
         # ── next OPD token, partitioned PER CLINIC (BUG-01) ──
         # The old query had no clinic filter, so two different clinics booking
         # on the same day shared one token sequence (clinic A #17, clinic B #18).
+        # Emergencies are excluded (E-08): they carry their own E sequence, and
+        # letting one bump MAX(token_number) would make routine numbers skip.
         token_row = await session.execute(
             sa.select(sa.func.coalesce(sa.func.max(QueueEntryModel.token_number), 0)).where(
                 QueueEntryModel.clinic_id == str(clinic.id),
                 QueueEntryModel.doctor_id == BOOKING_DOCTOR_ID,
                 QueueEntryModel.service_code == "OPD",
+                QueueEntryModel.visit_type != "emergency",
                 QueueEntryModel.visit_id.like(f"VIS-{date_prefix}-%"),
             )
         )
@@ -692,6 +831,9 @@ async def marketplace_book(request: Request):
         {
             "ok": True,
             "token": token,
+            "token_label": token_label.token_label(
+                token, token_label.specialty_prefix(clinic.specialty)
+            ),
             "patients_ahead": ahead,
             "wait_minutes": promised_minutes,
             "wait_state": promised_state,

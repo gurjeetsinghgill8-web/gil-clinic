@@ -6294,9 +6294,12 @@ async function deleteMedLibrary(id) {
   <div id="qe-state" style="margin-bottom:8px;color:#cbd5e1;">&#8230; loading</div>
   <div id="qe-stats" style="color:#cbd5e1;margin-bottom:8px;"></div>
   <button id="qe-toggle" style="width:100%;padding:9px;border:0;border-radius:9px;background:#16a34a;color:#fff;font-weight:700;cursor:pointer;">&#9654; START OPD</button>
+  <button id="qe-red" style="width:100%;margin-top:6px;padding:9px;border:0;border-radius:9px;background:#dc2626;color:#fff;font-weight:800;cursor:pointer;">&#128680; CODE RED (Emergency)</button>
   <div id="qe-links" style="margin-top:8px;"></div>
   <!-- Live per-patient actions: E-03b leave-now · E-02 hold · E-07 no-show -->
   <div id="qe-queue" style="margin-top:10px;"></div>
+  <!-- Slot grid: SLT-01/02 create + SLT-03 book (Part B · B5) -->
+  <div id="qe-slots" style="margin-top:10px;"></div>
 </div>
 <script>
 (function () {
@@ -6361,7 +6364,8 @@ async function deleteMedLibrary(id) {
       waiting.slice(0, 10).forEach(function (r) {
         html += '<div style="display:flex;align-items:center;gap:6px;padding:4px 0;' +
           'border-top:1px solid rgba(148,163,184,.18);">' +
-          '<span style="font-weight:700;min-width:34px;">#' + esc(r.token_number) + '</span>' +
+          '<span style="font-weight:700;min-width:42px;">' +
+          esc(r.token_label || ('#' + r.token_number)) + '</span>' +
           '<span style="flex:1;color:#e2e8f0;overflow:hidden;text-overflow:ellipsis;' +
           'white-space:nowrap;">' + esc(r.patient_name) + '</span>' +
           '<span style="color:#94a3b8;min-width:46px;text-align:right;">~' +
@@ -6380,7 +6384,8 @@ async function deleteMedLibrary(id) {
       absent.slice(0, 6).forEach(function (a) {
         html += '<div style="display:flex;align-items:center;gap:6px;padding:4px 0;' +
           'border-top:1px solid rgba(248,113,113,.25);">' +
-          '<span style="font-weight:700;min-width:34px;">#' + esc(a.token_number) + '</span>' +
+          '<span style="font-weight:700;min-width:42px;">' +
+          esc(a.token_label || ('#' + a.token_number)) + '</span>' +
           '<span style="flex:1;color:#fecaca;overflow:hidden;text-overflow:ellipsis;' +
           'white-space:nowrap;">' + esc(a.patient_name) + '</span>' +
           '<span style="color:#f87171;min-width:34px;text-align:right;">' +
@@ -6425,6 +6430,163 @@ async function deleteMedLibrary(id) {
     }).catch(function () {});
   };
 
+  // ── Slot grid (SLT-01 / SLT-02 / SLT-03) ────────────────────────────────
+  // A slot is never shown alone: every row carries the live queue forecast, so
+  // the doctor can see whether the window is actually realistic (blueprint B5).
+  function todayISO() {
+    var d = new Date();
+    var m = String(d.getMonth() + 1).padStart(2, '0');
+    var day = String(d.getDate()).padStart(2, '0');
+    return d.getFullYear() + '-' + m + '-' + day;
+  }
+
+  function renderSlots(d) {
+    var box = el('qe-slots');
+    if (!box) return;
+    var slots = (d && d.slots) || [];
+    var html = '<div style="color:#94a3b8;font-size:11px;text-transform:uppercase;' +
+      'letter-spacing:.4px;margin-bottom:5px;">Aaj ke slots (' + slots.length + ')</div>';
+
+    if (!slots.length) {
+      html += '<div style="color:#64748b;font-size:12px;margin-bottom:6px;">' +
+        'Koi slot nahi — ek din ke slots bana lein.</div>';
+    } else {
+      slots.slice(0, 8).forEach(function (s) {
+        var full = s.is_full;
+        var off = !s.is_active;
+        var colour = off ? '#64748b' : (full ? '#f59e0b' : '#4ade80');
+        var label = off ? 'band' : (full ? 'bhara' : s.booked + '/' + s.capacity);
+        html += '<div style="padding:5px 0;border-top:1px solid rgba(148,163,184,.18);">' +
+          '<div style="display:flex;align-items:center;gap:6px;">' +
+          '<span style="font-weight:700;min-width:88px;">' + esc(s.start_time) + '–' +
+          esc(s.end_time) + '</span>' +
+          '<span style="flex:1;color:' + colour + ';font-size:12px;">' + esc(label) + '</span>' +
+          (off || full
+            ? ''
+            : rowBtn('&#10133;', '#2563eb', 'Is slot me patient book karein',
+                     'onclick="qeBookSlot(\'' + esc(s.id) + '\')"')) +
+          rowBtn(off ? '&#9654;' : '&#9209;', '#475569',
+                 off ? 'Slot khol dein' : 'Slot band kar dein',
+                 'onclick="qeToggleSlot(\'' + esc(s.id) + '\')"') +
+          '</div>' +
+          '<div style="color:#94a3b8;font-size:11px;margin-top:2px;">' +
+          esc(s.forecast || '') + '</div>' +
+          '</div>';
+      });
+    }
+
+    html += '<div style="display:flex;gap:6px;margin-top:8px;">' +
+      '<button type="button" onclick="qeGenSlots()" style="flex:1;border:0;border-radius:7px;' +
+      'padding:6px;cursor:pointer;font-size:12px;font-weight:700;background:#334155;color:#fff;">' +
+      '&#10133; Aaj ke slots</button></div>';
+    box.innerHTML = html;
+  }
+
+  window.qeToggleSlot = function (slotId) {
+    post('/opd/api/slots/' + slotId + '/toggle', {}).then(function (d) {
+      if (!d || d.ok === false) { alert((d && d.error) || 'Fail hua'); return; }
+      loadSlots();
+    }).catch(function () {});
+  };
+
+  window.qeBookSlot = function (slotId) {
+    var name = prompt('Patient ka naam?');
+    if (!name) return;
+    var phone = prompt('Mobile number (optional)?') || '';
+    post('/opd/api/slots/' + slotId + '/book', { name: name, phone: phone })
+      .then(function (d) {
+        if (!d || d.ok === false) { alert((d && d.error) || 'Booking fail hui'); return; }
+        alert(d.message);
+        load();
+        loadSlots();
+      }).catch(function () {});
+  };
+
+  window.qeGenSlots = function () {
+    var from = prompt('Kitne baje se? (HH:MM)', '09:00');
+    if (!from) return;
+    var to = prompt('Kitne baje tak? (HH:MM)', '12:00');
+    if (!to) return;
+    var dur = prompt('Har slot kitne minute ka?', '20');
+    post('/opd/api/slots', {
+      date: todayISO(), from_time: from, to_time: to,
+      duration_minutes: parseInt(dur || '20', 10)
+    }).then(function (d) {
+      if (!d || d.ok === false) { alert((d && d.error) || 'Slots nahi bane'); return; }
+      alert(d.message);
+      loadSlots();
+    }).catch(function () {});
+  };
+
+  function loadSlots() {
+    fetch('/opd/api/slots?date=' + todayISO())
+      .then(function (r) { return r.json(); })
+      .then(function (d) { if (d && d.ok) renderSlots(d); })
+      .catch(function () {});
+  }
+
+  // ── E-08 · Code Red (emergency override + siren) ─────────────────────────
+  function siren() {
+    try {
+      var ctx = new (window.AudioContext || window.webkitAudioContext)();
+      // Three rising two-tone wails — a beep would read as "a patient arrived".
+      for (var i = 0; i < 3; i++) {
+        var at = ctx.currentTime + (i * 0.55);
+        [660, 990].forEach(function (freq, idx) {
+          var o = ctx.createOscillator();
+          var g = ctx.createGain();
+          o.type = 'sawtooth';
+          o.frequency.setValueAtTime(freq, at + (idx * 0.27));
+          g.gain.setValueAtTime(0.0001, at + (idx * 0.27));
+          g.gain.exponentialRampToValueAtTime(0.25, at + (idx * 0.27) + 0.05);
+          g.gain.exponentialRampToValueAtTime(0.0001, at + (idx * 0.27) + 0.25);
+          o.connect(g); g.connect(ctx.destination);
+          o.start(at + (idx * 0.27));
+          o.stop(at + (idx * 0.27) + 0.28);
+        });
+      }
+    } catch (e) {}
+  }
+
+  function codeRedBanner(text) {
+    var b = el('qe-red-banner');
+    if (!b) {
+      b = document.createElement('div');
+      b.id = 'qe-red-banner';
+      b.style.cssText = 'position:fixed;top:0;left:0;right:0;background:#dc2626;color:#fff;' +
+        'padding:14px;text-align:center;font-weight:800;font-size:16px;z-index:99999;' +
+        'box-shadow:0 2px 14px rgba(0,0,0,.3);font-family:system-ui,sans-serif;';
+      document.body.prepend(b);
+    }
+    b.textContent = text;
+    setTimeout(function () {
+      b.style.transition = 'opacity .6s';
+      b.style.opacity = '0';
+      setTimeout(function () { if (b.parentNode) b.parentNode.removeChild(b); }, 700);
+    }, 9000);
+  }
+
+  window.qeEmergency = function () {
+    var name = prompt('🚨 Emergency patient ka naam?', 'Emergency case');
+    if (name === null) return;
+    var problem = prompt('Problem / note (optional)?') || '';
+    post('/opd/api/slots/emergency', { name: name || 'Emergency case', problem: problem })
+      .then(function (d) {
+        if (!d || d.ok === false) { alert((d && d.error) || 'Code Red fail hua'); return; }
+        siren();
+        codeRedBanner('🚨 ' + (d.token_label || 'E-1') + ' — ' + d.position_note +
+          ' (' + d.patients_moved_back + ' patients ek number peeche)');
+        if (navigator.vibrate) { try { navigator.vibrate([400, 150, 400, 150, 400]); } catch (e) {} }
+        load();
+        loadSlots();
+      }).catch(function () {});
+  };
+
+  function bindRed() {
+    var b = el('qe-red');
+    if (b) b.addEventListener('click', window.qeEmergency);
+  }
+
   function load() {
     fetch('/opd/api/chamber/status').then(function (r) { return r.json(); }).then(function (d) {
       if (!d || !d.ok) return;
@@ -6468,8 +6630,11 @@ async function deleteMedLibrary(id) {
   function boot() {
     var b = el('qe-toggle');
     if (b) b.addEventListener('click', toggle);
+    bindRed();
     load();
+    loadSlots();
     setInterval(load, 30000);
+    setInterval(loadSlots, 60000);
   }
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);

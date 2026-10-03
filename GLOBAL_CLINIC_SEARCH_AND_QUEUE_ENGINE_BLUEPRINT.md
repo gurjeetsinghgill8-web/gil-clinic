@@ -38,9 +38,12 @@
 | 🕒 **Real opening hours + holiday flag** (BLOCK 2 · AVL-01/02, E-06) | ✅ **BUILT** |
 | 🚫 **E-07 no-show auto-detect** (8 min → NO_SHOW + recall) | ✅ **BUILT** |
 | 🛣️ **Travel-aware departure alert** (E-03c, GPS) | ✅ **BUILT** |
+| 📅 **Slot booking** (BLOCK 3 · SLT-01/02/03, capacity-checked) | ✅ **BUILT** |
+| 🚨 **E-08 Code Red** (`#E-1` + siren + queue-moved-back honesty) | ✅ **BUILT** |
+| 🏷️ **Token prefix** `C-14` / `G-14` (E-04 display gap) | ✅ **BUILT** |
 | 🖥️ Dashboard START OPD panel + delay badge | ✅ **BUILT** |
 | 📱 Patient page wait card + "ab niklo" chime | ✅ **BUILT** |
-| **Test suite** | ✅ **273 passed, 0 failed** |
+| **Test suite** | ✅ **344 passed, 0 failed** |
 
 ---
 
@@ -969,9 +972,10 @@ CREATE TABLE doctor_crawl_runs (...);
 | **E-03** | **Departure alert client-side** (chime + "AB NIKLO" + reception wa.me) | `patient_track.html` + new routes | M | ✅ |
 | EWT-07 | Unit + integration tests (49 in this file) | `tests/test_ewt_calculation.py` | M | ✅ |
 
-> **Note:** token prefix (C-14 / G-14) abhi bana nahi hai — `doctor_id` partition ho gaya hai, display prefix baaki hai.
-> **Note:** per-row HOLD button dashboard ke queue table me nahi hai — API ready hai (`/opd/api/queue/hold`),
-> button BLOCK 3 me dashboard ke saath jayega.
+> **Note:** token prefix (C-14 / G-14) ✅ **BAN GAYA** (03-Oct-2026) —
+> `src/domain/queue/token_label.py`, E-08 ka `E-1` bhi isi se aata hai.
+> **Note:** per-row HOLD button ✅ **BAN GAYA** — dashboard ke queue panel me
+> har row par ⏸️ HOLD · 🟢 leave-now · 🔄 recall teeno buttons hain.
 
 ### 🟠 BLOCK 2 — Availability + Alert (P1) — **DONE (03-Oct-2026)**
 
@@ -986,14 +990,25 @@ CREATE TABLE doctor_crawl_runs (...);
 | E-06 | Holiday / closed day flag | clinic model + marketplace | S | ✅ **DONE** |
 | E-07 | No-show auto-detect (8 min) + EWT recompute | `ewt.sweep_no_shows` + queue routes | S | ✅ **DONE** |
 
-### 🟡 BLOCK 3 — Slots + Doctor Live View (P1)
+### 🟡 BLOCK 3 — Slots + Doctor Live View (P1) — **DONE (03-Oct-2026)**
 
 | # | Item | File | Effort |
 |---|------|------|--------|
-| SLT-01 | `appointment_slots` + CRUD | model + migration | M |
-| SLT-02 | Slot booking API (capacity check → queue entry) | naya `slots_routes.py` | M |
-| SLT-03 | Doctor dashboard slot grid + EWT confidence | `dashboard.html` | M |
-| E-08 | Emergency override (`#E-1` + siren) | queue routes + dashboard | M |
+| SLT-01 | `appointment_slots` + CRUD (single + bulk day generate, toggle, guarded delete) | `appointment_slot_model.py` + `slots_routes.py` | M | ✅ **DONE** |
+| SLT-02 | Slot booking API (capacity check → real queue entry) — reception + public | `slots_routes._reserve` + `/api/v1/marketplace/slots` | M | ✅ **DONE** |
+| SLT-03 | Dashboard slot grid + EWT confidence + one-tap booking | `dashboard.html` | M | ✅ **DONE** |
+| E-08 | Emergency override (`#E-1` + siren + queue-moved-back count) | `slots_routes.py` + dashboard panel | M | ✅ **DONE** |
+| — | **Token prefix C-14 / G-14 / E-1** (E-04 display gap) | `token_label.py` + live feed + marketplace | S | ✅ **DONE** |
+
+> **Deviation (deliberate):** the blueprint's SQL has `booked INT DEFAULT 0`.
+> It is **not** stored. Bookings are counted from `queue_entries.slot_id`, which
+> is the real truth — a stored counter drifts the first time a booking is
+> cancelled, and a slot claiming "2 booked" while three patients hold tokens is
+> exactly the lie this product exists to remove.
+>
+> **Guarded delete:** a slot with a booked patient refuses deletion (400) and
+> tells the desk to shift or close it instead — deleting would strand a patient
+> holding a token with no window.
 
 ### 🔵 BLOCK 4 — Retention + Growth (P2)
 

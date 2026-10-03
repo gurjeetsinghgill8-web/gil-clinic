@@ -102,6 +102,16 @@ class QueueEntryModel(Base):
     )
     hold_reason: Mapped[str] = mapped_column(String(200), nullable=False, default="")
 
+    # ── Slot booking (Part B · B5) ──────────────────────────────────────────
+    #: The appointment slot this booking reserved, if any. Kept nullable so
+    #: every walk-in and every existing row is still valid, and so the number
+    #: of bookings in a slot can be counted from the queue itself instead of a
+    #: counter that drifts the moment somebody cancels.
+    slot_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    #: "HH:MM" the patient was promised. Display only — the real position is
+    #: still decided by the live queue, which is the whole point of the product.
+    slot_time: Mapped[str] = mapped_column(String(5), nullable=False, default="")
+
     version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)

@@ -197,6 +197,11 @@ from src.presentation.common.routes.friendly_routes import (
     router as friendly_router,
 )
 
+# -- Slot booking (appointment slots + Code Red emergency override) --
+from src.presentation.slots.routes.slots_routes import (
+    router as slots_router,
+)
+
 
 # =========================================================================
 # Database Setup
@@ -287,6 +292,10 @@ from src.infrastructure.lab.models import LabOrderModel  # noqa: F401
 # Queue Engine — chamber sessions (▶ START OPD gate, Part D · E-01)
 from src.infrastructure.queue.models.chamber_session_model import (  # noqa: F401
     ChamberSessionModel,
+)
+# Slot booking — appointment_slots (Part B · B5, BLOCK 3 · SLT-01)
+from src.infrastructure.queue.models.appointment_slot_model import (  # noqa: F401
+    AppointmentSlotModel,
 )
 
 
@@ -398,6 +407,12 @@ def _migrate_sqlite_columns():
                 "ON queue_entries (clinic_id, doctor_id, status)",
                 "CREATE INDEX IF NOT EXISTS ix_chamber_clinic_doctor_date "
                 "ON chamber_sessions (clinic_id, doctor_id, session_date)",
+                # Slot booking (BLOCK 3): counting a slot's bookings reads the
+                # queue, so this index keeps the slot grid to one query.
+                "CREATE INDEX IF NOT EXISTS ix_queue_slot_id "
+                "ON queue_entries (slot_id)",
+                "CREATE INDEX IF NOT EXISTS ix_slot_clinic_date "
+                "ON appointment_slots (clinic_id, slot_date)",
             ):
                 try:
                     conn.execute(text(idx_sql))
@@ -480,6 +495,11 @@ async def _migrate_missing_columns():
         ("clinics", "holiday_until", "VARCHAR(10)", "''"),
         ("clinics", "rating", "DOUBLE PRECISION", "NULL"),
         ("clinics", "rating_count", "INTEGER", "0"),
+        # ── Slot booking (BLOCK 3 · SLT-01 / SLT-02) ──
+        # The appointment_slots table itself is created by create_all; these two
+        # columns link a queue entry back to the slot it reserved.
+        ("queue_entries", "slot_id", "VARCHAR(36)", "NULL"),
+        ("queue_entries", "slot_time", "VARCHAR(5)", "''"),
     ]
 
     try:
@@ -602,6 +622,9 @@ app.include_router(queue_engine_router)
 # Friendly URLs — /opd/Dashboard, /dashboard, /opd/dashbord … ab dead-end nahi
 app.include_router(friendly_router)
 install_friendly_404(app)
+
+# Slot booking — appointment slots grid, capacity-checked booking, Code Red
+app.include_router(slots_router)
 
 # Serve static files from experience/pwa
 pwa_static = Path(__file__).parent / "src" / "experience" / "pwa"

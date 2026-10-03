@@ -59,9 +59,12 @@ MAX_DELAY_PENALTY_MINUTES: float = 15.0
 #: A "new" case is ~1.8× a routine visit; a report review is a quick 0.6×.
 #: "geriatric" comes from the enterprise blueprint's elderly multiplier
 #: (70+ consultations consistently run longer than the clinic average).
+#: "emergency" (Part D · E-08) jumps the queue but still occupies the chamber,
+#: so it must count honestly against everybody else's wait.
 VISIT_TYPE_WEIGHT: dict[str, float] = {
     "new": 1.8,
     "procedure": 1.8,
+    "emergency": 1.5,
     "geriatric": 1.2,
     "followup": 0.75,
     "report": 0.6,
@@ -75,6 +78,7 @@ COMPLEXITY_WEIGHT_MINUTES: dict[int, float] = {1: 0.85, 2: 1.8, 3: 2.2}
 VISIT_TYPE_LABEL: dict[str, str] = {
     "new": "Naya case",
     "procedure": "Test/Procedure",
+    "emergency": "🚨 Emergency",
     "geriatric": "Senior patient",
     "followup": "Follow-up",
     "report": "Report review",
@@ -265,13 +269,17 @@ def classify_visit_type(
     is_procedure: bool = False,
     service_code: str = "OPD",
     age: int | None = None,
+    is_emergency: bool = False,
 ) -> str:
-    """Decide new / followup / report / procedure / geriatric for one visit.
+    """Decide new / followup / report / procedure / geriatric / emergency.
 
     ``age`` comes from the enterprise blueprint's elderly multiplier — senior
     consultations genuinely run longer, so they get their own weight. Order is
-    deliberate: a procedure stays a procedure no matter the age.
+    deliberate: an emergency outranks everything, a procedure stays a procedure
+    no matter the age.
     """
+    if is_emergency:
+        return "emergency"
     if is_procedure or (service_code or "").upper() not in ("", "OPD"):
         return "procedure"
     if has_report:
@@ -291,8 +299,11 @@ def classify_visit_type(
 
 
 def complexity_weight(visit_type: str) -> int:
-    """DB int weight stored alongside ``visit_type`` (1 = routine, 2 = heavy)."""
-    return 2 if visit_type in ("new", "procedure") else 1
+    """DB int weight stored alongside ``visit_type`` (1 = routine, 3 = critical)."""
+    key = (visit_type or "").strip().lower()
+    if key == "emergency":
+        return 3
+    return 2 if key in ("new", "procedure") else 1
 
 
 def visit_weight(visit_type: str, complexity_weight_value: int | None = None) -> float:

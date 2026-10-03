@@ -35,7 +35,7 @@ import sqlalchemy as sa
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
 
-from src.domain.queue import ewt, travel
+from src.domain.queue import ewt, token_label, travel
 from src.infrastructure.queue.models.chamber_session_model import ChamberSessionModel
 from src.infrastructure.queue.models.queue_entry_model import QueueEntryModel
 from src.shared.infrastructure.database import async_session_factory
@@ -120,6 +120,31 @@ def _entry_key(entry: QueueEntryModel) -> float:
 
 def _today():
     return datetime.now(timezone.utc).date()
+
+
+async def _clinic_specialty(session, clinic_id: str) -> str:
+    """Specialty of the clinic, used for the ``C-14`` / ``G-14`` token prefix.
+
+    Two doctors in one clinic each call out "token 14", so the label needs the
+    specialty (Part D · E-04). One small read; the prefix is display sugar, so
+    any failure simply falls back to a bare number.
+    """
+    if not clinic_id:
+        return ""
+    try:
+        import uuid as _uuid
+
+        from src.infrastructure.clinic.models.clinic_model import ClinicModel
+
+        row = await session.execute(
+            sa.select(ClinicModel.specialty).where(
+                ClinicModel.id == _uuid.UUID(str(clinic_id))
+            )
+        )
+        return str(row.scalar() or "")
+    except Exception as exc:  # pragma: no cover - label is cosmetic
+        logger.debug("specialty lookup failed: %s", exc)
+        return ""
 
 
 # ── shared query helpers ────────────────────────────────────────────────────
@@ -212,10 +237,12 @@ async def chamber_status(request: Request):
         row = await _chamber(session, clinic_id, doctor_id)
         state = _chamber_state(row)
         entries = await _active_entries(session, clinic_id, doctor_id)
+        specialty = await _clinic_specialty(session, clinic_id)
 
     waiting = [e for e in entries if (e.status or "").upper() == "WAITING"]
     inside = [e for e in entries if (e.status or "").upper() == "IN_PROGRESS"]
     held = [e for e in entries if (e.status or "").upper() == "HOLD"]
+    next_entry = waiting[0] if waiting else None
     return {
         "ok": True,
         "clinic_id": clinic_id,
@@ -225,6 +252,9 @@ async def chamber_status(request: Request):
         "in_progress": len(inside),
         "on_hold": len(held),
         "next_token": waiting[0].token_number if waiting else 0,
+        "next_token_label": (
+            token_label.entry_label(next_entry, specialty) if next_entry else ""
+        ),
     }
 
 
@@ -670,6 +700,7 @@ async def queue_ewt(request: Request):
         # when nobody clicks anything.
         swept, entries = await _sweep_no_shows(session, clinic_id, doctor_id)
         history = await _history(session, clinic_id, doctor_id)
+        specialty = await _clinic_specialty(session, clinic_id)
 
     avg_minutes, samples = ewt.avg_service_minutes(history)
     inside = next((e for e in entries if (e.status or "").upper() == "IN_PROGRESS"), None)
@@ -684,6 +715,7 @@ async def queue_ewt(request: Request):
                 {
                     "entry_id": str(entry.id),
                     "token_number": entry.token_number,
+                    "token_label": token_label.entry_label(entry, specialty),
                     "patient_name": entry.patient_name,
                     "status": status,
                     "wait_minutes": 0,
@@ -709,6 +741,7 @@ async def queue_ewt(request: Request):
             {
                 "entry_id": str(entry.id),
                 "token_number": entry.token_number,
+                "token_label": token_label.entry_label(entry, specialty),
                 "patient_name": entry.patient_name,
                 "status": status,
                 "wait_minutes": estimate.minutes,
@@ -735,6 +768,7 @@ async def queue_ewt(request: Request):
             {
                 "entry_id": str(e.id),
                 "token_number": e.token_number,
+                "token_label": token_label.entry_label(e, specialty),
                 "patient_name": e.patient_name or "",
                 "waited_minutes": int(round(ewt.minutes_since_called(e) or 0)),
                 "note": ewt.no_show_recovery_note(
