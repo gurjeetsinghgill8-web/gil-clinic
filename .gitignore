@@ -57,3 +57,6 @@ repo-analysis
 
 # Dev scratch (test scripts, debug output)
 scratch/
+
+# Audit harness generated artifacts (scripts/*.py are committed, the dumps aren't)
+scripts/.audit_*.json
