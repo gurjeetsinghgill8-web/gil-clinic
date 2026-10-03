@@ -32,6 +32,8 @@ from fastapi.responses import JSONResponse
 
 from src.infrastructure.clinic.models.clinic_model import ClinicModel
 from src.infrastructure.clinic.models.crawl_model import (
+    REJECT_DUPLICATE,
+    REJECT_OPTED_OUT,
     RUN_COMPLETED,
     RUN_FAILED,
     SOURCE_CLAIM,
@@ -196,14 +198,14 @@ async def ingest_doctors(request: Request, token: str = Query(default="")):
                     profile = normalise_profile(raw, index)
                 except ProfileValidationError as exc:
                     skipped += 1
-                    note(exc.reason.split(":")[-1].strip()[:60] or "invalid")
+                    note(exc.code)
                     continue
 
                 name_key = profile["doctor_name"].strip().lower()
                 # Rule 1: an opt-out outranks the crawler, always.
                 if name_key in opted_out:
                     skipped += 1
-                    note("opted_out")
+                    note(REJECT_OPTED_OUT)
                     continue
 
                 city = str(profile.get("city") or "").strip()
@@ -217,7 +219,7 @@ async def ingest_doctors(request: Request, token: str = Query(default="")):
                     clinic = row.scalars().first()
                     if clinic is not None and clinic.claim_status == CLAIM_OPTED_OUT:
                         skipped += 1
-                        note("opted_out")
+                        note(REJECT_OPTED_OUT)
                         continue
                     if clinic is not None:
                         clinic.crawl_verified_at = now
@@ -274,11 +276,15 @@ async def ingest_doctors(request: Request, token: str = Query(default="")):
                 profiles_created=created,
                 profiles_updated=updated,
                 profiles_skipped=skipped,
+                # Bucketed by stable reason code, so a worker can see the SHAPE
+                # of its own failures rather than one counter per junk value.
                 skipped_reasons="|".join(f"{k}={v}" for k, v in sorted(reasons.items())),
                 started_at=now,
                 finished_at=datetime.now(timezone.utc),
             )
             session.add(run)
+            # ONE commit for the clinics AND the run row: a run recorded without
+            # its clinics (or the reverse) would make the history lie.
             await session.commit()
     except Exception as exc:  # pragma: no cover - defensive
         logger.exception("ingest failed: %s", exc)

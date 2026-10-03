@@ -161,11 +161,28 @@ def doctor_profile_schema() -> dict[str, Any]:
     }
 
 
-class ProfileValidationError(ValueError):
-    """A profile that must not enter the directory, with the reason."""
+#: Stable reason codes for a rejected profile. The ingest endpoint buckets its
+#: skip counts by these, NOT by the human message — bucketing by message text
+#: produced a separate counter per distinct junk value ("'N/A'": 1, "'--'": 1),
+#: which tells a worker nothing and defeats the point of tracking rejections.
+REJECT_NOT_AN_OBJECT = "not_an_object"
+REJECT_MISSING_NAME = "missing_name"
+REJECT_NAMELESS = "nameless"
+REJECT_PLACEHOLDER_NAME = "placeholder_name"
+REJECT_OPTED_OUT = "opted_out"
+REJECT_DUPLICATE = "duplicate_in_batch"
 
-    def __init__(self, reason: str, index: int = -1):
+
+class ProfileValidationError(ValueError):
+    """A profile that must not enter the directory, with the reason.
+
+    ``code`` is the stable bucket the caller counts; ``reason`` is what a human
+    reads. Keeping them separate is what makes the skip report aggregatable.
+    """
+
+    def __init__(self, reason: str, index: int = -1, code: str = "invalid"):
         self.reason = reason
+        self.code = code
         self.index = index
         super().__init__(f"profile[{index}]: {reason}" if index >= 0 else reason)
 
@@ -250,7 +267,7 @@ def normalise_profile(raw: dict[str, Any], index: int = -1) -> dict[str, Any]:
         ``(0, 0)`` placeholder is the classic "no fix" value and is not a place.
     """
     if not isinstance(raw, dict):
-        raise ProfileValidationError("not an object", index)
+        raise ProfileValidationError("not an object", index, code=REJECT_NOT_AN_OBJECT)
 
     clean: dict[str, Any] = {}
     for field in OPTIONAL_FIELDS + REQUIRED_FIELDS:
@@ -278,15 +295,21 @@ def normalise_profile(raw: dict[str, Any], index: int = -1) -> dict[str, Any]:
 
     name = clean.get("doctor_name", "")
     if not name:
-        raise ProfileValidationError("doctor_name is required", index)
+        raise ProfileValidationError(
+            "doctor_name is required", index, code=REJECT_MISSING_NAME
+        )
     # A name with no letters is a parsing artefact ("-", "123")…
     if not any(ch.isalpha() for ch in name):
-        raise ProfileValidationError(f"doctor_name is not a name: {name!r}", index)
+        raise ProfileValidationError(
+            f"doctor_name is not a name: {name!r}", index, code=REJECT_NAMELESS
+        )
     # …and "N/A" / "Not available" / "Unknown" are the extractor saying it found
     # nothing. Both must be dropped, not published as a clinic.
     if _is_placeholder(name):
         raise ProfileValidationError(
-            f"doctor_name is a placeholder, not a name: {name!r}", index
+            f"doctor_name is a placeholder, not a name: {name!r}",
+            index,
+            code=REJECT_PLACEHOLDER_NAME,
         )
 
     phone = clean.get("phone")

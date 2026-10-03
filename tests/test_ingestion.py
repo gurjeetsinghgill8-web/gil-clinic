@@ -389,6 +389,64 @@ class TestIngestEndpoint:
         assert body["skipped"] == 2
         assert body["skipped_reasons"], "a worker that cannot see WHY cannot fix itself"
 
+    def test_skip_reasons_are_stable_codes_not_junk_values(self, client):
+        """Bucketing by message text gave one counter per distinct junk value
+        ("'N/A'": 1, "'--'": 1), which tells a worker nothing about the SHAPE of
+        its own failures."""
+        body = _ingest(client, [
+            {"doctor_name": "N/A"},
+            {"doctor_name": "--"},
+            {"doctor_name": "Unknown"},
+            {"clinic_name": "Nameless"},
+            # A second "N/A" must land in the SAME bucket as the first.
+            {"doctor_name": "n/a"},
+        ]).json()
+        reasons = body["skipped_reasons"]
+        assert body["skipped"] == 5
+        # "N/A", "Unknown" and "n/a" are all the same failure → one bucket.
+        assert reasons.get("placeholder_name") == 3, reasons
+        # "--" has no letters at all, so it is caught as a parsing artefact
+        # before the placeholder check — a different, equally correct bucket.
+        assert reasons.get("nameless") == 1, reasons
+        assert reasons.get("missing_name") == 1, reasons
+        # And no bucket is named after a junk value.
+        for key in reasons:
+            assert "N/A" not in key and "--" not in key, reasons
+
+    def test_a_batch_of_only_junk_is_accepted_with_a_full_report(self, client):
+        """A 400 would say "bad request". The truth is "we received it and
+        rejected every profile, here is why" — which is more useful."""
+        response = _ingest(client, [{"doctor_name": "N/A"}, {"doctor_name": "TBD"}])
+        assert response.status_code == 200
+        body = response.json()
+        assert body["ok"] is True
+        assert body["received"] == 2
+        assert body["created"] == 0
+        assert body["skipped"] == 2
+        assert body["skipped_reasons"].get("placeholder_name") == 2
+
+    def test_the_run_row_records_the_bucketed_reasons(self, client):
+        _ingest(
+            client,
+            [{"doctor_name": "N/A"}, {"doctor_name": "Run Bucket Doctor", "city": "Nagaur"}],
+            run_label="bucket-run",
+        )
+
+        async def _run_row():
+            import sqlalchemy as sa
+
+            async with async_session_factory() as session:
+                row = await session.execute(
+                    sa.select(DoctorCrawlRunModel)
+                    .where(DoctorCrawlRunModel.run_label == "bucket-run")
+                    .limit(1)
+                )
+                return row.scalars().first()
+
+        run = _run(_run_row())
+        assert "placeholder_name=1" in run.skipped_reasons
+        assert run.profiles_created == 1
+
     def test_re_ingesting_updates_rather_than_duplicating(self, client):
         first = _ingest(client, [{"doctor_name": "Repeat Doctor", "city": "Bhilwara"}]).json()
         assert first["created"] == 1
