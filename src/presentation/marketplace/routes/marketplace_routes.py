@@ -30,6 +30,7 @@ import sqlalchemy as sa
 from fastapi import APIRouter, Query, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 
+from src.domain.clinic import opening_hours
 from src.domain.queue import ewt
 from src.infrastructure.clinic.models.clinic_model import ClinicModel
 from src.infrastructure.queue.models.queue_entry_model import QueueEntryModel
@@ -315,6 +316,24 @@ def _to_public(
     if lat is not None and lon is not None and clinic.latitude is not None and clinic.longitude is not None:
         distance_km = round(_haversine(lat, lon, float(clinic.latitude), float(clinic.longitude)), 1)
 
+    # ── Real availability (AVL-02 / E-06) ──
+    # Used to be the static string "OPEN" for every licensed clinic, which is
+    # how a patient ended up outside a closed shutter at 10 PM on a Sunday.
+    avail = opening_hours.to_public_dict(
+        open_time=getattr(clinic, "open_time", None),
+        close_time=getattr(clinic, "close_time", None),
+        closed_days=getattr(clinic, "closed_days", None),
+        holiday_until=getattr(clinic, "holiday_until", None),
+        is_partner=partner,
+    )
+    # Schedule-only truth, independent of tier — what the 🟢 filter uses.
+    schedule_open = opening_hours.within_hours(
+        open_time=getattr(clinic, "open_time", None),
+        close_time=getattr(clinic, "close_time", None),
+        closed_days=getattr(clinic, "closed_days", None),
+        holiday_until=getattr(clinic, "holiday_until", None),
+    )
+
     return {
         "id": str(clinic.id),
         "clinic_name": clinic.clinic_name or "",
@@ -327,7 +346,19 @@ def _to_public(
         "phone": (clinic.doctor_phone or "").strip(),
         "partner": partner,
         "tier": 1 if partner else 2,
-        "availability": "OPEN" if partner else "DIRECTORY",
+        # Open for real today: OPEN / CLOSING_SOON / CLOSED / HOLIDAY / DIRECTORY.
+        "availability": avail["state"],
+        "availability_label": avail["label"],
+        "availability_badge": avail["badge"],
+        "is_open_now": avail["is_open"],
+        "within_hours": schedule_open,
+        "hours": avail["hours"],
+        "open_time": avail["open_time"],
+        "close_time": avail["close_time"],
+        "next_opening": avail["next_opening"],
+        "closing_note": avail["closing_note"],
+        "rating": round(float(clinic.rating), 1) if getattr(clinic, "rating", None) else None,
+        "rating_count": int(getattr(clinic, "rating_count", 0) or 0),
         "live": live,
         "distance_km": distance_km,
     }
@@ -376,6 +407,47 @@ async def marketplace_meta():
     return {"cities": cities, "specialties": specialties}
 
 
+#: Sort keys the public directory accepts. Anything else falls back to "smart".
+SORT_KEYS = ("smart", "distance", "wait", "rating", "name")
+
+
+def _sort_key(sort: str, doctor: dict[str, Any]) -> Any:
+    """Secondary ordering inside one tier, per the requested sort key.
+
+    ``None`` must never be compared with a number, so every key returns a
+    tuple whose first element is the "is this known?" flag — unknown values
+    sort last instead of crashing the request.
+    """
+    live = doctor.get("live") or {}
+    wait = live.get("wait_minutes")
+    distance = doctor.get("distance_km")
+    rating = doctor.get("rating")
+
+    if sort == "distance":
+        return (distance is None, distance if distance is not None else 0.0,
+                doctor.get("doctor_name") or "")
+    if sort == "wait":
+        # Clinics whose chamber is not open yet show no countdown — rank them
+        # after the ones with a real number rather than pretending they are 0.
+        known = wait is not None and live.get("state") == "live"
+        return (not known, int(wait) if known else 0,
+                distance if distance is not None else 9999.0,
+                doctor.get("doctor_name") or "")
+    if sort == "rating":
+        return (rating is None, -(rating or 0.0), doctor.get("doctor_name") or "")
+    if sort == "name":
+        return (doctor.get("doctor_name") or "").lower()
+
+    # smart: open first, then the shortest real wait, then nearest, then rated.
+    return (
+        0 if doctor.get("is_open_now") else 1,
+        live.get("wait_minutes") if live.get("wait_minutes") is not None else 9999,
+        distance if distance is not None else 9999.0,
+        -(rating or 0.0),
+        (doctor.get("doctor_name") or "").lower(),
+    )
+
+
 @router.get("/api/v1/marketplace/doctors")
 async def marketplace_doctors(
     city: str | None = Query(default=None),
@@ -383,13 +455,24 @@ async def marketplace_doctors(
     problem: str | None = Query(default=None),
     lat: float | None = Query(default=None),
     lon: float | None = Query(default=None),
+    open_now: bool | None = Query(default=None),
+    sort: str = Query(default="smart"),
 ):
     """Public doctor directory with city / specialty / plain-language filters.
 
     Ranking: partner clinics (active license) always first, then directory
-    listings. Live queue depth is read from the real `queue_entries` table.
+    listings — the documented two-tier rule. **Within** a tier the requested
+    ``sort`` decides:
+
+        smart (default) · distance · wait · rating · name
+
+    ``open_now=true`` keeps only clinics whose stated hours cover right now
+    (AVL-02), so a patient is not sent to a closed shutter.
     """
     resolved_specialty = _detect_specialty(problem) or specialty
+    wanted_sort = (sort or "smart").strip().lower()
+    if wanted_sort not in SORT_KEYS:
+        wanted_sort = "smart"
 
     doctors: list[dict[str, Any]] = []
     note: str | None = None
@@ -413,11 +496,27 @@ async def marketplace_doctors(
         logger.exception("marketplace doctors query failed")
         note = f"Directory temporarily unavailable ({type(e).__name__}). Please try again."
 
+    total_before_filter = len(doctors)
+
+    if open_now:
+        doctors = [d for d in doctors if d.get("within_hours")]
+
+    if wanted_sort == "smart" or wanted_sort in SORT_KEYS:
+        # Tier first (1 = partner), then the chosen key. Stable, so the SQL
+        # ordering still breaks exact ties deterministically.
+        doctors.sort(key=lambda d: (d.get("tier", 2), _sort_key(wanted_sort, d)))
+
+    if open_now and not doctors:
+        note = note or "Abhi koi clinic khuli nahi hai — filter hata kar dekhein."
+
     return {
         "doctors": doctors,
         "total": len(doctors),
+        "total_before_filter": total_before_filter,
         "partners": sum(1 for d in doctors if d["tier"] == 1),
+        "open_now": sum(1 for d in doctors if d.get("is_open_now")),
         "resolved_specialty": resolved_specialty,
+        "sort": wanted_sort,
         "note": note,
     }
 

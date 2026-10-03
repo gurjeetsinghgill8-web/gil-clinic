@@ -351,6 +351,39 @@
                     </div>
                 </div>
 
+                <!-- ── Opening hours (AVL-01 / E-06) ── -->
+                <div class="card" style="margin-top:16px;background:#ecfdf5;border:1px solid #a7f3d0;">
+                    <h2 style="color:#065f46;">🕒 Opening Hours</h2>
+                    <p style="font-size:12px;color:#047857;margin-bottom:12px;">
+                        "Find a Doctor" inhi hours se <strong>🟢 Abhi khula hai</strong> ya <strong>🔴 Band hai</strong> dikhata hai.
+                        Khaali chhodne par clinic hamesha available dikhegi — band nahi.
+                    </p>
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label>Opens at</label>
+                            <input type="time" name="open_time" value="09:00">
+                        </div>
+                        <div class="form-group">
+                            <label>Closes at</label>
+                            <input type="time" name="close_time" value="18:00">
+                        </div>
+                        <div class="form-group full">
+                            <label>Weekly off (comma se alag)</label>
+                            <input type="text" name="closed_days" placeholder="e.g. Sunday  ·  Sunday,sat  ·  6,5">
+                            <p style="font-size:11px;color:#64748b;margin-top:4px;">
+                                Naam (Sunday) ya number (0 = Somvar … 6 = Ravivar) — dono chalte hain.
+                            </p>
+                        </div>
+                        <div class="form-group full">
+                            <label>Holiday till (chhutti ki aakhri tareekh)</label>
+                            <input type="date" name="holiday_until">
+                            <p style="font-size:11px;color:#64748b;margin-top:4px;">
+                                Diwali week jaise lambe break ke liye sirf aakhri din daaliye.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+
                 <button type="submit" class="btn btn-primary" style="margin-top:20px;width:100%;">
                     🚀 Onboard Doctor & Generate Credentials
                 </button>

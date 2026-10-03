@@ -366,6 +366,86 @@ def elapsed_since_started(entry: Any, now: datetime | None = None) -> float:
     return max(0.0, (moment - started).total_seconds() / 60.0)
 
 
+# ── E-07 · No-show detection ────────────────────────────────────────────────
+
+#: A patient who was CALLED but has not entered the chamber within this many
+#: minutes is treated as a no-show. Tuned to the walk from the waiting area to
+#: the door: long enough that a slow walk or a washroom stop is not punished,
+#: short enough that an empty chamber is not left idle for a whole slot.
+NO_SHOW_AFTER_MINUTES: int = 8
+
+
+def minutes_since_called(entry: Any, now: datetime | None = None) -> float | None:
+    """Minutes since this entry was called, or None when it never was.
+
+    Unlike :func:`elapsed_since_called` this distinguishes "never called"
+    (None) from "called a moment ago" (0.0) — the no-show rule needs that
+    difference, because an uncalled patient must never be swept away.
+    """
+    called = _as_utc(_field(entry, "called_at"))
+    if called is None:
+        return None
+    moment = now or datetime.now(timezone.utc)
+    return max(0.0, (moment - called).total_seconds() / 60.0)
+
+
+def is_no_show(
+    entry: Any,
+    now: datetime | None = None,
+    threshold: int = NO_SHOW_AFTER_MINUTES,
+) -> bool:
+    """Has this patient failed to show up after being called?
+
+    Only a **CALLED** entry can become a no-show. WAITING is untouched (they
+    were never summoned, so leaving them waiting is not their fault), HOLD is
+    untouched (they explicitly stepped out — E-02 already protects them), and
+    anything IN_PROGRESS or completed is obviously present.
+    """
+    if entry is None:
+        return False
+    status = str(_field(entry, "status", "") or "").upper()
+    if status != "CALLED":
+        return False
+    waited = minutes_since_called(entry, now=now)
+    if waited is None:
+        return False  # called_at missing → do not punish an unknown
+    try:
+        limit = max(1, int(threshold))
+    except (TypeError, ValueError):
+        limit = NO_SHOW_AFTER_MINUTES
+    return waited >= limit
+
+
+def sweep_no_shows(
+    entries: Iterable[Any] | None,
+    now: datetime | None = None,
+    threshold: int = NO_SHOW_AFTER_MINUTES,
+) -> tuple[list[Any], list[Any]]:
+    """Split today's live entries into ``(no_shows, still_present)``.
+
+    Pure: it decides, it does not write. The route applies the verdict, which
+    keeps the rule testable with hand-built objects and no database.
+
+    Returns the two lists in their original order, so the caller can keep
+    using the second list for the EWT feed exactly as it arrived.
+    """
+    absent: list[Any] = []
+    present: list[Any] = []
+    for entry in entries or []:
+        (absent if is_no_show(entry, now=now, threshold=threshold) else present).append(entry)
+    return absent, present
+
+
+def no_show_recovery_note(token: Any, waited_minutes: float | None) -> str:
+    """Hinglish explanation for the reception desk (BLOCK 2 · E-07)."""
+    if waited_minutes is None:
+        return f"Token #{token} ko 8 min tak awaz di gayi — abhi line me wapas laayein."
+    minutes = int(round(waited_minutes))
+    return (
+        f"Token #{token} ne {minutes} min tak jawab nahi diya — abhi line me wapas laayein?"
+    )
+
+
 # ── The estimate ────────────────────────────────────────────────────────────
 
 

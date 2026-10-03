@@ -6289,12 +6289,14 @@ async function deleteMedLibrary(id) {
 <!-- ── Queue Engine: START OPD chamber gate (E-01) + live delay badge ──
      Self-contained block: it adds its own floating panel and never touches the
      existing dashboard markup, so this giant template stays safe. -->
-<div id="qe-panel" style="position:fixed;left:14px;bottom:14px;z-index:9998;background:#0f172a;color:#fff;border-radius:14px;padding:12px 14px;font-family:system-ui,'Segoe UI',Roboto,Arial,sans-serif;font-size:13px;box-shadow:0 6px 24px rgba(2,6,23,.35);max-width:300px;display:none;">
+<div id="qe-panel" style="position:fixed;left:14px;bottom:14px;z-index:9998;background:#0f172a;color:#fff;border-radius:14px;padding:12px 14px;font-family:system-ui,'Segoe UI',Roboto,Arial,sans-serif;font-size:13px;box-shadow:0 6px 24px rgba(2,6,23,.35);max-width:330px;max-height:78vh;overflow-y:auto;display:none;">
   <div style="font-weight:700;font-size:14px;margin-bottom:6px;">&#9200; OPD Chamber</div>
   <div id="qe-state" style="margin-bottom:8px;color:#cbd5e1;">&#8230; loading</div>
   <div id="qe-stats" style="color:#cbd5e1;margin-bottom:8px;"></div>
   <button id="qe-toggle" style="width:100%;padding:9px;border:0;border-radius:9px;background:#16a34a;color:#fff;font-weight:700;cursor:pointer;">&#9654; START OPD</button>
   <div id="qe-links" style="margin-top:8px;"></div>
+  <!-- Live per-patient actions: E-03b leave-now · E-02 hold · E-07 no-show -->
+  <div id="qe-queue" style="margin-top:10px;"></div>
 </div>
 <script>
 (function () {
@@ -6336,6 +6338,93 @@ async function deleteMedLibrary(id) {
     box.innerHTML = html;
   }
 
+  // ── Per-patient row actions (E-03b leave-now · E-02 hold · E-07 no-show) ──
+  // Kept inside this self-contained panel so the 5,000-line dashboard markup
+  // is never touched — the same guardrail the whole queue engine follows.
+  function rowBtn(label, colour, title, onclick) {
+    return '<button type="button" title="' + esc(title) + '" ' + onclick +
+      ' style="border:0;border-radius:7px;padding:4px 7px;cursor:pointer;font-size:12px;' +
+      'font-weight:700;background:' + colour + ';color:#fff;">' + label + '</button>';
+  }
+
+  function renderQueue(d) {
+    var box = el('qe-queue');
+    if (!box) return;
+    var rows = (d && d.queue) || [];
+    var absent = (d && d.no_shows) || [];
+    var waiting = rows.filter(function (r) { return r.status !== 'IN_PROGRESS'; });
+
+    var html = '';
+    if (waiting.length) {
+      html += '<div style="color:#94a3b8;font-size:11px;text-transform:uppercase;' +
+        'letter-spacing:.4px;margin-bottom:5px;">Line me (' + waiting.length + ')</div>';
+      waiting.slice(0, 10).forEach(function (r) {
+        html += '<div style="display:flex;align-items:center;gap:6px;padding:4px 0;' +
+          'border-top:1px solid rgba(148,163,184,.18);">' +
+          '<span style="font-weight:700;min-width:34px;">#' + esc(r.token_number) + '</span>' +
+          '<span style="flex:1;color:#e2e8f0;overflow:hidden;text-overflow:ellipsis;' +
+          'white-space:nowrap;">' + esc(r.patient_name) + '</span>' +
+          '<span style="color:#94a3b8;min-width:46px;text-align:right;">~' +
+          esc(r.wait_minutes) + 'm</span>' +
+          rowBtn('&#128994;', '#16a34a', 'Ab niklo — WhatsApp bhejein',
+                 'onclick="qeLeaveNow(\'' + esc(r.entry_id) + '\')"') +
+          rowBtn('&#9208;', '#d97706', 'Hold — patient bahar hai',
+                 'onclick="qeHold(\'' + esc(r.entry_id) + '\')"') +
+          '</div>';
+      });
+    }
+
+    if (absent.length) {
+      html += '<div style="color:#fca5a5;font-size:11px;text-transform:uppercase;' +
+        'letter-spacing:.4px;margin:9px 0 5px;">Nahi aaye (' + absent.length + ')</div>';
+      absent.slice(0, 6).forEach(function (a) {
+        html += '<div style="display:flex;align-items:center;gap:6px;padding:4px 0;' +
+          'border-top:1px solid rgba(248,113,113,.25);">' +
+          '<span style="font-weight:700;min-width:34px;">#' + esc(a.token_number) + '</span>' +
+          '<span style="flex:1;color:#fecaca;overflow:hidden;text-overflow:ellipsis;' +
+          'white-space:nowrap;">' + esc(a.patient_name) + '</span>' +
+          '<span style="color:#f87171;min-width:34px;text-align:right;">' +
+          esc(a.waited_minutes) + 'm</span>' +
+          rowBtn('&#128260;', '#2563eb', 'Wapas line me laayein',
+                 'onclick="qeRecall(\'' + esc(a.entry_id) + '\')"') +
+          '</div>';
+      });
+    }
+
+    if (!html) html = '<div style="color:#64748b;font-size:12px;">Line khaali hai.</div>';
+    box.innerHTML = html;
+  }
+
+  function post(url, body) {
+    return fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body || {})
+    }).then(function (r) { return r.json(); });
+  }
+
+  window.qeLeaveNow = function (entryId) {
+    post('/opd/api/queue/leave-now', { entry_id: entryId }).then(function (d) {
+      if (!d || d.ok === false) { alert((d && d.error) || 'Link nahi bana'); return; }
+      if (d.whatsapp_url) window.open(d.whatsapp_url, '_blank');
+      else alert(d.message || 'Patient ka phone number nahi mila.');
+    }).catch(function () {});
+  };
+
+  window.qeHold = function (entryId) {
+    post('/opd/api/queue/hold', { entry_id: entryId }).then(function (d) {
+      if (!d || d.ok === false) { alert((d && d.error) || 'Hold fail hua'); return; }
+      load();
+    }).catch(function () {});
+  };
+
+  window.qeRecall = function (entryId) {
+    post('/opd/api/queue/recall', { entry_id: entryId }).then(function (d) {
+      if (!d || d.ok === false) { alert((d && d.error) || 'Recall fail hua'); return; }
+      load();
+    }).catch(function () {});
+  };
+
   function load() {
     fetch('/opd/api/chamber/status').then(function (r) { return r.json(); }).then(function (d) {
       if (!d || !d.ok) return;
@@ -6351,6 +6440,7 @@ async function deleteMedLibrary(id) {
       if (d.counts) state.waiting = d.counts.waiting || state.waiting;
       show();
       paint();
+      renderQueue(d);
     }).catch(function () {});
   }
 

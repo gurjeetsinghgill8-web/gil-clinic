@@ -471,6 +471,15 @@ async def _migrate_missing_columns():
         ("queue_entries", "requeue_count", "INTEGER", "0"),
         ("queue_entries", "held_at", "TIMESTAMP WITH TIME ZONE", "NULL"),
         ("queue_entries", "hold_reason", "VARCHAR(200)", "''"),
+        # ── Opening hours + ratings (BLOCK 2 · AVL-01 / AVL-02 / E-06 / F-07) ──
+        # Without these the marketplace called every licensed clinic "OPEN",
+        # including on a Sunday at 11 PM.
+        ("clinics", "open_time", "VARCHAR(5)", "'09:00'"),
+        ("clinics", "close_time", "VARCHAR(5)", "'18:00'"),
+        ("clinics", "closed_days", "VARCHAR(50)", "''"),
+        ("clinics", "holiday_until", "VARCHAR(10)", "''"),
+        ("clinics", "rating", "DOUBLE PRECISION", "NULL"),
+        ("clinics", "rating_count", "INTEGER", "0"),
     ]
 
     try:

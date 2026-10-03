@@ -1189,11 +1189,20 @@ async def public_patient_track(request: Request, public_token: str):
 
 
 @public_router.get("/track/{public_token}/status", include_in_schema=False)
-async def public_patient_track_status(request: Request, public_token: str):
+async def public_patient_track_status(
+    request: Request,
+    public_token: str,
+    lat: float | None = None,
+    lon: float | None = None,
+):
     """Live JSON status for the patient tracking page (polled every 8s).
 
     Lets the patient's phone show live "Called / In Progress / Report Ready"
     without a full page reload — the missing link in the call flow.
+
+    ``lat``/``lon`` are the patient's own coordinates, sent only after they tap
+    the location button on the page (E-03c). Without them everything behaves
+    exactly as before.
     """
     patient_id = decode_tracking_token(public_token)
     if not patient_id:
@@ -1212,7 +1221,7 @@ async def public_patient_track_status(request: Request, public_token: str):
     # ── Live EWT + chamber gate (master blueprint Part B · B4 / Part D · E-01) ──
     # The patient's own phone computes the "leave now" moment from this payload,
     # so nothing has to run on the server (PA free has no cron).
-    wait = await _track_wait_info(all_entries, patient_entries)
+    wait = await _track_wait_info(all_entries, patient_entries, lat, lon)
 
     return {
         "ok": True,
@@ -1394,14 +1403,24 @@ async def _track_live_queue(clinic_id: str, doctor_id: str) -> list:
         return list((await session.execute(stmt)).scalars().all())
 
 
-async def _track_wait_info(all_entries: list[dict], patient_entries: list[dict]) -> dict:
+async def _track_wait_info(
+    all_entries: list[dict],
+    patient_entries: list[dict],
+    patient_lat: float | None = None,
+    patient_lon: float | None = None,
+) -> dict:
     """Compute this patient's live wait for the public tracking page.
 
     Read-only and defensive: any failure returns an empty dict so the tracking
     page never breaks (it is the link patients open from WhatsApp).
+
+    When the patient's phone has shared its location (E-03c) the "ab niklo"
+    decision becomes transit-aware: leave when ``wait ≤ travel + buffer``,
+    instead of the old wait-only rule that sent a patient 25 minutes away into
+    a 6-minute wait.
     """
     try:
-        from src.domain.queue import ewt
+        from src.domain.queue import ewt, travel
 
         mine = patient_entries[0] if patient_entries else None
         if not mine:
@@ -1437,16 +1456,94 @@ async def _track_wait_info(all_entries: list[dict], patient_entries: list[dict])
         )
         payload = estimate.to_public_dict()
         payload["line"] = estimate.to_line_hi()
+
+        # ── E-03c: travel time from the patient's own phone GPS ──
+        travel_minutes = None
+        distance = None
+        if patient_lat is not None and patient_lon is not None and clinic_id:
+            clinic_lat, clinic_lon = await _track_clinic_coords(clinic_id)
+            distance = travel.distance_km(patient_lat, patient_lon, clinic_lat, clinic_lon)
+            if distance is not None:
+                travel_minutes = travel.travel_minutes(distance)
+
+        decision = travel.leave_decision(estimate.minutes, travel_minutes)
+        payload["has_travel"] = decision["has_travel"]
+        payload["travel_minutes"] = travel_minutes
+        payload["distance_km"] = round(distance, 1) if distance is not None else None
+        payload["urgency"] = decision["urgency"]
+        payload["slack_minutes"] = decision["slack_minutes"]
+
         # The patient's browser turns this into the chime + "ab niklo" screen,
         # so no server-side timer is needed (Part D · E-03).
-        payload["leave_now"] = bool(
-            chamber_open and estimate.patients_ahead <= 3 and estimate.minutes <= 20
-        )
+        if decision["has_travel"]:
+            payload["leave_now"] = bool(
+                chamber_open and (decision["should_leave"] or estimate.patients_ahead <= 0)
+            )
+            payload["travel_note"] = _travel_note(
+                decision, travel_minutes, estimate.minutes
+            )
+        else:
+            payload["leave_now"] = bool(
+                chamber_open and estimate.patients_ahead <= 3 and estimate.minutes <= 20
+            )
+            payload["travel_note"] = ""
         payload["token_number"] = mine_token
         return payload
     except Exception as exc:  # pragma: no cover - tracking must never break
         logger.warning("track wait info failed (non-fatal): %s", exc)
         return {}
+
+
+def _travel_note(decision: dict, travel_minutes: int | None, wait_minutes: int) -> str:
+    """One Hinglish line explaining the timing, or "" when we don't know it."""
+    if not decision.get("has_travel"):
+        return ""
+    minutes = int(travel_minutes or 0)
+    urgency = decision.get("urgency")
+    slack = decision.get("slack_minutes")
+    if urgency == "late":
+        return f"Aapka rasta ~{minutes} min hai, wait ~{wait_minutes} min — thoda late ho sakte hain."
+    if urgency == "now":
+        return f"Abhi nikliye — rasta ~{minutes} min, wait ~{wait_minutes} min."
+    if urgency == "soon":
+        return f"{max(0, int(slack or 0))} min me nikliye — rasta ~{minutes} min."
+    return f"Abhi jaldi nahi — lagbhag {max(0, int(slack or 0))} min baad nikliye (rasta ~{minutes} min)."
+
+
+async def _track_clinic_coords(clinic_id: str) -> tuple[float | None, float | None]:
+    """Clinic coordinates for the travel estimate, cached in-process.
+
+    Same reason as the wait cache: every waiting patient polls this endpoint
+    every 8 seconds and the host allows only 100 CPU-seconds per day, while a
+    clinic's address does not move.
+    """
+    key = f"coords:{clinic_id}"
+    cached = _cache_get(key, _WAIT_CACHE_TTL_SECONDS)
+    if cached is not None:
+        return cached  # type: ignore[return-value]
+    coords: tuple[float | None, float | None] = (None, None)
+    try:
+        import uuid as _uuid
+
+        from src.infrastructure.clinic.models.clinic_model import ClinicModel
+
+        # Compare as a real UUID, not a cast string: SQLite stores UUID columns
+        # as 32-char hex without dashes, so a string comparison silently never
+        # matches and the travel estimate would never appear.
+        clinic_uuid = _uuid.UUID(str(clinic_id))
+        async with async_session_factory() as session:
+            row = await session.execute(
+                sa.select(ClinicModel.latitude, ClinicModel.longitude).where(
+                    ClinicModel.id == clinic_uuid
+                )
+            )
+            found = row.first()
+            if found:
+                coords = (found[0], found[1])
+    except Exception as exc:  # pragma: no cover - coordinates are best-effort
+        logger.debug("clinic coords lookup failed: %s", exc)
+    _cache_set(key, coords)
+    return coords
 
 
 def _render_track_error(msg: str) -> str:

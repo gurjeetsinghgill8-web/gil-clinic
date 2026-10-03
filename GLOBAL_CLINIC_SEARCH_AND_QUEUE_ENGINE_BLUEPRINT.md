@@ -35,9 +35,12 @@
 | ⏸️ **E-02 HOLD → Next+1** | ✅ **BUILT** |
 | 👨‍⚕️ **E-04 doctor partition** (`doctor_id`) | ✅ **BUILT** |
 | 🔔 **E-03 departure alert** (client-side, koi cron nahi) | ✅ **BUILT** |
+| 🕒 **Real opening hours + holiday flag** (BLOCK 2 · AVL-01/02, E-06) | ✅ **BUILT** |
+| 🚫 **E-07 no-show auto-detect** (8 min → NO_SHOW + recall) | ✅ **BUILT** |
+| 🛣️ **Travel-aware departure alert** (E-03c, GPS) | ✅ **BUILT** |
 | 🖥️ Dashboard START OPD panel + delay badge | ✅ **BUILT** |
 | 📱 Patient page wait card + "ab niklo" chime | ✅ **BUILT** |
-| **Test suite** | ✅ **117 passed, 0 failed** |
+| **Test suite** | ✅ **273 passed, 0 failed** |
 
 ---
 
@@ -970,18 +973,18 @@ CREATE TABLE doctor_crawl_runs (...);
 > **Note:** per-row HOLD button dashboard ke queue table me nahi hai — API ready hai (`/opd/api/queue/hold`),
 > button BLOCK 3 me dashboard ke saath jayega.
 
-### 🟠 BLOCK 2 — Availability + Alert (P1)
+### 🟠 BLOCK 2 — Availability + Alert (P1) — **DONE (03-Oct-2026)**
 
 | # | Item | File | Effort |
 |---|------|------|--------|
-| AVL-01 | `open_time`/`close_time`/`rating` + admin form | clinic model + `onboard_doctor.html` | M |
-| AVL-02 | "🟢 Abhi khula hai" filter + `availability: OPEN/CLOSED` | `marketplace_routes.py` | S |
-| AVL-03 | Distance sort + "mere paas" button | `marketplace.html` | S |
+| AVL-01 | `open_time`/`close_time`/`closed_days`/`holiday_until`/`rating` + admin form | clinic model + `onboard_doctor.html` | M | ✅ **DONE** |
+| AVL-02 | Real availability (`OPEN`/`CLOSING_SOON`/`CLOSED`/`HOLIDAY`) + "🟢 Abhi khula hai" filter + sort | `opening_hours.py` + `marketplace_routes.py` + `marketplace.html` | M | ✅ **DONE** |
+| AVL-03 | Distance sort + "mere paas" button | `marketplace.html` | S | ✅ **DONE** |
 | **E-03** | **Departure alert client-side** (chime + "AB NIKLO") | `patient_track.html` + public status API | M | ✅ **DONE** |
-| **E-03b** | Reception 1-click WhatsApp link | `/opd/api/queue/leave-now` (API ✅) + green icon 📐 | S | 🏷️ API DONE |
-| **E-03c** | GPS + travel time in the alert (Part F-09b) | `patient_track.html` | S | 📐 |
-| E-06 | Holiday / closed day flag | clinic model + marketplace | S |
-| E-07 | No-show auto-detect (8 min) + EWT recompute | queue routes | S |
+| **E-03b** | Reception 1-click WhatsApp link (per-row 🟢 button) | `/opd/api/queue/leave-now` + dashboard panel | S | ✅ **DONE** |
+| **E-03c** | GPS + travel time in the alert (Part F-09b) | `travel.py` + `patient_track.html` | S | ✅ **DONE** |
+| E-06 | Holiday / closed day flag | clinic model + marketplace | S | ✅ **DONE** |
+| E-07 | No-show auto-detect (8 min) + EWT recompute | `ewt.sweep_no_shows` + queue routes | S | ✅ **DONE** |
 
 ### 🟡 BLOCK 3 — Slots + Doctor Live View (P1)
 

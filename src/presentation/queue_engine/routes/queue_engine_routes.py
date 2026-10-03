@@ -35,7 +35,7 @@ import sqlalchemy as sa
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
 
-from src.domain.queue import ewt
+from src.domain.queue import ewt, travel
 from src.infrastructure.queue.models.chamber_session_model import ChamberSessionModel
 from src.infrastructure.queue.models.queue_entry_model import QueueEntryModel
 from src.shared.infrastructure.database import async_session_factory
@@ -482,6 +482,176 @@ async def queue_requeue(request: Request):
     }
 
 
+# ── E-07 · No-show detection ────────────────────────────────────────────────
+
+
+async def _sweep_no_shows(
+    session,
+    clinic_id: str,
+    doctor_id: str,
+    entries: list[QueueEntryModel] | None = None,
+    now: datetime | None = None,
+) -> tuple[list[QueueEntryModel], list[QueueEntryModel]]:
+    """Mark CALLED-but-absent patients as NO_SHOW. Returns (absent, present).
+
+    Called automatically before every live-EWT read, because the honest fix for
+    a stale countdown is not a nicer number — it is removing the person who is
+    not there. Nobody is swept unless the reception *called* them and they did
+    not appear within :data:`ewt.NO_SHOW_AFTER_MINUTES`.
+
+    The verdict itself is pure (``ewt.sweep_no_shows``); this function only
+    persists it, so the rule stays unit-testable without a database.
+    """
+    rows = entries if entries is not None else await _active_entries(session, clinic_id, doctor_id)
+    absent, present = ewt.sweep_no_shows(rows, now=now)
+    if not absent:
+        return [], list(rows)
+    moment = now or datetime.now(timezone.utc)
+    for entry in absent:
+        entry.status = "NO_SHOW"
+        entry.updated_by = "no_show_sweep"
+        entry.updated_at = moment
+    await session.commit()
+    logger.info("no-show sweep: %d patient(s) marked absent", len(absent))
+    return absent, present
+
+
+@router.post("/queue/sweep-no-shows", include_in_schema=False)
+async def queue_sweep_no_shows(request: Request):
+    """Run the no-show check now and report what changed.
+
+    Body (optional): ``{threshold_minutes: 8}``.
+
+    Safe to call repeatedly: an entry is only swept once, and the guard is the
+    status transition CALLED → NO_SHOW, which no other state satisfies.
+    """
+    sess = _sess(request)
+    clinic_id = await _resolve_clinic_id(sess)
+    doctor_id = _doctor_id(sess)
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    try:
+        threshold = int((body or {}).get("threshold_minutes") or ewt.NO_SHOW_AFTER_MINUTES)
+    except (TypeError, ValueError):
+        threshold = ewt.NO_SHOW_AFTER_MINUTES
+    threshold = max(1, min(120, threshold))
+
+    async with async_session_factory() as session:
+        rows = await _active_entries(session, clinic_id, doctor_id)
+        absent, present = ewt.sweep_no_shows(rows, threshold=threshold)
+        moment = datetime.now(timezone.utc)
+        for entry in absent:
+            entry.status = "NO_SHOW"
+            entry.updated_by = "no_show_sweep"
+            entry.updated_at = moment
+        if absent:
+            await session.commit()
+
+        marked = [
+            {
+                "entry_id": str(e.id),
+                "token_number": e.token_number,
+                "patient_name": e.patient_name or "",
+                "waited_minutes": int(round(ewt.minutes_since_called(e, now=moment) or 0)),
+                "note": ewt.no_show_recovery_note(
+                    e.token_number, ewt.minutes_since_called(e, now=moment)
+                ),
+            }
+            for e in absent
+        ]
+        still_waiting = sum(
+            1 for e in present if (e.status or "").upper() in ("WAITING", "CALLED")
+        )
+
+    return {
+        "ok": True,
+        "threshold_minutes": threshold,
+        "marked": marked,
+        "count": len(marked),
+        "waiting": still_waiting,
+        "message": (
+            f"{len(marked)} patient 8 min me nahi pahunche — NO_SHOW mark kiye. "
+            "Baaki queue apne aap update ho gayi."
+            if marked
+            else "Sab patients hazir hain — koi no-show nahi."
+        ),
+    }
+
+
+@router.post("/queue/recall", include_in_schema=False)
+async def queue_recall(request: Request):
+    """Bring a NO_SHOW (or HOLD) patient back into the line — the late arrival.
+
+    Body: ``{entry_id, at_front?}``.
+
+    A patient who misses their call is usually just stuck in traffic, not gone.
+    The default is the back of the line (fair to everyone who did show up); the
+    receptionist can pass ``at_front: true`` for a genuine mistake on our side,
+    which puts them back at Next + 1 using the same midpoint trick as E-02.
+    """
+    _sess(request)
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    entry_id = str((body or {}).get("entry_id") or "").strip()
+    at_front = bool((body or {}).get("at_front"))
+    if not entry_id:
+        return JSONResponse({"ok": False, "error": "entry_id chahiye."}, status_code=400)
+
+    async with async_session_factory() as session:
+        entry = await _load_entry(session, entry_id)
+        if entry is None:
+            return JSONResponse({"ok": False, "error": "Queue entry nahi mili."}, status_code=404)
+
+        status = (entry.status or "").upper()
+        if status not in ("NO_SHOW", "HOLD"):
+            return JSONResponse(
+                {"ok": False, "error": f"Ye entry recall nahi ho sakti (status: {status})."},
+                status_code=400,
+            )
+
+        siblings = await _active_entries(
+            session, str(entry.clinic_id or ""), str(entry.doctor_id or "")
+        )
+        inside = [e for e in siblings if (e.status or "").upper() == "IN_PROGRESS"]
+        waiting = [
+            e for e in siblings
+            if (e.status or "").upper() in ("WAITING", "CALLED") and str(e.id) != str(entry.id)
+        ]
+
+        if at_front and inside:
+            anchor = max(_entry_key(e) for e in inside)
+            later = sorted(_entry_key(e) for e in waiting if _entry_key(e) > anchor)
+            new_key = (anchor + later[0]) / 2.0 if later else anchor + 0.5
+            note = "Wapas line me — chamber ke turant baad."
+        else:
+            keys = [_entry_key(e) for e in waiting]
+            new_key = (max(keys) + 1.0) if keys else float(entry.token_number or 1)
+            note = "Wapas line me — line ke aakhir me."
+
+        entry.sort_key = float(new_key)
+        entry.status = "WAITING"
+        entry.held_at = None
+        entry.hold_reason = ""
+        entry.called_at = None
+        entry.updated_by = "recall"
+        await session.commit()
+        token = entry.token_number
+        name = entry.patient_name
+        ahead = sum(1 for e in waiting if _entry_key(e) < float(new_key))
+
+    return {
+        "ok": True,
+        "token": token,
+        "patients_ahead": ahead,
+        "position_note": note,
+        "message": f"Token #{token} ({name}) wapas line me — aapse {ahead} patient aage.",
+    }
+
+
 # ── B4 · Live EWT feed for the doctor's screen ──────────────────────────────
 
 
@@ -495,7 +665,10 @@ async def queue_ewt(request: Request):
     async with async_session_factory() as session:
         row = await _chamber(session, clinic_id, doctor_id)
         state = _chamber_state(row)
-        entries = await _active_entries(session, clinic_id, doctor_id)
+        # E-07: sweep before reading. A patient who never showed up must not
+        # keep inflating everybody's EWT — the countdown has to be honest even
+        # when nobody clicks anything.
+        swept, entries = await _sweep_no_shows(session, clinic_id, doctor_id)
         history = await _history(session, clinic_id, doctor_id)
 
     avg_minutes, samples = ewt.avg_service_minutes(history)
@@ -558,10 +731,23 @@ async def queue_ewt(request: Request):
         "samples": samples,
         "delay_severity": severity,
         "queue": feed,
+        "no_shows": [
+            {
+                "entry_id": str(e.id),
+                "token_number": e.token_number,
+                "patient_name": e.patient_name or "",
+                "waited_minutes": int(round(ewt.minutes_since_called(e) or 0)),
+                "note": ewt.no_show_recovery_note(
+                    e.token_number, ewt.minutes_since_called(e)
+                ),
+            }
+            for e in swept
+        ],
         "counts": {
             "waiting": sum(1 for e in entries if (e.status or "").upper() in ("WAITING", "CALLED")),
             "in_progress": 1 if inside else 0,
             "on_hold": sum(1 for e in entries if (e.status or "").upper() == "HOLD"),
+            "no_show": len(swept),
         },
     }
 
@@ -573,9 +759,15 @@ async def queue_ewt(request: Request):
 async def queue_leave_now(request: Request):
     """Return a WhatsApp link telling a patient to start moving.
 
-    Body: ``{entry_id, travel_minutes?, distance_km?}``.
+    Body: ``{entry_id, travel_minutes?, distance_km?, patient_lat?, patient_lon?}``.
+
     The browser opens the link; nothing is sent from the server, so this works
     inside the PythonAnywhere outbound whitelist.
+
+    Since E-03c the advice is transit-aware: when the caller supplies the
+    patient's coordinates (the tracking page can read them with permission) the
+    message says *when* to leave — ``wait ≤ travel + buffer`` — instead of a
+    flat "ab niklo" that sent a patient 25 minutes away into a 6-minute wait.
     """
     _sess(request)
     try:
@@ -592,6 +784,24 @@ async def queue_leave_now(request: Request):
             return JSONResponse({"ok": False, "error": "Queue entry nahi mili."}, status_code=404)
         entries = await _active_entries(session, str(entry.clinic_id or ""), str(entry.doctor_id or ""))
         history = await _history(session, str(entry.clinic_id or ""), str(entry.doctor_id or ""))
+        clinic_lat = clinic_lon = None
+        try:
+            from src.infrastructure.clinic.models.clinic_model import ClinicModel
+
+            # Compare as a real UUID, not a cast string: SQLite stores UUID
+            # columns as 32-char hex without dashes, so `str(uuid)` never
+            # matches and the travel estimate would silently never appear.
+            clinic_uuid = uuid.UUID(str(entry.clinic_id or ""))
+            row = await session.execute(
+                sa.select(ClinicModel.latitude, ClinicModel.longitude).where(
+                    ClinicModel.id == clinic_uuid
+                )
+            )
+            found = row.first()
+            if found:
+                clinic_lat, clinic_lon = found[0], found[1]
+        except Exception as exc:  # pragma: no cover - coordinates are best-effort
+            logger.debug("clinic coordinates lookup failed: %s", exc)
         token = entry.token_number
         name = entry.patient_name
 
@@ -607,26 +817,46 @@ async def queue_leave_now(request: Request):
     estimate = ewt.estimate_wait(
         ahead=ahead, avg_minutes=avg_minutes, samples=samples, current=inside
     )
-    travel = 0
-    try:
-        travel = int((body or {}).get("travel_minutes") or 0)
-    except (TypeError, ValueError):
-        travel = 0
 
-    msg = (
-        f"🏃 GIL CLINIC — ab niklo!\n\n"
-        f"Token #{token} ({name}): aapse {estimate.patients_ahead} patient aage, "
-        f"~{estimate.minutes} min ka wait.\n"
-    )
-    if travel:
-        msg += f"Aapka rasta ~{travel} min ka hai — abhi chalne par zero wait.\n"
-    msg += "\nLocation: clinic pahunch kar reception par token dikhaiye."
+    # ── travel time: explicit minutes win, else GPS from the tracking page ──
+    travel_minutes: int | None = None
+    distance = None
+    raw_travel = (body or {}).get("travel_minutes")
+    if str(raw_travel or "").strip():
+        try:
+            travel_minutes = max(0, int(raw_travel))
+        except (TypeError, ValueError):
+            travel_minutes = None
+    explicit_km = (body or {}).get("distance_km")
+    if travel_minutes is None:
+        distance = travel.distance_km(
+            (body or {}).get("patient_lat"),
+            (body or {}).get("patient_lon"),
+            clinic_lat,
+            clinic_lon,
+        )
+        if distance is None and str(explicit_km or "").strip():
+            try:
+                distance = float(explicit_km)
+            except (TypeError, ValueError):
+                distance = None
+        if distance is not None:
+            travel_minutes = travel.travel_minutes(distance)
+
+    decision = travel.leave_decision(estimate.minutes, travel_minutes)
+    msg = travel.departure_message(token, estimate.minutes, travel_minutes)
 
     return {
         "ok": True,
         "patients_ahead": estimate.patients_ahead,
         "wait_minutes": estimate.minutes,
-        "should_leave": estimate.minutes <= max(travel + 8, 15),
+        "has_travel": decision["has_travel"],
+        "travel_minutes": travel_minutes,
+        "distance_km": round(distance, 1) if distance is not None else None,
+        "urgency": decision["urgency"],
+        "slack_minutes": decision["slack_minutes"],
+        # Backwards compatible: this used to be the only signal.
+        "should_leave": decision["should_leave"],
         "phone_found": bool(phone),
         "whatsapp_url": f"https://wa.me/91{phone[-10:]}?text={_quote(msg)}" if phone else "",
         "message": msg,

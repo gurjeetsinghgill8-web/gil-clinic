@@ -383,7 +383,9 @@
           ? '<div style="margin-top:6px;font-size:13px;color:#9a3412;">Aapka number safe hai — wait count OPD shuru hote hi chalega.</div>'
           : '<div style="margin-top:6px;font-size:13px;color:#64748b;">Aapse ' + (w.patients_ahead || 0) +
             ' patient aage ' + (trust ? '· ' + trust : '') + '</div>') +
-        (w.note ? '<div style="margin-top:4px;font-size:13px;color:#b45309;">' + w.note + '</div>' : '');
+        (w.note ? '<div style="margin-top:4px;font-size:13px;color:#b45309;">' + w.note + '</div>' : '') +
+        (w.travel_note ? '<div style="margin-top:8px;padding:9px 11px;border-radius:10px;background:#eef2ff;border:1px solid #c7d2fe;font-size:13px;color:#3730a3;">📍 ' + w.travel_note + '</div>' : '') +
+        travelButtonHTML(w);
 
       if (w.leave_now && !leaveNowFired) {
         leaveNowFired = true;
@@ -395,9 +397,53 @@
       if (!w.leave_now && w.patients_ahead > 4) leaveNowFired = false;
     }
 
+    // ── E-03c: patient shares location once, alert becomes transit-aware ────
+    // Optional by design: refusing permission keeps the old wait-only alert, so
+    // nothing breaks for a patient who does not want to share GPS.
+    let patientCoords = null;
+    try {
+      const saved = localStorage.getItem('ghos_coords');
+      if (saved) { const c = JSON.parse(saved); if (c && c.lat != null) patientCoords = c; }
+    } catch (e) { /* private mode — fine */ }
+
+    function travelButtonHTML(w) {
+      if (patientCoords || (w && w.has_travel)) return '';
+      return '<button type="button" id="loc-btn" style="margin-top:10px;padding:9px 14px;' +
+        'border-radius:10px;border:1.5px solid #c7d2fe;background:#fff;color:#3730a3;' +
+        'font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;">' +
+        '📍 Meri location se kitna door? (wait time behtar hoga)</button>';
+    }
+
+    function bindLocationButton() {
+      const btn = document.getElementById('loc-btn');
+      if (!btn || btn.dataset.bound) return;
+      btn.dataset.bound = '1';
+      btn.addEventListener('click', () => {
+        if (!navigator.geolocation) { alert('Is device par location support nahi hai.'); return; }
+        btn.textContent = '⏳ Location le rahe hain…';
+        navigator.geolocation.getCurrentPosition(
+          pos => {
+            patientCoords = {
+              lat: Number(pos.coords.latitude.toFixed(6)),
+              lon: Number(pos.coords.longitude.toFixed(6))
+            };
+            try { localStorage.setItem('ghos_coords', JSON.stringify(patientCoords)); } catch (e) {}
+            poll();
+          },
+          () => { btn.textContent = '📍 Meri location se kitna door?'; },
+          { timeout: 8000 }
+        );
+      });
+    }
+
     async function poll() {
       try {
-        const r = await fetch('/track/' + TRACK_TOKEN + '/status');
+        let url = '/track/' + TRACK_TOKEN + '/status';
+        if (patientCoords) {
+          url += '?lat=' + encodeURIComponent(patientCoords.lat) +
+                 '&lon=' + encodeURIComponent(patientCoords.lon);
+        }
+        const r = await fetch(url);
         const d = await r.json();
         if (!d.ok) return;
         (d.entries || []).forEach(e => {
@@ -424,6 +470,7 @@
           }
         });
         renderWait(d.wait);
+        bindLocationButton();
       } catch (e) { /* network — next poll will retry */ }
     }
 

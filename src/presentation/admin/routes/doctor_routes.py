@@ -50,6 +50,41 @@ def _to_float(value: str) -> float | None:
         return None
 
 
+def _clean_time(value: str, fallback: str) -> str:
+    """Normalise an ``HH:MM`` form value, falling back when unusable.
+
+    The admin form is filled by a human, so "9", "9.30" and "9:00 PM" all turn
+    up. A blank field keeps the default instead of silently becoming midnight,
+    which would make the clinic look open at 3 AM on the marketplace.
+    """
+    from src.domain.clinic import opening_hours
+
+    parsed = opening_hours.parse_time(value)
+    if parsed is None:
+        return fallback
+    return parsed.strftime("%H:%M")
+
+
+def _clean_closed_days(value: str) -> str:
+    """Normalise the weekly-off field to canonical weekday numbers.
+
+    Stored as "6,5" rather than "Sunday,sat" so the marketplace's filter and
+    the patient-facing label can never disagree about what was meant.
+    """
+    from src.domain.clinic import opening_hours
+
+    days = opening_hours.parse_closed_days(value)
+    return ",".join(str(d) for d in sorted(days))
+
+
+def _clean_date(value: str) -> str:
+    """Normalise a holiday date to ISO (``YYYY-MM-DD``), or "" if unusable."""
+    from src.domain.clinic import opening_hours
+
+    parsed = opening_hours.parse_date(value)
+    return parsed.isoformat() if parsed else ""
+
+
 router = APIRouter(prefix="/admin", tags=["Doctor Onboarding"])
 
 
@@ -90,6 +125,10 @@ async def api_onboard_doctor(
     longitude: str = Form(""),         # optional
     hpr_id: str = Form(""),            # optional — ABDM doctor registry
     hfr_id: str = Form(""),            # optional — ABDM facility registry
+    open_time: str = Form("09:00"),    # optional — real availability (AVL-01)
+    close_time: str = Form("18:00"),   # optional
+    closed_days: str = Form(""),       # optional — "Sunday,sat" or "6,5"
+    holiday_until: str = Form(""),     # optional — last closed date (E-06)
 ):
     """Create a new clinic + doctor with auto-generated credentials."""
     sess = require_admin_session(request)
@@ -146,6 +185,13 @@ async def api_onboard_doctor(
                 longitude=_to_float(longitude),
                 hpr_id=hpr_id.strip(),
                 hfr_id=hfr_id.strip(),
+                # Opening hours (AVL-01): normalised so the marketplace never
+                # has to parse free text, and blank input keeps the defaults
+                # rather than turning the clinic into a 24-hour one.
+                open_time=_clean_time(open_time, "09:00"),
+                close_time=_clean_time(close_time, "18:00"),
+                closed_days=_clean_closed_days(closed_days),
+                holiday_until=_clean_date(holiday_until),
                 clinic_username=creds["clinic_username"],
                 clinic_password_hash=password_hash,
                 doctor_opd_pin=creds["doctor_opd_pin"],

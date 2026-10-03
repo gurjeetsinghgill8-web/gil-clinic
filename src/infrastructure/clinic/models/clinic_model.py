@@ -4,6 +4,8 @@ Each clinic = one doctor's practice. Stores:
 - Doctor/clinic details
 - Auto-generated credentials (username, password hash, PINs)
 - License dates and status
+- Opening hours + holiday flag (so "Find a Doctor" can show real availability)
+- Cached rating, for marketplace ranking
 - All patient data is scoped to clinic_id
 """
 
@@ -79,6 +81,34 @@ class ClinicModel(Base):
     # Registry (clinic). Empty until the facility is registered on ABDM sandbox.
     hpr_id: Mapped[str] = mapped_column(String(50), nullable=False, default="")
     hfr_id: Mapped[str] = mapped_column(String(50), nullable=False, default="")
+
+    # ── Opening hours (Find a Doctor · AVL-01 / AVL-02 / E-06) ───────────────
+    # Before these columns the directory called every licensed clinic "OPEN",
+    # so a patient could travel across the city to a closed shutter. Times are
+    # clinic-local "HH:MM"; closed_days holds names or weekday numbers
+    # ("Sunday,sat" / "6,5"); holiday_until is the LAST closed date, which lets
+    # one field cover both a single day off and a whole festival week.
+    open_time: Mapped[str] = mapped_column(
+        String(5), nullable=False, default="09:00", server_default="09:00"
+    )
+    close_time: Mapped[str] = mapped_column(
+        String(5), nullable=False, default="18:00", server_default="18:00"
+    )
+    closed_days: Mapped[str] = mapped_column(
+        String(50), nullable=False, default="", server_default=""
+    )
+    holiday_until: Mapped[str] = mapped_column(
+        String(10), nullable=False, default="", server_default=""
+    )
+
+    # ── Ratings (Find a Doctor · F-07) ───────────────────────────────────────
+    # Cached Bayesian score + how many reviews it is based on. Recomputed from
+    # verified post-visit feedback; kept denormalised so ranking never has to
+    # aggregate the whole feedback table per search.
+    rating: Mapped[float | None] = mapped_column(Float, nullable=True)
+    rating_count: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default="0"
+    )
 
     # ── Auth Credentials (auto-generated) ─────────────────────────────────
     clinic_username: Mapped[str] = mapped_column(
