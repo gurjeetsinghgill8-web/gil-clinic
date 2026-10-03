@@ -811,8 +811,8 @@ def _render_landing() -> str:
 
 @app.get("/clinic-portal", include_in_schema=False)
 async def clinic_portal(request: Request, error: str = ""):
-    """Dedicated clinic login page — only username+password from admin."""
-    return HTMLResponse(content=_render_template("clinic_login.html", error=error))
+    """Clinic login now lives on the unified door (Brick 2c shim)."""
+    return RedirectResponse("/signin", status_code=302)
 
 
 def _render_template(name: str, **context) -> str:

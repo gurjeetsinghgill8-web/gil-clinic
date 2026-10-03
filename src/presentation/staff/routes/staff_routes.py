@@ -315,7 +315,8 @@ async def login_page(request: Request):
     sess = get_session(request)
     if sess:
         return RedirectResponse("/staff/home")
-    return HTMLResponse(content=_render("dashboard/login.html", request=request))
+    # Brick 2c: the staff PIN login now lives on the unified door.
+    return RedirectResponse("/signin", status_code=302)
 
 
 @router.post("/login", include_in_schema=False)

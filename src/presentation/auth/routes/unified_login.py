@@ -208,7 +208,11 @@ async def signin_password(
     it sets the SAME cookie the old login sets, so the target dashboard accepts
     it unchanged.
     """
-    from src.application.auth.credentials import verify_admin, verify_clinic
+    from src.application.auth.credentials import (
+        verify_admin,
+        verify_clinic,
+        verify_staff_phone,
+    )
     from src.shared.infrastructure.database import async_session_factory
 
     async with async_session_factory() as session:
@@ -257,9 +261,32 @@ async def signin_password(
             )
             return resp
 
+        # The same field also accepts a staff PHONE number (phone + password).
+        staff, staff_err = await verify_staff_phone(session, username, password)
+        if staff is not None:
+            from src.presentation.staff.routes import staff_routes
+
+            token = staff_routes.create_session(
+                role=staff.role.capitalize(),
+                name=staff.name,
+                user_id=str(staff.id),
+                assigned_opds=staff.assigned_opds or "",
+            )
+            await session.commit()
+            resp = RedirectResponse("/staff/home", status_code=303)
+            resp.set_cookie(
+                "gc_session",
+                token,
+                max_age=staff_routes.SESSION_MAX_AGE,
+                httponly=True,
+                samesite="lax",
+                secure=True,
+            )
+            return resp
+
         await session.commit()
 
-    # Prefer the admin error if it was a lockout (more specific than "invalid").
+    # Prefer the admin lockout message (more specific than "invalid").
     error = admin_err if admin_err and "lock" in admin_err else _invalid_message()
     return HTMLResponse(
         _render("unified_login.html", error=error, mode="password"),

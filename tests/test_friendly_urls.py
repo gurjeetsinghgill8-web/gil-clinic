@@ -136,7 +136,9 @@ def test_api_404_with_html_accept_header_still_returns_json():
 def test_the_real_routes_still_work():
     assert _get("/health").status_code == 200
     assert _get("/").status_code == 200
-    assert _get("/opd/login").status_code == 200
+    # /opd/login is now a thin shim to the unified door (Brick 2c), so a 302 is
+    # correct — the login itself has not vanished.
+    assert _get("/opd/login").status_code == 302
     assert _get("/find-doctor").status_code == 200
 
 

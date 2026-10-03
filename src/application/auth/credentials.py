@@ -20,6 +20,7 @@ pointed at it in a later brick.
 
 from __future__ import annotations
 
+import hashlib
 from datetime import date, datetime, timedelta, timezone
 from typing import Any
 
@@ -28,6 +29,7 @@ import sqlalchemy as sa
 
 from src.infrastructure.clinic.models.clinic_model import ClinicModel
 from src.infrastructure.identity.models.admin_user_model import AdminUserModel
+from src.infrastructure.staff.models.staff_user_model import StaffUserModel
 
 #: After this many wrong passwords an admin account locks for a cool-down.
 MAX_LOGIN_ATTEMPTS = 5
@@ -126,3 +128,33 @@ async def verify_clinic(
         return None, _INVALID
 
     return clinic, ""
+
+
+async def verify_staff_phone(
+    session: Any, phone: str, password: str
+) -> tuple[StaffUserModel | None, str]:
+    """Verify a staff user by phone + password (receptionists, some doctors).
+
+    The old staff ``phone-login`` hashes the password with SHA-256 (not bcrypt,
+    unlike admin/clinic). This mirrors that exact check so a staff member can use
+    the unified door with the same credential they already have.
+    """
+    phone = (phone or "").strip()
+    password = (password or "").strip()
+    if not phone or not password:
+        return None, "Phone aur password chahiye."
+
+    row = await session.execute(
+        sa.select(StaffUserModel).where(
+            StaffUserModel.phone == phone,
+            StaffUserModel.is_active == True,  # noqa: E712
+        )
+    )
+    user = row.scalar_one_or_none()
+    if user is None or not user.password_hash:
+        return None, _INVALID
+
+    if hashlib.sha256(password.encode("utf-8")).hexdigest() != user.password_hash:
+        return None, _INVALID
+
+    return user, ""

@@ -49,7 +49,7 @@ MANIFEST: dict = {
         "Live OPD queue, token booking, estimated wait time and patient records "
         "for GIL CLINIC."
     ),
-    "start_url": "/opd/login",
+    "start_url": "/signin",
     "scope": "/",
     "display": "standalone",
     "display_override": ["standalone", "minimal-ui"],
@@ -90,10 +90,10 @@ MANIFEST: dict = {
     ],
     "shortcuts": [
         {
-            "name": "Doctor login",
+            "name": "Login",
             "short_name": "Login",
-            "url": "/opd/login",
-            "description": "OPD dashboard me login karein",
+            "url": "/signin",
+            "description": "Ek login — apni jagah pahunche",
         },
         {
             "name": "Find a Doctor",

@@ -238,3 +238,68 @@ class TestPasswordDoor:
         html = client.get("/signin").text
         assert "Username + Password" in html
         assert "signin/password" in html
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# 3. Staff phone + password (the third credential shape on the same door)
+# ══════════════════════════════════════════════════════════════════════════
+
+
+def _make_staff(phone: str, name: str = "Reception One", role: str = "receptionist",
+                password: str = "staffpass") -> None:
+    import hashlib
+
+    from src.infrastructure.staff.models.staff_user_model import StaffUserModel
+
+    async def _insert():
+        async with async_session_factory() as session:
+            session.add(
+                StaffUserModel(
+                    name=name,
+                    phone=phone,
+                    password_hash=hashlib.sha256(password.encode("utf-8")).hexdigest(),
+                    role=role,
+                    assigned_opds="[]",
+                    is_active=True,
+                )
+            )
+            await session.commit()
+
+    _run(_insert())
+
+
+class TestStaffPhoneDoor:
+    def test_a_staff_phone_logs_in_on_the_unified_door(self, client):
+        _make_staff("9000000001")
+        response = client.post(
+            "/signin/password", data={"username": "9000000001", "password": "staffpass"}
+        )
+        assert response.status_code == 303
+        assert response.headers["location"] == "/staff/home"
+        assert "gc_session" in response.headers.get("set-cookie", "")
+
+    def test_a_wrong_staff_password_is_rejected(self, client):
+        _make_staff("9000000002")
+        response = client.post(
+            "/signin/password", data={"username": "9000000002", "password": "wrong"}
+        )
+        assert response.status_code == 401
+
+    def test_a_phone_that_is_not_registered_is_rejected(self, client):
+        response = client.post(
+            "/signin/password", data={"username": "9999999999", "password": "x"}
+        )
+        assert response.status_code == 401
+
+    def test_username_and_phone_do_not_collide(self, client):
+        """An admin username and a staff phone live in different namespaces — the
+        door tries admin, then clinic, then staff phone, in that order."""
+        _make_admin("root")
+        _make_staff("root")  # same string, but as a staff PHONE
+        response = client.post(
+            "/signin/password", data={"username": "root", "password": PASSWORD}
+        )
+        # "root" as an admin username wins (higher privilege is checked first).
+        assert response.status_code == 303
+        assert response.headers["location"] == "/admin/dashboard"
+        assert "admin_session" in response.headers.get("set-cookie", "")

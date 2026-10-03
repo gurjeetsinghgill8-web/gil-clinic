@@ -113,7 +113,8 @@ async def admin_login_page(request: Request, error: str = ""):
     sess = get_admin_session(request)
     if sess:
         return RedirectResponse("/admin/dashboard")
-    return HTMLResponse(content=_render("admin/login.html", error=error))
+    # Brick 2c: the admin username/password login now lives on the unified door.
+    return RedirectResponse("/signin", status_code=302)
 
 
 @router.post("/login", include_in_schema=False)

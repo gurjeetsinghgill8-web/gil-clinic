@@ -193,11 +193,11 @@ class TestSigninRoute:
         assert response.status_code == 401
 
     def test_the_old_logins_still_work(self, client):
-        """The unified door is additive — nothing else may break."""
-        assert client.get("/opd/login").status_code == 200
-        assert client.get("/staff/login").status_code == 200
-        assert client.get("/clinic-portal", follow_redirects=False).status_code == 200
-        assert client.get("/admin/login", follow_redirects=False).status_code == 200
+        """The old login PAGES are now thin shims to the unified door (Brick 2c)."""
+        for path in ("/opd/login", "/staff/login", "/clinic-portal", "/admin/login"):
+            response = client.get(path)
+            assert response.status_code == 302, path
+            assert response.headers.get("location") == "/signin", path
 
 
 class TestSigninCheck:
