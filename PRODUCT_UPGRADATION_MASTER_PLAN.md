@@ -62,13 +62,13 @@ GIL CLINIC (one product)
 
 ## 4. The Lego plan (each brick = build → test → commit → push → deploy → verify → checkpoint)
 
-### BRICK 1 — Phase 0: correctness + cleanup (no behaviour change)  ← STARTING HERE
-- [x] Dead files delete (assets/, patient-pwa/) — DONE 2026-10-03
-- [x] Audit harness committed (scripts/audit_*.py) — DONE 2026-10-03
-- [ ] Fix `queue/notes` 500 → 404
-- [ ] Branding: "CardioQueue" → "GIL CLINIC" (landing title)
-- [ ] `/docs` production me disable
-- [ ] `/staff/seed*` env-flag ke peeche
+### BRICK 1 — Phase 0: correctness + cleanup (no behaviour change) — ✅ DONE 2026-10-03
+- [x] Dead files delete (assets/, patient-pwa/) — commit 61bcd41
+- [x] Audit harness committed (scripts/audit_*.py) — commit 61bcd41
+- [x] Fix `queue/notes` 500 → 404 — commit 24a9798, live-verified
+- [x] Branding: landing subtitle "GIL CLINIC" — commit 24a9798
+- [x] `/docs` + `/redoc` production me disable (ENABLE_DOCS=1 opt-in) — 24a9798
+- [x] `/staff/seed*` env-flag ke peeche (ALLOW_SEED=1) — 24a9798
 
 ### BRICK 2 — Phase 1: one front door (single login, role routing)
 - Ek login page; role → route. Old logins become thin shims, then removed.
@@ -105,10 +105,10 @@ GIL CLINIC (one product)
 
 ## 6. CURRENT CHECKPOINT (resume from here)
 
-**Last update:** 2026-10-03
-**State:** Plan + memory files likh diye. Brick 1 ke code-fixes (500→404, branding,
-/docs band, seed flag) **next** hain — abhi start nahi hue.
-**Next action:** Brick 1 ke 4 fixes karo, phir COMPLETION RITUAL.
+**Last update:** 2026-10-03 (after Brick 1)
+**State:** Brick 1 (Phase 0) DONE + deployed + live-verified. Tests 609 green. Build `24a9798` live.
+**Next action:** Brick 2 — Phase 1: single login (role-based routing). Old logins become shims.
+**How to resume:** ye file + `git pull` → `scripts/audit_probe_live.py` → Brick 2.
 
 ---
 
