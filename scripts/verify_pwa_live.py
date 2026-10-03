@@ -7,12 +7,15 @@ the private routes are still guarded.
 
 Run:  python scripts/verify_pwa_live.py
 """
+import subprocess
 import sys
 import time
+from pathlib import Path
 
 import requests
 
 BASE = "https://gillhopitalsoftware1.pythonanywhere.com"
+ROOT = Path(__file__).resolve().parents[1]
 
 passed = []
 failed = []
@@ -29,6 +32,23 @@ def get(path, **kw):
     return r, time.time() - t
 
 
+def local_head() -> str:
+    """The commit this checkout is on — what the deploy SHOULD have shipped.
+
+    Compared against the live build stamp on purpose: a deploy whose file diff
+    came out empty (which happened here, because the templates were edited but
+    not yet committed) reports SHIP COMPLETE while shipping nothing. That is
+    indistinguishable from a successful deploy unless something checks the hash.
+    """
+    try:
+        return subprocess.run(
+            ["git", "rev-parse", "--short", "HEAD"],
+            cwd=str(ROOT), capture_output=True, text=True, timeout=30,
+        ).stdout.strip()
+    except Exception:
+        return ""
+
+
 print("=" * 78)
 print("PWA + TOOLS LIVE VERIFICATION")
 print("=" * 78)
@@ -40,7 +60,15 @@ try:
 except Exception:
     pass
 check("health 200", r.status_code == 200, f"{secs:.1f}s")
-check("build is 3ffbe26", "3ffbe26" in build, build)
+head = local_head()
+if head:
+    check(
+        f"live build matches local HEAD ({head})",
+        head in build,
+        build,
+    )
+else:  # pragma: no cover - no git in the environment
+    check("build stamp present", "a" <= build.lower() <= "f" or bool(build), build)
 
 # ── Chrome's installability requirements ──
 print("\n-- Chrome ke actual install requirements --")
