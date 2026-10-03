@@ -227,6 +227,16 @@ from src.presentation.ingest.routes.ingest_routes import (
     router as ingest_router,
 )
 
+# -- PWA (single manifest + service worker, served from the root) --
+from src.presentation.pwa.routes.pwa_routes import (
+    router as pwa_router,
+)
+
+# -- Clinic tools (one page where every new capability is actually clickable) --
+from src.presentation.tools.routes.tools_routes import (
+    router as tools_router,
+)
+
 
 # =========================================================================
 # Database Setup
@@ -697,6 +707,12 @@ app.include_router(growth_router)
 
 # Module 6 — crawled doctor profiles, run history, claim and opt-out (BLOCK 5)
 app.include_router(ingest_router)
+
+# PWA — one manifest + one root-scoped service worker (installable app)
+app.include_router(pwa_router)
+
+# Clinic tools — a real page for referral / slots / reviews / FHIR / audit
+app.include_router(tools_router)
 
 # Serve static files from experience/pwa
 pwa_static = Path(__file__).parent / "src" / "experience" / "pwa"

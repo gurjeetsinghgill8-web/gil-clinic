@@ -6286,6 +6286,19 @@ async function deleteMedLibrary(id) {
     .catch(function () { el.textContent = 'Build: (health check nahi chala)'; });
 })();
 </script>
+<!-- ── PWA: one manifest, one root-scoped service worker ──
+     Before this, the dashboard advertised nothing to the browser, so Chrome
+     never offered to install the app staff actually use all day. -->
+<link rel="manifest" href="/manifest.json">
+<link rel="apple-touch-icon" href="/static/icons/apple-touch-icon.png">
+<link rel="icon" type="image/png" sizes="192x192" href="/static/icons/icon-192.png">
+<script>
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', function () {
+      navigator.serviceWorker.register('/sw.js').catch(function () {});
+    });
+  }
+</script>
 <!-- ── Queue Engine: START OPD chamber gate (E-01) + live delay badge ──
      Self-contained block: it adds its own floating panel and never touches the
      existing dashboard markup, so this giant template stays safe. -->
@@ -6302,6 +6315,8 @@ async function deleteMedLibrary(id) {
   <div id="qe-queue" style="margin-top:10px;"></div>
   <!-- Slot grid: SLT-01/02 create + SLT-03 book (Part B · B5) -->
   <div id="qe-slots" style="margin-top:10px;"></div>
+  <!-- Everything with no natural home in this dashboard lives on one page -->
+  <a href="/tools" style="display:block;margin-top:10px;padding:9px;border-radius:9px;background:#334155;color:#fff;font-weight:700;text-align:center;text-decoration:none;font-size:13px;">&#128736; Clinic Tools</a>
 </div>
 <script>
 (function () {

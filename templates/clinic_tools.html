@@ -1,0 +1,543 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#0f172a">
+<title>Clinic Tools — GIL CLINIC</title>
+<link rel="manifest" href="/manifest.json">
+<link rel="apple-touch-icon" href="/static/icons/apple-touch-icon.png">
+<link rel="icon" type="image/png" sizes="192x192" href="/static/icons/icon-192.png">
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700;14..32,800&display=swap');
+  :root{
+    --bg:#f1f5f9; --card:#fff; --ink:#0f172a; --muted:#64748b; --line:#e2e8f0;
+    --brand:#667eea; --brand2:#764ba2; --grad:linear-gradient(135deg,#667eea,#764ba2);
+    --green:#16a34a; --green-bg:#dcfce7; --amber:#d97706; --amber-bg:#fef3c7;
+    --red:#dc2626; --red-bg:#fee2e2;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--ink);-webkit-font-smoothing:antialiased}
+  a{color:inherit}
+  header{background:linear-gradient(160deg,#0f172a 0%,#1e293b 55%,#312e81 100%);color:#f8fafc;padding:22px 20px 26px}
+  .hwrap{max-width:1080px;margin:0 auto;display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+  .dot{width:38px;height:38px;border-radius:11px;background:var(--grad);display:flex;align-items:center;justify-content:center;font-size:19px}
+  header h1{font-size:19px;font-weight:800;letter-spacing:-.3px}
+  header .sub{color:#94a3b8;font-size:13px;margin-top:2px}
+  .spacer{flex:1}
+  .hlink{font-size:13px;font-weight:700;color:#cbd5e1;text-decoration:none;padding:8px 13px;border-radius:9px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.14)}
+  .hlink:hover{background:rgba(255,255,255,.16)}
+  main{max-width:1080px;margin:22px auto 60px;padding:0 20px}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:16px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:15px;padding:18px}
+  .card h2{font-size:15px;font-weight:800;display:flex;align-items:center;gap:8px;margin-bottom:4px}
+  .card .why{font-size:12.5px;color:var(--muted);line-height:1.6;margin-bottom:12px}
+  .badge{font-size:11px;font-weight:800;padding:3px 9px;border-radius:999px;background:#f1f5f9;border:1px solid var(--line);color:var(--muted)}
+  .badge.hot{background:var(--amber-bg);border-color:#fde68a;color:#92400e}
+  .badge.ok{background:var(--green-bg);border-color:#bbf7d0;color:#166534}
+  label{display:block;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;margin:10px 0 5px}
+  select,input,textarea{width:100%;padding:10px;border:1.5px solid var(--line);border-radius:10px;font-size:13.5px;font-family:inherit;outline:none;background:#fff;color:var(--ink)}
+  select:focus,input:focus,textarea:focus{border-color:var(--brand)}
+  .row{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+  button{font-family:inherit;font-size:13px;font-weight:700;padding:10px 14px;border-radius:10px;border:0;cursor:pointer;transition:.15s}
+  button:disabled{opacity:.55;cursor:not-allowed}
+  .b-main{background:var(--grad);color:#fff;box-shadow:0 5px 14px rgba(102,126,234,.28)}
+  .b-out{background:#fff;color:var(--ink);border:1.5px solid var(--line)}
+  .b-out:hover{border-color:var(--brand)}
+  .b-danger{background:var(--red-bg);color:#991b1b;border:1.5px solid #fecaca}
+  .b-ok{background:var(--green);color:#fff}
+  .out{margin-top:12px;font-size:12.5px;line-height:1.65;white-space:pre-wrap;word-break:break-word;max-height:280px;overflow:auto;padding:11px;border-radius:10px;background:#f8fafc;border:1px solid var(--line);color:#334155;font-family:ui-monospace,Menlo,Consolas,monospace}
+  .out.empty{color:#94a3b8;font-family:inherit}
+  .note{margin-top:10px;padding:10px 12px;border-radius:10px;background:#eef2ff;border:1px solid #c7d2fe;font-size:12px;color:#3730a3;line-height:1.6}
+  .warn{margin-top:10px;padding:10px 12px;border-radius:10px;background:var(--amber-bg);border:1px solid #fde68a;font-size:12px;color:#92400e;line-height:1.6}
+  .list{margin-top:10px}
+  .item{padding:9px 0;border-top:1px solid var(--line);font-size:13px;display:flex;gap:9px;align-items:center;flex-wrap:wrap}
+  .item .grow{flex:1;min-width:120px}
+  .item .id{font-family:ui-monospace,monospace;font-size:11px;color:var(--muted)}
+  footer{max-width:1080px;margin:0 auto;padding:0 20px 44px;text-align:center;color:#94a3b8;font-size:12px;line-height:1.75}
+  .ping{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--green);margin-right:5px}
+  .offline-banner{display:none;background:#fef3c7;border-bottom:1px solid #fde68a;color:#92400e;padding:9px 20px;text-align:center;font-size:13px;font-weight:600}
+  body.is-offline .offline-banner{display:block}
+</style>
+</head>
+<body>
+
+<div class="offline-banner">📶 Internet nahi hai — ye page live server se data laata hai, is liye abhi kuch kaam nahi karega.</div>
+
+<header>
+  <div class="hwrap">
+    <div class="dot">🛠️</div>
+    <div>
+      <h1>Clinic Tools</h1>
+      <div class="sub"><span class="ping"></span>{{ staff_name }} · {{ role }}</div>
+    </div>
+    <div class="spacer"></div>
+    <a class="hlink" href="/opd/dashboard">← Dashboard</a>
+    <a class="hlink" href="/find-doctor">🔍 Find a Doctor</a>
+  </div>
+</header>
+
+<main>
+
+  <div class="note" style="margin-bottom:16px;">
+    <b>Ye page kis liye hai:</b> in features ka apna koi natural screen nahi tha, is liye
+    ye code me tha, test ho chuka tha, live tha — par doctor ke paas pahunchne ka rasta nahi tha.
+    Yahan har cheez clickable hai. <b>Sab kuch already-tested endpoints par chalta hai;</b> yahan naya
+    kuch nahi bana.
+  </div>
+
+  <div class="grid">
+
+    <!-- ── Patient record: health card audit + revoke + FHIR ── -->
+    <div class="card">
+      <h2>🗂️ Patient record <span class="badge" id="card-kind">—</span></h2>
+      <div class="why">
+        Kaun kaun aapka health card khola (DPDP ka haq), card revoke karna, aur
+        poori record FHIR (ABDM) format me export karna.
+      </div>
+
+      <label for="patient-select">Patient chunein</label>
+      <select id="patient-select"><option value="">— load ho raha hai —</option></select>
+      <div class="row">
+        <button class="b-out" onclick="hcCreate()">🪪 Card banayein</button>
+      </div>
+
+      <label for="hc-uid">Ya card ka UID / link paste karein</label>
+      <input id="hc-uid" placeholder="jaise: AbC123…  ya  https://…/card/AbC123">
+      <div class="row">
+        <button class="b-out" onclick="hcAccess()">👁️ Kisne khola?</button>
+        <button class="b-out" onclick="hcFhir()">🧾 FHIR export</button>
+        <button class="b-danger" onclick="hcRevoke()">🚫 Revoke</button>
+      </div>
+      <div class="out empty" id="hc-out">Abhi kuch nahi chala.</div>
+      <div class="warn">
+        Revoke karne par purana link turant band ho jata hai — aur who/when/why record ho jata hai.
+        FHIR export bhi access log me darj hota hai, kyunki wo poori record ka read hai.
+      </div>
+    </div>
+
+    <!-- ── Referrals ── -->
+    <div class="card">
+      <h2>🔁 Referrals <span class="badge" id="ref-badge">—</span></h2>
+      <div class="why">
+        Doosri clinic se aaye referral accept/decline karein, ya apne patient ko
+        kisi doosri clinic ko bhejein. Accept karne par <b>asli token</b> aapki queue me banta hai.
+      </div>
+      <div class="row">
+        <button class="b-out" onclick="refLoad()">🔄 Inbox reload</button>
+      </div>
+      <div class="list" id="ref-list"><div class="item" style="color:#94a3b8">Abhi load nahi hua.</div></div>
+      <label for="ref-send">Patient ko bhejein (aaj ki queue se)</label>
+      <select id="ref-send"><option value="">— load ho raha hai —</option></select>
+      <div class="row">
+        <button class="b-main" onclick="refSend()">📤 Referral slip banayein</button>
+      </div>
+      <div class="out empty" id="ref-out">Abhi kuch nahi chala.</div>
+    </div>
+
+    <!-- ── Queue honesty (EWT accuracy) ── -->
+    <div class="card">
+      <h2>🎯 Kya hamara wait time sach hai?</h2>
+      <div class="why">
+        Jo wait hum patient ko batate hain, wo asli me kitna nikla — promised vs delivered.
+        Engineer bina ye "self-calibrating" ek dava hai, fact nahi.
+      </div>
+      <label for="acc-days">Kitne din ka data</label>
+      <select id="acc-days">
+        <option value="7">7 din</option>
+        <option value="30" selected>30 din</option>
+        <option value="90">90 din</option>
+      </select>
+      <div class="row">
+        <button class="b-main" onclick="accLoad()">📊 Report dekhein</button>
+      </div>
+      <div class="out empty" id="acc-out">Abhi kuch nahi chala.</div>
+      <div class="note">
+        ±5 min North Star hai. Grade <b>hit-rate</b> par milta hai (kitne patients ko sahi bata),
+        is liye ek 90-min outlier achhi clinic ko chhupa nahi sakta.
+      </div>
+    </div>
+
+    <!-- ── Reviews ── -->
+    <div class="card">
+      <h2>⭐ Verified reviews <span class="badge" id="rev-badge">—</span></h2>
+      <div class="why">
+        Review sirf us patient se aata hai jiska visit poora hua — tracking link hi proof hai.
+        Public list me patient ka naam kabhi nahi jata.
+      </div>
+      <div class="row">
+        <button class="b-main" onclick="revLoad()">⭐ Reviews dekhein</button>
+        <button class="b-out" onclick="revFromPatient()">Is patient ki visit se</button>
+      </div>
+      <div class="list" id="rev-list"></div>
+      <div class="out empty" id="rev-out">Abhi kuch nahi chala.</div>
+    </div>
+
+    <!-- ── Growth: demand for clinics not on the network ── -->
+    <div class="card">
+      <h2>📢 Patients kya maang rahe hain <span class="badge" id="lead-badge">—</span></h2>
+      <div class="why">
+        Jab patient kisi aisi clinic ke liye request karta hai jo network me nahi hai.
+        Pehle ye sirf ek toast tha — ab counted lead hai, demand ke hisaab se sorted.
+      </div>
+      <div class="row">
+        <button class="b-main" onclick="leadLoad()">📋 Pipeline dekhein</button>
+      </div>
+      <div class="list" id="lead-list"></div>
+      <div class="out empty" id="lead-out">Abhi kuch nahi chala.</div>
+    </div>
+
+    <!-- ── Ingestion: what the crawler found ── -->
+    <div class="card">
+      <h2>🕷️ Crawler ne kya nikala <span class="badge" id="ing-badge">—</span></h2>
+      <div class="why">
+        Public hospital pages se aaye doctor profiles — aur kya reject hua, kis wajah se.
+        Crawled listing hamesha "public listing, unclaimed" rehti hai, partner nahi banti.
+      </div>
+      <div class="row">
+        <button class="b-out" onclick="ingLoad()">🗂️ Runs dekhein</button>
+        <button class="b-out" onclick="ingOptOuts()">🚫 Opt-out list</button>
+      </div>
+      <div class="out empty" id="ing-out">Abhi kuch nahi chala.</div>
+      <div class="warn">
+        Worker GitHub Actions par chalta hai (PA free me outbound internet + cron nahi hai).
+        Yahan sirf uska <b>result</b> dikhta hai.
+      </div>
+    </div>
+
+    <!-- ── App / PWA ── -->
+    <div class="card">
+      <h2>📱 App install (PWA)</h2>
+      <div class="why">
+        Chrome install tab hi offer karta hai jab icon, manifest aur service worker — teeno theek hon.
+        Wo teeno silent hote hain, is liye yahan check chalaya ja sakta hai.
+      </div>
+      <div class="row">
+        <button class="b-main" onclick="pwaCheck()">✅ Installability check</button>
+      </div>
+      <div class="out empty" id="pwa-out">Abhi kuch nahi chala.</div>
+      <div class="note">
+        Install: Chrome me address bar ke right taraf <b>⊕ / monitor icon</b>, ya menu ⋮ →
+        <b>"Install GIL CLINIC"</b>. Phone par ⋮ → <b>"Add to Home screen"</b>.
+      </div>
+    </div>
+
+  </div>
+</main>
+
+<footer>
+  <b>GHOS — Gill Hospital OS</b><br>
+  Har action pehle se tested endpoint par jaata hai. Patient data sirf live server se aata hai —
+  app ka service worker use kabhi cache nahi karta.
+</footer>
+
+<script>
+const $ = (id) => document.getElementById(id);
+
+function show(id, text, kind) {
+  const el = $(id);
+  el.classList.remove('empty');
+  el.textContent = typeof text === 'string' ? text : JSON.stringify(text, null, 1);
+  if (kind === 'err') { el.style.borderColor = '#fecaca'; el.style.background = '#fef2f2'; }
+  else if (kind === 'ok') { el.style.borderColor = '#bbf7d0'; el.style.background = '#f0fdf4'; }
+  else { el.style.borderColor = ''; el.style.background = ''; }
+}
+
+async function api(url, options) {
+  const r = await fetch(url, options);
+  let body;
+  try { body = await r.json(); } catch (e) { body = { ok: false, error: 'HTTP ' + r.status }; }
+  return { status: r.status, body };
+}
+
+function busy(btn, on) {
+  if (!btn) return;
+  btn.disabled = on;
+}
+
+/* ── offline awareness: this page is useless without the server, so say so ── */
+function setOnline() { document.body.classList.toggle('is-offline', !navigator.onLine); }
+window.addEventListener('online', setOnline);
+window.addEventListener('offline', setOnline);
+setOnline();
+
+/* ── patient pick-lists ── */
+async function loadPatients() {
+  const sel = $('patient-select'), send = $('ref-send');
+  const today = await api('/opd/api/tools/doctor-queue-today');
+  const recent = await api('/opd/api/tools/recent-patients?limit=25');
+  const seen = new Set();
+  const rows = [];
+  for (const r of [...(today.body.patients || []), ...(recent.body.patients || [])]) {
+    if (seen.has(r.patient_id)) continue;
+    seen.add(r.patient_id);
+    rows.push(r);
+  }
+  const html = rows.length
+    ? rows.map(p => `<option value="${p.patient_id}">${p.patient_name || '—'} · ${p.patient_id}</option>`).join('')
+    : '<option value="">— aaj koi patient nahi —</option>';
+  sel.innerHTML = html;
+  send.innerHTML = html;
+}
+
+/* ── 1. patient record ── */
+function uidFromInput() {
+  const raw = ($('hc-uid').value || '').trim();
+  if (!raw) return '';
+  const m = raw.match(/\/card\/([^/?#\s]+)/);
+  return m ? m[1] : raw;
+}
+
+async function hcCreate() {
+  const pid = $('patient-select').value;
+  if (!pid) { show('hc-out', 'Pehle patient chunein.', 'err'); return; }
+  const r = await api('/opd/api/health-card', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ patient_id: pid })
+  });
+  if (r.body.ok) {
+    $('hc-uid').value = r.body.uid || '';
+    show('hc-out', 'Card ban gaya.\nUID: ' + (r.body.uid || '') + '\nLink: ' + (r.body.url || ''), 'ok');
+  } else show('hc-out', r.body.error || 'Card nahi bana.', 'err');
+}
+
+async function hcAccess() {
+  const uid = uidFromInput();
+  if (!uid) { show('hc-out', 'Card UID ya link dalein.', 'err'); return; }
+  const r = await api('/opd/api/health-card/access?uid=' + encodeURIComponent(uid));
+  if (!r.body.ok) { show('hc-out', r.body.error || 'Nahi mila.', 'err'); return; }
+  const s = r.body.summary || {};
+  let txt = 'Total views: ' + s.total_views + '  ·  granted: ' + s.granted +
+            '  ·  denied: ' + s.denied + '\nDistinct viewers: ' + s.distinct_viewers +
+            '\nCard active: ' + r.body.card_active + '\n';
+  if (r.body.revoked_at) txt += 'Revoked: ' + r.body.revoked_at + ' (' + r.body.revoked_reason + ')\n';
+  txt += '\nRecent access:\n' + ((r.body.access || []).slice(0, 15)
+    .map(a => '  ' + (a.at || '').slice(0, 19) + '  ' + a.viewer + '  ' + a.outcome +
+                (a.denial_reason ? ' (' + a.denial_reason + ')' : '')).join('\n') || '  (none)');
+  show('hc-out', txt, 'ok');
+}
+
+async function hcRevoke() {
+  const uid = uidFromInput();
+  if (!uid) { show('hc-out', 'Card UID ya link dalein.', 'err'); return; }
+  const reason = prompt('Revoke karne ki wajah?', 'patient request');
+  if (reason === null) return;
+  if (!confirm('Pakka? Purana link turant band ho jayega.')) return;
+  const r = await api('/opd/api/health-card/revoke', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ uid: uid, reason: reason })
+  });
+  show('hc-out', r.body.message || r.body.error || JSON.stringify(r.body), r.body.ok ? 'ok' : 'err');
+}
+
+async function hcFhir() {
+  const uid = uidFromInput();
+  if (!uid) { show('hc-out', 'Card UID ya link dalein.', 'err'); return; }
+  const r = await api('/card/' + encodeURIComponent(uid) + '/fhir?download=false');
+  if (!r.body || r.body.resourceType !== 'Bundle') {
+    show('hc-out', 'FHIR export nahi bana — card ya patient record nahi mila.', 'err'); return;
+  }
+  const counts = {};
+  (r.body.entry || []).forEach(e => {
+    const k = (e.resource || {}).resourceType || '?';
+    counts[k] = (counts[k] || 0) + 1;
+  });
+  show('hc-out',
+    'FHIR R4 Bundle ban gaya — ' + r.body.total + ' resources.\n' +
+    JSON.stringify(counts, null, 1) +
+    '\n\nFile: /card/' + uid + '/fhir (ye URL browser me kholein → download)\n' +
+    'Ye ABDM credentials ke bina bhi kaam karta hai.', 'ok');
+}
+
+/* ── 2. referrals ── */
+function refBadge(n) {
+  const b = $('ref-badge');
+  b.textContent = n ? n + ' pending' : 'khali';
+  b.className = 'badge' + (n ? ' hot' : ' ok');
+}
+
+async function refLoad() {
+  const r = await api('/opd/api/referrals');
+  const list = $('ref-list');
+  if (!r.body.ok) { list.innerHTML = '<div class="item" style="color:#b91c1c">' + (r.body.error || 'fail') + '</div>'; return; }
+  refBadge(r.body.pending);
+  const rows = r.body.referrals || [];
+  if (!rows.length) { list.innerHTML = '<div class="item" style="color:#94a3b8">Koi pending referral nahi.</div>'; return; }
+  list.innerHTML = rows.map(x => `
+    <div class="item">
+      <span class="grow"><b>${x.patient_name || '—'}</b> · ${x.urgency_label || ''}<br>
+        <span class="id">${x.from_clinic_name || 'Clinic'} se · ${(x.reason || '').slice(0, 70)}</span></span>
+      <button class="b-ok" onclick="refAct('${x.id}','accept')">✅ Accept</button>
+      <button class="b-out" onclick="refAct('${x.id}','decline')">✖ Decline</button>
+    </div>`).join('');
+}
+
+async function refAct(id, kind) {
+  const body = kind === 'decline' ? { reason: prompt('Wajah (optional)?') || '' } : {};
+  const r = await api('/opd/api/referrals/' + id + '/' + kind, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)
+  });
+  show('ref-out', r.body.message || r.body.error || JSON.stringify(r.body), r.body.ok ? 'ok' : 'err');
+  refLoad();
+}
+
+async function refSend() {
+  const pid = $('ref-send').value;
+  if (!pid) { show('ref-out', 'Patient chunein.', 'err'); return; }
+  const list = await api('/api/v1/marketplace/doctors');
+  const options = (list.body.doctors || []).filter(d => d.partner);
+  if (!options.length) { show('ref-out', 'Koi partner clinic nahi mili.', 'err'); return; }
+  const menu = options.map((d, i) => (i + 1) + '. ' + d.clinic_name + ' (' + d.specialty + ', ' + d.city + ')').join('\n');
+  const pick = prompt('Kis clinic ko bhejna hai?\n\n' + menu + '\n\nNumber likhein:', '1');
+  if (!pick) return;
+  const chosen = options[parseInt(pick, 10) - 1];
+  if (!chosen) { show('ref-out', 'Galat number.', 'err'); return; }
+  const reason = prompt('Kyun bhej rahe hain?') || '';
+  const urgency = (prompt('Priority — ROUTINE / SOON / URGENT', 'ROUTINE') || 'ROUTINE').toUpperCase();
+  const r = await api('/opd/api/referrals', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ to_clinic_id: chosen.id, patient_id: pid, reason: reason, urgency: urgency })
+  });
+  if (r.body.ok) {
+    if (navigator.clipboard) navigator.clipboard.writeText(r.body.slip_url).catch(() => {});
+    show('ref-out', (r.body.message || '') + '\n\nSlip link (copy ho gaya):\n' + r.body.slip_url, 'ok');
+  } else show('ref-out', r.body.error || 'Referral nahi bana.', 'err');
+}
+
+/* ── 3. EWT accuracy ── */
+async function accLoad() {
+  const days = $('acc-days').value;
+  const r = await api('/opd/api/stats/ewt-accuracy?days=' + days);
+  if (!r.body.ok) { show('acc-out', r.body.error || 'Report nahi bani.', 'err'); return; }
+  const b = r.body;
+  show('acc-out',
+    'Grade: ' + b.accuracy_grade + '  (' + (b.within_tolerance_pct ?? '—') + '% within ±' + b.tolerance_minutes + ' min)\n' +
+    'Samples: ' + b.samples + '  ·  skipped: ' + b.skipped + '\n' +
+    'Promised avg: ' + (b.promised_avg ?? '—') + ' min\n' +
+    'Delivered avg: ' + (b.delivered_avg ?? '—') + ' min\n' +
+    'Bias: ' + (b.bias_minutes ?? '—') + ' min  ' +
+    (b.bias_minutes > 0 ? '(patients ne ZYADA wait kiya — hum optimistic the)'
+                        : b.bias_minutes < 0 ? '(patients ne KAM wait kiya — conservative, safe)' : '') + '\n' +
+    'Mean abs error: ' + (b.mean_abs_error ?? '—') + ' min\n\n' + (b.note || ''),
+    b.accuracy_grade === 'poor' ? 'err' : 'ok');
+}
+
+/* ── 4. reviews ── */
+async function revLoad(patientId) {
+  const r = await api('/opd/api/tools/summary');
+  const clinicId = (r.body || {}).clinic_id;
+  if (!clinicId) { show('rev-out', 'Clinic resolve nahi hui.', 'err'); return; }
+  const list = await api('/api/v1/reviews?clinic_id=' + clinicId);
+  if (!list.body.ok) { show('rev-out', list.body.error || 'fail', 'err'); return; }
+  const b = list.body;
+  $('rev-badge').textContent = b.count + ' reviews';
+  $('rev-badge').className = 'badge' + (b.count ? ' ok' : '');
+  $('rev-list').innerHTML = (b.reviews || []).length
+    ? b.reviews.map(v => `<div class="item"><span class="grow">${'★'.repeat(v.rating)}${'☆'.repeat(5 - v.rating)}
+        <br><span class="id">${(v.comment || '(no comment)').slice(0, 90)}</span></span></div>`).join('')
+    : '<div class="item" style="color:#94a3b8">Abhi koi verified review nahi.</div>';
+  show('rev-out',
+    'Visible reviews: ' + b.count + '\n' +
+    'Raw average: ' + (b.raw_average ?? '—') + '\n' +
+    'Bayesian score (jo dikhta hai): ' + (b.rating ?? '—') + '\n' +
+    'Confidence: ' + b.confidence + '\n\n' + (b.note || ''), 'ok');
+}
+
+async function revFromPatient() {
+  const pid = $('patient-select').value;
+  if (!pid) { show('rev-out', 'Pehle patient chunein.', 'err'); return; }
+  show('rev-out',
+    'Review patient ke tracking link se aata hai (wahi link jo WhatsApp par jata hai).\n\n' +
+    'Patient id: ' + pid + '\n' +
+    'Uska tracking page kholkar "⭐ Doctor ko rating dijiye" form dikhega —\n' +
+    'lekin sirf tab jab uska visit COMPLETED ho chuka ho.\n\n' +
+    'Ye jaan-boojh kar hai: review ka proof visit hai, is liye fake review ban hi nahi sakta.', 'ok');
+}
+
+/* ── 5. leads ── */
+async function leadLoad() {
+  const r = await api('/opd/api/leads?limit=50');
+  if (!r.body.ok) { show('lead-out', r.body.error || 'fail', 'err'); return; }
+  $('lead-badge').textContent = r.body.total + ' total';
+  $('lead-badge').className = 'badge' + (r.body.total ? ' hot' : '');
+  const rows = r.body.leads || [];
+  $('lead-list').innerHTML = rows.length
+    ? rows.slice(0, 12).map(l => `<div class="item">
+        <span class="grow"><b>${l.clinic_name || '—'}</b> · ${l.city || ''}
+          <br><span class="id">${l.request_count} patient request${l.request_count === 1 ? '' : 's'} ·
+          ${(l.demand_notes || []).join(', ').slice(0, 60)}</span></span>
+        <span class="badge ${l.status === 'NEW' ? 'hot' : ''}">${l.status_label || l.status}</span>
+        </div>`).join('')
+    : '<div class="item" style="color:#94a3b8">Abhi koi demand nahi — marketplace par "📢 Invite" dabane se yahan aayega.</div>';
+  show('lead-out',
+    'Total leads: ' + r.body.total + '\nBy status: ' + JSON.stringify(r.body.by_status, null, 1) +
+    '\n\nSorted by DEMAND (kitne patients ne poocha), date se nahi — zyada demand wale ko pehle call.', 'ok');
+}
+
+/* ── 6. ingestion ── */
+async function ingLoad() {
+  const r = await api('/api/v1/ingest/runs?limit=10');
+  if (!r.body.ok) { show('ing-out', r.body.error || 'fail', 'err'); return; }
+  const runs = r.body.runs || [];
+  $('ing-badge').textContent = runs.length + ' runs';
+  show('ing-out', runs.length
+    ? runs.map(x => `${x.run_label || '(no label)'} · ${x.status} · ${x.triggered_by}
+   found ${x.profiles_found} · created ${x.profiles_created} · updated ${x.profiles_updated} · skipped ${x.profiles_skipped}
+   reasons: ${x.skipped_reasons || '(none)'}
+   ${(x.started_at || '').slice(0, 19)}`).join('\n\n')
+    : 'Abhi koi crawl run nahi chala.\n\nWorker GitHub Actions par chalta hai:\n' +
+      '  workers/crawl_doctors/  +  .github/workflows/ingest-doctors.yml\n' +
+      'Secrets chahiye: INGEST_TOKEN, GEMINI_API_KEY. Cron jaan-boojh kar band hai.', 'ok');
+}
+
+async function ingOptOuts() {
+  const r = await api('/api/v1/marketplace/opt-out');
+  if (!r.body.ok) { show('ing-out', r.body.error || 'fail', 'err'); return; }
+  const rows = r.body.opted_out || [];
+  show('ing-out', 'Opt-out register (total ' + r.body.total + '):\n' + (rows.length
+    ? rows.map(x => '  ' + (x.clinic_name || '—') + '  ·  ' + (x.reason || '') + '  ·  ' + (x.opted_out_at || '').slice(0, 19)).join('\n')
+    : '  (khali)') +
+    '\n\nOpt-out hamesha ke liye lagta hai — agli crawl run bhi in clinics ko skip karegi.', 'ok');
+}
+
+/* ── 7. PWA ── */
+async function pwaCheck() {
+  const r = await api('/pwa-status');
+  if (!r.body.ok) { show('pwa-out', r.body.error || 'fail', 'err'); return; }
+  const lines = (r.body.checks || []).map(c => (c.ok ? '  ✅ ' : '  ❌ ') + c.check + (c.detail ? '  — ' + c.detail : ''));
+  show('pwa-out',
+    (r.body.installable ? '✅ Installable' : '❌ Abhi install nahi hoga') + '\n\n' + lines.join('\n') +
+    '\n\n' + r.body.how_to_install + '\n\n' + r.body.note,
+    r.body.installable ? 'ok' : 'err');
+}
+
+/* ── boot ── */
+loadPatients();
+refLoad();
+api('/opd/api/tools/summary').then(r => {
+  if (!r.body || !r.body.ok) return;
+  const b = r.body;
+  $('card-kind').textContent = 'ready';
+  $('card-kind').className = 'badge ok';
+  if (b.reviews_visible !== undefined) {
+    $('rev-badge').textContent = b.reviews_visible + ' reviews';
+    $('rev-badge').className = 'badge' + (b.reviews_visible ? ' ok' : '');
+  }
+  if (b.leads_new !== undefined) {
+    $('lead-badge').textContent = b.leads_new + ' naye';
+    $('lead-badge').className = 'badge' + (b.leads_new ? ' hot' : '');
+  }
+  if (b.crawled_listings !== undefined) {
+    $('ing-badge').textContent = b.crawled_listings + ' crawled';
+  }
+});
+
+/* ── service worker: registered here too, so installing from this page works ── */
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js').catch(() => {});
+  });
+}
+</script>
+</body>
+</html>

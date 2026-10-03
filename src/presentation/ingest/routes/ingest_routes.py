@@ -81,6 +81,27 @@ def _authorised(token: str) -> bool:
     return hmac.compare_digest(str(token or ""), expected)
 
 
+def _staff_or_token(request: Request, token: str) -> bool:
+    """Read access for machine writes AND for a logged-in staff member.
+
+    The worker needs the token. The clinic tools page needs a human to be able
+    to READ what the crawler did — and a doctor is not going to paste a machine
+    secret into a page to find out. So read-only endpoints accept either.
+
+    Write endpoints (``/api/v1/ingest/doctors``) accept ONLY the token: a
+    session cookie must never be enough to inject listings into the directory.
+    """
+    if _authorised(token):
+        return True
+    try:
+        from src.presentation.opd.routes.opd_routes import _require_opd_session
+
+        _require_opd_session(request)
+        return True
+    except Exception:
+        return False
+
+
 # ── M6-02 · the schema, served so the worker cannot drift ───────────────────
 
 
@@ -313,9 +334,13 @@ async def ingest_doctors(request: Request, token: str = Query(default="")):
 
 
 @router.get("/api/v1/ingest/runs", include_in_schema=False)
-async def ingest_runs(token: str = Query(default=""), limit: int = Query(default=20)):
-    """Recent crawl runs — what was attempted, accepted, and rejected why."""
-    if not _authorised(token):
+async def ingest_runs(request: Request, token: str = Query(default=""), limit: int = Query(default=20)):
+    """Recent crawl runs — what was attempted, accepted, and rejected why.
+
+    Readable with the machine token OR a staff session (see
+    :func:`_staff_or_token`) so the clinic tools page can show it.
+    """
+    if not _staff_or_token(request, token):
         return JSONResponse({"ok": False, "error": "Unauthorized"}, status_code=401)
     try:
         cap = max(1, min(100, int(limit)))
@@ -479,9 +504,11 @@ async def opt_out_listing(request: Request):
 
 
 @router.get("/api/v1/marketplace/opt-out", include_in_schema=False)
-async def opt_out_register(token: str = Query(default=""), limit: int = Query(default=100)):
-    """Every opt-out on record. Token-gated — it is an internal register."""
-    if not _authorised(token):
+async def opt_out_register(
+    request: Request, token: str = Query(default=""), limit: int = Query(default=100)
+):
+    """Every opt-out on record — a clinic register, so staff can read it too."""
+    if not _staff_or_token(request, token):
         return JSONResponse({"ok": False, "error": "Unauthorized"}, status_code=401)
     try:
         cap = max(1, min(500, int(limit)))
