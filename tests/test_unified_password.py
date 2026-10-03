@@ -211,8 +211,10 @@ class TestPasswordDoor:
         response = client.post(
             "/signin/password", data={"username": "door-scope", "password": PASSWORD}
         )
-        cookie = response.headers.get("set-cookie", "")
-        token = cookie.split("gc_session=", 1)[1].split(";", 1)[0]
+        # The other session cookies are cleared first, then gc_session is set;
+        # read the FINAL cookie from the jar (not the raw header).
+        token = client.cookies.get("gc_session")
+        assert token is not None
         payload = staff_routes.read_session(token)
         assert payload is not None
         assert payload.get("clinic_id")

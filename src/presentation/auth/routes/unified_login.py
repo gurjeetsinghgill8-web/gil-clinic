@@ -62,6 +62,19 @@ def _render(name: str, **context: Any) -> str:
     return env.get_template(name).render(**context)
 
 
+#: Every session cookie the app issues. A login for one role must CLEAR the
+#: others, so a person cannot stack a low-privilege session on top of a
+#: still-valid high-privilege one (e.g. log in as reception while a doctor
+#: ``opd_session`` is still in the browser from an earlier login).
+_SESSION_COOKIES = ("opd_session", "gc_session", "admin_session")
+
+
+def _clear_other_sessions(resp: RedirectResponse) -> RedirectResponse:
+    for name in _SESSION_COOKIES:
+        resp.delete_cookie(name)
+    return resp
+
+
 @router.get("/signin", include_in_schema=False)
 async def signin_page(request: Request):
     """The one login page. No state — always shows the PIN form."""
@@ -77,6 +90,7 @@ def _opd_response(match: RoleMatch) -> RedirectResponse:
         role=match.key, doctor_id=doctor_id, name=match.name
     )
     resp = RedirectResponse(match.dashboard, status_code=303)
+    _clear_other_sessions(resp)
     resp.set_cookie(
         opd_routes.SESSION_COOKIE,
         token,
@@ -93,6 +107,7 @@ def _staff_response(match: RoleMatch) -> RedirectResponse:
 
     token = staff_routes.create_session(role=match.name, name=match.name)
     resp = RedirectResponse(match.dashboard, status_code=303)
+    _clear_other_sessions(resp)
     resp.set_cookie(
         staff_routes.SESSION_COOKIE,
         token,
@@ -229,6 +244,7 @@ async def signin_password(
             )
             await session.commit()
             resp = RedirectResponse("/admin/dashboard", status_code=303)
+            _clear_other_sessions(resp)
             resp.set_cookie(
                 auth_routes.SESSION_COOKIE,
                 token,
@@ -253,6 +269,7 @@ async def signin_password(
             token = _STAFF_SIGNER.dumps(payload)
             await session.commit()
             resp = RedirectResponse("/staff/home", status_code=303)
+            _clear_other_sessions(resp)
             resp.set_cookie(
                 "gc_session",
                 token,
@@ -275,6 +292,7 @@ async def signin_password(
             )
             await session.commit()
             resp = RedirectResponse("/staff/home", status_code=303)
+            _clear_other_sessions(resp)
             resp.set_cookie(
                 "gc_session",
                 token,

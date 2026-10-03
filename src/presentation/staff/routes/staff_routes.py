@@ -554,6 +554,12 @@ async def doctor(request: Request):
     sess = get_session(request)
     if not sess:
         return RedirectResponse("/staff/login")
+    # Brick 4/security: only a doctor-level staff role may enter the doctor view;
+    # everyone else (reception, lab, …) is sent to their own hub.
+    from src.domain.auth import nav
+
+    if not nav.can_access_staff_route(sess.get("role"), "doctor"):
+        return RedirectResponse("/home", status_code=302)
     return RedirectResponse("/opd/dashboard")
 
 

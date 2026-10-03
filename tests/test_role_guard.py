@@ -145,3 +145,59 @@ class TestRouteRefusal:
             client.cookies.set("gc_session", _staff_session(role))
             response = client.get("/staff/home")
             assert response.status_code == 200, role
+
+
+class TestOpdIsolationFromStaff:
+    """A staff session must NEVER grant OPD (prescription) access.
+
+    Regression for the security blunder where the OPD session reader borrowed a
+    staff session and mapped ANY staff role to a doctor — a receptionist could
+    open the prescription pad. OPD access comes only from an ``opd_session``.
+    """
+
+    def test_a_receptionist_cannot_open_the_opd_cockpit(self, client):
+        client.cookies.set("gc_session", _staff_session("Reception"))
+        response = client.get("/opd/dashboard")
+        assert response.status_code == 302
+        assert "opd/login" in response.headers.get("location", "")
+
+    def test_a_receptionist_cannot_read_opd_apis(self, client):
+        client.cookies.set("gc_session", _staff_session("Reception"))
+        for path in ("/opd/api/settings", "/opd/api/queue-ewt", "/opd/api/referrals", "/opd/api/leads"):
+            response = client.get(path)
+            assert response.status_code == 302, path
+            assert "opd/login" in response.headers.get("location", ""), path
+
+    def test_a_lab_tech_cannot_open_the_opd_cockpit(self, client):
+        client.cookies.set("gc_session", _staff_session("Lab"))
+        response = client.get("/opd/dashboard")
+        assert response.status_code == 302
+
+    def test_the_doctor_view_route_is_guarded(self, client):
+        client.cookies.set("gc_session", _staff_session("Reception"))
+        response = client.get("/staff/doctor")
+        assert response.status_code == 302
+        assert response.headers.get("location") == "/home"
+
+
+class TestLoginClearsOtherSessions:
+    """Logging in as one role must clear the OTHER session cookies, so a person
+    cannot stack a low-privilege session on a still-valid high-privilege one."""
+
+    def test_staff_login_clears_an_existing_opd_session(self, client):
+        from src.presentation.opd.routes import opd_routes
+
+        doctor_token = opd_routes._create_opd_session(
+            role="junior", doctor_id="clinic_default", name="Dr"
+        )
+        client.cookies.set("opd_session", doctor_token)
+
+        response = client.post(
+            "/signin", data={"pin": "1234", "role": "reception"}, follow_redirects=False
+        )
+
+        set_cookies = response.headers.get_list("set-cookie")
+        joined = "; ".join(set_cookies)
+        # The old doctor cookie is cleared AND the reception staff cookie is set.
+        assert "opd_session" in joined
+        assert "gc_session" in joined
